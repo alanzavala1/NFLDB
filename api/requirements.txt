@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+duckdb
+nfl_data_py
+numpy>=2.0
+pandas
+pydantic
+httpx
+pytest
+python-dotenv
