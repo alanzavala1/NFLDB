@@ -359,10 +359,38 @@ def get_game(game_id: str):
          game_id],
     )
 
+    # Quarter-by-quarter scores from play-by-play
+    quarter_scores = []
+    try:
+        q_rows = _safe_query(
+            """
+            SELECT
+                qtr,
+                MAX(CASE WHEN posteam = ? THEN posteam_score
+                         WHEN defteam  = ? THEN defteam_score END) AS away_cumul,
+                MAX(CASE WHEN posteam = ? THEN posteam_score
+                         WHEN defteam  = ? THEN defteam_score END) AS home_cumul
+            FROM plays
+            WHERE game_id = ?
+            GROUP BY qtr
+            ORDER BY qtr
+            """,
+            [away_team, away_team, home_team, home_team, game_id],
+        )
+        away_prev = home_prev = 0
+        for row in q_rows:
+            ac = int(row["away_cumul"] or 0)
+            hc = int(row["home_cumul"] or 0)
+            quarter_scores.append({"qtr": int(row["qtr"]), "away": ac - away_prev, "home": hc - home_prev})
+            away_prev, home_prev = ac, hc
+    except Exception:
+        pass
+
     return {
         **game,
         "away": [p for p in players if p["team"] == away_team],
         "home": [p for p in players if p["team"] == home_team],
+        "quarter_scores": quarter_scores,
     }
 
 

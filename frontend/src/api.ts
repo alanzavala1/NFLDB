@@ -78,9 +78,16 @@ export interface PlayerStats {
   punt_return_tds: number
 }
 
+export interface QuarterScore {
+  qtr: number
+  away: number
+  home: number
+}
+
 export interface GameDetail extends Game {
   away: PlayerStats[]
   home: PlayerStats[]
+  quarter_scores: QuarterScore[]
 }
 
 export interface PlayerGame {
