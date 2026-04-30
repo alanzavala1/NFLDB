@@ -122,16 +122,23 @@ def merge_all_stats(*stat_frames):
     if not frames:
         return pd.DataFrame()
 
-    keys = ["game_id", "player_id", "team", "season", "week"]
+    # Exclude 'team' from merge keys: different stat sources use posteam vs defteam,
+    # which creates duplicate rows for the same player+game with different team values.
+    # Instead we coalesce team from the primary (leftmost) source after each join.
+    keys = ["game_id", "player_id", "season", "week"]
     merged = frames[0]
 
     for frame in frames[1:]:
         merged = merged.merge(frame, on=keys, how="outer", suffixes=("", "_r"))
+        if "team_r" in merged.columns:
+            merged["team"] = merged["team"].combine_first(merged["team_r"])
+            merged.drop(columns=["team_r"], inplace=True)
         if "player_name_r" in merged.columns:
             merged["player_name"] = merged["player_name"].combine_first(merged["player_name_r"])
             merged.drop(columns=["player_name_r"], inplace=True)
 
-    stat_cols = [c for c in merged.columns if c not in keys + ["player_name"]]
+    non_stat = keys + ["team", "player_name"]
+    stat_cols = [c for c in merged.columns if c not in non_stat]
     merged[stat_cols] = merged[stat_cols].fillna(0)
 
     return merged

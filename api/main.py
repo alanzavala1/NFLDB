@@ -1,21 +1,73 @@
 import asyncio
+import queue
 import threading
 from contextlib import asynccontextmanager
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from database import query_to_dict
 from ingest import run_ingest
 
 FIRST_SEASON = 1999
+
+# All numeric stat columns on player_game_stats (excluding identity/team fields).
+# Single source of truth used in SQL selects and Python aggregations.
+_STAT_COLS = (
+    "attempts", "completions", "pass_yards", "pass_tds",
+    "interceptions_thrown", "sacks_taken", "pass_epa",
+    "targets", "receptions", "rec_yards", "rec_tds",
+    "air_yards", "yac", "rec_epa",
+    "carries", "rush_yards", "rush_tds", "rush_epa",
+    "solo_tackles", "assist_tackles", "tackles_for_loss",
+    "sacks", "qb_hits", "def_interceptions",
+    "pass_breakups", "forced_fumbles", "fumble_recoveries",
+    "fg_att", "fg_made", "xp_att", "xp_made",
+    "punts", "punt_yards",
+    "punt_returns", "punt_return_yards", "punt_return_tds",
+)
+
+# Prefixed for use inside CTEs where pgs alias is in scope.
+_PGS_STAT_SEL = ", ".join(f"pgs.{c}" for c in _STAT_COLS)
+
+# De-duped roster: one row per player+season.
+_ROSTER_CTE = """\
+    roster AS (
+        SELECT player_id, season, team, position, jersey_number, headshot_url
+        FROM rosters
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id, season ORDER BY season DESC) = 1
+    )"""
+
+# Team-correction CASE and ROW_NUMBER rank for a known game (away/home as SQL expressions).
+# Roster team is authoritative; pgs.team is only used if roster doesn't match the game.
+def _team_sql(away: str, home: str) -> tuple[str, str]:
+    correction = f"""\
+CASE
+                    WHEN r.team IN ({away}, {home})                             THEN r.team
+                    WHEN pgs.team IN ({away}, {home})                           THEN pgs.team
+                    ELSE COALESCE(r.team, pgs.team)
+                END"""
+    rank = f"""\
+CASE
+                        WHEN r.team = pgs.team AND pgs.team IN ({away}, {home}) THEN 0
+                        WHEN r.team IN ({away}, {home})                         THEN 1
+                        WHEN pgs.team IN ({away}, {home})                       THEN 2
+                        ELSE 3
+                    END"""
+    return correction, rank
+
+
 CURRENT_SEASON = 2025
+AUTO_LOAD_SEASONS = 5  # load this many recent seasons automatically on startup
 
-_season_status: dict[int, str] = {}  # year -> "loading" | "error"
-_ingest_logs: dict[int, list[str]] = {}  # year -> list of log lines
-_ingest_lock = threading.Lock()
+# Season state: "queued" | "loading" | "error" — absent means loaded or not yet touched
+_season_status: dict[int, str] = {}
+_ingest_logs:   dict[int, list[str]] = {}
+
+# Single-writer queue: one background thread loads seasons sequentially
+_load_queue: queue.SimpleQueue[int] = queue.SimpleQueue()
 
 
-def _ingest_season(year: int):
+def _ingest_season(year: int) -> None:
     _ingest_logs[year] = []
 
     def log(msg: str):
@@ -23,27 +75,64 @@ def _ingest_season(year: int):
         print(line)
         _ingest_logs.setdefault(year, []).append(line)
 
-    with _ingest_lock:
+    try:
+        run_ingest([year], log=log)
+        _season_status.pop(year, None)          # remove → treated as "loaded"
+        _ingest_logs[year].append("__DONE__")
+    except Exception as e:
+        print(f"Ingest failed for {year}: {e}")
+        _season_status[year] = "error"
+        _ingest_logs[year].append(f"__ERROR__ {e}")
+
+
+def _load_worker() -> None:
+    """Single daemon thread — consumes the queue, one season at a time."""
+    while True:
+        year = _load_queue.get()
+        if _season_status.get(year) not in ("queued", "loading"):
+            continue   # was cancelled / already done
+        _season_status[year] = "loading"
+        _ingest_season(year)
+
+
+def _queue_season(year: int, force: bool = False) -> str:
+    """Enqueue a season for loading. Returns the resulting status string."""
+    current = _season_status.get(year)
+    if current in ("queued", "loading"):
+        return current
+
+    if not force:
         try:
-            run_ingest([year], log=log)
-            _season_status.pop(year, None)
-            _ingest_logs.setdefault(year, []).append("__DONE__")
-        except Exception as e:
-            print(f"Ingest failed for {year}: {e}")
-            _season_status[year] = "error"
-            _ingest_logs.setdefault(year, []).append(f"__ERROR__ {e}")
+            loaded = {r["season"] for r in query_to_dict("SELECT DISTINCT season FROM schedules")}
+            if year in loaded:
+                return "loaded"
+        except Exception:
+            pass
+
+    _season_status[year] = "queued"
+    _load_queue.put(year)
+    return "queued"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Auto-load current season on startup if not already present
+    # Start the single background worker
+    threading.Thread(target=_load_worker, daemon=True).start()
+
+    # Auto-queue the N most recent seasons that aren't already in the DB
     try:
         loaded = {r["season"] for r in query_to_dict("SELECT DISTINCT season FROM schedules")}
     except Exception:
         loaded = set()
-    if CURRENT_SEASON not in loaded and _season_status.get(CURRENT_SEASON) != "loading":
-        _season_status[CURRENT_SEASON] = "loading"
-        threading.Thread(target=_ingest_season, args=(CURRENT_SEASON,), daemon=True).start()
+
+    queued = 0
+    for year in range(CURRENT_SEASON, FIRST_SEASON - 1, -1):
+        if queued >= AUTO_LOAD_SEASONS:
+            break
+        if year not in loaded:
+            _queue_season(year, force=False)
+            queued += 1
+
     yield
 
 
@@ -79,20 +168,11 @@ def get_seasons():
 
 
 @app.post("/seasons/{year}/load")
-def load_season(year: int, background_tasks: BackgroundTasks, force: bool = False):
+def load_season(year: int, force: bool = False):
     if year < FIRST_SEASON or year > CURRENT_SEASON:
         raise HTTPException(status_code=400, detail=f"Season must be between {FIRST_SEASON} and {CURRENT_SEASON}")
-
-    if _season_status.get(year) == "loading":
-        return {"season": year, "status": "loading"}
-
-    loaded = {r["season"] for r in query_to_dict("SELECT DISTINCT season FROM schedules")}
-    if year in loaded and not force:
-        return {"season": year, "status": "loaded"}
-
-    _season_status[year] = "loading"
-    background_tasks.add_task(_ingest_season, year)
-    return {"season": year, "status": "loading"}
+    status = _queue_season(year, force=force)
+    return {"season": year, "status": status}
 
 
 @app.get("/seasons/{year}/progress")
@@ -246,37 +326,38 @@ def get_game(game_id: str):
     )
     _attach_records(prior + [game])  # mutates game in-place
 
-    players = query_to_dict(
-        """
-        SELECT
-            pgs.player_id,
-            pgs.player_name,
-            pgs.team,
-            pgs.week,
-            r.position,
-            r.jersey_number,
-            r.headshot_url,
-            pgs.attempts, pgs.completions, pgs.pass_yards, pgs.pass_tds,
-            pgs.interceptions_thrown, pgs.sacks_taken, pgs.pass_epa,
-            pgs.targets, pgs.receptions, pgs.rec_yards, pgs.rec_tds,
-            pgs.air_yards, pgs.yac, pgs.rec_epa,
-            pgs.carries, pgs.rush_yards, pgs.rush_tds, pgs.rush_epa,
-            pgs.solo_tackles, pgs.assist_tackles, pgs.tackles_for_loss,
-            pgs.sacks, pgs.qb_hits, pgs.def_interceptions,
-            pgs.pass_breakups, pgs.forced_fumbles, pgs.fumble_recoveries,
-            pgs.fg_att, pgs.fg_made, pgs.xp_att, pgs.xp_made,
-            pgs.punts, pgs.punt_yards,
-            pgs.punt_returns, pgs.punt_return_yards, pgs.punt_return_tds
-        FROM player_game_stats pgs
-        LEFT JOIN rosters r ON pgs.player_id = r.player_id AND r.season = pgs.season
-        WHERE pgs.game_id = ?
-        ORDER BY pgs.team, r.position, pgs.player_name
-        """,
-        [game_id],
-    )
-
     away_team = game["away_team"]
     home_team = game["home_team"]
+    team_sel, team_rank = _team_sql("?", "?")
+
+    players = query_to_dict(
+        f"""
+        WITH {_ROSTER_CTE},
+        ranked AS (
+            SELECT
+                pgs.player_id,
+                pgs.player_name,
+                {team_sel} AS team,
+                pgs.week,
+                r.position, r.jersey_number, r.headshot_url,
+                {_PGS_STAT_SEL},
+                ROW_NUMBER() OVER (
+                    PARTITION BY pgs.player_id
+                    ORDER BY {team_rank}
+                ) AS rn
+            FROM player_game_stats pgs
+            LEFT JOIN roster r ON r.player_id = pgs.player_id AND r.season = pgs.season
+            WHERE pgs.game_id = ?
+        )
+        SELECT * EXCLUDE (rn)
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY team, position, player_name
+        """,
+        [away_team, home_team, away_team, home_team,
+         away_team, home_team, away_team, home_team, away_team, home_team,
+         game_id],
+    )
 
     return {
         **game,
@@ -382,54 +463,50 @@ def get_player(player_id: str):
 
     profile = profile_rows[0]
 
+    team_sel, team_rank = _team_sql("s.away_team", "s.home_team")
+    stat_cols_csv = ", ".join(_STAT_COLS)
+
     games = query_to_dict(
-        """
+        f"""
+        WITH {_ROSTER_CTE},
+        ranked AS (
+            SELECT
+                pgs.game_id, pgs.season, pgs.week, pgs.player_id,
+                {team_sel} AS team,
+                s.away_team, s.home_team, s.gameday, s.away_score, s.home_score,
+                r.position, r.jersey_number, r.headshot_url,
+                {_PGS_STAT_SEL},
+                ROW_NUMBER() OVER (
+                    PARTITION BY pgs.game_id, pgs.player_id
+                    ORDER BY {team_rank}
+                ) AS rn
+            FROM player_game_stats pgs
+            LEFT JOIN schedules s ON pgs.game_id = s.game_id
+            LEFT JOIN roster r    ON pgs.player_id = r.player_id AND r.season = pgs.season
+            WHERE pgs.player_id = ?
+        )
         SELECT
-            pgs.game_id,
-            pgs.season,
-            pgs.week,
-            pgs.team,
-            CASE WHEN pgs.team = s.home_team THEN s.away_team ELSE s.home_team END AS opponent,
-            CASE WHEN pgs.team = s.home_team THEN 'home' ELSE 'away' END           AS location,
-            s.gameday,
-            s.away_score,
-            s.home_score,
+            game_id, season, week, team,
+            CASE WHEN team = home_team THEN away_team ELSE home_team END AS opponent,
+            CASE WHEN team = home_team THEN 'home' ELSE 'away' END       AS location,
+            gameday, away_score, home_score,
             CASE
-                WHEN s.away_score IS NULL                                          THEN NULL
-                WHEN pgs.team = s.home_team AND s.home_score > s.away_score       THEN 'W'
-                WHEN pgs.team = s.away_team AND s.away_score > s.home_score       THEN 'W'
-                WHEN s.home_score = s.away_score                                  THEN 'T'
+                WHEN away_score IS NULL                               THEN NULL
+                WHEN team = home_team AND home_score > away_score     THEN 'W'
+                WHEN team = away_team AND away_score > home_score     THEN 'W'
+                WHEN home_score = away_score                          THEN 'T'
                 ELSE 'L'
             END AS result,
-            pgs.attempts, pgs.completions, pgs.pass_yards, pgs.pass_tds,
-            pgs.interceptions_thrown, pgs.sacks_taken, pgs.pass_epa,
-            pgs.targets, pgs.receptions, pgs.rec_yards, pgs.rec_tds,
-            pgs.air_yards, pgs.yac, pgs.rec_epa,
-            pgs.carries, pgs.rush_yards, pgs.rush_tds, pgs.rush_epa,
-            pgs.solo_tackles, pgs.assist_tackles, pgs.tackles_for_loss,
-            pgs.sacks, pgs.qb_hits, pgs.def_interceptions,
-            pgs.pass_breakups, pgs.forced_fumbles, pgs.fumble_recoveries,
-            pgs.fg_att, pgs.fg_made, pgs.xp_att, pgs.xp_made,
-            pgs.punts, pgs.punt_yards,
-            pgs.punt_returns, pgs.punt_return_yards, pgs.punt_return_tds
-        FROM player_game_stats pgs
-        LEFT JOIN schedules s ON pgs.game_id = s.game_id
-        WHERE pgs.player_id = ?
-        ORDER BY pgs.season, pgs.week
+            {stat_cols_csv},
+            position, jersey_number, headshot_url
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY season, week
         """,
         [player_id],
     )
 
-    numeric_stat_cols = [
-        "attempts", "completions", "pass_yards", "pass_tds", "interceptions_thrown",
-        "sacks_taken", "pass_epa", "targets", "receptions", "rec_yards", "rec_tds",
-        "air_yards", "yac", "rec_epa", "carries", "rush_yards", "rush_tds", "rush_epa",
-        "solo_tackles", "assist_tackles", "tackles_for_loss", "sacks", "qb_hits",
-        "def_interceptions", "pass_breakups", "forced_fumbles", "fumble_recoveries",
-        "fg_att", "fg_made", "xp_att", "xp_made", "punts", "punt_yards",
-        "punt_returns", "punt_return_yards", "punt_return_tds",
-    ]
-    season_totals = {col: sum(g[col] or 0 for g in games) for col in numeric_stat_cols}
+    season_totals = {col: sum(g[col] or 0 for g in games) for col in _STAT_COLS}
 
     return {
         **profile,
@@ -487,9 +564,11 @@ def get_team(team: str, season: int = Query(2025)):
             SUM(pgs.assist_tackles)       AS assist_tackles,
             SUM(pgs.sacks)                AS sacks,
             SUM(pgs.tackles_for_loss)     AS tackles_for_loss,
+            SUM(pgs.qb_hits)              AS qb_hits,
             SUM(pgs.def_interceptions)    AS def_interceptions,
             SUM(pgs.pass_breakups)        AS pass_breakups,
-            SUM(pgs.forced_fumbles)       AS forced_fumbles
+            SUM(pgs.forced_fumbles)       AS forced_fumbles,
+            SUM(pgs.fumble_recoveries)    AS fumble_recoveries
         FROM player_game_stats pgs
         LEFT JOIN rosters r ON pgs.player_id = r.player_id AND r.season = pgs.season
         WHERE pgs.season = ? AND pgs.team = ?

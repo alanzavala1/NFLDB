@@ -340,11 +340,75 @@ export default function PlayerPage() {
   const fromGame = (location.state as any)?.fromGame
   const [player, setPlayer] = useState<PlayerProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [seasonMap, setSeasonMap] = useState<Record<number, string>>({})
 
+  // Load player + global season list together on mount
   useEffect(() => {
     if (!playerId) return
-    api.player(playerId).then(setPlayer).finally(() => setLoading(false))
+    Promise.all([api.player(playerId), api.seasons()])
+      .then(([p, allSeasons]) => {
+        setPlayer(p)
+        setSeasonMap(Object.fromEntries(allSeasons.map(s => [s.season, s.status])))
+      })
+      .finally(() => setLoading(false))
   }, [playerId])
+
+  // Auto-queue missing career seasons whenever player data arrives
+  useEffect(() => {
+    if (!player || !player.entry_year) return
+    const loadedForPlayer = new Set(player.games.map(g => g.season))
+    const toQueue: number[] = []
+    for (let y = 2025; y >= player.entry_year; y--) {
+      const status = seasonMap[y]
+      if (!loadedForPlayer.has(y) && status === 'available') {
+        toQueue.push(y)
+      }
+    }
+    if (toQueue.length === 0) return
+
+    // Fire-and-forget: queue each missing season; update local map optimistically
+    toQueue.forEach(y => api.loadSeason(y))
+    setSeasonMap(prev => {
+      const next = { ...prev }
+      toQueue.forEach(y => { next[y] = 'queued' })
+      return next
+    })
+  }, [player?.player_id, player?.entry_year])
+
+  // Poll season statuses while any career season is in-flight; re-fetch player on completion
+  useEffect(() => {
+    if (!player || !player.entry_year) return
+    const entryYear = player.entry_year
+
+    const anyInFlight = Object.entries(seasonMap).some(([y, s]) =>
+      Number(y) >= entryYear && (s === 'loading' || s === 'queued')
+    )
+    if (!anyInFlight) return
+
+    const loadedForPlayer = new Set(player.games.map(g => g.season))
+
+    const interval = setInterval(async () => {
+      const allSeasons = await api.seasons().catch(() => [] as typeof import('../api').SeasonEntry[])
+      const updated = Object.fromEntries(allSeasons.map(s => [s.season, s.status]))
+      setSeasonMap(updated)
+
+      // Re-fetch player if a previously-missing season just finished
+      const newlyDone = allSeasons.filter(
+        s => s.season >= entryYear && !loadedForPlayer.has(s.season) && s.status === 'loaded'
+      )
+      if (newlyDone.length > 0) {
+        api.player(playerId!).then(setPlayer)
+      }
+
+      // Stop polling once nothing is in-flight for this player's career
+      const stillInFlight = allSeasons.some(
+        s => s.season >= entryYear && (s.status === 'loading' || s.status === 'queued')
+      )
+      if (!stillInFlight) clearInterval(interval)
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [player?.player_id, seasonMap])
 
   if (loading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
   if (!player) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Player not found.</p></div>
@@ -355,11 +419,15 @@ export default function PlayerPage() {
   }, {})
   const seasons = Object.keys(bySeason).map(Number).sort((a, b) => b - a)
 
-  // Derive team info from game data (authoritative — roster field lags behind trades)
   const recentGames = seasons.length > 0 ? bySeason[seasons[0]] : []
-  // Unique teams in chronological order (so traded-to team appears last = current)
   const recentTeams = [...new Set(recentGames.map(g => g.team))]
   const currentTeam = recentGames[recentGames.length - 1]?.team ?? player.team
+
+  const careerInFlight = player.entry_year
+    ? Object.entries(seasonMap).some(
+        ([y, s]) => Number(y) >= player.entry_year! && (s === 'loading' || s === 'queued')
+      )
+    : false
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -447,6 +515,12 @@ export default function PlayerPage() {
           ngs={player.ngs ?? {}}
           snapTotals={player.snap_totals ?? {}}
         />
+        {careerInFlight && (
+          <p className="text-xs text-gray-600 -mt-4 mb-6 pl-1 flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+            Loading historical seasons — career stats will update automatically.
+          </p>
+        )}
 
         {/* Game logs */}
         <div className="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-3">Game Log</div>

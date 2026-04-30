@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { api } from '../api'
-import type { TeamProfile, TeamGame, TeamLeader } from '../api'
+import type { TeamProfile, TeamGame, TeamLeader, SeasonEntry } from '../api'
 import Nav from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
@@ -71,7 +71,7 @@ function SchedulePanel({ profile }: { profile: TeamProfile }) {
   )
 }
 
-// ── Leaders panel (preview) ──────────────────────────────────────────────────
+// ── Leaders panel ────────────────────────────────────────────────────────────
 
 const LEADERS_PREVIEW = 3
 
@@ -112,9 +112,9 @@ function LeaderSection({ title, rows }: { title: string; rows: React.ReactNode[]
 }
 
 function LeadersPanel({ leaders, onViewFull }: { leaders: TeamLeader[]; onViewFull: () => void }) {
-  const passers   = leaders.filter(p => p.attempts >= 1).sort((a, b) => b.pass_yards - a.pass_yards).slice(0, LEADERS_PREVIEW)
-  const rushers   = leaders.filter(p => p.carries >= 1).sort((a, b) => b.rush_yards - a.rush_yards).slice(0, LEADERS_PREVIEW)
-  const receivers = leaders.filter(p => p.targets >= 1).sort((a, b) => b.rec_yards - a.rec_yards).slice(0, LEADERS_PREVIEW)
+  const passers   = leaders.filter(p => p.attempts >= 50).sort((a, b) => b.pass_yards - a.pass_yards).slice(0, LEADERS_PREVIEW)
+  const rushers   = leaders.filter(p => p.carries >= 20).sort((a, b) => b.rush_yards - a.rush_yards).slice(0, LEADERS_PREVIEW)
+  const receivers = leaders.filter(p => p.targets >= 10).sort((a, b) => b.rec_yards - a.rec_yards).slice(0, LEADERS_PREVIEW)
   const defenders = leaders
     .filter(p => p.solo_tackles + p.assist_tackles + p.sacks + p.def_interceptions > 0)
     .sort((a, b) => (b.solo_tackles + b.assist_tackles) - (a.solo_tackles + a.assist_tackles))
@@ -137,7 +137,7 @@ function LeadersPanel({ leaders, onViewFull }: { leaders: TeamLeader[]; onViewFu
       <LeaderSection title="Receiving" rows={receivers.map(p => (
         <LeaderRow key={p.player_id} player={p}
           primary={{ value: sv(p.rec_yards), label: 'YDS' }}
-          secondary={`${sv(p.receptions)}/${sv(p.targets)} · ${avg(p.rec_yards, p.receptions)} YPR · ${sv(p.rec_tds)} TD`}
+          secondary={`${sv(p.receptions)}/${sv(p.targets)} REC · ${avg(p.rec_yards, p.receptions)} YPR · ${sv(p.rec_tds)} TD`}
         />
       ))} />
       <LeaderSection title="Defense" rows={defenders.map(p => (
@@ -192,7 +192,6 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
     .filter(p => p.solo_tackles + p.assist_tackles + p.sacks + p.def_interceptions > 0)
     .sort((a, b) => (b.solo_tackles + b.assist_tackles) - (a.solo_tackles + a.assist_tackles))
 
-  // Close on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -211,7 +210,6 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-950">
-      {/* Modal header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900 shrink-0">
         <div className="flex items-center gap-4">
           <img src={teamLogoUrl(profile.team)} alt={profile.team} className="w-8 h-8 object-contain" />
@@ -220,20 +218,15 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
             <div className="text-gray-500 text-xs">All regular season and playoff games</div>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="flex items-center gap-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 rounded-lg px-4 py-2 transition-colors"
-        >
+        <button onClick={onClose} className="flex items-center gap-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 rounded-lg px-4 py-2 transition-colors">
           <span className="text-base leading-none">✕</span> Close
         </button>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-6 py-6 max-w-6xl mx-auto w-full">
-
         <FullStatsTable
           title="Passing"
-          headers={['Player', 'G', 'CMP', 'ATT', 'CMP%', 'YDS', 'YPA', 'TD', 'INT', 'SCK', 'SCK YDS']}
+          headers={['Player', 'G', 'CMP', 'ATT', 'CMP%', 'YDS', 'YPA', 'TD', 'INT', 'SCK']}
           rows={passers.map(p => (
             <tr key={p.player_id} className="border-t border-gray-800/60 hover:bg-gray-800/30">
               {playerCell(p)}
@@ -246,7 +239,6 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
               {td(sv(p.pass_tds), 'text-green-400')}
               {td(sv(p.interceptions_thrown), 'text-red-400')}
               {td(sv(p.sacks_taken), 'text-gray-500')}
-              {td(sv(p.sacks_taken * 7), 'text-gray-500')}
             </tr>
           ))}
         />
@@ -269,7 +261,7 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
 
         <FullStatsTable
           title="Receiving"
-          headers={['Player', 'G', 'TGT', 'REC', 'YDS', 'YPR', 'TD', 'YAC', 'CAT%', 'YDS/G']}
+          headers={['Player', 'G', 'TGT', 'REC', 'YDS', 'YPR', 'TD', 'YAC', 'CTH%', 'YDS/G']}
           rows={receivers.map(p => (
             <tr key={p.player_id} className="border-t border-gray-800/60 hover:bg-gray-800/30">
               {playerCell(p)}
@@ -298,15 +290,14 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
               {td(sv(p.assist_tackles), 'text-gray-400')}
               {td(sv(p.tackles_for_loss), 'text-gray-400')}
               {td(sv(p.sacks), 'text-yellow-400')}
-              {td('—', 'text-gray-600')}
+              {td(sv(p.qb_hits), 'text-gray-400')}
               {td(sv(p.def_interceptions), 'text-indigo-400')}
               {td(sv(p.pass_breakups))}
               {td(sv(p.forced_fumbles), 'text-gray-400')}
-              {td('—', 'text-gray-600')}
+              {td(sv(p.fumble_recoveries), 'text-gray-400')}
             </tr>
           ))}
         />
-
       </div>
     </div>
   )
@@ -322,9 +313,7 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
   return (
     <>
       {statsOpen && <FullStatsModal profile={profile} onClose={() => setStatsOpen(false)} />}
-
       <div className="flex flex-col">
-        {/* Season header */}
         <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
           <div>
             <div className="text-white font-bold text-xl">{profile.season} Season</div>
@@ -337,8 +326,6 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
             Full Stats
           </button>
         </div>
-
-        {/* Two-column body — schedule fills height of leaders column */}
         <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-800">
           <div className="flex flex-col">
             <div className="px-4 py-2 bg-gray-800/20 border-b border-gray-800 shrink-0">
@@ -346,7 +333,6 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
             </div>
             <SchedulePanel profile={profile} />
           </div>
-
           <div>
             <div className="px-4 py-2 bg-gray-800/20 border-b border-gray-800">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Leaders</span>
@@ -361,46 +347,82 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
 
 // ── Season sidebar ───────────────────────────────────────────────────────────
 
+type SeasonStatus = SeasonEntry['status']
+
+function StatusDot({ status }: { status: SeasonStatus }) {
+  if (status === 'loading')
+    return <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />
+  if (status === 'queued')
+    return <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-600 animate-pulse shrink-0" />
+  return null
+}
+
 function SeasonSidebar({
-  profiles, selected, onSelect, hasMore, loadingMore, onLoadMore, nextYear,
+  profiles, selected, onSelect, seasonStatuses, onQueueSeason,
 }: {
   profiles: TeamProfile[]
   selected: number
   onSelect: (season: number) => void
-  hasMore: boolean
-  loadingMore: boolean
-  onLoadMore: () => void
-  nextYear: number
+  seasonStatuses: Record<number, SeasonStatus>
+  onQueueSeason: (year: number) => void
 }) {
   const team = profiles[0]?.team ?? ''
+  const profileMap = Object.fromEntries(profiles.map(p => [p.season, p]))
+
+  // Seasons to show: all loaded + queued/loading, sorted newest first
+  const inFlight = Object.entries(seasonStatuses)
+    .filter(([, s]) => s === 'loading' || s === 'queued')
+    .map(([y]) => Number(y))
+  const loadedYears = profiles.map(p => p.season)
+  const visibleYears = [...new Set([...loadedYears, ...inFlight])].sort((a, b) => b - a)
+
+  // Next available year to queue (oldest loaded - 1, if not already loading)
+  const oldest = Math.min(...loadedYears, ...inFlight)
+  const nextAvailable = oldest > 1999 ? oldest - 1 : null
+  const nextStatus = nextAvailable ? seasonStatuses[nextAvailable] : null
+  const canLoadMore = nextAvailable && (!nextStatus || nextStatus === 'available' || nextStatus === 'error')
+
   return (
     <div className="flex flex-col border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shrink-0 lg:w-40">
       <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-800/40">
         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Seasons</span>
       </div>
       <div className="overflow-y-auto">
-        {profiles.map(p => {
-          const rec = computeRecord(p.games, team)
-          const active = p.season === selected
+        {visibleYears.map(year => {
+          const profile = profileMap[year]
+          const status = seasonStatuses[year] ?? (profile ? 'loaded' : 'available')
+          const active = year === selected
+          const inProgress = status === 'loading' || status === 'queued'
+          const rec = profile ? computeRecord(profile.games, team) : null
+
           return (
             <button
-              key={p.season}
-              onClick={() => onSelect(p.season)}
-              className={`w-full text-left px-4 py-3 border-b border-gray-800/60 transition-colors hover:bg-gray-800/60 ${active ? 'bg-indigo-900/30 border-l-2 border-l-indigo-500' : ''}`}
+              key={year}
+              onClick={() => profile ? onSelect(year) : undefined}
+              disabled={inProgress && !profile}
+              className={`w-full text-left px-4 py-3 border-b border-gray-800/60 transition-colors
+                ${active ? 'bg-indigo-900/30 border-l-2 border-l-indigo-500' : 'hover:bg-gray-800/60'}
+                ${inProgress && !profile ? 'cursor-default' : ''}`}
             >
-              <div className={`text-sm font-bold ${active ? 'text-indigo-300' : 'text-gray-300'}`}>{p.season}</div>
-              <div className="text-xs text-gray-500">{rec.label}</div>
+              <div className="flex items-center gap-1.5">
+                <StatusDot status={status} />
+                <span className={`text-sm font-bold ${active ? 'text-indigo-300' : inProgress ? 'text-gray-400' : 'text-gray-300'}`}>
+                  {year}
+                </span>
+              </div>
+              <div className="text-xs text-gray-600 mt-0.5">
+                {inProgress ? (status === 'loading' ? 'Loading…' : 'Queued') : rec ? rec.label : ''}
+              </div>
             </button>
           )
         })}
       </div>
-      {hasMore && (
+      {canLoadMore && (
         <button
-          onClick={onLoadMore}
-          disabled={loadingMore}
-          className="text-xs text-gray-600 hover:text-gray-300 py-2.5 border-t border-gray-800 transition-colors disabled:opacity-50"
+          onClick={() => onQueueSeason(nextAvailable!)}
+          className="text-xs text-gray-600 hover:text-gray-300 py-2.5 border-t border-gray-800 transition-colors"
         >
-          {loadingMore ? 'Loading…' : `+ ${nextYear}`}
+          + {nextAvailable}
         </button>
       )}
     </div>
@@ -412,49 +434,86 @@ function SeasonSidebar({
 const CURRENT_SEASON = 2025
 const FIRST_SEASON = 1999
 const INITIAL_SEASONS = 3
+const AUTO_QUEUE = 2  // queue this many unloaded seasons beyond initial fetch
 
 export default function TeamPage() {
   const { teamAbbrev } = useParams<{ teamAbbrev: string }>()
   const navigate = useNavigate()
   const [profiles, setProfiles] = useState<TeamProfile[]>([])
   const [selectedSeason, setSelectedSeason] = useState<number>(CURRENT_SEASON)
-  const [nextSeasonToTry, setNextSeasonToTry] = useState(CURRENT_SEASON - INITIAL_SEASONS)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [seasonStatuses, setSeasonStatuses] = useState<Record<number, SeasonStatus>>({})
 
+  // Load initial seasons + global season list on mount
   useEffect(() => {
     if (!teamAbbrev) return
     let cancelled = false
     setProfiles([])
     setInitialLoading(true)
-    setNextSeasonToTry(CURRENT_SEASON - INITIAL_SEASONS)
 
-    const seasons = Array.from({ length: INITIAL_SEASONS }, (_, i) => CURRENT_SEASON - i)
-    let completed = 0
-    for (const s of seasons) {
-      api.team(teamAbbrev, s)
-        .then(p => {
-          if (!cancelled) {
-            setProfiles(prev => [...prev, p].sort((a, b) => b.season - a.season))
-            if (s === CURRENT_SEASON) setSelectedSeason(CURRENT_SEASON)
-          }
-        })
-        .catch(() => {})
-        .finally(() => { completed++; if (completed === seasons.length && !cancelled) setInitialLoading(false) })
-    }
+    const years = Array.from({ length: INITIAL_SEASONS }, (_, i) => CURRENT_SEASON - i)
+
+    Promise.all([
+      ...years.map(y => api.team(teamAbbrev, y).catch(() => null)),
+      api.seasons(),
+    ]).then(results => {
+      if (cancelled) return
+      const allSeasons = results.pop() as SeasonEntry[]
+      const fetched = (results as (TeamProfile | null)[]).filter(Boolean) as TeamProfile[]
+      const statuses = Object.fromEntries(allSeasons.map(s => [s.season, s.status])) as Record<number, SeasonStatus>
+
+      setProfiles(fetched.sort((a, b) => b.season - a.season))
+      setSeasonStatuses(statuses)
+      setSelectedSeason(fetched[0]?.season ?? CURRENT_SEASON)
+      setInitialLoading(false)
+
+      // Auto-queue a couple more recent seasons that aren't loaded yet
+      let queued = 0
+      for (let y = CURRENT_SEASON - INITIAL_SEASONS; y >= FIRST_SEASON && queued < AUTO_QUEUE; y--) {
+        if (statuses[y] === 'available' || statuses[y] === 'error') {
+          api.loadSeason(y)
+          statuses[y] = 'queued'
+          queued++
+        }
+      }
+      if (queued > 0) setSeasonStatuses({ ...statuses })
+    })
+
     return () => { cancelled = true }
   }, [teamAbbrev])
 
-  function loadMore() {
-    if (!teamAbbrev || nextSeasonToTry < FIRST_SEASON) return
-    setLoadingMore(true)
-    api.team(teamAbbrev, nextSeasonToTry)
-      .then(p => setProfiles(prev => [...prev, p].sort((a, b) => b.season - a.season)))
-      .catch(() => {})
-      .finally(() => { setNextSeasonToTry(s => s - 1); setLoadingMore(false) })
-  }
+  // Poll while any season is in-flight; fetch team profile when one completes
+  useEffect(() => {
+    const anyInFlight = Object.values(seasonStatuses).some(s => s === 'loading' || s === 'queued')
+    if (!anyInFlight || !teamAbbrev) return
 
-  const hasMore = nextSeasonToTry >= FIRST_SEASON
+    const loadedYears = new Set(profiles.map(p => p.season))
+
+    const interval = setInterval(async () => {
+      const allSeasons = await api.seasons().catch(() => [] as SeasonEntry[])
+      const updated = Object.fromEntries(allSeasons.map(s => [s.season, s.status])) as Record<number, SeasonStatus>
+      setSeasonStatuses(updated)
+
+      // Fetch team profile for any season that just finished loading
+      const newlyLoaded = allSeasons.filter(s => !loadedYears.has(s.season) && s.status === 'loaded')
+      for (const s of newlyLoaded) {
+        api.team(teamAbbrev, s.season)
+          .then(p => setProfiles(prev => [...prev.filter(x => x.season !== p.season), p].sort((a, b) => b.season - a.season)))
+          .catch(() => {})
+      }
+
+      if (!allSeasons.some(s => s.status === 'loading' || s.status === 'queued')) {
+        clearInterval(interval)
+      }
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [teamAbbrev, seasonStatuses])
+
+  function handleQueueSeason(year: number) {
+    api.loadSeason(year).catch(() => {})
+    setSeasonStatuses(prev => ({ ...prev, [year]: 'queued' }))
+  }
 
   if (initialLoading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
   if (!profiles.length || !teamAbbrev) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Team not found.</p></div>
@@ -476,10 +535,7 @@ export default function TeamPage() {
           </button>
           <span className="text-gray-700">/</span>
           <span className="text-gray-400 text-sm">{teamName(teamAbbrev)}</span>
-          <button
-            onClick={() => navigate(-1)}
-            className="ml-auto flex items-center gap-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-2 transition-colors"
-          >
+          <button onClick={() => navigate(-1)} className="ml-auto flex items-center gap-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-2 transition-colors">
             ← Back
           </button>
         </div>
@@ -489,7 +545,8 @@ export default function TeamPage() {
           <div>
             <h1 className="text-3xl font-bold text-white leading-tight">{teamName(teamAbbrev)}</h1>
             <div className="text-gray-400 mt-1">
-              All-time (loaded seasons) · <span className="text-white font-semibold">{allTime.label}</span>
+              {profiles.length} season{profiles.length !== 1 ? 's' : ''} loaded ·{' '}
+              <span className="text-white font-semibold">{allTime.label}</span>
               <span className="text-gray-600 text-xs ml-2">{allTime.w + allTime.l + allTime.t} games</span>
             </div>
           </div>
@@ -500,10 +557,8 @@ export default function TeamPage() {
             profiles={profiles}
             selected={activeProfile.season}
             onSelect={setSelectedSeason}
-            hasMore={hasMore}
-            loadingMore={loadingMore}
-            onLoadMore={loadMore}
-            nextYear={nextSeasonToTry}
+            seasonStatuses={seasonStatuses}
+            onQueueSeason={handleQueueSeason}
           />
           <div className="flex-1 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
             <SeasonDetail profile={activeProfile} />

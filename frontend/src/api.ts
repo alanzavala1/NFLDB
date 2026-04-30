@@ -2,7 +2,7 @@ const BASE = '/api'
 
 export interface SeasonEntry {
   season: number
-  status: 'loaded' | 'loading' | 'available' | 'error'
+  status: 'loaded' | 'loading' | 'queued' | 'available' | 'error'
 }
 
 export interface Game {
@@ -107,8 +107,10 @@ export interface PlayerGame {
   rush_yards: number
   rush_tds: number
   solo_tackles: number
+  assist_tackles: number
   sacks: number
   def_interceptions: number
+  pass_breakups: number
 }
 
 export interface NgsStats {
@@ -205,9 +207,11 @@ export interface TeamGame {
   assist_tackles: number
   sacks: number
   tackles_for_loss: number
+  qb_hits: number
   def_interceptions: number
   pass_breakups: number
   forced_fumbles: number
+  fumble_recoveries: number
 }
 
 export interface TeamProfile {

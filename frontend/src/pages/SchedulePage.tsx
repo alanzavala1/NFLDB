@@ -281,12 +281,13 @@ export default function SchedulePage() {
     fetchSeasons()
     const interval = setInterval(() => {
       fetchSeasons()
-      if (!seasons.some(s => s.status === 'loading')) clearInterval(interval)
+      if (!seasons.some(s => s.status === 'loading' || s.status === 'queued')) clearInterval(interval)
     }, 5000)
     return () => clearInterval(interval)
   }, [])
 
-  const currentSeasonStatus = seasons.find(s => s.season === season)?.status
+  const currentSeasonEntry = seasons.find(s => s.season === season)
+  const currentSeasonStatus = currentSeasonEntry?.status
 
   // Clear schedule data when season changes
   useEffect(() => {
@@ -296,7 +297,7 @@ export default function SchedulePage() {
   // Fetch schedule once season is confirmed loaded (or unknown — optimistic fetch)
   useEffect(() => {
     if (season === null) return
-    if (currentSeasonStatus === 'loading' || currentSeasonStatus === 'available' || currentSeasonStatus === 'error') return
+    if (currentSeasonStatus === 'loading' || currentSeasonStatus === 'queued' || currentSeasonStatus === 'available' || currentSeasonStatus === 'error') return
     setScheduleLoading(true)
     api.schedule(season)
       .then(setSchedule)
@@ -316,7 +317,7 @@ export default function SchedulePage() {
   }
 
   const selectedGroup = schedule.find(g => g.week === selectedWeek)
-  const isSeasonLoading = currentSeasonStatus === 'loading'
+  const isSeasonLoading = currentSeasonStatus === 'loading' || currentSeasonStatus === 'queued'
 
   return (
     <div className="min-h-screen bg-gray-950">
