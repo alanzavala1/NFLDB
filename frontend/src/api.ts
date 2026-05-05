@@ -1,5 +1,11 @@
 const BASE = '/api'
 
+// NFL season year = calendar year the season starts (Sep onward = this year, Jan–Aug = last year)
+export const CURRENT_NFL_SEASON = ((): number => {
+  const now = new Date()
+  return now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
+})()
+
 export interface SeasonEntry {
   season: number
   status: 'loaded' | 'loading' | 'queued' | 'available' | 'error'
@@ -106,16 +112,20 @@ export interface PlayerGame {
   pass_yards: number
   pass_tds: number
   interceptions_thrown: number
+  sacks_taken: number
   targets: number
   receptions: number
   rec_yards: number
   rec_tds: number
+  yac: number
   carries: number
   rush_yards: number
   rush_tds: number
   solo_tackles: number
   assist_tackles: number
+  tackles_for_loss: number
   sacks: number
+  qb_hits: number
   def_interceptions: number
   pass_breakups: number
 }
@@ -228,6 +238,45 @@ export interface TeamProfile {
   leaders: TeamLeader[]
 }
 
+export interface LeagueLeader {
+  player_id: string
+  player_name: string
+  position: string | null
+  team: string | null
+  headshot_url: string | null
+  games_played: number
+  attempts: number
+  completions: number
+  pass_yards: number
+  pass_tds: number
+  interceptions_thrown: number
+  sacks_taken: number
+  carries: number
+  rush_yards: number
+  rush_tds: number
+  targets: number
+  receptions: number
+  rec_yards: number
+  rec_tds: number
+  yac: number
+  solo_tackles: number
+  assist_tackles: number
+  tackles_for_loss: number
+  sacks: number
+  qb_hits: number
+  def_interceptions: number
+  pass_breakups: number
+}
+
+export interface SearchResult {
+  type: 'player' | 'team'
+  id: string
+  name: string
+  position: string | null
+  team: string | null
+  headshot_url: string | null
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(BASE + path)
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -247,4 +296,6 @@ export const api = {
   game: (gameId: string) => get<GameDetail>(`/games/${gameId}`),
   player: (playerId: string) => get<PlayerProfile>(`/players/${playerId}`),
   team: (abbrev: string, season: number) => get<TeamProfile>(`/teams/${abbrev}?season=${season}`),
+  search: (q: string) => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
+  leaders: (season: number) => get<LeagueLeader[]>(`/leaders?season=${season}`),
 }

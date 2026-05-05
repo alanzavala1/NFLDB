@@ -1,17 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-
-function HomeIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 11h1v6a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
-    </svg>
-  )
-}
-import { api } from '../api'
-import type { Game, SeasonEntry, WeekGroup } from '../api'
-import Nav from '../components/Nav'
-import { teamLogoUrl, CONFERENCES } from '../utils/teams'
+import { api, CURRENT_NFL_SEASON } from '../api'
+import type { Game, LeagueLeader, SearchResult, SeasonEntry, WeekGroup } from '../api'
+import { teamLogoUrl, teamName, CONFERENCES } from '../utils/teams'
 
 const GAME_TYPE_LABELS: Record<string, string> = { WC: 'Wild Card', DIV: 'Divisional', CON: 'Conference', SB: 'Super Bowl' }
 
@@ -243,6 +234,75 @@ function Standings({ schedule }: { schedule: WeekGroup[] }) {
   )
 }
 
+type LeaderCategory = { label: string; stat: string; getValue: (p: LeagueLeader) => number; filter: (p: LeagueLeader) => boolean }
+
+const LEADER_CATEGORIES: LeaderCategory[] = [
+  { label: 'Passing', stat: 'YDS', getValue: p => p.pass_yards, filter: p => p.attempts >= 100 },
+  { label: 'Rushing', stat: 'YDS', getValue: p => p.rush_yards, filter: p => p.carries >= 50 },
+  { label: 'Receiving', stat: 'YDS', getValue: p => p.rec_yards, filter: p => p.targets >= 20 },
+  { label: 'Defense', stat: 'TKL', getValue: p => p.solo_tackles + p.assist_tackles, filter: p => p.solo_tackles + p.assist_tackles >= 10 },
+]
+
+function LeaderMiniRow({ p, value, rank }: { p: LeagueLeader; value: number; rank: number }) {
+  const gold = rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-gray-400' : rank === 3 ? 'text-amber-600' : 'text-gray-600'
+  return (
+    <Link to={`/players/${p.player_id}`} className="flex items-center gap-2 py-1.5 px-3 hover:bg-gray-800/60 rounded-lg transition-colors group">
+      <span className={`text-xs font-bold w-4 shrink-0 tabular-nums ${gold}`}>{rank}</span>
+      {p.headshot_url
+        ? <img src={p.headshot_url} className="w-6 h-6 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" />
+        : <div className="w-6 h-6 rounded-full bg-gray-800 shrink-0" />
+      }
+      <span className="flex-1 text-sm text-gray-300 group-hover:text-white transition-colors truncate font-medium">{p.player_name}</span>
+      <span className="text-sm font-bold text-white tabular-nums">{value.toLocaleString()}</span>
+    </Link>
+  )
+}
+
+function LeadersPreview({ season }: { season: number }) {
+  const [leaders, setLeaders] = useState<LeagueLeader[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    setLeaders([])
+    api.leaders(season).then(setLeaders).finally(() => setLoading(false))
+  }, [season])
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-white">League Leaders</h2>
+        <Link to={`/leaders?season=${season}`} className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
+          View all →
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {LEADER_CATEGORIES.map(cat => {
+          const top5 = leaders.filter(cat.filter).sort((a, b) => cat.getValue(b) - cat.getValue(a)).slice(0, 5)
+          return (
+            <div key={cat.label} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">{cat.label}</span>
+                <span className="text-xs text-gray-600 font-medium">{cat.stat}</span>
+              </div>
+              <div className="py-1.5">
+                {loading
+                  ? <p className="px-3 py-2 text-xs text-gray-700">Loading…</p>
+                  : top5.length === 0
+                    ? <p className="px-3 py-2 text-xs text-gray-700">No data</p>
+                    : top5.map((p, i) => (
+                        <LeaderMiniRow key={p.player_id} p={p} value={cat.getValue(p)} rank={i + 1} />
+                      ))
+                }
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function SchedulePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -257,6 +317,36 @@ export default function SchedulePage() {
     const w = searchParams.get('week')
     return w ? Number(w) : null
   })
+
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [open, setOpen] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    let cancelled = false
+    const trimmed = query.trim()
+    if (!trimmed) { setResults([]); setOpen(false); return }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await api.search(trimmed)
+        if (!cancelled) { setResults(res); setOpen(true) }
+      } catch { if (!cancelled) setResults([]) }
+    }, 300)
+    return () => { cancelled = true; if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [query])
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [])
+
+  function dismiss() { setQuery(''); setResults([]); setOpen(false) }
 
   // Sync season + week whenever URL params change
   useEffect(() => {
@@ -321,56 +411,73 @@ export default function SchedulePage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav />
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-10">
 
-        {/* Header */}
-        <div className="mb-8">
-          {/* Nav row */}
-          <div className="flex items-center gap-2 mb-5">
-            <button
-              onClick={() => navigate('/?season=2025')}
-              className="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-800"
-              title="Home"
-            >
-              <HomeIcon />
-            </button>
-            <span className="text-gray-700">/</span>
-            <span className="text-gray-400 text-sm">{season}</span>
-            {selectedWeek !== null && (
-              <>
-                <span className="text-gray-700">/</span>
-                <span className="text-gray-400 text-sm">{weekLabel(selectedWeek, selectedGroup?.games[0]?.game_type)}</span>
-              </>
-            )}
-            {selectedWeek !== null && (
-              <button
-                onClick={() => setSearchParams({ season: String(season) })}
-                className="ml-auto flex items-center gap-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-2 transition-colors"
-              >
-                ← Back
-              </button>
-            )}
-          </div>
+        {/* Home header */}
+        {selectedWeek === null && (
+          <div className="mb-10">
+            <div className="flex items-center gap-4">
+              {/* Brand */}
+              <div className="shrink-0">
+                <span className="text-4xl font-black tracking-tight leading-none">
+                  <span className="text-white">NFL</span><span className="text-indigo-500">DB</span>
+                </span>
+              </div>
 
-          {/* Title row */}
-          <div className="flex items-end justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-white">
-                {selectedWeek !== null ? weekLabel(selectedWeek, selectedGroup?.games[0]?.game_type) : `${season} Season`}
-              </h1>
-              <p className="text-gray-500 text-sm mt-0.5">
-                {selectedWeek !== null ? `${season} NFL Season` : 'Select a week to view games'}
-              </p>
-            </div>
+              {/* Search — inline, flex-1 */}
+              <div ref={searchContainerRef} className="relative flex-1">
+                <div className="relative">
+                  <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none"
+                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Escape' && setOpen(false)}
+                    placeholder="Search players or teams…"
+                    className="w-full bg-gray-900 border border-gray-800 hover:border-gray-700 focus:border-indigo-500 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none transition-colors"
+                  />
+                </div>
+                {open && (
+                  <div className="absolute top-full mt-2 left-0 right-0 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                    {results.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-gray-600">No results for "{query.trim()}"</div>
+                    ) : results.map(r => r.type === 'team' ? (
+                      <Link key={r.id} to={`/teams/${r.id}`} onClick={dismiss}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800 transition-colors">
+                        <img src={teamLogoUrl(r.id)} className="w-7 h-7 object-contain shrink-0" alt="" />
+                        <div>
+                          <div className="text-sm font-semibold text-white">{teamName(r.id)}</div>
+                          <div className="text-xs text-gray-500">{r.id}</div>
+                        </div>
+                      </Link>
+                    ) : (
+                      <Link key={r.id} to={`/players/${r.id}`} onClick={dismiss}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800 transition-colors">
+                        {r.headshot_url
+                          ? <img src={r.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" />
+                          : <div className="w-7 h-7 rounded-full bg-gray-800 shrink-0" />
+                        }
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white truncate">{r.name}</div>
+                          <div className="text-xs text-gray-500">{[r.position, r.team].filter(Boolean).join(' · ')}</div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            {selectedWeek === null && (
-              <div className="relative">
+              {/* Season selector */}
+              <div className="relative shrink-0">
                 <select
                   value={season ?? ''}
                   onChange={e => handleSeasonChange(Number(e.target.value))}
                   disabled={seasons.length === 0}
-                  className="appearance-none bg-gray-800 border border-gray-700 text-white text-sm rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-indigo-500 disabled:opacity-50 cursor-pointer hover:border-gray-500 transition-colors"
+                  className="appearance-none bg-gray-800 border border-gray-700 text-white text-sm rounded-lg pl-3 pr-8 py-2.5 focus:outline-none focus:border-indigo-500 disabled:opacity-50 cursor-pointer hover:border-gray-500 transition-colors"
                 >
                   {seasons.length === 0 && <option value="">Loading…</option>}
                   {seasons.map(s => (
@@ -379,9 +486,38 @@ export default function SchedulePage() {
                 </select>
                 <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Week view breadcrumb nav */}
+        {selectedWeek !== null && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-5">
+              <button
+                onClick={() => navigate(`/?season=${CURRENT_NFL_SEASON}`)}
+                className="font-black text-lg tracking-tight shrink-0"
+              >
+                <span className="text-white">NFL</span><span className="text-indigo-500">DB</span>
+              </button>
+              <span className="text-gray-700 text-lg">/</span>
+              <button
+                onClick={() => setSearchParams({ season: String(season) })}
+                className="text-gray-400 hover:text-white text-sm font-semibold transition-colors"
+              >
+                {season}
+              </button>
+              <span className="text-gray-700 text-lg">/</span>
+              <span className="text-white text-sm font-bold">
+                {weekLabel(selectedWeek, selectedGroup?.games[0]?.game_type)}
+              </span>
+            </div>
+            <h1 className="text-3xl font-bold text-white">
+              {weekLabel(selectedWeek, selectedGroup?.games[0]?.game_type)}
+            </h1>
+            <p className="text-gray-500 text-sm mt-0.5">{season} NFL Season</p>
+          </div>
+        )}
 
         {/* Loading state */}
         {isSeasonLoading && season !== null && (
@@ -431,6 +567,7 @@ export default function SchedulePage() {
           scheduleLoading
             ? <p className="text-gray-500">Loading schedule…</p>
             : <>
+                {schedule.length > 0 && season !== null && <LeadersPreview season={season} />}
                 {schedule.length > 0 && <Standings schedule={schedule} />}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
                   {schedule.map(group => (

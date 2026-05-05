@@ -6,6 +6,7 @@ import SchedulePage from './pages/SchedulePage'
 import GamePage from './pages/GamePage'
 import TeamPage from './pages/TeamPage'
 import PlayerPage from './pages/PlayerPage'
+import LeadersPage from './pages/LeadersPage'
 
 
 createRoot(document.getElementById('root')!).render(
@@ -16,7 +17,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<SchedulePage />} />
         <Route path="/games/:gameId" element={<GamePage />} />
         <Route path="/players/:playerId" element={<PlayerPage />} />
-
+        <Route path="/leaders" element={<LeadersPage />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

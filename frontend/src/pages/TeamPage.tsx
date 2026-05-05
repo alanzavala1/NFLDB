@@ -376,11 +376,15 @@ function SeasonSidebar({
   const loadedYears = profiles.map(p => p.season)
   const visibleYears = [...new Set([...loadedYears, ...inFlight])].sort((a, b) => b - a)
 
-  // Next available year to queue (oldest loaded - 1, if not already loading)
+  // Next year to surface — either the next un-fetched loaded season or the next available one
   const oldest = Math.min(...loadedYears, ...inFlight)
   const nextAvailable = oldest > 1999 ? oldest - 1 : null
   const nextStatus = nextAvailable ? seasonStatuses[nextAvailable] : null
-  const canLoadMore = nextAvailable && (!nextStatus || nextStatus === 'available' || nextStatus === 'error')
+  const nextHasProfile = nextAvailable ? !!profileMap[nextAvailable] : false
+  const canLoadMore = nextAvailable && (
+    !nextStatus || nextStatus === 'available' || nextStatus === 'error' ||
+    (nextStatus === 'loaded' && !nextHasProfile)
+  )
 
   return (
     <div className="flex flex-col border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shrink-0 lg:w-40">
@@ -431,10 +435,10 @@ function SeasonSidebar({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-const CURRENT_SEASON = 2025
+import { CURRENT_NFL_SEASON } from '../api'
+const CURRENT_SEASON = CURRENT_NFL_SEASON
 const FIRST_SEASON = 1999
-const INITIAL_SEASONS = 3
-const AUTO_QUEUE = 2  // queue this many unloaded seasons beyond initial fetch
+const AUTO_SEASONS = 5  // fetch/queue this many recent seasons automatically
 
 export default function TeamPage() {
   const { teamAbbrev } = useParams<{ teamAbbrev: string }>()
@@ -444,39 +448,39 @@ export default function TeamPage() {
   const [initialLoading, setInitialLoading] = useState(true)
   const [seasonStatuses, setSeasonStatuses] = useState<Record<number, SeasonStatus>>({})
 
-  // Load initial seasons + global season list on mount
+  // On mount: get season list, fetch loaded profiles, queue missing ones
   useEffect(() => {
     if (!teamAbbrev) return
     let cancelled = false
     setProfiles([])
     setInitialLoading(true)
 
-    const years = Array.from({ length: INITIAL_SEASONS }, (_, i) => CURRENT_SEASON - i)
+    const years = Array.from({ length: AUTO_SEASONS }, (_, i) => CURRENT_SEASON - i)
 
-    Promise.all([
-      ...years.map(y => api.team(teamAbbrev, y).catch(() => null)),
-      api.seasons(),
-    ]).then(results => {
+    api.seasons().then(allSeasons => {
       if (cancelled) return
-      const allSeasons = results.pop() as SeasonEntry[]
-      const fetched = (results as (TeamProfile | null)[]).filter(Boolean) as TeamProfile[]
       const statuses = Object.fromEntries(allSeasons.map(s => [s.season, s.status])) as Record<number, SeasonStatus>
-
-      setProfiles(fetched.sort((a, b) => b.season - a.season))
       setSeasonStatuses(statuses)
-      setSelectedSeason(fetched[0]?.season ?? CURRENT_SEASON)
       setInitialLoading(false)
 
-      // Auto-queue a couple more recent seasons that aren't loaded yet
-      let queued = 0
-      for (let y = CURRENT_SEASON - INITIAL_SEASONS; y >= FIRST_SEASON && queued < AUTO_QUEUE; y--) {
-        if (statuses[y] === 'available' || statuses[y] === 'error') {
-          api.loadSeason(y)
-          statuses[y] = 'queued'
-          queued++
-        }
+      const toFetch = years.filter(y => statuses[y] === 'loaded')
+      const toQueue = years.filter(y => statuses[y] === 'available' || statuses[y] === 'error')
+
+      if (toFetch.length > 0) {
+        Promise.all(toFetch.map(y => api.team(teamAbbrev, y).catch(() => null))).then(results => {
+          if (cancelled) return
+          const fetched = results.filter(Boolean) as TeamProfile[]
+          setProfiles(fetched.sort((a, b) => b.season - a.season))
+          if (fetched.length > 0) setSelectedSeason(fetched[0].season)
+        })
       }
-      if (queued > 0) setSeasonStatuses({ ...statuses })
+
+      if (toQueue.length > 0) {
+        toQueue.forEach(y => api.loadSeason(y))
+        const next = { ...statuses }
+        toQueue.forEach(y => { next[y] = 'queued' })
+        setSeasonStatuses(next)
+      }
     })
 
     return () => { cancelled = true }
@@ -510,13 +514,50 @@ export default function TeamPage() {
     return () => clearInterval(interval)
   }, [teamAbbrev, seasonStatuses])
 
+  // Auto-select the newest available season when profiles first arrive
+  useEffect(() => {
+    if (profiles.length > 0 && !profiles.find(p => p.season === selectedSeason)) {
+      setSelectedSeason(profiles[0].season)
+    }
+  }, [profiles])
+
   function handleQueueSeason(year: number) {
-    api.loadSeason(year).catch(() => {})
-    setSeasonStatuses(prev => ({ ...prev, [year]: 'queued' }))
+    if (seasonStatuses[year] === 'loaded') {
+      api.team(teamAbbrev!, year)
+        .then(p => setProfiles(prev => [...prev.filter(x => x.season !== p.season), p].sort((a, b) => b.season - a.season)))
+        .catch(() => {})
+    } else {
+      api.loadSeason(year).catch(() => {})
+      setSeasonStatuses(prev => ({ ...prev, [year]: 'queued' }))
+    }
   }
 
   if (initialLoading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
-  if (!profiles.length || !teamAbbrev) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Team not found.</p></div>
+  if (!teamAbbrev) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Team not found.</p></div>
+
+  if (!profiles.length) {
+    const anyInFlight = Object.values(seasonStatuses).some(s => s === 'loading' || s === 'queued')
+    return (
+      <div className="min-h-screen bg-gray-950">
+        <Nav />
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <div className="flex items-center gap-5 mb-8">
+            <img src={teamLogoUrl(teamAbbrev)} alt={teamAbbrev} className="w-20 h-20 object-contain shrink-0" />
+            <div>
+              <h1 className="text-3xl font-bold text-white leading-tight">{teamName(teamAbbrev)}</h1>
+              {anyInFlight
+                ? <div className="text-gray-500 mt-1 flex items-center gap-2">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                    Loading season data — updates automatically…
+                  </div>
+                : <p className="text-gray-600 mt-1">No data available for this team.</p>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const allGames = profiles.flatMap(p => p.games)
   const allTime = computeRecord(allGames, teamAbbrev)
@@ -528,7 +569,7 @@ export default function TeamPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
 
         <div className="flex items-center gap-2 mb-5">
-          <button onClick={() => navigate('/?season=2025')} className="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-800" title="Home">
+          <button onClick={() => navigate(`/?season=${CURRENT_NFL_SEASON}`)} className="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-800" title="Home">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
               <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 11h1v6a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
             </svg>

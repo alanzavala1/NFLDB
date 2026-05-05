@@ -56,7 +56,33 @@ CASE
     return correction, rank
 
 
-CURRENT_SEASON = 2025
+_TEAM_NAMES = {
+    'ARI': 'Arizona Cardinals',    'ATL': 'Atlanta Falcons',
+    'BAL': 'Baltimore Ravens',     'BUF': 'Buffalo Bills',
+    'CAR': 'Carolina Panthers',    'CHI': 'Chicago Bears',
+    'CIN': 'Cincinnati Bengals',   'CLE': 'Cleveland Browns',
+    'DAL': 'Dallas Cowboys',       'DEN': 'Denver Broncos',
+    'DET': 'Detroit Lions',        'GB':  'Green Bay Packers',
+    'HOU': 'Houston Texans',       'IND': 'Indianapolis Colts',
+    'JAX': 'Jacksonville Jaguars', 'KC':  'Kansas City Chiefs',
+    'LAC': 'Los Angeles Chargers', 'LA':  'Los Angeles Rams',
+    'LV':  'Las Vegas Raiders',    'MIA': 'Miami Dolphins',
+    'MIN': 'Minnesota Vikings',    'NE':  'New England Patriots',
+    'NO':  'New Orleans Saints',   'NYG': 'New York Giants',
+    'NYJ': 'New York Jets',        'PHI': 'Philadelphia Eagles',
+    'PIT': 'Pittsburgh Steelers',  'SEA': 'Seattle Seahawks',
+    'SF':  'San Francisco 49ers',  'TB':  'Tampa Bay Buccaneers',
+    'TEN': 'Tennessee Titans',     'WAS': 'Washington Commanders',
+    'OAK': 'Oakland Raiders',      'SD':  'San Diego Chargers',
+    'STL': 'St. Louis Rams',       'JAC': 'Jacksonville Jaguars',
+}
+
+def _current_nfl_season() -> int:
+    from datetime import datetime
+    now = datetime.now()
+    return now.year if now.month >= 9 else now.year - 1
+
+CURRENT_SEASON = _current_nfl_season()
 AUTO_LOAD_SEASONS = 5  # load this many recent seasons automatically on startup
 
 # Season state: "queued" | "loading" | "error" — absent means loaded or not yet touched
@@ -471,6 +497,87 @@ def _get_snap_totals(player_id: str) -> dict:
     return {r["season"]: r for r in rows}
 
 
+def _get_situational_stats(player_id: str) -> dict:
+    """Per-season situational stats from play-by-play: red zone, 3rd down, longest plays, first downs."""
+    result: dict[int, dict] = {}
+    pid = player_id
+
+    def merge_rows(rows: list[dict]) -> None:
+        for row in rows:
+            s = row.pop("season", None)
+            if s is None:
+                continue
+            cleaned = {}
+            for k, v in row.items():
+                if v is None:
+                    continue
+                cleaned[k] = int(v) if isinstance(v, float) and v.is_integer() else v
+            result.setdefault(int(s), {}).update(cleaned)
+
+    # Longest completions / rushes / receptions
+    merge_rows(_safe_query("""
+        WITH pp AS (
+            SELECT * FROM plays
+            WHERE passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?
+        )
+        SELECT season,
+            MAX(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND complete_pass = 1 THEN passing_yards   END) AS lng_pass,
+            MAX(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1                       THEN rushing_yards   END) AS lng_rush,
+            MAX(CASE WHEN receiver_player_id = ? AND complete_pass = 1                      THEN receiving_yards END) AS lng_rec
+        FROM pp GROUP BY season
+    """, [pid, pid, pid, pid, pid, pid]))
+
+    # Red zone (inside opponent 20 = yardline_100 <= 20)
+    merge_rows(_safe_query("""
+        WITH pp AS (
+            SELECT * FROM plays
+            WHERE (passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?)
+              AND yardline_100 <= 20
+        )
+        SELECT season,
+            COUNT(*)  FILTER (WHERE passer_player_id  = ? AND pass_attempt = 1)                        AS rz_pass_att,
+            SUM(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND complete_pass = 1 THEN 1 ELSE 0 END) AS rz_cmp,
+            SUM(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND touchdown = 1     THEN 1 ELSE 0 END) AS rz_pass_tds,
+            COUNT(*)  FILTER (WHERE receiver_player_id = ? AND pass_attempt = 1)                       AS rz_targets,
+            SUM(CASE WHEN receiver_player_id = ? AND pass_attempt = 1 AND touchdown = 1    THEN 1 ELSE 0 END) AS rz_rec_tds,
+            COUNT(*)  FILTER (WHERE rusher_player_id   = ? AND rush_attempt = 1)                       AS rz_carries,
+            SUM(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1 AND touchdown = 1    THEN 1 ELSE 0 END) AS rz_rush_tds
+        FROM pp GROUP BY season
+    """, [pid, pid, pid, pid, pid, pid, pid, pid, pid, pid]))
+
+    # 3rd down
+    merge_rows(_safe_query("""
+        WITH pp AS (
+            SELECT * FROM plays
+            WHERE (passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?)
+              AND down = 3
+        )
+        SELECT season,
+            COUNT(*)  FILTER (WHERE passer_player_id  = ? AND pass_attempt = 1)                                          AS third_pass_att,
+            SUM(COALESCE(CASE WHEN passer_player_id  = ? AND pass_attempt = 1  THEN first_down_pass END, 0))              AS third_pass_fd,
+            COUNT(*)  FILTER (WHERE receiver_player_id = ? AND pass_attempt = 1)                                          AS third_targets,
+            SUM(COALESCE(CASE WHEN receiver_player_id = ? AND complete_pass = 1 THEN first_down_pass END, 0))             AS third_rec_fd,
+            COUNT(*)  FILTER (WHERE rusher_player_id   = ? AND rush_attempt = 1)                                          AS third_carries,
+            SUM(COALESCE(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1  THEN first_down_rush END, 0))             AS third_rush_fd
+        FROM pp GROUP BY season
+    """, [pid, pid, pid, pid, pid, pid, pid, pid, pid]))
+
+    # First downs generated
+    merge_rows(_safe_query("""
+        WITH pp AS (
+            SELECT * FROM plays
+            WHERE passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?
+        )
+        SELECT season,
+            SUM(COALESCE(CASE WHEN passer_player_id  = ? AND pass_attempt = 1  THEN first_down_pass END, 0)) AS fd_pass,
+            SUM(COALESCE(CASE WHEN receiver_player_id = ? AND complete_pass = 1 THEN first_down_pass END, 0)) AS fd_rec,
+            SUM(COALESCE(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1  THEN first_down_rush END, 0)) AS fd_rush
+        FROM pp GROUP BY season
+    """, [pid, pid, pid, pid, pid, pid]))
+
+    return result
+
+
 @app.get("/players/{player_id}")
 def get_player(player_id: str):
     profile_rows = query_to_dict(
@@ -606,3 +713,97 @@ def get_team(team: str, season: int = Query(2025)):
     )
 
     return {"team": team, "season": season, "games": games, "leaders": leaders}
+
+
+@app.get("/leaders")
+def get_leaders(season: int = Query(default=None)):
+    if season is None:
+        season = CURRENT_SEASON
+    rows = query_to_dict(
+        f"""
+        WITH {_ROSTER_CTE},
+        stats AS (
+            SELECT
+                pgs.player_id,
+                MAX(pgs.player_name)              AS player_name,
+                COUNT(DISTINCT pgs.game_id)       AS games_played,
+                SUM(pgs.attempts)                 AS attempts,
+                SUM(pgs.completions)              AS completions,
+                SUM(pgs.pass_yards)               AS pass_yards,
+                SUM(pgs.pass_tds)                 AS pass_tds,
+                SUM(pgs.interceptions_thrown)     AS interceptions_thrown,
+                SUM(pgs.sacks_taken)              AS sacks_taken,
+                SUM(pgs.carries)                  AS carries,
+                SUM(pgs.rush_yards)               AS rush_yards,
+                SUM(pgs.rush_tds)                 AS rush_tds,
+                SUM(pgs.targets)                  AS targets,
+                SUM(pgs.receptions)               AS receptions,
+                SUM(pgs.rec_yards)                AS rec_yards,
+                SUM(pgs.rec_tds)                  AS rec_tds,
+                SUM(pgs.yac)                      AS yac,
+                SUM(pgs.solo_tackles)             AS solo_tackles,
+                SUM(pgs.assist_tackles)           AS assist_tackles,
+                SUM(pgs.tackles_for_loss)         AS tackles_for_loss,
+                SUM(pgs.sacks)                    AS sacks,
+                SUM(pgs.qb_hits)                  AS qb_hits,
+                SUM(pgs.def_interceptions)        AS def_interceptions,
+                SUM(pgs.pass_breakups)            AS pass_breakups
+            FROM player_game_stats pgs
+            WHERE pgs.season = ?
+            GROUP BY pgs.player_id
+        )
+        SELECT s.*, r.position, r.team, r.headshot_url
+        FROM stats s
+        LEFT JOIN roster r ON r.player_id = s.player_id AND r.season = ?
+        """,
+        [season, season],
+    )
+    return rows
+
+
+@app.get("/search")
+def search(q: str = Query(..., min_length=1)):
+    q = q.strip()
+    if not q:
+        return []
+
+    ql = q.lower()
+
+    # Team results — match abbreviation prefix or anywhere in full name
+    teams = [
+        {"type": "team", "id": abbrev, "name": name, "position": None, "team": abbrev, "headshot_url": None}
+        for abbrev, name in _TEAM_NAMES.items()
+        if ql in abbrev.lower() or ql in name.lower()
+    ][:3]
+
+    # Player results — ILIKE match, deduplicated to most recent roster entry,
+    # ranked: exact match → starts-with → contains
+    players = _safe_query(
+        """
+        SELECT
+            player_id    AS id,
+            player_name  AS name,
+            position,
+            team,
+            headshot_url,
+            CASE
+                WHEN LOWER(player_name) = LOWER(?)            THEN 0
+                WHEN LOWER(player_name) LIKE LOWER(?) || '%'  THEN 1
+                ELSE 2
+            END AS rank
+        FROM rosters
+        WHERE player_name ILIKE ?
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY season DESC) = 1
+        ORDER BY rank, player_name
+        LIMIT 8
+        """,
+        [q, q, f"%{q}%"],
+    )
+
+    player_results = [
+        {"type": "player", "id": p["id"], "name": p["name"],
+         "position": p["position"], "team": p["team"], "headshot_url": p["headshot_url"]}
+        for p in players
+    ]
+
+    return (teams + player_results)[:10]
