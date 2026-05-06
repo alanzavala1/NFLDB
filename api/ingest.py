@@ -158,23 +158,25 @@ def build_passing_stats(conn, available, seasons):
     week_expr   = "week"   if "week"   in available else "NULL::INTEGER"
     season_expr = "season" if "season" in available else "NULL::INTEGER"
     sf = _season_filter(available, seasons)
+    # Exclude 2-pt conversion plays (they inflate attempts/completions/yards and have no TD credit to the passer)
+    two_pt = "AND COALESCE(two_point_attempt, 0) = 0" if "two_point_attempt" in available else ""
     sql = f"""
         SELECT
             game_id,
-            passer_player_id                                            AS player_id,
-            passer_player_name                                          AS player_name,
-            posteam                                                     AS team,
-            {season_expr}                                               AS season,
-            {week_expr}                                                 AS week,
-            COUNT(*) FILTER (WHERE pass_attempt = 1)                   AS attempts,
-            SUM(complete_pass)                                          AS completions,
+            passer_player_id                                                                             AS player_id,
+            passer_player_name                                                                           AS player_name,
+            posteam                                                                                      AS team,
+            {season_expr}                                                                                AS season,
+            {week_expr}                                                                                  AS week,
+            COUNT(*) FILTER (WHERE pass_attempt = 1)                                                    AS attempts,
+            SUM(complete_pass)                                                                           AS completions,
             {sql_sum('passing_yards', 'pass_yards', available)},
-            COUNT(*) FILTER (WHERE touchdown = 1 AND pass_attempt = 1) AS pass_tds,
-            COUNT(*) FILTER (WHERE interception = 1)                   AS interceptions_thrown,
-            COUNT(*) FILTER (WHERE sack = 1)                           AS sacks_taken,
-            SUM(CASE WHEN pass_attempt = 1 THEN epa ELSE 0 END)        AS pass_epa
+            COUNT(*) FILTER (WHERE touchdown = 1 AND pass_attempt = 1 AND COALESCE(interception, 0) = 0) AS pass_tds,
+            COUNT(*) FILTER (WHERE interception = 1)                                                    AS interceptions_thrown,
+            COUNT(*) FILTER (WHERE sack = 1)                                                            AS sacks_taken,
+            SUM(CASE WHEN pass_attempt = 1 THEN epa ELSE 0 END)                                         AS pass_epa
         FROM plays
-        WHERE passer_player_id IS NOT NULL {sf}
+        WHERE passer_player_id IS NOT NULL {two_pt} {sf}
         GROUP BY game_id, passer_player_id, passer_player_name, posteam, {season_expr}, {week_expr}
     """
     return conn.execute(sql).df()
@@ -184,6 +186,7 @@ def build_receiving_stats(conn, available, seasons):
     week_expr   = "week"   if "week"   in available else "NULL::INTEGER"
     season_expr = "season" if "season" in available else "NULL::INTEGER"
     sf = _season_filter(available, seasons)
+    two_pt = "AND COALESCE(two_point_attempt, 0) = 0" if "two_point_attempt" in available else ""
     sql = f"""
         SELECT
             game_id,
@@ -200,7 +203,7 @@ def build_receiving_stats(conn, available, seasons):
             {sql_sum('yards_after_catch','yac',        available)},
             SUM(CASE WHEN pass_attempt = 1 THEN epa ELSE 0 END)          AS rec_epa
         FROM plays
-        WHERE receiver_player_id IS NOT NULL {sf}
+        WHERE receiver_player_id IS NOT NULL {two_pt} {sf}
         GROUP BY game_id, receiver_player_id, receiver_player_name, posteam, {season_expr}, {week_expr}
     """
     return conn.execute(sql).df()
@@ -210,6 +213,7 @@ def build_rushing_stats(conn, available, seasons):
     week_expr   = "week"   if "week"   in available else "NULL::INTEGER"
     season_expr = "season" if "season" in available else "NULL::INTEGER"
     sf = _season_filter(available, seasons)
+    two_pt = "AND COALESCE(two_point_attempt, 0) = 0" if "two_point_attempt" in available else ""
     sql = f"""
         SELECT
             game_id,
@@ -223,7 +227,7 @@ def build_rushing_stats(conn, available, seasons):
             COUNT(*) FILTER (WHERE touchdown = 1 AND rush_attempt = 1)  AS rush_tds,
             SUM(CASE WHEN rush_attempt = 1 THEN epa ELSE 0 END)         AS rush_epa
         FROM plays
-        WHERE rusher_player_id IS NOT NULL AND rush_attempt = 1 {sf}
+        WHERE rusher_player_id IS NOT NULL AND rush_attempt = 1 {two_pt} {sf}
         GROUP BY game_id, rusher_player_id, rusher_player_name, posteam, {season_expr}, {week_expr}
     """
     return conn.execute(sql).df()
