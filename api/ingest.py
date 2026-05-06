@@ -168,13 +168,13 @@ def build_passing_stats(conn, available, seasons):
             posteam                                                                                      AS team,
             {season_expr}                                                                                AS season,
             {week_expr}                                                                                  AS week,
-            COUNT(*) FILTER (WHERE pass_attempt = 1)                                                    AS attempts,
-            SUM(complete_pass)                                                                           AS completions,
+            COUNT(*) FILTER (WHERE pass_attempt = 1 AND COALESCE(sack, 0) = 0)                          AS attempts,
+            SUM(complete_pass) FILTER (WHERE COALESCE(sack, 0) = 0)                                     AS completions,
             {sql_sum('passing_yards', 'pass_yards', available)},
             COUNT(*) FILTER (WHERE touchdown = 1 AND pass_attempt = 1 AND COALESCE(interception, 0) = 0) AS pass_tds,
             COUNT(*) FILTER (WHERE interception = 1)                                                    AS interceptions_thrown,
             COUNT(*) FILTER (WHERE sack = 1)                                                            AS sacks_taken,
-            SUM(CASE WHEN pass_attempt = 1 THEN epa ELSE 0 END)                                         AS pass_epa
+            SUM(CASE WHEN pass_attempt = 1 OR COALESCE(sack, 0) = 1 THEN epa ELSE 0 END)               AS pass_epa
         FROM plays
         WHERE passer_player_id IS NOT NULL {two_pt} {sf}
         GROUP BY game_id, passer_player_id, passer_player_name, posteam, {season_expr}, {week_expr}
