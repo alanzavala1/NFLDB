@@ -198,7 +198,7 @@ def build_receiving_stats(conn, available, seasons):
             COUNT(*) FILTER (WHERE pass_attempt = 1)                     AS targets,
             SUM(complete_pass)                                            AS receptions,
             {sql_sum('receiving_yards',  'rec_yards',  available)},
-            COUNT(*) FILTER (WHERE touchdown = 1 AND pass_attempt = 1)   AS rec_tds,
+            COUNT(*) FILTER (WHERE touchdown = 1 AND pass_attempt = 1 AND COALESCE(interception, 0) = 0) AS rec_tds,
             {sql_sum('air_yards',        'air_yards',  available)},
             {sql_sum('yards_after_catch','yac',        available)},
             SUM(CASE WHEN pass_attempt = 1 THEN epa ELSE 0 END)          AS rec_epa
@@ -255,7 +255,7 @@ def build_slot_stats(plays, slots):
 
     return (
         long
-        .groupby(["game_id", "player_id", "team", "season", "week"], dropna=False)
+        .groupby(["game_id", "player_id", "team", "season", "week"])
         .agg(agg_rules)
         .reset_index()
     )
@@ -289,7 +289,7 @@ def build_kicker_stats(plays):
     })
 
     agg_rules = {"player_name": "first", "fg_att": "sum", "fg_made": "sum", "xp_att": "sum", "xp_made": "sum"}
-    return frame.groupby(["game_id", "player_id", "team", "season", "week"], dropna=False).agg(agg_rules).reset_index()
+    return frame.groupby(["game_id", "player_id", "team", "season", "week"]).agg(agg_rules).reset_index()
 
 
 def build_punter_stats(plays):
@@ -313,7 +313,7 @@ def build_punter_stats(plays):
     })
 
     agg_rules = {"player_name": "first", "punts": "sum", "punt_yards": "sum"}
-    return frame.groupby(["game_id", "player_id", "team", "season", "week"], dropna=False).agg(agg_rules).reset_index()
+    return frame.groupby(["game_id", "player_id", "team", "season", "week"]).agg(agg_rules).reset_index()
 
 
 def build_returner_stats(plays):
@@ -355,7 +355,7 @@ def build_returner_stats(plays):
 
         agg_rules = {"player_name": "first", ret_stat: "sum", yds_stat: "sum", td_stat: "sum"}
         result_frames.append(
-            frame.groupby(["game_id", "player_id", "team", "season", "week"], dropna=False).agg(agg_rules).reset_index()
+            frame.groupby(["game_id", "player_id", "team", "season", "week"]).agg(agg_rules).reset_index()
         )
 
     return merge_all_stats(*result_frames) if result_frames else pd.DataFrame()
@@ -377,6 +377,13 @@ def load_and_store_raw(conn, seasons: list[int], log=print):
     log(f"Loading rosters...")
     rosters = nfl_data_py.import_seasonal_rosters(seasons)
     _upsert_by_season(conn, "rosters", rosters, seasons, log=log)
+
+    log(f"Loading weekly player stats...")
+    try:
+        weekly = nfl_data_py.import_weekly_data(seasons)
+        _upsert_by_season(conn, "weekly_player_stats", weekly, seasons, log=log)
+    except Exception as e:
+        log(f"  weekly player stats unavailable: {e}")
 
     return plays
 
@@ -418,6 +425,85 @@ def load_advanced_stats(conn, seasons: list[int], log=print):
 
 
 # ---------------------------------------------------------------------------
+# Official weekly offensive stats (replaces PBP-derived passing/rushing/receiving)
+# ---------------------------------------------------------------------------
+
+def build_offensive_stats_from_weekly(conn, seasons: list[int], log=print) -> pd.DataFrame:
+    """
+    Passing/rushing/receiving stats from nflverse official weekly player data.
+
+    nflverse derives these from the same official NFL source PFR uses, so play
+    classification edge cases (sack encoding, 2-pt conversions, pick-sixes) are
+    handled correctly without any manual filtering on our end.
+    """
+    try:
+        cols = {r[0] for r in conn.execute("DESCRIBE weekly_player_stats").fetchall()}
+    except Exception:
+        return pd.DataFrame()
+
+    season_clause = ', '.join(str(s) for s in seasons)
+
+    def col(name, alias, default='0'):
+        return (f'COALESCE(w.{name}, {default}) AS {alias}' if name in cols
+                else f'CAST({default} AS DOUBLE) AS {alias}')
+
+    # game_id is present in modern nflverse weekly data; fall back to schedule join if absent
+    if 'game_id' in cols:
+        game_id_expr = 'w.game_id'
+        join_clause  = ''
+    else:
+        game_id_expr = 'sch.game_id'
+        join_clause  = """
+            LEFT JOIN schedules sch
+                ON  sch.season = w.season AND sch.week = w.week
+                AND (sch.home_team = w.recent_team OR sch.away_team = w.recent_team)
+        """
+
+    name_col = 'player_display_name' if 'player_display_name' in cols else 'player_name'
+
+    sql = f"""
+        SELECT
+            {game_id_expr}                                              AS game_id,
+            w.player_id,
+            w.{name_col}                                                AS player_name,
+            w.recent_team                                               AS team,
+            w.season,
+            w.week,
+            {col('completions',                 'completions')},
+            {col('attempts',                    'attempts')},
+            {col('passing_yards',               'pass_yards')},
+            {col('passing_tds',                 'pass_tds')},
+            {col('interceptions',               'interceptions_thrown')},
+            {col('sacks',                       'sacks_taken')},
+            {col('passing_epa',                 'pass_epa')},
+            {col('targets',                     'targets')},
+            {col('receptions',                  'receptions')},
+            {col('receiving_yards',             'rec_yards')},
+            {col('receiving_tds',               'rec_tds')},
+            {col('receiving_air_yards',         'air_yards')},
+            {col('receiving_yards_after_catch', 'yac')},
+            {col('receiving_epa',               'rec_epa')},
+            {col('carries',                     'carries')},
+            {col('rushing_yards',               'rush_yards')},
+            {col('rushing_tds',                 'rush_tds')},
+            {col('rushing_epa',                 'rush_epa')}
+        FROM weekly_player_stats w
+        {join_clause}
+        WHERE w.season IN ({season_clause})
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY w.player_id, w.season, w.week
+            ORDER BY COALESCE(w.attempts, 0) + COALESCE(w.carries, 0) + COALESCE(w.targets, 0) DESC
+        ) = 1
+    """
+
+    df = conn.execute(sql).df()
+    # Drop rows where the schedule join failed to resolve a game_id (old seasons without game_id column)
+    df = df[df["game_id"].notna()]
+    log(f"  offensive (weekly): {len(df):,} player-game rows")
+    return df
+
+
+# ---------------------------------------------------------------------------
 # Pipeline
 # ---------------------------------------------------------------------------
 
@@ -429,15 +515,38 @@ def run_ingest(seasons: list[int], log=print):
 
     # Build stats only for the seasons being ingested — never touch other seasons.
     log(f"\nBuilding player_game_stats for {seasons}...")
-    passing   = build_passing_stats(conn, available, seasons)
-    receiving = build_receiving_stats(conn, available, seasons)
-    rushing   = build_rushing_stats(conn, available, seasons)
+
+    # Offensive stats: prefer official nflverse weekly data (same source as PFR).
+    # Falls back to play-by-play derivation if weekly data isn't available.
+    offensive = build_offensive_stats_from_weekly(conn, seasons, log=log)
+    if offensive.empty:
+        log("  weekly_player_stats unavailable — falling back to play-by-play")
+        offensive = merge_all_stats(
+            build_passing_stats(conn, available, seasons),
+            build_receiving_stats(conn, available, seasons),
+            build_rushing_stats(conn, available, seasons),
+        )
+
     defensive = build_slot_stats(plays, DEFENSIVE_SLOTS)
     kicker    = build_kicker_stats(plays)
     punter    = build_punter_stats(plays)
     returner  = build_returner_stats(plays)
 
-    player_game_stats = merge_all_stats(passing, receiving, rushing, defensive, kicker, punter, returner)
+    player_game_stats = merge_all_stats(offensive, defensive, kicker, punter, returner)
+
+    # Drop any rows with no game_id (orphaned rows from failed joins)
+    player_game_stats = player_game_stats[player_game_stats["game_id"].notna()]
+
+    # Deduplicate on (game_id, player_id) — keep the row with the most total activity
+    stat_cols = [c for c in player_game_stats.columns if c not in ("game_id", "player_id", "season", "week", "team", "player_name")]
+    if stat_cols:
+        player_game_stats["_total"] = player_game_stats[stat_cols].fillna(0).sum(axis=1)
+        player_game_stats = (
+            player_game_stats
+            .sort_values("_total", ascending=False)
+            .drop_duplicates(subset=["game_id", "player_id"])
+            .drop(columns=["_total"])
+        )
 
     conn.register("pgs_df", player_game_stats)
     try:
