@@ -107,20 +107,25 @@ export interface PlayerGame {
   away_score: number | null
   home_score: number | null
   result: 'W' | 'L' | 'T' | null
+  game_type: string
   attempts: number
   completions: number
   pass_yards: number
   pass_tds: number
   interceptions_thrown: number
   sacks_taken: number
+  pass_epa: number
   targets: number
   receptions: number
   rec_yards: number
   rec_tds: number
   yac: number
+  air_yards: number
+  rec_epa: number
   carries: number
   rush_yards: number
   rush_tds: number
+  rush_epa: number
   solo_tackles: number
   assist_tackles: number
   tackles_for_loss: number
@@ -128,6 +133,28 @@ export interface PlayerGame {
   qb_hits: number
   def_interceptions: number
   pass_breakups: number
+}
+
+export interface SituationalStats {
+  lng_pass?: number
+  lng_rush?: number
+  lng_rec?: number
+  rz_pass_att?: number
+  rz_cmp?: number
+  rz_pass_tds?: number
+  rz_targets?: number
+  rz_rec_tds?: number
+  rz_carries?: number
+  rz_rush_tds?: number
+  third_pass_att?: number
+  third_pass_fd?: number
+  third_targets?: number
+  third_rec_fd?: number
+  third_carries?: number
+  third_rush_fd?: number
+  fd_pass?: number
+  fd_rec?: number
+  fd_rush?: number
 }
 
 export interface NgsStats {
@@ -183,6 +210,7 @@ export interface PlayerProfile {
   games: PlayerGame[]
   ngs: Record<number, NgsStats>
   snap_totals: Record<number, SnapTotals>
+  situational: Record<number, SituationalStats>
 }
 
 export interface TeamGame {
@@ -212,14 +240,18 @@ export interface TeamGame {
   pass_tds: number
   interceptions_thrown: number
   sacks_taken: number
+  pass_epa: number | null
   carries: number
   rush_yards: number
   rush_tds: number
+  rush_epa: number | null
   targets: number
   receptions: number
   rec_yards: number
   rec_tds: number
+  air_yards: number | null
   yac: number
+  rec_epa: number | null
   solo_tackles: number
   assist_tackles: number
   sacks: number
@@ -236,6 +268,7 @@ export interface TeamProfile {
   season: number
   games: TeamGame[]
   leaders: TeamLeader[]
+  playoff_leaders: TeamLeader[]
 }
 
 export interface LeagueLeader {
@@ -251,14 +284,18 @@ export interface LeagueLeader {
   pass_tds: number
   interceptions_thrown: number
   sacks_taken: number
+  pass_epa: number | null
   carries: number
   rush_yards: number
   rush_tds: number
+  rush_epa: number | null
   targets: number
   receptions: number
   rec_yards: number
   rec_tds: number
   yac: number
+  air_yards: number | null
+  rec_epa: number | null
   solo_tackles: number
   assist_tackles: number
   tackles_for_loss: number
@@ -266,6 +303,28 @@ export interface LeagueLeader {
   qb_hits: number
   def_interceptions: number
   pass_breakups: number
+  forced_fumbles: number | null
+  fumble_recoveries: number | null
+}
+
+export interface StandingsTeam {
+  team: string
+  w: number
+  l: number
+  t: number
+  pct: number
+  pf: number
+  pa: number
+  gb: string
+  home: string
+  away: string
+  div: string
+  strk: string
+}
+
+export interface DivisionStandings {
+  division: string
+  teams: StandingsTeam[]
 }
 
 export interface SearchResult {
@@ -297,5 +356,6 @@ export const api = {
   player: (playerId: string) => get<PlayerProfile>(`/players/${playerId}`),
   team: (abbrev: string, season: number) => get<TeamProfile>(`/teams/${abbrev}?season=${season}`),
   search: (q: string) => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
+  standings: (season: number) => get<DivisionStandings[]>(`/standings?season=${season}`),
   leaders: (season: number) => get<LeagueLeader[]>(`/leaders?season=${season}`),
 }

@@ -212,11 +212,16 @@ function DivisionCard({ conf, div, teams, records }: { conf: string; div: string
   )
 }
 
-function Standings({ schedule }: { schedule: WeekGroup[] }) {
+function Standings({ schedule, season }: { schedule: WeekGroup[]; season: number }) {
   const records = computeStandings(schedule)
   return (
     <div className="mb-2">
-      <h2 className="text-lg font-bold text-white mb-4">Standings</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-white">Standings</h2>
+        <Link to={`/standings?season=${season}`} className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
+          View full →
+        </Link>
+      </div>
       {Object.entries(CONFERENCES).map(([conf, divisions]) => (
         <div key={conf} className="mb-5">
           <div className="flex items-center gap-3 mb-3">
@@ -511,6 +516,12 @@ export default function SchedulePage() {
               <span className="text-white text-sm font-bold">
                 {weekLabel(selectedWeek, selectedGroup?.games[0]?.game_type)}
               </span>
+              <button
+                onClick={() => setSearchParams({ season: String(season) })}
+                className="ml-auto shrink-0 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
+              >
+                ← Back
+              </button>
             </div>
             <h1 className="text-3xl font-bold text-white">
               {weekLabel(selectedWeek, selectedGroup?.games[0]?.game_type)}
@@ -568,7 +579,7 @@ export default function SchedulePage() {
             ? <p className="text-gray-500">Loading schedule…</p>
             : <>
                 {schedule.length > 0 && season !== null && <LeadersPreview season={season} />}
-                {schedule.length > 0 && <Standings schedule={schedule} />}
+                {schedule.length > 0 && season !== null && <Standings schedule={schedule} season={season} />}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
                   {schedule.map(group => (
                     <WeekCard key={group.week} group={group} onExpand={() => setSearchParams({ season: String(season), week: String(group.week) })} />
