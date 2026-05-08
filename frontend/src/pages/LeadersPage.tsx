@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { LeagueLeader, SeasonEntry } from '../api'
+import type { LeagueLeader, SeasonEntry, WpaLeader, WpaLeaders } from '../api'
 import Nav from '../components/Nav'
 import { teamLogoUrl } from '../utils/teams'
 
@@ -216,6 +216,73 @@ function LeaderTable({ players, cols, sort, onSort }: {
   )
 }
 
+type WpaSubTab = 'passing' | 'rushing' | 'receiving'
+
+function WpaTable({ players, contextLabel }: { players: WpaLeader[]; contextLabel: string }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-800/50">
+            <th colSpan={4} />
+            <th colSpan={1} className="py-1 text-center text-[10px] font-semibold text-violet-400/60 uppercase tracking-widest bg-violet-950/20 border-l border-gray-800/40">WPA</th>
+            <th colSpan={2} className="py-1 text-center text-[10px] font-semibold text-gray-600 uppercase tracking-widest border-l border-gray-800/40">Context</th>
+          </tr>
+          <tr className="border-b border-gray-800">
+            <th className="py-2.5 pl-4 pr-2 text-xs font-semibold text-gray-500 text-right w-8">#</th>
+            <th className="py-2.5 pl-2 pr-3 text-xs font-semibold text-gray-500 text-left">Player</th>
+            <th className="py-2.5 px-2 text-xs font-semibold text-gray-500 text-left">Pos</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-gray-500 text-left">Team</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-violet-400/50 text-right border-l border-gray-800/40 bg-violet-950/10">WPA</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-gray-600 text-right border-l border-gray-800/40">G</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-gray-600 text-right">{contextLabel}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {players.map((p, i) => {
+            const wpaStr = `${p.wpa >= 0 ? '+' : ''}${p.wpa.toFixed(3)}`
+            const isPos = p.wpa >= 0
+            const ctx = p.attempts ?? p.carries ?? p.receptions ?? null
+            return (
+              <tr key={p.player_id} className="border-t border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                <td className="py-2.5 pl-4 pr-2 text-right">
+                  <span className={`text-sm tabular-nums ${i === 0 ? 'text-yellow-400 font-black' : i === 1 ? 'text-gray-300 font-bold' : i === 2 ? 'text-amber-600 font-bold' : 'text-gray-600 font-medium'}`}>{i + 1}</span>
+                </td>
+                <td className="py-2.5 pl-2 pr-3 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    {p.headshot_url
+                      ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" />
+                      : <div className="w-7 h-7 rounded-full bg-gray-800 shrink-0" />
+                    }
+                    <Link to={`/players/${p.player_id}`} className="text-indigo-400 hover:underline font-semibold text-sm leading-tight">{p.player_name}</Link>
+                  </div>
+                </td>
+                <td className="py-2.5 px-2 whitespace-nowrap">
+                  <span className="text-xs text-gray-500 font-medium">{p.position ?? '—'}</span>
+                </td>
+                <td className="py-2.5 px-3 whitespace-nowrap">
+                  {p.team
+                    ? <Link to={`/teams/${p.team}`} className="flex items-center gap-1.5 group w-fit">
+                        <img src={teamLogoUrl(p.team)} className="w-5 h-5 object-contain opacity-80 group-hover:opacity-100" alt="" />
+                        <span className="text-xs text-gray-400 group-hover:text-white transition-colors font-medium">{p.team}</span>
+                      </Link>
+                    : <span className="text-gray-700 text-xs">—</span>
+                  }
+                </td>
+                <td className={`py-2.5 px-3 text-right tabular-nums font-bold text-sm border-l border-gray-800/30 bg-violet-950/10 ${isPos ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {wpaStr}
+                </td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-sm text-gray-600 border-l border-gray-800/30">{p.games_played}</td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-sm text-gray-500">{ctx ?? '—'}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function LeadersPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -223,6 +290,9 @@ export default function LeadersPage() {
   const [leaders, setLeaders] = useState<LeagueLeader[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState(0)
+  const [wpaData, setWpaData] = useState<WpaLeaders | null>(null)
+  const [wpaLoading, setWpaLoading] = useState(false)
+  const [wpaSubTab, setWpaSubTab] = useState<WpaSubTab>('passing')
   const [sorts, setSorts] = useState<Record<string, { key: string; dir: SortDir }>>({
     passing:   { key: 'yds', dir: 'desc' },
     rushing:   { key: 'yds', dir: 'desc' },
@@ -230,8 +300,10 @@ export default function LeadersPage() {
     defense:   { key: 'tot', dir: 'desc' },
   })
 
+  const WPA_TAB_INDEX = TABS.length
+
   const season = Number(searchParams.get('season') ?? CURRENT_NFL_SEASON)
-  const tab = TABS[activeTab]
+  const tab = TABS[activeTab] ?? TABS[0]
 
   useEffect(() => {
     api.seasons().then(all => setSeasons(all.filter(s => s.status === 'loaded')))
@@ -242,6 +314,13 @@ export default function LeadersPage() {
     setLeaders([])
     api.leaders(season).then(setLeaders).finally(() => setLoading(false))
   }, [season])
+
+  useEffect(() => {
+    if (activeTab !== WPA_TAB_INDEX) return
+    setWpaLoading(true)
+    setWpaData(null)
+    api.wpaLeaders(season).then(setWpaData).finally(() => setWpaLoading(false))
+  }, [activeTab, season, WPA_TAB_INDEX])
 
   function handleSort(tabKey: string, colKey: string) {
     setSorts(prev => {
@@ -292,7 +371,7 @@ export default function LeadersPage() {
           </select>
         </div>
 
-        <div className="flex gap-1 mb-4 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+        <div className="flex gap-1 mb-4 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit flex-wrap">
           {TABS.map((t, i) => (
             <button
               key={t.key}
@@ -303,22 +382,65 @@ export default function LeadersPage() {
               {t.label}
             </button>
           ))}
+          <button
+            onClick={() => setActiveTab(WPA_TAB_INDEX)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors
+              ${activeTab === WPA_TAB_INDEX ? 'bg-violet-700 text-white' : 'text-gray-400 hover:text-white'}`}
+          >
+            WPA
+          </button>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          {loading ? (
-            <p className="p-8 text-gray-500 text-sm">Loading…</p>
-          ) : filtered.length === 0 ? (
-            <p className="p-8 text-gray-600 text-sm">No data for {season}.</p>
-          ) : (
-            <LeaderTable
-              players={filtered}
-              cols={tab.cols}
-              sort={sort}
-              onSort={key => handleSort(tab.key, key)}
-            />
-          )}
-        </div>
+        {activeTab === WPA_TAB_INDEX ? (
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+                {(['passing', 'rushing', 'receiving'] as WpaSubTab[]).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setWpaSubTab(s)}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition-colors
+                      ${wpaSubTab === s ? 'bg-violet-700 text-white' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-gray-600">
+                {wpaSubTab === 'passing' ? 'Air WPA credited to passer (≥50 att)' :
+                 wpaSubTab === 'rushing' ? 'WPA on rush plays (≥50 car)' :
+                 'YAC WPA credited to receiver (≥20 rec)'}
+              </span>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              {wpaLoading ? (
+                <p className="p-8 text-gray-500 text-sm">Loading…</p>
+              ) : !wpaData ? (
+                <p className="p-8 text-gray-600 text-sm">No WPA data for {season}.</p>
+              ) : (
+                <WpaTable
+                  players={wpaData[wpaSubTab]}
+                  contextLabel={wpaSubTab === 'passing' ? 'ATT' : wpaSubTab === 'rushing' ? 'CAR' : 'REC'}
+                />
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            {loading ? (
+              <p className="p-8 text-gray-500 text-sm">Loading…</p>
+            ) : filtered.length === 0 ? (
+              <p className="p-8 text-gray-600 text-sm">No data for {season}.</p>
+            ) : (
+              <LeaderTable
+                players={filtered}
+                cols={tab.cols}
+                sort={sort}
+                onSort={key => handleSort(tab.key, key)}
+              />
+            )}
+          </div>
+        )}
 
       </div>
     </div>

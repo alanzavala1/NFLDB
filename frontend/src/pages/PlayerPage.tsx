@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats } from '../api'
+import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa } from '../api'
 import Nav from '../components/Nav'
 import { teamLogoUrl } from '../utils/teams'
 
@@ -39,10 +39,10 @@ function sumGames(games: PlayerGame[]) {
 }
 type Totals = ReturnType<typeof sumGames>
 
-type ColKind = 'trad' | 'adv' | 'ngs' | 'snap' | 'sit'
+type ColKind = 'trad' | 'adv' | 'ngs' | 'snap' | 'sit' | 'wpa'
 type Col = {
   key: string; label: string; kind: ColKind; signed?: boolean; highlight?: boolean
-  cell: (t: Totals, games: number, n?: NgsStats, sn?: SnapTotals, sit?: SituationalStats) => string | number | null
+  cell: (t: Totals, games: number, n?: NgsStats, sn?: SnapTotals, sit?: SituationalStats, w?: PlayerWpa) => string | number | null
 }
 
 // — column definitions —
@@ -74,6 +74,7 @@ const QB_COLS: Col[] = [
   { key: 'rzp',    label: 'RZ%',    kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_pass_att ? pct(sit.rz_pass_tds ?? 0, sit.rz_pass_att) + '%' : null },
   { key: 'tdp',    label: '3D%',    kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_pass_att ? pct(sit.third_pass_fd ?? 0, sit.third_pass_att) + '%' : null },
   { key: 'lng',    label: 'LNG',    kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_pass ?? null },
+  { key: 'pwpa',   label: 'WPA',    kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w?.pass_wpa != null ? sfmt(w.pass_wpa, 3) : null },
 ]
 
 const RB_COLS: Col[] = [
@@ -100,6 +101,7 @@ const RB_COLS: Col[] = [
   { key: 'rzp',  label: 'RZ%',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_carries ? pct(sit.rz_rush_tds ?? 0, sit.rz_carries) + '%' : null },
   { key: 'tdp',  label: '3D%',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_carries ? pct(sit.third_rush_fd ?? 0, sit.third_carries) + '%' : null },
   { key: 'lng',  label: 'LNG',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_rush ?? null },
+  { key: 'rwpa', label: 'WPA',     kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w ? sfmt((w.rush_wpa ?? 0) + (w.rec_wpa ?? 0), 3) : null },
 ]
 
 const WR_COLS: Col[] = [
@@ -131,6 +133,7 @@ const WR_COLS: Col[] = [
   { key: 'rzp',  label: 'RZ%',       kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_targets ? pct(sit.rz_rec_tds ?? 0, sit.rz_targets) + '%' : null },
   { key: 'tdp',  label: '3D%',       kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_targets ? pct(sit.third_rec_fd ?? 0, sit.third_targets) + '%' : null },
   { key: 'lng',  label: 'LNG',       kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_rec ?? null },
+  { key: 'recwpa', label: 'WPA',     kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w?.rec_wpa != null ? sfmt(w.rec_wpa, 3) : null },
 ]
 
 const DEF_COLS: Col[] = [
@@ -236,12 +239,13 @@ function aggregateSituational(situational: Record<number, SituationalStats>): Si
 }
 
 // — career stats table —
-function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position, onlyKinds, showGroupHeaders = true }: {
+function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, position, onlyKinds, showGroupHeaders = true }: {
   seasons: number[]
   bySeason: Record<number, PlayerGame[]>
   ngs: Record<number, NgsStats>
   snapTotals: Record<number, SnapTotals>
   situational: Record<number, SituationalStats>
+  wpa?: Record<number, PlayerWpa>
   position?: string | null
   onlyKinds?: ColKind[]
   showGroupHeaders?: boolean
@@ -253,11 +257,13 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
   const hasNgs  = Object.keys(ngs).length > 0
   const hasSnaps = Object.keys(snapTotals).length > 0
   const hasSit  = Object.keys(situational).length > 0 && pos !== 'DEF'
+  const hasWpa  = wpa != null && Object.keys(wpa).length > 0
   const cols = allCols.filter(c =>
     !(onlyKinds && !onlyKinds.includes(c.kind)) &&
     !(c.kind === 'ngs'  && !hasNgs) &&
     !(c.kind === 'snap' && !hasSnaps) &&
-    !(c.kind === 'sit'  && !hasSit)
+    !(c.kind === 'sit'  && !hasSit) &&
+    !(c.kind === 'wpa'  && !hasWpa)
   )
 
   const tradCount = cols.filter(c => c.kind === 'trad').length
@@ -265,6 +271,13 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
   const ngsCount  = cols.filter(c => c.kind === 'ngs').length
   const snapCount = cols.filter(c => c.kind === 'snap').length
   const sitCount  = cols.filter(c => c.kind === 'sit').length
+  const wpaCount  = cols.filter(c => c.kind === 'wpa').length
+
+  const careerWpaTotals: PlayerWpa | undefined = hasWpa ? {
+    pass_wpa: seasons.reduce((acc, s) => acc + (wpa![s]?.pass_wpa ?? 0), 0),
+    rush_wpa: seasons.reduce((acc, s) => acc + (wpa![s]?.rush_wpa ?? 0), 0),
+    rec_wpa:  seasons.reduce((acc, s) => acc + (wpa![s]?.rec_wpa  ?? 0), 0),
+  } : undefined
 
   const careerSit = hasSit ? aggregateSituational(situational) : undefined
 
@@ -288,6 +301,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
                 {ngsCount  > 0 && <th colSpan={ngsCount}  className="py-1 text-center text-[10px] font-semibold text-indigo-400 uppercase tracking-widest bg-indigo-950/25 border-l border-gray-800/40">Next Gen</th>}
                 {snapCount > 0 && <th colSpan={snapCount} className="py-1 text-center text-[10px] font-semibold text-gray-700 uppercase tracking-widest border-l border-gray-800/40">Snaps</th>}
                 {sitCount  > 0 && <th colSpan={sitCount}  className="py-1 text-center text-[10px] font-semibold text-teal-500/60 uppercase tracking-widest bg-teal-950/20 border-l border-gray-800/40">Situational</th>}
+                {wpaCount  > 0 && <th colSpan={wpaCount}  className="py-1 text-center text-[10px] font-semibold text-violet-400/60 uppercase tracking-widest bg-violet-950/20 border-l border-gray-800/40">WPA</th>}
               </tr>
             )}
             <tr className="border-b border-gray-800">
@@ -300,7 +314,8 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
                     ${c.kind === 'adv'  ? 'text-amber-300/50 bg-amber-950/10' :
                       c.kind === 'ngs'  ? 'text-indigo-300/50 bg-indigo-950/10' :
                       c.kind === 'snap' ? 'text-gray-700' :
-                      c.kind === 'sit'  ? 'text-teal-400/50 bg-teal-950/10' : 'text-gray-500'}`}>
+                      c.kind === 'sit'  ? 'text-teal-400/50 bg-teal-950/10' :
+                      c.kind === 'wpa'  ? 'text-violet-400/50 bg-violet-950/10' : 'text-gray-500'}`}>
                     {c.label}
                   </th>
                 )
@@ -314,6 +329,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
               const n = ngs[s] as NgsStats | undefined
               const sn = snapTotals[s] as SnapTotals | undefined
               const sit = situational[s] as SituationalStats | undefined
+              const w = wpa?.[s] as PlayerWpa | undefined
               const teams = [...new Set(games.map(g => g.team))]
               return (
                 <tr key={s} className="border-t border-gray-800/60 hover:bg-gray-800/30">
@@ -330,7 +346,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
                   </td>
                   {cols.map((c, i) => {
                     const sep = i > 0 && cols[i - 1].kind !== c.kind
-                    const raw = c.cell(t, games.length, n, sn, sit)
+                    const raw = c.cell(t, games.length, n, sn, sit, w)
                     const isNull = raw === null || raw === undefined
                     const strVal = isNull ? null : String(raw)
                     const isPos = c.signed && !isNull && strVal!.startsWith('+')
@@ -341,6 +357,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
                         ${c.kind === 'adv'  ? 'bg-amber-950/10'  : ''}
                         ${c.kind === 'ngs'  ? 'bg-indigo-950/10' : ''}
                         ${c.kind === 'sit'  ? 'bg-teal-950/10'   : ''}
+                        ${c.kind === 'wpa'  ? 'bg-violet-950/10' : ''}
                         ${isNull   ? 'text-gray-700' :
                           isPos    ? 'text-emerald-400 font-semibold' :
                           isNeg    ? 'text-red-400 font-semibold' :
@@ -348,6 +365,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
                           c.kind === 'ngs'  ? 'text-gray-200' :
                           c.kind === 'adv'  ? 'text-amber-200/80' :
                           c.kind === 'sit'  ? 'text-teal-200/80' :
+                          c.kind === 'wpa'  ? 'text-violet-200/80' :
                           'text-gray-300'}`}>
                         {isNull ? '—' : strVal}
                       </td>
@@ -362,17 +380,21 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, position
                 <td className="py-2.5 px-3 text-gray-600 text-xs">{careerGames}G</td>
                 {cols.map((c, i) => {
                   const sep = i > 0 && cols[i - 1].kind !== c.kind
-                  const raw = (c.kind === 'trad' || c.kind === 'adv' || c.kind === 'sit')
-                    ? c.cell(careerT, careerGames, undefined, undefined, careerSit)
+                  const raw = (c.kind === 'trad' || c.kind === 'adv' || c.kind === 'sit' || c.kind === 'wpa')
+                    ? c.cell(careerT, careerGames, undefined, undefined, careerSit, careerWpaTotals)
                     : null
                   const isNull = raw === null || raw === undefined
+                  const strVal = isNull ? null : String(raw)
+                  const isPos = c.signed && !isNull && strVal!.startsWith('+')
+                  const isNeg = c.signed && !isNull && strVal!.startsWith('-')
                   return (
                     <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums font-semibold
                       ${sep ? 'border-l border-gray-800/30' : ''}
                       ${c.kind === 'adv' ? 'bg-amber-950/10' : ''}
                       ${c.kind === 'ngs' ? 'bg-indigo-950/10 text-gray-700' : ''}
                       ${c.kind === 'sit' ? 'bg-teal-950/10' : ''}
-                      ${isNull ? 'text-gray-700' : c.highlight ? 'text-white' : c.kind === 'adv' ? 'text-amber-200/80' : c.kind === 'sit' ? 'text-teal-200/80' : 'text-gray-300'}`}>
+                      ${c.kind === 'wpa' ? 'bg-violet-950/10' : ''}
+                      ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-400' : isNeg ? 'text-red-400' : c.highlight ? 'text-white' : c.kind === 'adv' ? 'text-amber-200/80' : c.kind === 'sit' ? 'text-teal-200/80' : c.kind === 'wpa' ? 'text-violet-200/80' : 'text-gray-300'}`}>
                       {isNull ? '—' : String(raw)}
                     </td>
                   )
@@ -694,7 +716,7 @@ export default function PlayerPage() {
   const allTotals   = seasons.length > 0 ? sumGames(seasons.flatMap(s => regBySeason[s])) : sumGames([])
   const careerGames = seasons.reduce((acc, s) => acc + regBySeason[s].length, 0)
   const playerPos   = detectPos(allTotals, player.position)
-  const hasAdvanced = playerPos !== 'DEF' || Object.keys(player.snap_totals ?? {}).length > 0
+  const hasAdvanced = playerPos !== 'DEF'
 
   const careerInFlight = player.entry_year != null
     ? Object.entries(seasonMap).some(([y, s]) => Number(y) >= player.entry_year! && (s === 'loading' || s === 'queued'))
@@ -797,6 +819,7 @@ export default function PlayerPage() {
           ngs={player.ngs ?? {}}
           snapTotals={player.snap_totals ?? {}}
           situational={player.situational ?? {}}
+          wpa={player.wpa ?? {}}
           position={player.position}
           onlyKinds={['trad', 'snap']}
           showGroupHeaders={false}
@@ -820,8 +843,9 @@ export default function PlayerPage() {
               ngs={player.ngs ?? {}}
               snapTotals={player.snap_totals ?? {}}
               situational={player.situational ?? {}}
+              wpa={player.wpa ?? {}}
               position={player.position}
-              onlyKinds={['adv', 'ngs', 'sit']}
+              onlyKinds={['adv', 'ngs', 'sit', 'wpa']}
             />
           </>
         )}
@@ -845,6 +869,7 @@ export default function PlayerPage() {
               onlyKinds={['trad', 'snap', 'adv']}
               showGroupHeaders={false}
             />
+
           </>
         )}
 

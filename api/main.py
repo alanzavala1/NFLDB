@@ -425,11 +425,32 @@ def get_game(game_id: str):
     except Exception:
         pass
 
+    win_prob = _safe_query(
+        """
+        SELECT
+            game_seconds_remaining,
+            qtr,
+            ROUND(home_wp, 4)   AS home_wp,
+            COALESCE(touchdown,    0) AS touchdown,
+            COALESCE(interception, 0) AS interception,
+            COALESCE(fumble_lost,  0) AS fumble_lost,
+            posteam,
+            "desc"              AS desc
+        FROM plays
+        WHERE game_id = ?
+          AND home_wp IS NOT NULL
+          AND game_seconds_remaining IS NOT NULL
+        ORDER BY game_seconds_remaining DESC
+        """,
+        [game_id],
+    )
+
     return {
         **game,
         "away": [p for p in players if p["team"] == away_team],
         "home": [p for p in players if p["team"] == home_team],
         "quarter_scores": quarter_scores,
+        "win_prob": win_prob,
     }
 
 
@@ -595,6 +616,41 @@ def _get_situational_stats(player_id: str) -> dict:
     return result
 
 
+def _get_player_wpa(player_id: str) -> dict:
+    """Per-season WPA attribution from play-by-play using proper split credit."""
+    result: dict[int, dict] = {}
+    pid = player_id
+
+    for row in _safe_query("""
+        SELECT season, ROUND(SUM(COALESCE(air_wpa, 0)), 3) AS pass_wpa
+        FROM plays
+        WHERE passer_player_id = ? AND pass_attempt = 1 AND season_type = 'REG'
+        GROUP BY season
+    """, [pid]):
+        s = int(row["season"])
+        result.setdefault(s, {})["pass_wpa"] = row["pass_wpa"]
+
+    for row in _safe_query("""
+        SELECT season, ROUND(SUM(COALESCE(yac_wpa, 0)), 3) AS rec_wpa
+        FROM plays
+        WHERE receiver_player_id = ? AND complete_pass = 1 AND season_type = 'REG'
+        GROUP BY season
+    """, [pid]):
+        s = int(row["season"])
+        result.setdefault(s, {})["rec_wpa"] = row["rec_wpa"]
+
+    for row in _safe_query("""
+        SELECT season, ROUND(SUM(COALESCE(wpa, 0)), 3) AS rush_wpa
+        FROM plays
+        WHERE rusher_player_id = ? AND rush_attempt = 1 AND season_type = 'REG'
+        GROUP BY season
+    """, [pid]):
+        s = int(row["season"])
+        result.setdefault(s, {})["rush_wpa"] = row["rush_wpa"]
+
+    return result
+
+
 @app.get("/players/{player_id}")
 def get_player(player_id: str):
     profile_rows = query_to_dict(
@@ -669,6 +725,7 @@ def get_player(player_id: str):
         "ngs": _get_ngs(player_id),
         "snap_totals": _get_snap_totals(player_id),
         "situational": _get_situational_stats(player_id),
+        "wpa": _get_player_wpa(player_id),
     }
 
 
@@ -839,6 +896,80 @@ def get_leaders(season: int = Query(default=None)):
         [season, season],
     )
     return rows
+
+
+@app.get("/wpa-leaders")
+def get_wpa_leaders(season: int = Query(default=None)):
+    if season is None:
+        season = CURRENT_SEASON
+
+    passing = _safe_query(f"""
+        WITH {_ROSTER_CTE},
+        stats AS (
+            SELECT passer_player_id AS player_id,
+                   MAX(passer_player_name) AS player_name,
+                   ROUND(SUM(COALESCE(air_wpa, 0)), 3) AS wpa,
+                   COUNT(DISTINCT game_id) AS games_played,
+                   COUNT(*) FILTER (WHERE pass_attempt = 1) AS attempts
+            FROM plays
+            WHERE season = ? AND season_type = 'REG'
+              AND pass_attempt = 1 AND passer_player_id IS NOT NULL
+            GROUP BY passer_player_id
+            HAVING COUNT(*) FILTER (WHERE pass_attempt = 1) >= 50
+        )
+        SELECT stats.player_id, stats.player_name, r.position, r.team, r.headshot_url,
+               stats.wpa, stats.games_played, stats.attempts
+        FROM stats
+        LEFT JOIN roster r ON r.player_id = stats.player_id AND r.season = ?
+        ORDER BY wpa DESC
+        LIMIT 30
+    """, [season, season])
+
+    rushing = _safe_query(f"""
+        WITH {_ROSTER_CTE},
+        stats AS (
+            SELECT rusher_player_id AS player_id,
+                   MAX(rusher_player_name) AS player_name,
+                   ROUND(SUM(COALESCE(wpa, 0)), 3) AS wpa,
+                   COUNT(DISTINCT game_id) AS games_played,
+                   COUNT(*) AS carries
+            FROM plays
+            WHERE season = ? AND season_type = 'REG'
+              AND rush_attempt = 1 AND rusher_player_id IS NOT NULL
+            GROUP BY rusher_player_id
+            HAVING COUNT(*) >= 50
+        )
+        SELECT stats.player_id, stats.player_name, r.position, r.team, r.headshot_url,
+               stats.wpa, stats.games_played, stats.carries
+        FROM stats
+        LEFT JOIN roster r ON r.player_id = stats.player_id AND r.season = ?
+        ORDER BY wpa DESC
+        LIMIT 30
+    """, [season, season])
+
+    receiving = _safe_query(f"""
+        WITH {_ROSTER_CTE},
+        stats AS (
+            SELECT receiver_player_id AS player_id,
+                   MAX(receiver_player_name) AS player_name,
+                   ROUND(SUM(COALESCE(yac_wpa, 0)), 3) AS wpa,
+                   COUNT(DISTINCT game_id) AS games_played,
+                   COUNT(*) FILTER (WHERE complete_pass = 1) AS receptions
+            FROM plays
+            WHERE season = ? AND season_type = 'REG'
+              AND complete_pass = 1 AND receiver_player_id IS NOT NULL
+            GROUP BY receiver_player_id
+            HAVING COUNT(*) FILTER (WHERE complete_pass = 1) >= 20
+        )
+        SELECT stats.player_id, stats.player_name, r.position, r.team, r.headshot_url,
+               stats.wpa, stats.games_played, stats.receptions
+        FROM stats
+        LEFT JOIN roster r ON r.player_id = stats.player_id AND r.season = ?
+        ORDER BY wpa DESC
+        LIMIT 30
+    """, [season, season])
+
+    return {"passing": passing, "rushing": rushing, "receiving": receiving}
 
 
 @app.get("/standings")

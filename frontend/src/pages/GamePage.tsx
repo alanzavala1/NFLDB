@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { GameDetail, PlayerStats } from '../api'
+import type { GameDetail, PlayerStats, WinProbPlay } from '../api'
 import Nav from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
@@ -341,11 +342,13 @@ function GameLeaders({ game }: { game: GameDetail }) {
 
 function TeamDivider({ team }: { team: string }) {
   return (
-    <tr>
-      <td colSpan={20} className="pt-4 pb-1 px-4">
-        <div className="flex items-center gap-1.5">
-          <img src={teamLogoUrl(team)} className="w-4 h-4 object-contain" alt="" />
-          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{teamName(team)}</span>
+    <tr className="bg-gray-800/40 border-t border-gray-800/60">
+      <td colSpan={20} className="px-4 py-2">
+        <div className="flex items-center gap-2.5">
+          <img src={teamLogoUrl(team)} className="w-6 h-6 object-contain" alt="" />
+          <span className="text-sm font-bold text-white">{team}</span>
+          <span className="text-xs text-gray-600">·</span>
+          <span className="text-xs text-gray-500">{teamName(team)}</span>
         </div>
       </td>
     </tr>
@@ -517,6 +520,139 @@ function PlayerStats({ game }: { game: GameDetail }) {
   )
 }
 
+// ── Win probability chart ─────────────────────────────────────────────────────
+
+function fmtRemaining(rem: number): string {
+  const qtr = rem > 2700 ? 1 : rem > 1800 ? 2 : rem > 900 ? 3 : 4
+  const secInQtr = rem - (qtr === 1 ? 2700 : qtr === 2 ? 1800 : qtr === 3 ? 900 : 0)
+  const min = Math.floor(secInQtr / 60)
+  const sec = secInQtr % 60
+  return `Q${qtr} ${min}:${sec.toString().padStart(2, '0')}`
+}
+
+function WpTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload as ChartPoint
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 shadow-2xl max-w-[220px] pointer-events-none">
+      <div className="flex justify-between gap-3 text-xs font-bold mb-1.5">
+        <span className="text-rose-400">{d.awayTeam} {(100 - d.wp).toFixed(1)}%</span>
+        <span className="text-gray-600 font-normal">{fmtRemaining(d.rem)}</span>
+        <span className="text-indigo-400">{d.homeTeam} {d.wp.toFixed(1)}%</span>
+      </div>
+      {d.desc && <p className="text-[11px] text-gray-500 leading-snug line-clamp-2">{d.desc}</p>}
+    </div>
+  )
+}
+
+interface ChartPoint {
+  t: number; wp: number; rem: number; desc: string
+  td: boolean; turnover: boolean; posteam: string
+  homeTeam: string; awayTeam: string
+}
+
+function WinProbabilityChart({ game }: { game: GameDetail }) {
+  const plays = game.win_prob
+  if (!plays?.length) return null
+
+  const homeTeam = game.home_team
+  const awayTeam = game.away_team
+
+  const data: ChartPoint[] = plays.map((p: WinProbPlay) => ({
+    t: 3600 - p.game_seconds_remaining,
+    wp: Math.round(p.home_wp * 1000) / 10,
+    rem: p.game_seconds_remaining,
+    desc: p.desc,
+    td: p.touchdown === 1,
+    turnover: p.interception === 1 || p.fumble_lost === 1,
+    posteam: p.posteam,
+    homeTeam,
+    awayTeam,
+  }))
+
+  const maxT = Math.max(3600, data[data.length - 1]?.t ?? 3600)
+  const finalWp = data[data.length - 1]?.wp ?? 50
+  const scoringPlays = data.filter(d => d.td)
+  const turnovers = data.filter(d => d.turnover)
+  const qtTicks = [0, 900, 1800, 2700, 3600].filter(t => t <= maxT + 1)
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
+      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Win Probability</span>
+        <div className="flex items-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />{awayTeam}</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" />{homeTeam}</span>
+        </div>
+      </div>
+
+      <div className="px-1 pt-3 pb-1">
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={data} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="wpFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor="#818cf8" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#818cf8" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+
+            <CartesianGrid vertical={false} stroke="#1f2937" strokeDasharray="0" />
+
+            {/* Background territory tint */}
+            <ReferenceArea y1={50} y2={100} fill="#6366f1" fillOpacity={0.05} ifOverflow="hidden" />
+            <ReferenceArea y1={0}  y2={50}  fill="#f43f5e" fillOpacity={0.05} ifOverflow="hidden" />
+
+            {/* 50% line */}
+            <ReferenceLine y={50} stroke="#374151" strokeDasharray="4 3" strokeWidth={1} />
+
+            {/* Quarter separators */}
+            {[900, 1800, 2700, 3600].filter(t => t < maxT).map(t => (
+              <ReferenceLine key={t} x={t} stroke="#1f2937" strokeWidth={1.5} />
+            ))}
+
+            {/* Scoring play markers */}
+            {scoringPlays.map((d, i) => (
+              <ReferenceLine key={`td-${i}`} x={d.t} strokeWidth={1.5} strokeOpacity={0.55}
+                stroke={d.posteam === homeTeam ? '#818cf8' : '#fb7185'} />
+            ))}
+            {turnovers.map((d, i) => (
+              <ReferenceLine key={`to-${i}`} x={d.t} strokeWidth={1} strokeOpacity={0.4}
+                stroke={d.posteam === homeTeam ? '#fb7185' : '#818cf8'} strokeDasharray="2 2" />
+            ))}
+
+            <XAxis dataKey="t" type="number" domain={[0, maxT]}
+              ticks={[450, 1350, 2250, 3150, ...(maxT > 3600 ? [3825] : [])]}
+              tickFormatter={v => ({ 450: 'Q1', 1350: 'Q2', 2250: 'Q3', 3150: 'Q4', 3825: 'OT' }[v] ?? '')}
+              tick={{ fill: '#4b5563', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis domain={[0, 100]} ticks={[0, 50, 100]}
+              tickFormatter={v => v === 50 ? '50%' : `${v}%`}
+              tick={{ fill: '#374151', fontSize: 10 }} axisLine={false} tickLine={false} width={34} />
+
+            <Tooltip content={<WpTooltip />} cursor={{ stroke: '#6b7280', strokeWidth: 1, strokeDasharray: '3 3' }} />
+
+            <Area type="monotone" dataKey="wp" stroke="#818cf8" strokeWidth={2.5}
+              fill="url(#wpFill)" dot={false}
+              activeDot={{ r: 5, fill: '#818cf8', stroke: '#1e1b4b', strokeWidth: 2 }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Footer */}
+      <div className="px-5 pb-4 pt-1 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img src={teamLogoUrl(awayTeam)} className="w-6 h-6 object-contain opacity-60" alt="" />
+          <span className="text-lg font-black tabular-nums text-rose-400">{(100 - finalWp).toFixed(0)}%</span>
+        </div>
+        <span className="text-[10px] text-gray-700 uppercase tracking-widest">final</span>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-black tabular-nums text-indigo-400">{finalWp.toFixed(0)}%</span>
+          <img src={teamLogoUrl(homeTeam)} className="w-6 h-6 object-contain opacity-60" alt="" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function GamePage() {
@@ -586,6 +722,7 @@ export default function GamePage() {
 
         <GameContext.Provider value={{ gameId: game.game_id, season: game.season, week: game.week, awayTeam: game.away_team, homeTeam: game.home_team, fromWeek }}>
           <Scoreboard game={game} />
+          <WinProbabilityChart game={game} />
           <GameLeaders game={game} />
           <BoxScore game={game} />
           {(game.away.length > 0 || game.home.length > 0) && <PlayerStats game={game} />}

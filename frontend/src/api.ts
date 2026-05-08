@@ -90,10 +90,22 @@ export interface QuarterScore {
   home: number
 }
 
+export interface WinProbPlay {
+  game_seconds_remaining: number
+  qtr: number
+  home_wp: number
+  touchdown: number
+  interception: number
+  fumble_lost: number
+  posteam: string
+  desc: string
+}
+
 export interface GameDetail extends Game {
   away: PlayerStats[]
   home: PlayerStats[]
   quarter_scores: QuarterScore[]
+  win_prob: WinProbPlay[]
 }
 
 export interface PlayerGame {
@@ -192,6 +204,12 @@ export interface SnapTotals {
   avg_st_pct: number
 }
 
+export interface PlayerWpa {
+  pass_wpa?: number
+  rec_wpa?: number
+  rush_wpa?: number
+}
+
 export interface PlayerProfile {
   player_id: string
   player_name: string
@@ -211,6 +229,7 @@ export interface PlayerProfile {
   ngs: Record<number, NgsStats>
   snap_totals: Record<number, SnapTotals>
   situational: Record<number, SituationalStats>
+  wpa: Record<number, PlayerWpa>
 }
 
 export interface TeamGame {
@@ -336,6 +355,25 @@ export interface SearchResult {
   headshot_url: string | null
 }
 
+export interface WpaLeader {
+  player_id: string
+  player_name: string
+  position: string | null
+  team: string | null
+  headshot_url: string | null
+  wpa: number
+  games_played: number
+  attempts?: number
+  carries?: number
+  receptions?: number
+}
+
+export interface WpaLeaders {
+  passing: WpaLeader[]
+  rushing: WpaLeader[]
+  receiving: WpaLeader[]
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(BASE + path)
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -358,4 +396,5 @@ export const api = {
   search: (q: string) => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
   standings: (season: number) => get<DivisionStandings[]>(`/standings?season=${season}`),
   leaders: (season: number) => get<LeagueLeader[]>(`/leaders?season=${season}`),
+  wpaLeaders: (season: number) => get<WpaLeaders>(`/wpa-leaders?season=${season}`),
 }
