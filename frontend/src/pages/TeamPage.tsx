@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { BarChart, Bar, XAxis, Tooltip, Cell, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { api } from '../api'
 import type { TeamProfile, TeamGame, TeamLeader, SeasonEntry } from '../api'
 import Nav from '../components/Nav'
@@ -198,9 +199,105 @@ const DEF_COLS: TCol[] = [
   { key: 'fr',   label: 'FR',   kind: 'trad', dim: true,       sortVal: p => p.fumble_recoveries,   render: p => p.fumble_recoveries > 0 ? p.fumble_recoveries : null },
 ]
 
+// ── Season summary ───────────────────────────────────────────────────────────
+
+function SeasonSummary({ profile }: { profile: TeamProfile }) {
+  const playedGames = profile.games.filter(g => {
+    return (g.away_team === profile.team ? g.away_score : g.home_score) !== null
+  })
+  const n = playedGames.length
+
+  const pfTotal = playedGames.reduce((s, g) =>
+    s + ((g.away_team === profile.team ? g.away_score : g.home_score) ?? 0), 0)
+  const paTotal = playedGames.reduce((s, g) =>
+    s + ((g.away_team === profile.team ? g.home_score : g.away_score) ?? 0), 0)
+
+  const passYds  = profile.leaders.filter(p => p.attempts >= 1).reduce((s, p) => s + p.pass_yards, 0)
+  const rushYds  = profile.leaders.filter(p => p.carries >= 1).reduce((s, p) => s + p.rush_yards, 0)
+  const passTDs  = profile.leaders.filter(p => p.attempts >= 1).reduce((s, p) => s + p.pass_tds, 0)
+  const rushTDs  = profile.leaders.filter(p => p.carries >= 1).reduce((s, p) => s + p.rush_tds, 0)
+  const ints     = profile.leaders.filter(p => p.attempts >= 1).reduce((s, p) => s + p.interceptions_thrown, 0)
+  const offEPA   = profile.leaders.reduce((s, p) => {
+    if (p.pass_epa != null && p.attempts >= 1) s += p.pass_epa
+    if (p.rush_epa != null && p.carries >= 1)  s += p.rush_epa
+    return s
+  }, 0)
+
+  const diff = pfTotal - paTotal
+  const boxes = [
+    { label: 'PF/G',     val: n > 0 ? (pfTotal / n).toFixed(1) : '—' },
+    { label: 'PA/G',     val: n > 0 ? (paTotal / n).toFixed(1) : '—' },
+    { label: 'DIFF',     val: n > 0 ? `${diff >= 0 ? '+' : ''}${diff}` : '—', signed: true },
+    { label: 'PASS YDS', val: passYds > 0 ? passYds.toLocaleString() : '—' },
+    { label: 'RUSH YDS', val: rushYds > 0 ? rushYds.toLocaleString() : '—' },
+    { label: 'TD',       val: (passTDs + rushTDs) || '—' },
+    { label: 'INT',      val: ints || '—' },
+    { label: 'OFF EPA',  val: offEPA !== 0 ? `${offEPA >= 0 ? '+' : ''}${offEPA.toFixed(1)}` : '—', signed: true },
+  ]
+
+  return (
+    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 mb-4">
+      {boxes.map(b => {
+        const str = String(b.val)
+        const isPos = b.signed && str.startsWith('+')
+        const isNeg = b.signed && str.startsWith('-')
+        return (
+          <div key={b.label} className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2.5 text-center">
+            <div className={`text-sm font-bold tabular-nums ${isPos ? 'text-emerald-400' : isNeg ? 'text-red-400' : 'text-white'}`}>
+              {b.val}
+            </div>
+            <div className="text-[10px] text-gray-600 uppercase tracking-wider mt-0.5 leading-tight">{b.label}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Point differential chart ─────────────────────────────────────────────────
+
+function ScoreChart({ profile }: { profile: TeamProfile }) {
+  const data = profile.games
+    .filter(g => (g.away_team === profile.team ? g.away_score : g.home_score) !== null)
+    .map(g => {
+      const isAway = g.away_team === profile.team
+      const pf = (isAway ? g.away_score : g.home_score) ?? 0
+      const pa = (isAway ? g.home_score : g.away_score) ?? 0
+      return { name: weekLabel(g.week, (g as any).game_type), diff: pf - pa, pf, pa }
+    })
+
+  if (data.length === 0) return null
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 pt-4 pb-2 mb-4">
+      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Point Differential</div>
+      <ResponsiveContainer width="100%" height={90}>
+        <BarChart data={data} barSize={14} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+          <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#4b5563' }} axisLine={false} tickLine={false} interval={0} />
+          <ReferenceLine y={0} stroke="#374151" strokeWidth={1} />
+          <Tooltip
+            contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+            labelStyle={{ color: '#9ca3af' }}
+            formatter={(_v: unknown, _n: unknown, entry: any) => {
+              const { pf, pa, diff } = entry.payload
+              return [`${pf}–${pa}  (${diff >= 0 ? '+' : ''}${diff})`, 'Score']
+            }}
+          />
+          <Bar dataKey="diff" radius={[2, 2, 0, 0]}>
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.diff >= 0 ? '#34d399' : '#f87171'} fillOpacity={0.75} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 // ── Schedule panel ──────────────────────────────────────────────────────────
 
 function SchedulePanel({ profile }: { profile: TeamProfile }) {
+  let w = 0, l = 0, t = 0
   return (
     <div className="overflow-y-auto divide-y divide-gray-800/60 flex-1 min-h-0">
       {profile.games.map(g => {
@@ -211,6 +308,12 @@ function SchedulePanel({ profile }: { profile: TeamProfile }) {
         const result = gameResult(g, profile.team)
         const finished = teamScore !== null && oppScore !== null
         const resultColor = result === 'W' ? 'text-green-400' : result === 'L' ? 'text-red-400' : 'text-gray-400'
+
+        if (result === 'W') w++
+        else if (result === 'L') l++
+        else if (result === 'T') t++
+        const runningRec = finished ? (t > 0 ? `${w}-${l}-${t}` : `${w}-${l}`) : null
+
         return (
           <Link
             key={g.game_id}
@@ -226,6 +329,7 @@ function SchedulePanel({ profile }: { profile: TeamProfile }) {
               <>
                 <span className={`text-xs font-bold w-4 text-center ${resultColor}`}>{result}</span>
                 <span className="text-xs tabular-nums text-gray-500 w-12 text-right">{teamScore}–{oppScore}</span>
+                <span className="text-xs tabular-nums text-gray-700 w-10 text-right">{runningRec}</span>
               </>
             ) : (
               <span className="text-xs text-gray-700 w-16 text-right">{g.gameday}</span>
@@ -426,6 +530,8 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
           Full Stats
         </button>
       </div>
+      <SeasonSummary profile={profile} />
+      <ScoreChart profile={profile} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col">
           <div className="px-4 py-2.5 border-b border-gray-800">
@@ -536,7 +642,6 @@ function SeasonSidebar({
 
 import { CURRENT_NFL_SEASON } from '../api'
 const CURRENT_SEASON = CURRENT_NFL_SEASON
-const FIRST_SEASON = 1999
 const AUTO_SEASONS = 5  // fetch/queue this many recent seasons automatically
 
 export default function TeamPage() {

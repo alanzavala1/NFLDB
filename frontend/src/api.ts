@@ -204,6 +204,15 @@ export interface SnapTotals {
   avg_st_pct: number
 }
 
+export interface PlayerAdvStats {
+  fumbles_lost?: number
+  target_share?: number
+  air_yards_share?: number
+  stuff_rate?: number
+  stuffed?: number
+  carries_total?: number
+}
+
 export interface PlayerWpa {
   pass_wpa?: number
   rec_wpa?: number
@@ -230,6 +239,7 @@ export interface PlayerProfile {
   snap_totals: Record<number, SnapTotals>
   situational: Record<number, SituationalStats>
   wpa: Record<number, PlayerWpa>
+  adv_stats: Record<number, PlayerAdvStats>
 }
 
 export interface TeamGame {
@@ -355,6 +365,29 @@ export interface SearchResult {
   headshot_url: string | null
 }
 
+export interface PlayerComparable {
+  player_id: string
+  player_name: string
+  position: string | null
+  team: string | null
+  headshot_url: string | null
+  similarity: number
+  games: number
+  first_season: number
+  last_season: number
+  pass_yards: number
+  pass_tds: number
+  rush_yards: number
+  rush_tds: number
+  carries: number
+  rec_yards: number
+  rec_tds: number
+  targets: number
+  att: number
+  cmp: number
+  ints: number
+}
+
 export interface WpaLeader {
   player_id: string
   player_name: string
@@ -397,4 +430,5 @@ export const api = {
   standings: (season: number) => get<DivisionStandings[]>(`/standings?season=${season}`),
   leaders: (season: number) => get<LeagueLeader[]>(`/leaders?season=${season}`),
   wpaLeaders: (season: number) => get<WpaLeaders>(`/wpa-leaders?season=${season}`),
+  comparables: (playerId: string) => get<PlayerComparable[]>(`/players/${playerId}/comparables`),
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa } from '../api'
+import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, PlayerComparable, SeasonEntry } from '../api'
 import Nav from '../components/Nav'
 import { teamLogoUrl } from '../utils/teams'
 
@@ -42,7 +42,7 @@ type Totals = ReturnType<typeof sumGames>
 type ColKind = 'trad' | 'adv' | 'ngs' | 'snap' | 'sit' | 'wpa'
 type Col = {
   key: string; label: string; kind: ColKind; signed?: boolean; highlight?: boolean
-  cell: (t: Totals, games: number, n?: NgsStats, sn?: SnapTotals, sit?: SituationalStats, w?: PlayerWpa) => string | number | null
+  cell: (t: Totals, games: number, n?: NgsStats, sn?: SnapTotals, sit?: SituationalStats, w?: PlayerWpa, a?: PlayerAdvStats) => string | number | null
 }
 
 // — column definitions —
@@ -75,6 +75,7 @@ const QB_COLS: Col[] = [
   { key: 'tdp',    label: '3D%',    kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_pass_att ? pct(sit.third_pass_fd ?? 0, sit.third_pass_att) + '%' : null },
   { key: 'lng',    label: 'LNG',    kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_pass ?? null },
   { key: 'pwpa',   label: 'WPA',    kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w?.pass_wpa != null ? sfmt(w.pass_wpa, 3) : null },
+  { key: 'qbfl',   label: 'FUM',    kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
 ]
 
 const RB_COLS: Col[] = [
@@ -101,7 +102,9 @@ const RB_COLS: Col[] = [
   { key: 'rzp',  label: 'RZ%',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_carries ? pct(sit.rz_rush_tds ?? 0, sit.rz_carries) + '%' : null },
   { key: 'tdp',  label: '3D%',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_carries ? pct(sit.third_rush_fd ?? 0, sit.third_carries) + '%' : null },
   { key: 'lng',  label: 'LNG',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_rush ?? null },
-  { key: 'rwpa', label: 'WPA',     kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w ? sfmt((w.rush_wpa ?? 0) + (w.rec_wpa ?? 0), 3) : null },
+  { key: 'rwpa',   label: 'WPA',     kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w ? sfmt((w.rush_wpa ?? 0) + (w.rec_wpa ?? 0), 3) : null },
+  { key: 'rbstuf', label: 'STF%',    kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.stuff_rate != null ? `${a.stuff_rate.toFixed(1)}%` : null },
+  { key: 'rbfl',   label: 'FUM',     kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
 ]
 
 const WR_COLS: Col[] = [
@@ -134,6 +137,10 @@ const WR_COLS: Col[] = [
   { key: 'tdp',  label: '3D%',       kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_targets ? pct(sit.third_rec_fd ?? 0, sit.third_targets) + '%' : null },
   { key: 'lng',  label: 'LNG',       kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_rec ?? null },
   { key: 'recwpa', label: 'WPA',     kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w?.rec_wpa != null ? sfmt(w.rec_wpa, 3) : null },
+  { key: 'racr',   label: 'RACR',    kind: 'adv', cell: t => t.air_yards > 0 ? (t.rec_yards / t.air_yards).toFixed(2) : null },
+  { key: 'tgtsh',  label: 'TGT%',    kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.target_share != null ? `${a.target_share.toFixed(1)}%` : null },
+  { key: 'aysh',   label: 'AY%',     kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.air_yards_share != null ? `${a.air_yards_share.toFixed(1)}%` : null },
+  { key: 'wrfl',   label: 'FUM',     kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
 ]
 
 const DEF_COLS: Col[] = [
@@ -239,13 +246,14 @@ function aggregateSituational(situational: Record<number, SituationalStats>): Si
 }
 
 // — career stats table —
-function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, position, onlyKinds, showGroupHeaders = true }: {
+function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, advStats, position, onlyKinds, showGroupHeaders = true }: {
   seasons: number[]
   bySeason: Record<number, PlayerGame[]>
   ngs: Record<number, NgsStats>
   snapTotals: Record<number, SnapTotals>
   situational: Record<number, SituationalStats>
   wpa?: Record<number, PlayerWpa>
+  advStats?: Record<number, PlayerAdvStats>
   position?: string | null
   onlyKinds?: ColKind[]
   showGroupHeaders?: boolean
@@ -272,6 +280,25 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, pos
   const snapCount = cols.filter(c => c.kind === 'snap').length
   const sitCount  = cols.filter(c => c.kind === 'sit').length
   const wpaCount  = cols.filter(c => c.kind === 'wpa').length
+
+  const hasAdv  = advStats != null && Object.keys(advStats).length > 0
+
+  const careerAdvTotals: PlayerAdvStats | undefined = hasAdv ? (() => {
+    const vals = seasons.map(s => advStats![s]).filter(Boolean)
+    const totalFL = vals.reduce((acc, v) => acc + (v.fumbles_lost ?? 0), 0)
+    const totalStuffed = vals.reduce((acc, v) => acc + (v.stuffed ?? 0), 0)
+    const totalCarries = vals.reduce((acc, v) => acc + (v.carries_total ?? 0), 0)
+    const tshVals = vals.map(v => v.target_share).filter((v): v is number => v != null)
+    const ayshVals = vals.map(v => v.air_yards_share).filter((v): v is number => v != null)
+    return {
+      fumbles_lost: totalFL,
+      stuffed: totalStuffed,
+      carries_total: totalCarries,
+      stuff_rate: totalCarries > 0 ? parseFloat((100 * totalStuffed / totalCarries).toFixed(1)) : undefined,
+      target_share: tshVals.length > 0 ? parseFloat((tshVals.reduce((a, b) => a + b, 0) / tshVals.length).toFixed(1)) : undefined,
+      air_yards_share: ayshVals.length > 0 ? parseFloat((ayshVals.reduce((a, b) => a + b, 0) / ayshVals.length).toFixed(1)) : undefined,
+    }
+  })() : undefined
 
   const careerWpaTotals: PlayerWpa | undefined = hasWpa ? {
     pass_wpa: seasons.reduce((acc, s) => acc + (wpa![s]?.pass_wpa ?? 0), 0),
@@ -330,6 +357,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, pos
               const sn = snapTotals[s] as SnapTotals | undefined
               const sit = situational[s] as SituationalStats | undefined
               const w = wpa?.[s] as PlayerWpa | undefined
+              const a = advStats?.[s] as PlayerAdvStats | undefined
               const teams = [...new Set(games.map(g => g.team))]
               return (
                 <tr key={s} className="border-t border-gray-800/60 hover:bg-gray-800/30">
@@ -346,7 +374,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, pos
                   </td>
                   {cols.map((c, i) => {
                     const sep = i > 0 && cols[i - 1].kind !== c.kind
-                    const raw = c.cell(t, games.length, n, sn, sit, w)
+                    const raw = c.cell(t, games.length, n, sn, sit, w, a)
                     const isNull = raw === null || raw === undefined
                     const strVal = isNull ? null : String(raw)
                     const isPos = c.signed && !isNull && strVal!.startsWith('+')
@@ -381,7 +409,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, pos
                 {cols.map((c, i) => {
                   const sep = i > 0 && cols[i - 1].kind !== c.kind
                   const raw = (c.kind === 'trad' || c.kind === 'adv' || c.kind === 'sit' || c.kind === 'wpa')
-                    ? c.cell(careerT, careerGames, undefined, undefined, careerSit, careerWpaTotals)
+                    ? c.cell(careerT, careerGames, undefined, undefined, careerSit, careerWpaTotals, careerAdvTotals)
                     : null
                   const isNull = raw === null || raw === undefined
                   const strVal = isNull ? null : String(raw)
@@ -619,6 +647,104 @@ function GameLog({ season, games, pos, playerId, playerName, fromGame, defaultOp
   )
 }
 
+// — comparables —
+function simColor(s: number) {
+  if (s >= 95) return 'text-emerald-400'
+  if (s >= 88) return 'text-green-400'
+  if (s >= 80) return 'text-yellow-400'
+  return 'text-gray-500'
+}
+
+function simBar(s: number) {
+  if (s >= 95) return 'bg-emerald-500'
+  if (s >= 88) return 'bg-green-500'
+  if (s >= 80) return 'bg-yellow-500'
+  return 'bg-gray-600'
+}
+
+function ComparableCard({ p, pos }: { p: PlayerComparable; pos: string }) {
+  const era = p.first_season === p.last_season ? `${p.first_season}` : `${p.first_season}–${p.last_season}`
+  let statLine = ''
+  if (pos === 'QB') {
+    const ypa = p.att > 0 ? (p.pass_yards / p.att).toFixed(1) : '—'
+    statLine = `${p.pass_yards.toLocaleString()} YDS · ${p.pass_tds} TD · ${p.ints} INT · ${ypa} Y/A`
+  } else if (pos === 'RB') {
+    const ypc = p.carries > 0 ? (p.rush_yards / p.carries).toFixed(1) : '—'
+    statLine = `${p.rush_yards.toLocaleString()} YDS · ${p.rush_tds} TD · ${ypc} Y/C`
+  } else {
+    statLine = `${p.rec_yards.toLocaleString()} YDS · ${p.rec_tds} TD · ${p.targets} TGT`
+  }
+
+  return (
+    <Link to={`/players/${p.player_id}`} className="block bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 hover:bg-gray-800/60 transition-all group">
+      <div className="flex items-start gap-3 mb-3">
+        {p.headshot_url
+          ? <img src={p.headshot_url} className="w-12 h-12 rounded-full object-cover object-top bg-gray-800 shrink-0" alt="" />
+          : <div className="w-12 h-12 rounded-full bg-gray-800 shrink-0" />
+        }
+        <div className="min-w-0 flex-1">
+          <div className="font-bold text-white text-sm leading-tight group-hover:text-indigo-400 transition-colors truncate">{p.player_name}</div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-xs text-gray-500 font-medium">{p.position ?? '—'}</span>
+            {p.team && (
+              <>
+                <span className="text-gray-700">·</span>
+                <img src={teamLogoUrl(p.team)} className="w-4 h-4 object-contain opacity-70" alt="" />
+                <span className="text-xs text-gray-500">{p.team}</span>
+              </>
+            )}
+          </div>
+          <div className="text-xs text-gray-600 mt-0.5">{era} · {p.games}G</div>
+        </div>
+      </div>
+
+      <div className="mb-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] text-gray-600 uppercase tracking-wider">Similarity</span>
+          <span className={`text-sm font-black tabular-nums ${simColor(p.similarity)}`}>{p.similarity}%</span>
+        </div>
+        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full ${simBar(p.similarity)}`} style={{ width: `${p.similarity}%` }} />
+        </div>
+      </div>
+
+      <div className="text-[11px] text-gray-500 leading-relaxed">{statLine}</div>
+    </Link>
+  )
+}
+
+function ComparablesSection({ playerId, pos }: { playerId: string; pos: string }) {
+  const [comps, setComps] = useState<PlayerComparable[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.comparables(playerId)
+      .then(setComps)
+      .catch(() => setComps([]))
+      .finally(() => setLoading(false))
+  }, [playerId])
+
+  if (loading) return (
+    <div className="mt-8">
+      <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Similar Players</div>
+      <p className="text-xs text-gray-600 pl-1">Computing comparables…</p>
+    </div>
+  )
+  if (comps.length === 0) return null
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center gap-3 mb-3">
+        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Similar Players</span>
+        <span className="text-xs text-gray-700">Cosine similarity on career rate stats · same position group</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {comps.map(p => <ComparableCard key={p.player_id} p={p} pos={pos} />)}
+      </div>
+    </div>
+  )
+}
+
 // — page —
 export default function PlayerPage() {
   const { playerId } = useParams<{ playerId: string }>()
@@ -633,7 +759,8 @@ export default function PlayerPage() {
   const advRef   = useRef<HTMLDivElement>(null)
   const postRef  = useRef<HTMLDivElement>(null)
   const logRef   = useRef<HTMLDivElement>(null)
-  function scrollTo(ref: ReturnType<typeof useRef<HTMLDivElement>>) {
+  const compRef  = useRef<HTMLDivElement>(null)
+  function scrollTo(ref: { current: HTMLDivElement | null | undefined }) {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -668,7 +795,7 @@ export default function PlayerPage() {
     if (!anyInFlight) return
     const loadedForPlayer = new Set(player.games.map(g => g.season))
     const interval = setInterval(async () => {
-      const allSeasons = await api.seasons().catch(() => [] as typeof import('../api').SeasonEntry[])
+      const allSeasons = await api.seasons().catch(() => [] as SeasonEntry[])
       const updated = Object.fromEntries(allSeasons.map(s => [s.season, s.status]))
       setSeasonMap(updated)
       const newlyDone = allSeasons.filter(
@@ -806,6 +933,7 @@ export default function PlayerPage() {
             {hasAdvanced && <button onClick={() => scrollTo(advRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Advanced</button>}
             {playoffSeasons.length > 0 && <button onClick={() => scrollTo(postRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Postseason</button>}
             <button onClick={() => scrollTo(logRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Game Log</button>
+            <button onClick={() => scrollTo(compRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Comparables</button>
           </div>
         )}
 
@@ -820,6 +948,7 @@ export default function PlayerPage() {
           snapTotals={player.snap_totals ?? {}}
           situational={player.situational ?? {}}
           wpa={player.wpa ?? {}}
+          advStats={player.adv_stats ?? {}}
           position={player.position}
           onlyKinds={['trad', 'snap']}
           showGroupHeaders={false}
@@ -844,6 +973,7 @@ export default function PlayerPage() {
               snapTotals={player.snap_totals ?? {}}
               situational={player.situational ?? {}}
               wpa={player.wpa ?? {}}
+              advStats={player.adv_stats ?? {}}
               position={player.position}
               onlyKinds={['adv', 'ngs', 'sit', 'wpa']}
             />
@@ -892,6 +1022,13 @@ export default function PlayerPage() {
             />
           ))}
         </div>
+
+        {/* Similar players */}
+        {seasons.length > 0 && (
+          <div ref={compRef} className="scroll-mt-12">
+            <ComparablesSection playerId={player.player_id} pos={playerPos} />
+          </div>
+        )}
 
       </div>
     </div>

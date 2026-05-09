@@ -616,6 +616,81 @@ def _get_situational_stats(player_id: str) -> dict:
     return result
 
 
+def _get_player_advanced_stats(player_id: str) -> dict:
+    """Per-season: fumbles lost, target share, air yards share, stuff rate."""
+    result: dict[int, dict] = {}
+    pid = player_id
+
+    # Fumbles lost — rusher fumbles on runs, receiver fumbles on catches, QB fumbles on sacks
+    for row in _safe_query("""
+        SELECT season,
+            SUM(CASE
+                WHEN rusher_player_id   = ? AND rush_attempt  = 1 AND fumble_lost = 1 THEN 1
+                WHEN receiver_player_id = ? AND complete_pass = 1 AND fumble_lost = 1 THEN 1
+                WHEN passer_player_id   = ? AND sack          = 1 AND fumble_lost = 1 THEN 1
+                ELSE 0 END) AS fumbles_lost
+        FROM plays
+        WHERE (rusher_player_id = ? OR receiver_player_id = ? OR passer_player_id = ?)
+          AND season_type = 'REG'
+        GROUP BY season
+    """, [pid, pid, pid, pid, pid, pid]):
+        s = int(row["season"])
+        result.setdefault(s, {})["fumbles_lost"] = int(row["fumbles_lost"] or 0)
+
+    # Target share & air yards share — player's share of team targets/air yards
+    # in games the player actually appeared in (handles mid-season trades correctly)
+    for row in _safe_query("""
+        WITH player_games AS (
+            SELECT pgs.game_id, pgs.season, pgs.team,
+                   pgs.targets AS p_tgt, pgs.air_yards AS p_ay
+            FROM player_game_stats pgs
+            JOIN schedules s ON pgs.game_id = s.game_id AND s.game_type = 'REG'
+            WHERE pgs.player_id = ?
+        ),
+        team_totals AS (
+            SELECT pgs2.season, pg.team,
+                   SUM(pgs2.targets)   AS team_tgt,
+                   SUM(pgs2.air_yards) AS team_ay
+            FROM player_game_stats pgs2
+            JOIN player_games pg ON pgs2.game_id = pg.game_id AND pgs2.team = pg.team
+            GROUP BY pgs2.season, pg.team
+        ),
+        player_season AS (
+            SELECT season, SUM(p_tgt) AS player_tgt, SUM(p_ay) AS player_ay
+            FROM player_games
+            GROUP BY season
+        )
+        SELECT ps.season,
+               ROUND(100.0 * ps.player_tgt / NULLIF(tt.team_tgt, 0), 1) AS target_share,
+               ROUND(100.0 * ps.player_ay  / NULLIF(tt.team_ay,  0), 1) AS air_yards_share
+        FROM player_season ps
+        JOIN team_totals tt ON ps.season = tt.season
+    """, [pid]):
+        s = int(row["season"])
+        d = result.setdefault(s, {})
+        if row["target_share"]    is not None: d["target_share"]    = float(row["target_share"])
+        if row["air_yards_share"] is not None: d["air_yards_share"] = float(row["air_yards_share"])
+
+    # Stuff rate — % of rush carries stopped at or behind the line of scrimmage
+    for row in _safe_query("""
+        SELECT season,
+            COUNT(*) FILTER (WHERE rush_attempt = 1 AND rushing_yards <= 0) AS stuffed,
+            COUNT(*) FILTER (WHERE rush_attempt = 1)                         AS carries_total,
+            ROUND(100.0 * COUNT(*) FILTER (WHERE rush_attempt = 1 AND rushing_yards <= 0)
+                        / NULLIF(COUNT(*) FILTER (WHERE rush_attempt = 1), 0), 1) AS stuff_rate
+        FROM plays
+        WHERE rusher_player_id = ? AND season_type = 'REG'
+        GROUP BY season
+    """, [pid]):
+        s = int(row["season"])
+        d = result.setdefault(s, {})
+        d["stuffed"]        = int(row["stuffed"] or 0)
+        d["carries_total"]  = int(row["carries_total"] or 0)
+        if row["stuff_rate"] is not None: d["stuff_rate"] = float(row["stuff_rate"])
+
+    return result
+
+
 def _get_player_wpa(player_id: str) -> dict:
     """Per-season WPA attribution from play-by-play using proper split credit."""
     result: dict[int, dict] = {}
@@ -726,6 +801,7 @@ def get_player(player_id: str):
         "snap_totals": _get_snap_totals(player_id),
         "situational": _get_situational_stats(player_id),
         "wpa": _get_player_wpa(player_id),
+        "adv_stats": _get_player_advanced_stats(player_id),
     }
 
 
@@ -1063,6 +1139,193 @@ def get_standings(season: int = Query(default=None)):
         result.append({'division': div, 'teams': teams})
 
     return result
+
+
+def _comp_pos_group(pos: str | None, att: int, carries: int, tgts: int) -> str:
+    if pos == 'QB': return 'QB'
+    if pos in ('RB', 'FB'): return 'RB'
+    if pos in ('WR', 'TE'): return 'WRTE'
+    if att > carries and att > tgts and att >= 50: return 'QB'
+    if carries >= tgts and carries >= 50: return 'RB'
+    if tgts >= 30: return 'WRTE'
+    return 'OTHER'
+
+
+def _comp_feature_vec(r: dict, pg: str) -> list[float]:
+    g   = max(r['games'],   1)
+    att = max(r['att'],     1)
+    car = max(r['carries'], 1)
+    tgt = max(r['tgts'],    1)
+    rec = max(r['rec'],     1)
+    if pg == 'QB':
+        return [
+            r['cmp']      / att,
+            r['pass_yds'] / att,
+            r['pass_tds'] / att,
+            r['ints']     / att,
+            r['pass_epa'] / att,
+            r['rush_yds'] / g,
+            r['rush_tds'] / g,
+        ]
+    elif pg == 'RB':
+        return [
+            r['rush_yds'] / car,
+            r['rush_tds'] / car,
+            r['rush_yds'] / g,
+            r['rush_epa'] / car,
+            r['rec_yds']  / g,
+            r['rec']      / g,
+            r['tgts']     / g,
+        ]
+    else:
+        return [
+            r['rec']     / tgt,
+            r['rec_yds'] / rec,
+            r['rec_tds'] / rec,
+            r['rec_yds'] / g,
+            r['rec_epa'] / tgt,
+            r['air_yds'] / tgt,
+            r['yac']     / rec,
+        ]
+
+
+def _zscore_normalize(vecs: list[list[float]]) -> list[list[float]]:
+    import math
+    if not vecs: return vecs
+    n_feat = len(vecs[0])
+    out = [list(v) for v in vecs]
+    for j in range(n_feat):
+        vals = [v[j] for v in vecs]
+        mu  = sum(vals) / len(vals)
+        std = math.sqrt(sum((x - mu) ** 2 for x in vals) / len(vals))
+        for i in range(len(out)):
+            out[i][j] = (out[i][j] - mu) / std if std > 0 else 0.0
+    return out
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    import math
+    dot   = sum(x * y for x, y in zip(a, b))
+    mag_a = math.sqrt(sum(x * x for x in a))
+    mag_b = math.sqrt(sum(x * x for x in b))
+    if mag_a == 0 or mag_b == 0: return 0.0
+    return dot / (mag_a * mag_b)
+
+
+def _get_player_comparables(player_id: str, n: int = 8) -> list[dict]:
+    rows = _safe_query(f"""
+        WITH recent_roster AS (
+            SELECT player_id, position, team, headshot_url
+            FROM rosters
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY season DESC) = 1
+        ),
+        career AS (
+            SELECT
+                pgs.player_id,
+                MAX(pgs.player_name)          AS player_name,
+                COUNT(DISTINCT pgs.game_id)   AS games,
+                MIN(pgs.season)               AS first_season,
+                MAX(pgs.season)               AS last_season,
+                SUM(pgs.attempts)             AS att,
+                SUM(pgs.completions)          AS cmp,
+                SUM(pgs.pass_yards)           AS pass_yds,
+                SUM(pgs.pass_tds)             AS pass_tds,
+                SUM(pgs.interceptions_thrown) AS ints,
+                SUM(pgs.pass_epa)             AS pass_epa,
+                SUM(pgs.carries)              AS carries,
+                SUM(pgs.rush_yards)           AS rush_yds,
+                SUM(pgs.rush_tds)             AS rush_tds,
+                SUM(pgs.rush_epa)             AS rush_epa,
+                SUM(pgs.targets)              AS tgts,
+                SUM(pgs.receptions)           AS rec,
+                SUM(pgs.rec_yards)            AS rec_yds,
+                SUM(pgs.rec_tds)              AS rec_tds,
+                SUM(pgs.rec_epa)              AS rec_epa,
+                SUM(pgs.air_yards)            AS air_yds,
+                SUM(pgs.yac)                  AS yac
+            FROM player_game_stats pgs
+            JOIN schedules s ON pgs.game_id = s.game_id AND s.game_type = 'REG'
+            GROUP BY pgs.player_id
+            HAVING COUNT(DISTINCT pgs.game_id) >= 16
+        )
+        SELECT c.*, r.position, r.team, r.headshot_url
+        FROM career c
+        LEFT JOIN recent_roster r ON r.player_id = c.player_id
+    """)
+
+    if not rows:
+        return []
+
+    target = next((r for r in rows if r['player_id'] == player_id), None)
+    if target is None:
+        return []
+
+    tpg = _comp_pos_group(target.get('position'), target['att'], target['carries'], target['tgts'])
+    if tpg == 'OTHER':
+        return []
+
+    pool = [r for r in rows if _comp_pos_group(r.get('position'), r['att'], r['carries'], r['tgts']) == tpg]
+
+    # Minimum sample filters per position
+    min_att = {'QB': 200, 'RB': 0, 'WRTE': 0}
+    min_car = {'QB': 0, 'RB': 100, 'WRTE': 0}
+    min_tgt = {'QB': 0, 'RB': 0, 'WRTE': 50}
+    pool = [r for r in pool
+            if r['att'] >= min_att[tpg]
+            and r['carries'] >= min_car[tpg]
+            and r['tgts'] >= min_tgt[tpg]]
+
+    if len(pool) < 2:
+        return []
+
+    vecs = [_comp_feature_vec(r, tpg) for r in pool]
+    normed = _zscore_normalize(vecs)
+
+    target_idx = next((i for i, r in enumerate(pool) if r['player_id'] == player_id), None)
+    if target_idx is None:
+        return []
+
+    target_vec = normed[target_idx]
+
+    scored = []
+    for i, (r, v) in enumerate(zip(pool, normed)):
+        if r['player_id'] == player_id:
+            continue
+        sim = max(0.0, _cosine(target_vec, v))
+        scored.append((sim, r))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    result = []
+    for sim, r in scored[:n]:
+        result.append({
+            'player_id':    r['player_id'],
+            'player_name':  r['player_name'],
+            'position':     r.get('position'),
+            'team':         r.get('team'),
+            'headshot_url': r.get('headshot_url'),
+            'similarity':   round(sim * 100, 1),
+            'games':        r['games'],
+            'first_season': r['first_season'],
+            'last_season':  r['last_season'],
+            'pass_yards':   r['pass_yds'],
+            'pass_tds':     r['pass_tds'],
+            'rush_yards':   r['rush_yds'],
+            'rush_tds':     r['rush_tds'],
+            'carries':      r['carries'],
+            'rec_yards':    r['rec_yds'],
+            'rec_tds':      r['rec_tds'],
+            'targets':      r['tgts'],
+            'att':          r['att'],
+            'cmp':          r['cmp'],
+            'ints':         r['ints'],
+        })
+    return result
+
+
+@app.get("/players/{player_id}/comparables")
+def get_player_comparables(player_id: str, n: int = Query(default=8, ge=1, le=20)):
+    return _get_player_comparables(player_id, n)
 
 
 @app.get("/search")
