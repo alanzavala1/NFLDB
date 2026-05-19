@@ -1,0 +1,227 @@
+"""Schedule and game endpoints."""
+from fastapi import APIRouter, HTTPException, Query
+
+from database import query_to_dict
+from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, safe_query, team_sql
+
+router = APIRouter()
+
+
+def attach_records(games: list[dict]) -> list[dict]:
+    """Add away_record / home_record (entering each game) by walking weeks in order."""
+    team_records: dict[str, tuple[int, int, int]] = {}  # team -> (W, L, T)
+
+    def fmt(wlt: tuple[int, int, int]) -> str:
+        w, l, t = wlt
+        return f"{w}-{l}-{t}" if t else f"{w}-{l}"
+
+    by_week: dict[int, list[dict]] = {}
+    for g in games:
+        by_week.setdefault(g["week"], []).append(g)
+
+    for week in sorted(by_week):
+        for g in by_week[week]:
+            g["away_record"] = fmt(team_records.get(g["away_team"], (0, 0, 0)))
+            g["home_record"] = fmt(team_records.get(g["home_team"], (0, 0, 0)))
+
+        for g in by_week[week]:
+            a, h = g["away_team"], g["home_team"]
+            as_, hs = g["away_score"], g["home_score"]
+            if as_ is None or hs is None:
+                continue
+            aw, al, at = team_records.get(a, (0, 0, 0))
+            hw, hl, ht = team_records.get(h, (0, 0, 0))
+            if as_ > hs:
+                team_records[a] = (aw + 1, al, at)
+                team_records[h] = (hw, hl + 1, ht)
+            elif hs > as_:
+                team_records[a] = (aw, al + 1, at)
+                team_records[h] = (hw + 1, hl, ht)
+            else:
+                team_records[a] = (aw, al, at + 1)
+                team_records[h] = (hw, hl, ht + 1)
+
+    return games
+
+
+@router.get("/schedule")
+def get_schedule(season: int = Query(2025)):
+    rows = query_to_dict(
+        """
+        SELECT
+            game_id, season, game_type, week, gameday, gametime,
+            away_team, home_team, away_score, home_score,
+            away_qb_name, home_qb_name, spread_line, total_line,
+            roof, surface, temp, wind, stadium, overtime, div_game
+        FROM schedules
+        WHERE season = ?
+        ORDER BY week, gametime
+        """,
+        [season],
+    )
+    attach_records(rows)
+    grouped: dict[int, list] = {}
+    for row in rows:
+        grouped.setdefault(row["week"], []).append(row)
+    return [{"week": w, "games": games} for w, games in sorted(grouped.items())]
+
+
+@router.get("/games")
+def get_games(
+    week: int = Query(..., ge=1, le=22),
+    season: int = Query(2025),
+):
+    rows = query_to_dict(
+        """
+        SELECT
+            game_id,
+            season,
+            game_type,
+            week,
+            gameday,
+            gametime,
+            away_team,
+            home_team,
+            away_score,
+            home_score,
+            away_qb_name,
+            home_qb_name,
+            spread_line,
+            total_line,
+            roof,
+            surface,
+            temp,
+            wind,
+            stadium,
+            overtime,
+            div_game
+        FROM schedules
+        WHERE week = ? AND season = ?
+        ORDER BY gametime
+        """,
+        [week, season],
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No games found for week {week}, season {season}")
+    return rows
+
+
+@router.get("/games/{game_id}")
+def get_game(game_id: str):
+    games = query_to_dict(
+        """
+        SELECT
+            game_id, season, game_type, week, gameday, gametime,
+            away_team, home_team, away_score, home_score,
+            away_qb_name, home_qb_name,
+            spread_line, total_line, overtime, div_game,
+            roof, surface, temp, wind, stadium
+        FROM schedules
+        WHERE game_id = ?
+        """,
+        [game_id],
+    )
+    if not games:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+    game = games[0]
+
+    # Compute each team's record entering this game
+    prior = query_to_dict(
+        """
+        SELECT away_team, home_team, away_score, home_score, week
+        FROM schedules
+        WHERE season = ? AND week < ? AND away_score IS NOT NULL
+        ORDER BY week
+        """,
+        [game["season"], game["week"]],
+    )
+    attach_records(prior + [game])  # mutates game in-place
+
+    away_team = game["away_team"]
+    home_team = game["home_team"]
+    team_sel, team_rank = team_sql("?", "?")
+
+    players = query_to_dict(
+        f"""
+        WITH {ROSTER_CTE},
+        ranked AS (
+            SELECT
+                pgs.player_id,
+                pgs.player_name,
+                {team_sel} AS team,
+                pgs.week,
+                r.position, r.jersey_number, r.headshot_url,
+                {PGS_STAT_SEL},
+                ROW_NUMBER() OVER (
+                    PARTITION BY pgs.player_id
+                    ORDER BY {team_rank}
+                ) AS rn
+            FROM player_game_stats pgs
+            LEFT JOIN roster r ON r.player_id = pgs.player_id AND r.season = pgs.season
+            WHERE pgs.game_id = ?
+        )
+        SELECT * EXCLUDE (rn)
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY team, position, player_name
+        """,
+        [away_team, home_team, away_team, home_team,
+         away_team, home_team, away_team, home_team, away_team, home_team,
+         game_id],
+    )
+
+    # Quarter-by-quarter scores from play-by-play
+    quarter_scores = []
+    try:
+        q_rows = safe_query(
+            """
+            SELECT
+                qtr,
+                MAX(CASE WHEN posteam = ? THEN posteam_score
+                         WHEN defteam  = ? THEN defteam_score END) AS away_cumul,
+                MAX(CASE WHEN posteam = ? THEN posteam_score
+                         WHEN defteam  = ? THEN defteam_score END) AS home_cumul
+            FROM plays
+            WHERE game_id = ?
+            GROUP BY qtr
+            ORDER BY qtr
+            """,
+            [away_team, away_team, home_team, home_team, game_id],
+        )
+        away_prev = home_prev = 0
+        for row in q_rows:
+            ac = int(row["away_cumul"] or 0)
+            hc = int(row["home_cumul"] or 0)
+            quarter_scores.append({"qtr": int(row["qtr"]), "away": ac - away_prev, "home": hc - home_prev})
+            away_prev, home_prev = ac, hc
+    except Exception:
+        pass
+
+    win_prob = safe_query(
+        """
+        SELECT
+            game_seconds_remaining,
+            qtr,
+            ROUND(home_wp, 4)   AS home_wp,
+            COALESCE(touchdown,    0) AS touchdown,
+            COALESCE(interception, 0) AS interception,
+            COALESCE(fumble_lost,  0) AS fumble_lost,
+            posteam,
+            "desc"              AS desc
+        FROM plays
+        WHERE game_id = ?
+          AND home_wp IS NOT NULL
+          AND game_seconds_remaining IS NOT NULL
+        ORDER BY game_seconds_remaining DESC
+        """,
+        [game_id],
+    )
+
+    return {
+        **game,
+        "away": [p for p in players if p["team"] == away_team],
+        "home": [p for p in players if p["team"] == home_team],
+        "quarter_scores": quarter_scores,
+        "win_prob": win_prob,
+    }

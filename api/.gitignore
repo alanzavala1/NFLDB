@@ -1,6 +1,17 @@
-data/
-__pycache__/
-.env
+# Virtualenv internals (api/ was created as a venv root in addition to api/venv/)
+Include/
+Lib/
+Scripts/
+share/
+pyvenv.cfg
 venv/
-.pytest_cache/
+.venv/
+
+# Python caches
+__pycache__/
 *.pyc
+
+# Local DB (large binary, not source-controlled)
+data/
+*.duckdb
+*.duckdb.wal
