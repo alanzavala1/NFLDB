@@ -3,7 +3,8 @@ import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { GameDetail, PlayerStats, WinProbPlay } from '../api'
-import Nav from '../components/Nav'
+import Nav, { backBtnCls } from '../components/Nav'
+import type { Crumb } from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
 interface GameCtx { gameId: string; season: number; week: number; awayTeam: string; homeTeam: string; fromWeek?: number }
@@ -172,29 +173,38 @@ function BoxScore({ game }: { game: GameDetail }) {
   const H = teamTotals(game.home)
   if (!A.passAtt && !A.rushCar && !H.passAtt && !H.rushCar) return null
 
-  function Row({ label, a, h, lo = false, neutral = false }: {
+  function StatBar({ label, a, h, lo = false, neutral = false }: {
     label: string; a: string | number; h: string | number; lo?: boolean; neutral?: boolean
   }) {
     const av = typeof a === 'number' ? a : parseFloat(String(a)) || 0
     const hv = typeof h === 'number' ? h : parseFloat(String(h)) || 0
-    const aBold = !neutral && av !== hv && (lo ? av < hv : av > hv)
-    const hBold = !neutral && av !== hv && (lo ? hv < av : hv > av)
+    const total = av + hv
+    const aPct = total > 0 ? (av / total) * 100 : 50
+    const hPct = total > 0 ? (hv / total) * 100 : 50
+    const aWon = !neutral && av !== hv && (lo ? av < hv : av > hv)
+    const hWon = !neutral && av !== hv && (lo ? hv < av : hv > av)
     return (
-      <tr className="hover:bg-gray-800/10">
-        <td className={`py-2.5 pl-5 pr-3 text-right tabular-nums w-[38%] ${aBold ? 'text-white font-semibold' : 'text-gray-400'}`}>{a}</td>
-        <td className="py-2.5 px-3 text-center text-xs font-semibold text-gray-500 w-[24%]">{label}</td>
-        <td className={`py-2.5 pr-5 pl-3 text-left tabular-nums w-[38%] ${hBold ? 'text-white font-semibold' : 'text-gray-400'}`}>{h}</td>
-      </tr>
+      <div className="px-5 py-2.5">
+        <div className="flex items-baseline justify-between gap-3 mb-1.5">
+          <span className={`text-base font-bold tabular-nums w-20 text-right ${aWon ? 'text-white' : 'text-gray-500'}`}>{a}</span>
+          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider text-center">{label}</span>
+          <span className={`text-base font-bold tabular-nums w-20 text-left ${hWon ? 'text-white' : 'text-gray-500'}`}>{h}</span>
+        </div>
+        {!neutral && total > 0 && (
+          <div className="relative h-1 rounded-full bg-gray-800/60 overflow-hidden flex">
+            <div className={`h-full ${aWon ? 'bg-rose-400' : 'bg-rose-400/30'}`} style={{ width: `${aPct}%` }} />
+            <div className={`h-full ${hWon ? 'bg-indigo-400' : 'bg-indigo-400/30'}`} style={{ width: `${hPct}%` }} />
+          </div>
+        )}
+      </div>
     )
   }
 
-  function Section({ label }: { label: string }) {
+  function SectionDivider({ label }: { label: string }) {
     return (
-      <tr>
-        <td colSpan={3} className="py-1 text-center text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-          {label}
-        </td>
-      </tr>
+      <div className="px-5 pt-3 pb-1 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-t border-gray-800/40 mt-1">
+        {label}
+      </div>
     )
   }
 
@@ -215,24 +225,22 @@ function BoxScore({ game }: { game: GameDetail }) {
         </div>
       </div>
 
-      <table className="w-full">
-        <tbody>
-          <Row label="Total Yards"   a={A.totalYds} h={H.totalYds} />
-          <Section label="Passing" />
-          <Row label="Comp–Att"      a={`${A.passCmp}/${A.passAtt}`} h={`${H.passCmp}/${H.passAtt}`} neutral />
-          <Row label="Yards"         a={A.passYds}    h={H.passYds} />
-          <Row label="Touchdowns"    a={A.passTDs}    h={H.passTDs} />
-          <Row label="Interceptions" a={A.ints}       h={H.ints}       lo />
-          <Row label="Sacks Taken"   a={A.sacksTaken} h={H.sacksTaken} lo />
-          <Section label="Rushing" />
-          <Row label="Carries"       a={A.rushCar}  h={H.rushCar}  neutral />
-          <Row label="Yards"         a={A.rushYds}  h={H.rushYds} />
-          <Row label="Touchdowns"    a={A.rushTDs}  h={H.rushTDs} />
-          <Section label="Defense" />
-          <Row label="Sacks"         a={A.sacks}   h={H.sacks} />
-          <Row label="Interceptions" a={A.defInts} h={H.defInts} />
-        </tbody>
-      </table>
+      <div className="pb-3">
+        <StatBar label="Total Yards"   a={A.totalYds} h={H.totalYds} />
+        <SectionDivider label="Passing" />
+        <StatBar label="Comp / Att"    a={`${A.passCmp}/${A.passAtt}`} h={`${H.passCmp}/${H.passAtt}`} neutral />
+        <StatBar label="Yards"         a={A.passYds}    h={H.passYds} />
+        <StatBar label="Touchdowns"    a={A.passTDs}    h={H.passTDs} />
+        <StatBar label="Interceptions" a={A.ints}       h={H.ints}       lo />
+        <StatBar label="Sacks Taken"   a={A.sacksTaken} h={H.sacksTaken} lo />
+        <SectionDivider label="Rushing" />
+        <StatBar label="Carries"       a={A.rushCar}  h={H.rushCar}  neutral />
+        <StatBar label="Yards"         a={A.rushYds}  h={H.rushYds} />
+        <StatBar label="Touchdowns"    a={A.rushTDs}  h={H.rushTDs} />
+        <SectionDivider label="Defense" />
+        <StatBar label="Sacks"         a={A.sacks}   h={H.sacks} />
+        <StatBar label="Interceptions" a={A.defInts} h={H.defInts} />
+      </div>
     </div>
   )
 }
@@ -523,11 +531,94 @@ function PlayerStats({ game }: { game: GameDetail }) {
 // ── Win probability chart ─────────────────────────────────────────────────────
 
 function fmtRemaining(rem: number): string {
+  if (rem < 0) {
+    const elapsedOT = -rem
+    const min = Math.floor((600 - elapsedOT) / 60)
+    const sec = (600 - elapsedOT) % 60
+    return `OT ${Math.max(0, min)}:${Math.max(0, sec).toString().padStart(2, '0')}`
+  }
   const qtr = rem > 2700 ? 1 : rem > 1800 ? 2 : rem > 900 ? 3 : 4
   const secInQtr = rem - (qtr === 1 ? 2700 : qtr === 2 ? 1800 : qtr === 3 ? 900 : 0)
   const min = Math.floor(secInQtr / 60)
   const sec = secInQtr % 60
   return `Q${qtr} ${min}:${sec.toString().padStart(2, '0')}`
+}
+
+// ── Key plays (scoring + turnovers) ───────────────────────────────────────────
+
+type KeyPlayKind = 'td' | 'fg' | 'int' | 'fum'
+interface KeyPlayItem {
+  qtr: number
+  rem: number
+  team: string
+  desc: string
+  kind: KeyPlayKind
+  wpSwing: number  // points of WP added for the offense
+}
+
+function detectKeyPlays(plays: WinProbPlay[]): KeyPlayItem[] {
+  const out: KeyPlayItem[] = []
+  for (let i = 0; i < plays.length; i++) {
+    const p = plays[i]
+    const prevHomeWp = i > 0 ? plays[i - 1].home_wp : 0.5
+    const homeSwing = (p.home_wp - prevHomeWp) * 100
+    if (p.touchdown === 1) {
+      out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'td', wpSwing: homeSwing })
+    } else if (/field goal is good/i.test(p.desc)) {
+      out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'fg', wpSwing: homeSwing })
+    }
+    if (p.interception === 1) {
+      out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'int', wpSwing: homeSwing })
+    } else if (p.fumble_lost === 1) {
+      out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'fum', wpSwing: homeSwing })
+    }
+  }
+  return out.sort((a, b) => b.rem - a.rem)
+}
+
+const KIND_META: Record<KeyPlayKind, { label: string; color: string; bg: string }> = {
+  td:  { label: 'TD',  color: 'text-emerald-300', bg: 'bg-emerald-500/15 border-emerald-500/30' },
+  fg:  { label: 'FG',  color: 'text-amber-300',   bg: 'bg-amber-500/15 border-amber-500/30' },
+  int: { label: 'INT', color: 'text-rose-300',    bg: 'bg-rose-500/15 border-rose-500/30' },
+  fum: { label: 'FUM', color: 'text-rose-300',    bg: 'bg-rose-500/15 border-rose-500/30' },
+}
+
+function KeyPlays({ game }: { game: GameDetail }) {
+  const plays = detectKeyPlays(game.win_prob ?? [])
+  if (!plays.length) return null
+  const homeTeam = game.home_team
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
+      <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-800/40 flex items-center justify-between">
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Key Plays</span>
+        <span className="text-[10px] text-gray-600 uppercase tracking-wider">{plays.length} events</span>
+      </div>
+      <div className="divide-y divide-gray-800/40 max-h-96 overflow-y-auto">
+        {plays.map((p, i) => {
+          const isHome = p.team === homeTeam
+          // For scoring plays, swing is in offense's favor; for turnovers, against
+          const offSwing = isHome ? p.wpSwing : -p.wpSwing
+          const swingStr = Math.abs(offSwing) >= 1 ? `${offSwing >= 0 ? '+' : ''}${offSwing.toFixed(0)}%` : null
+          const meta = KIND_META[p.kind]
+          return (
+            <div key={i} className={`flex items-center gap-3 px-4 py-2.5 border-l-2 ${isHome ? 'border-l-indigo-500/60' : 'border-l-rose-500/60'}`}>
+              <div className="shrink-0 w-12 text-[11px] text-gray-500 font-mono tabular-nums">{fmtRemaining(p.rem)}</div>
+              <img src={teamLogoUrl(p.team)} className="w-5 h-5 object-contain shrink-0 opacity-70" alt="" />
+              <span className={`shrink-0 inline-block text-[10px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${meta.color} ${meta.bg}`}>
+                {meta.label}
+              </span>
+              <p className="flex-1 text-xs text-gray-400 leading-snug line-clamp-2 min-w-0">{p.desc}</p>
+              {swingStr && (
+                <span className={`shrink-0 text-[11px] tabular-nums font-semibold ${offSwing >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {swingStr} WP
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function WpTooltip({ active, payload }: any) {
@@ -672,57 +763,28 @@ export default function GamePage() {
   if (loading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
   if (!game) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Game not found.</p></div>
 
-  const backTo = fromPlayer
-    ? { to: `/players/${fromPlayer.playerId}`, state: { fromGame: (fromPlayer as any).fromGame } }
-    : fromWeek !== undefined
-      ? { to: `/?season=${game.season}&week=${fromWeek}`, state: undefined }
-      : { to: `/?season=${game.season}`, state: undefined }
+  const crumbs: Crumb[] = []
+  if (fromPlayer) {
+    crumbs.push({
+      label: fromPlayer.playerName,
+      to: `/players/${fromPlayer.playerId}`,
+      state: (fromPlayer as any).fromGame ? { fromGame: (fromPlayer as any).fromGame } : undefined,
+    })
+  } else if (fromWeek !== undefined) {
+    crumbs.push({ label: weekLabel(fromWeek), to: `/?season=${game.season}&week=${fromWeek}` })
+  }
+  crumbs.push({ label: `${game.away_team} @ ${game.home_team}` })
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav />
+      <Nav crumbs={crumbs} />
       <div className="max-w-3xl mx-auto px-4 py-8">
-
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 mb-5">
-          <button onClick={() => navigate(`/?season=${CURRENT_NFL_SEASON}`)}
-            className="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-800" title="Home">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 11h1v6a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
-            </svg>
-          </button>
-          <span className="text-gray-700">/</span>
-          {fromPlayer ? (
-            <>
-              <Link to={`/players/${fromPlayer.playerId}`} state={{ fromGame: (fromPlayer as any).fromGame }}
-                className="text-gray-400 hover:text-white text-sm transition-colors">{fromPlayer.playerName}</Link>
-              <span className="text-gray-700">/</span>
-            </>
-          ) : (
-            <>
-              <Link to={`/?season=${game.season}`} className="text-gray-400 hover:text-white text-sm transition-colors">
-                {game.season}
-              </Link>
-              {fromWeek !== undefined && (
-                <>
-                  <span className="text-gray-700">/</span>
-                  <Link to={`/?season=${game.season}&week=${fromWeek}`}
-                    className="text-gray-400 hover:text-white text-sm transition-colors">{weekLabel(fromWeek)}</Link>
-                </>
-              )}
-              <span className="text-gray-700">/</span>
-            </>
-          )}
-          <span className="text-gray-400 text-sm">{game.away_team} @ {game.home_team}</span>
-          <Link to={backTo.to} state={backTo.state}
-            className="ml-auto flex items-center gap-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-2 transition-colors">
-            ← Back
-          </Link>
-        </div>
+        <button onClick={() => navigate(-1)} className={`${backBtnCls} mb-6`}>← Back</button>
 
         <GameContext.Provider value={{ gameId: game.game_id, season: game.season, week: game.week, awayTeam: game.away_team, homeTeam: game.home_team, fromWeek }}>
           <Scoreboard game={game} />
           <WinProbabilityChart game={game} />
+          <KeyPlays game={game} />
           <GameLeaders game={game} />
           <BoxScore game={game} />
           {(game.away.length > 0 || game.home.length > 0) && <PlayerStats game={game} />}

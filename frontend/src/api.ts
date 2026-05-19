@@ -145,6 +145,12 @@ export interface PlayerGame {
   qb_hits: number
   def_interceptions: number
   pass_breakups: number
+  fg_att: number
+  fg_made: number
+  xp_att: number
+  xp_made: number
+  punts: number
+  punt_yards: number
 }
 
 export interface SituationalStats {
@@ -334,6 +340,20 @@ export interface LeagueLeader {
   pass_breakups: number
   forced_fumbles: number | null
   fumble_recoveries: number | null
+  fg_att: number
+  fg_made: number
+  xp_att: number
+  xp_made: number
+  punts: number
+  punt_yards: number
+}
+
+export interface RosterPlayer {
+  player_id: string
+  player_name: string
+  position: string | null
+  jersey_number: number | null
+  headshot_url: string | null
 }
 
 export interface StandingsTeam {
@@ -407,6 +427,75 @@ export interface WpaLeaders {
   receiving: WpaLeader[]
 }
 
+export interface TeamAnalyticsTeam {
+  team: string
+  games: number
+  wins: number
+  losses: number
+  ties: number
+  pf_total: number
+  pa_total: number
+  // Scoring
+  ppg: number | null
+  papg: number | null
+  pt_diff_per_game: number | null
+  pts_per_drive: number | null
+  pts_per_drive_allowed: number | null
+  // Drives / red zone / turnovers
+  total_drives: number | null
+  total_drives_allowed: number | null
+  rz_td_pct: number | null
+  rz_td_pct_allowed: number | null
+  off_turnovers_total: number
+  def_takeaways_total: number
+  turnover_diff_per_game: number | null
+  // Offense
+  off_plays_count: number | null
+  off_epa_play: number | null
+  off_pass_epa: number | null
+  off_rush_epa: number | null
+  off_success_pct: number | null
+  off_explosive_pct: number | null
+  proe: number | null
+  third_down_pct: number | null
+  // Defense
+  def_epa_play: number | null
+  def_pass_epa: number | null
+  def_rush_epa: number | null
+  def_success_pct: number | null
+  def_explosive_pct: number | null
+  def_sack_pct: number | null
+  third_down_stop_pct: number | null
+  // Ranks (1 = best for team direction)
+  ppg_rank: number | null
+  pts_per_drive_rank: number | null
+  off_epa_play_rank: number | null
+  off_pass_epa_rank: number | null
+  off_rush_epa_rank: number | null
+  off_success_rank: number | null
+  off_explosive_rank: number | null
+  third_down_rank: number | null
+  rz_td_rank: number | null
+  proe_rank: number | null
+  papg_rank: number | null
+  pts_per_drive_allowed_rank: number | null
+  def_epa_play_rank: number | null
+  def_pass_epa_rank: number | null
+  def_rush_epa_rank: number | null
+  def_success_rank: number | null
+  def_explosive_rank: number | null
+  third_down_stop_rank: number | null
+  rz_td_allowed_rank: number | null
+  def_sack_rank: number | null
+  pt_diff_rank: number | null
+  to_diff_rank: number | null
+}
+
+export interface TeamAnalyticsResponse {
+  season: number
+  league: TeamAnalyticsTeam[]
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(BASE + path)
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -430,5 +519,7 @@ export const api = {
   standings: (season: number) => get<DivisionStandings[]>(`/standings?season=${season}`),
   leaders: (season: number) => get<LeagueLeader[]>(`/leaders?season=${season}`),
   wpaLeaders: (season: number) => get<WpaLeaders>(`/wpa-leaders?season=${season}`),
+  teamRoster: (team: string, season: number) => get<RosterPlayer[]>(`/teams/${team}/roster?season=${season}`),
   comparables: (playerId: string) => get<PlayerComparable[]>(`/players/${playerId}/comparables`),
+  teamAnalytics: (season: number) => get<TeamAnalyticsResponse>(`/team-analytics?season=${season}`),
 }

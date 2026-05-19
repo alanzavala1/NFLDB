@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, PlayerComparable, SeasonEntry } from '../api'
-import Nav from '../components/Nav'
-import { teamLogoUrl } from '../utils/teams'
+import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, PlayerComparable, SeasonEntry, LeagueLeader } from '../api'
+import Nav, { backBtnCls } from '../components/Nav'
+import type { Crumb } from '../components/Nav'
+import { teamLogoUrl, teamName } from '../utils/teams'
+import { PAST_AWARDS, AWARD_LABEL, type AwardKey } from '../utils/awards'
 
 // — helpers —
 function passerRating(cmp: number, att: number, yds: number, td: number, int_: number): string | null {
@@ -29,6 +31,8 @@ function sumGames(games: PlayerGame[]) {
     targets: 0, receptions: 0, rec_yards: 0, rec_tds: 0, yac: 0, air_yards: 0, rec_epa: 0,
     solo_tackles: 0, assist_tackles: 0, tackles_for_loss: 0,
     sacks: 0, qb_hits: 0, def_interceptions: 0, pass_breakups: 0,
+    fg_att: 0, fg_made: 0, xp_att: 0, xp_made: 0,
+    punts: 0, punt_yards: 0,
   }
   for (const g of games) {
     for (const k of Object.keys(s) as (keyof typeof s)[]) {
@@ -39,108 +43,280 @@ function sumGames(games: PlayerGame[]) {
 }
 type Totals = ReturnType<typeof sumGames>
 
-type ColKind = 'trad' | 'adv' | 'ngs' | 'snap' | 'sit' | 'wpa'
+// — awards lookup —
+function getPlayerAwards(playerName: string): Array<{ season: number; award: AwardKey }> {
+  const won: Array<{ season: number; award: AwardKey }> = []
+  for (const [season, list] of Object.entries(PAST_AWARDS)) {
+    for (const a of list) {
+      if (a.player === playerName) won.push({ season: Number(season), award: a.award })
+    }
+  }
+  return won.sort((a, b) => b.season - a.season)
+}
+
+function AwardBadge({ season, award }: { season: number; award: AwardKey }) {
+  const isMvp = award === 'MVP'
+  return (
+    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border whitespace-nowrap ${
+      isMvp
+        ? 'border-yellow-500/50 bg-yellow-500/15 text-yellow-300'
+        : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200'
+    }`}>
+      {isMvp ? '★ ' : ''}{AWARD_LABEL[award]} {season}
+    </span>
+  )
+}
+
+// — career trajectory chart —
+function getPrimaryStat(t: Totals, pos: string): { value: number; label: string } {
+  if (pos === 'QB') return { value: t.pass_yards, label: 'Pass YDS' }
+  if (pos === 'RB') return { value: t.rush_yards + t.rec_yards, label: 'Scrim YDS' }
+  if (pos === 'WR') return { value: t.rec_yards, label: 'Rec YDS' }
+  if (pos === 'K')  return { value: t.fg_made * 3 + t.xp_made, label: 'Points' }
+  if (pos === 'P')  return { value: t.punt_yards, label: 'Punt YDS' }
+  return { value: t.solo_tackles + t.assist_tackles, label: 'Tackles' }
+}
+
+function CareerTrajectory({ seasons, bySeason, pos }: {
+  seasons: number[]
+  bySeason: Record<number, PlayerGame[]>
+  pos: string
+}) {
+  if (seasons.length < 2) return null
+  const data = [...seasons]
+    .sort((a, b) => a - b)
+    .map(s => {
+      const totals = sumGames(bySeason[s])
+      const games = bySeason[s].length
+      const { value, label } = getPrimaryStat(totals, pos)
+      return { season: s, value, games, label }
+    })
+  const max = Math.max(...data.map(d => d.value), 1)
+  const peakSeason = data.reduce((p, c) => c.value > p.value ? c : p, data[0]).season
+  const statLabel = data[0]?.label ?? ''
+  const BAR_MAX_H = 96  // px
+
+  return (
+    <section className="mb-8">
+      <div className="flex items-end justify-between mb-3">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Career Trajectory</h2>
+          <span className="text-[10px] text-gray-700">{statLabel} by season</span>
+        </div>
+        <span className="text-[10px] text-gray-700">{data[0].season}–{data[data.length - 1].season}</span>
+      </div>
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="flex items-end gap-2 overflow-x-auto" style={{ minHeight: BAR_MAX_H + 28 }}>
+          {data.map(d => {
+            const isPeak = d.season === peakSeason
+            const barH = d.value > 0 ? Math.max(2, Math.round((d.value / max) * BAR_MAX_H)) : 0
+            return (
+              <div key={d.season} className="flex flex-col items-center shrink-0 w-12">
+                <div className="text-[10px] tabular-nums text-gray-400 mb-1 font-semibold leading-none h-3">
+                  {d.value > 0 ? d.value.toLocaleString() : ''}
+                </div>
+                <div
+                  className={`w-full rounded-t transition-colors ${isPeak ? 'bg-indigo-400' : 'bg-indigo-500/60 hover:bg-indigo-500'}`}
+                  style={{ height: `${barH}px` }}
+                  title={`${d.season}: ${d.value.toLocaleString()} ${d.label} · ${d.games}G`}
+                />
+                <div className={`text-[10px] tabular-nums mt-1 leading-none ${isPeak ? 'text-indigo-300 font-bold' : 'text-gray-600'}`}>
+                  {String(d.season).slice(-2)}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// — league rank lookup —
+function computeRank(leaders: LeagueLeader[], playerId: string, value: (p: LeagueLeader) => number, filter: (p: LeagueLeader) => boolean): number | null {
+  const filtered = leaders.filter(filter)
+  // Player must qualify themselves
+  if (!filtered.some(p => p.player_id === playerId)) return null
+  const sorted = [...filtered].sort((a, b) => value(b) - value(a))
+  const idx = sorted.findIndex(p => p.player_id === playerId)
+  return idx >= 0 ? idx + 1 : null
+}
+
+function rankSuffix(rank: number | null, season: number): string | null {
+  if (rank == null) return null
+  const suffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'
+  return `${rank}${suffix} in NFL · ${season}`
+}
+
+function passerRatingNum(cmp: number, att: number, yds: number, td: number, int_: number): number | null {
+  if (att === 0) return null
+  const clamp = (x: number) => Math.min(2.375, Math.max(0, x))
+  const a = clamp((cmp / att - 0.3) / 0.2)
+  const b = clamp((yds / att - 3) / 4)
+  const c = clamp((td / att) / 0.05)
+  const d = clamp(2.375 - (int_ / att) / 0.04)
+  return ((a + b + c + d) / 6) * 100
+}
+
+function computeHighlightRanks(pos: string, playerId: string, leaders: LeagueLeader[], season: number): Record<string, string | null> {
+  const r = (val: (p: LeagueLeader) => number, filter: (p: LeagueLeader) => boolean) =>
+    rankSuffix(computeRank(leaders, playerId, val, filter), season)
+  if (pos === 'QB') {
+    const qbFilter = (p: LeagueLeader) => p.attempts >= 100
+    return {
+      'Passer Rating': r(p => passerRatingNum(p.completions, p.attempts, p.pass_yards, p.pass_tds, p.interceptions_thrown) ?? 0, qbFilter),
+      'AY/A':          r(p => p.attempts > 0 ? (p.pass_yards + 20 * p.pass_tds - 45 * p.interceptions_thrown) / p.attempts : 0, qbFilter),
+      'EPA / Att':     r(p => p.attempts > 0 && p.pass_epa != null ? p.pass_epa / p.attempts : 0, qbFilter),
+    }
+  }
+  if (pos === 'RB') {
+    const rbFilter = (p: LeagueLeader) => p.carries >= 50
+    return {
+      'Rush Yards':  r(p => p.rush_yards, rbFilter),
+      'Y / Carry':   r(p => p.carries > 0 ? p.rush_yards / p.carries : 0, rbFilter),
+      'EPA / Carry': r(p => p.carries > 0 && p.rush_epa != null ? p.rush_epa / p.carries : 0, rbFilter),
+      'SCR YDS / G': r(p => p.games_played > 0 ? (p.rush_yards + p.rec_yards) / p.games_played : 0, rbFilter),
+    }
+  }
+  if (pos === 'WR') {
+    const wrFilter = (p: LeagueLeader) => p.targets >= 20
+    return {
+      'Rec Yards':    r(p => p.rec_yards, wrFilter),
+      'Catch %':      r(p => p.targets > 0 ? p.receptions / p.targets : 0, wrFilter),
+      'EPA / Target': r(p => p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, wrFilter),
+      'Y / Target':   r(p => p.targets > 0 ? p.rec_yards / p.targets : 0, wrFilter),
+    }
+  }
+  if (pos === 'DEF') {
+    return {
+      'Tackles': r(p => p.solo_tackles + p.assist_tackles, p => p.solo_tackles + p.assist_tackles >= 10),
+      'Sacks':   r(p => p.sacks, p => p.sacks > 0),
+      'INT':     r(p => p.def_interceptions, p => p.def_interceptions > 0),
+      'PBU':     r(p => p.pass_breakups, p => p.pass_breakups > 0),
+    }
+  }
+  if (pos === 'K') {
+    return { 'Points': r(p => p.fg_made * 3 + p.xp_made, p => p.fg_att + p.xp_att > 0) }
+  }
+  if (pos === 'P') {
+    return { 'Punts': r(p => (p as any).punts ?? 0, p => ((p as any).punts ?? 0) > 0) }
+  }
+  return {}
+}
+
+type ColKind = 'trad' | 'adv' | 'ngs' | 'snap' | 'sit'
 type Col = {
-  key: string; label: string; kind: ColKind; signed?: boolean; highlight?: boolean
+  key: string; label: string; kind: ColKind; group?: string; wpaOnly?: boolean; signed?: boolean; highlight?: boolean
   cell: (t: Totals, games: number, n?: NgsStats, sn?: SnapTotals, sit?: SituationalStats, w?: PlayerWpa, a?: PlayerAdvStats) => string | number | null
 }
 
 // — column definitions —
 const QB_COLS: Col[] = [
-  { key: 'g',      label: 'G',      kind: 'trad', cell: (_, g) => g },
-  { key: 'snp',    label: 'SNP',    kind: 'snap', cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
-  { key: 'spct',   label: 'SNP%',   kind: 'snap', cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
-  { key: 'cmp',    label: 'CMP',    kind: 'trad', cell: t => t.completions },
-  { key: 'att',    label: 'ATT',    kind: 'trad', cell: t => t.attempts },
-  { key: 'cpct',   label: 'CMP%',   kind: 'trad', cell: t => pct(t.completions, t.attempts) },
-  { key: 'yds',    label: 'YDS',    kind: 'trad', highlight: true, cell: t => t.pass_yards },
-  { key: 'td',     label: 'TD',     kind: 'trad', cell: t => t.pass_tds },
-  { key: 'int',    label: 'INT',    kind: 'trad', cell: t => t.interceptions_thrown },
-  { key: 'ya',     label: 'Y/A',    kind: 'trad', cell: t => ratio(t.pass_yards, t.attempts) },
-  { key: 'sck',    label: 'SACK',   kind: 'trad', cell: t => t.sacks_taken },
-  { key: 'rate',   label: 'RATE',   kind: 'trad', cell: t => passerRating(t.completions, t.attempts, t.pass_yards, t.pass_tds, t.interceptions_thrown) },
-  { key: 'car',    label: 'CAR',    kind: 'trad', cell: t => t.carries > 0 ? t.carries : null },
-  { key: 'ryds',   label: 'RYDS',   kind: 'trad', cell: t => t.carries > 0 ? t.rush_yards : null },
-  { key: 'rtd',    label: 'RTD',    kind: 'trad', cell: t => t.carries > 0 && t.rush_tds > 0 ? t.rush_tds : null },
-  { key: 'rypc',   label: 'Y/C',    kind: 'trad', cell: t => t.carries > 0 ? ratio(t.rush_yards, t.carries) : null },
-  { key: 'aya',    label: 'AY/A',   kind: 'adv',  cell: t => t.attempts > 0 ? ((t.pass_yards + 20 * t.pass_tds - 45 * t.interceptions_thrown) / t.attempts).toFixed(1) : null },
-  { key: 'epaa',   label: 'EPA/Att',kind: 'adv', signed: true, cell: t => t.attempts > 0 ? sfmt(t.pass_epa / t.attempts, 3) : null },
-  { key: 'cpoe',   label: 'CPOE',   kind: 'ngs', signed: true, cell: (_, __, n) => sfmt(n?.cpoe) },
-  { key: 'ttt',    label: 'TTT',    kind: 'ngs', cell: (_, __, n) => n?.avg_time_to_throw != null ? `${n.avg_time_to_throw.toFixed(2)}s` : null },
-  { key: 'adot',   label: 'aDOT',   kind: 'ngs', cell: (_, __, n) => dfmt(n?.adot) },
-  { key: 'agg',    label: 'AGG%',   kind: 'ngs', cell: (_, __, n) => n?.aggressiveness != null ? `${n.aggressiveness.toFixed(1)}%` : null },
-  { key: 'xcmp',   label: 'xCMP%',  kind: 'ngs', cell: (_, __, n) => n?.expected_cmp_pct != null ? `${n.expected_cmp_pct.toFixed(1)}%` : null },
-  { key: 'rzd',    label: 'RZ TD',  kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_pass_tds ?? null },
-  { key: 'rzp',    label: 'RZ%',    kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_pass_att ? pct(sit.rz_pass_tds ?? 0, sit.rz_pass_att) + '%' : null },
-  { key: 'tdp',    label: '3D%',    kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_pass_att ? pct(sit.third_pass_fd ?? 0, sit.third_pass_att) + '%' : null },
-  { key: 'lng',    label: 'LNG',    kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_pass ?? null },
-  { key: 'pwpa',   label: 'WPA',    kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w?.pass_wpa != null ? sfmt(w.pass_wpa, 3) : null },
-  { key: 'qbfl',   label: 'FUM',    kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
+  { key: 'g',    label: 'G',       kind: 'trad',                        cell: (_, g) => g },
+  { key: 'snp',  label: 'SNP',     kind: 'snap',                        cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
+  { key: 'spct', label: 'SNP%',    kind: 'snap',                        cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
+  // Passing
+  { key: 'cmp',  label: 'CMP',     kind: 'trad', group: 'Passing',      cell: t => t.completions },
+  { key: 'att',  label: 'ATT',     kind: 'trad', group: 'Passing',      cell: t => t.attempts },
+  { key: 'cpct', label: 'CMP%',    kind: 'trad', group: 'Passing',      cell: t => pct(t.completions, t.attempts) },
+  { key: 'yds',  label: 'YDS',     kind: 'trad', group: 'Passing', highlight: true, cell: t => t.pass_yards },
+  { key: 'td',   label: 'TD',      kind: 'trad', group: 'Passing',      cell: t => t.pass_tds },
+  { key: 'int',  label: 'INT',     kind: 'trad', group: 'Passing',      cell: t => t.interceptions_thrown },
+  { key: 'ya',   label: 'Y/A',     kind: 'trad', group: 'Passing',      cell: t => ratio(t.pass_yards, t.attempts) },
+  { key: 'sck',  label: 'SACK',    kind: 'trad', group: 'Passing',      cell: t => t.sacks_taken },
+  { key: 'rate', label: 'RATE',    kind: 'trad', group: 'Passing',      cell: t => passerRating(t.completions, t.attempts, t.pass_yards, t.pass_tds, t.interceptions_thrown) },
+  // Rushing
+  { key: 'car',  label: 'CAR',     kind: 'trad', group: 'Rushing',      cell: t => t.carries > 0 ? t.carries : null },
+  { key: 'ryds', label: 'YDS',     kind: 'trad', group: 'Rushing',      cell: t => t.carries > 0 ? t.rush_yards : null },
+  { key: 'rtd',  label: 'TD',      kind: 'trad', group: 'Rushing',      cell: t => t.carries > 0 && t.rush_tds > 0 ? t.rush_tds : null },
+  { key: 'rypc', label: 'Y/C',     kind: 'trad', group: 'Rushing',      cell: t => t.carries > 0 ? ratio(t.rush_yards, t.carries) : null },
+  // Advanced / NGS / Situational / WPA
+  { key: 'aya',  label: 'AY/A',    kind: 'adv',                         cell: t => t.attempts > 0 ? ((t.pass_yards + 20 * t.pass_tds - 45 * t.interceptions_thrown) / t.attempts).toFixed(1) : null },
+  { key: 'epaa', label: 'EPA/Att', kind: 'adv',  signed: true,          cell: t => t.attempts > 0 ? sfmt(t.pass_epa / t.attempts, 3) : null },
+  { key: 'qbfl', label: 'FUM',     kind: 'adv',                         cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
+  { key: 'pwpa', label: 'WPA',     kind: 'adv',  wpaOnly: true, signed: true, cell: (_, __, _n, _sn, _sit, w) => w?.pass_wpa != null ? sfmt(w.pass_wpa, 3) : null },
+  { key: 'cpoe', label: 'CPOE',    kind: 'ngs',  signed: true,          cell: (_, __, n) => sfmt(n?.cpoe) },
+  { key: 'ttt',  label: 'TTT',     kind: 'ngs',                         cell: (_, __, n) => n?.avg_time_to_throw != null ? `${n.avg_time_to_throw.toFixed(2)}s` : null },
+  { key: 'adot', label: 'aDOT',    kind: 'ngs',                         cell: (_, __, n) => dfmt(n?.adot) },
+  { key: 'agg',  label: 'AGG%',    kind: 'ngs',                         cell: (_, __, n) => n?.aggressiveness != null ? `${n.aggressiveness.toFixed(1)}%` : null },
+  { key: 'xcmp', label: 'xCMP%',   kind: 'ngs',                         cell: (_, __, n) => n?.expected_cmp_pct != null ? `${n.expected_cmp_pct.toFixed(1)}%` : null },
+  { key: 'rzd',  label: 'RZ TD',   kind: 'sit',                         cell: (_, __, _n, _sn, sit) => sit?.rz_pass_tds ?? null },
+  { key: 'rzp',  label: 'RZ%',     kind: 'sit',                         cell: (_, __, _n, _sn, sit) => sit?.rz_pass_att ? pct(sit.rz_pass_tds ?? 0, sit.rz_pass_att) + '%' : null },
+  { key: 'tdp',  label: '3D%',     kind: 'sit',                         cell: (_, __, _n, _sn, sit) => sit?.third_pass_att ? pct(sit.third_pass_fd ?? 0, sit.third_pass_att) + '%' : null },
+  { key: 'lng',  label: 'LNG',     kind: 'sit',                         cell: (_, __, _n, _sn, sit) => sit?.lng_pass ?? null },
 ]
 
 const RB_COLS: Col[] = [
-  { key: 'g',    label: 'G',       kind: 'trad', cell: (_, g) => g },
-  { key: 'snp',  label: 'SNP',     kind: 'snap', cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
-  { key: 'spct', label: 'SNP%',    kind: 'snap', cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
-  { key: 'car',  label: 'CAR',     kind: 'trad', cell: t => t.carries },
-  { key: 'ryds', label: 'YDS',     kind: 'trad', highlight: true, cell: t => t.rush_yards },
-  { key: 'ypc',  label: 'Y/C',     kind: 'trad', cell: t => ratio(t.rush_yards, t.carries) },
-  { key: 'rtd',  label: 'TD',      kind: 'trad', cell: t => t.rush_tds },
-  { key: 'ryg',  label: 'Y/G',     kind: 'trad', cell: (t, g) => ratio(t.rush_yards, g) },
-  { key: 'tgt',  label: 'TGT',     kind: 'trad', cell: t => t.targets > 0 ? t.targets : null },
-  { key: 'rec',  label: 'REC',     kind: 'trad', cell: t => t.targets > 0 ? t.receptions : null },
-  { key: 'rcy',  label: 'REC YDS', kind: 'trad', cell: t => t.targets > 0 ? t.rec_yards : null },
-  { key: 'scr',  label: 'SCR YDS', kind: 'trad', cell: t => t.rush_yards + t.rec_yards > 0 ? t.rush_yards + t.rec_yards : null },
-  { key: 'patt', label: 'P.ATT',  kind: 'trad', cell: t => t.attempts > 0 ? t.attempts : null },
-  { key: 'pyds', label: 'P.YDS',  kind: 'trad', cell: t => t.attempts > 0 ? t.pass_yards : null },
-  { key: 'ptd',  label: 'P.TD',   kind: 'trad', cell: t => t.attempts > 0 ? t.pass_tds : null },
-  { key: 'epac', label: 'EPA/Car', kind: 'adv', signed: true, cell: t => t.carries > 0 ? sfmt(t.rush_epa / t.carries, 3) : null },
-  { key: 'ryoe', label: 'RYOE',    kind: 'ngs', signed: true, cell: (_, __, n) => sfmt(n?.rush_yoe) },
-  { key: 'ryoa', label: 'RYOE/A',  kind: 'ngs', signed: true, cell: (_, __, n) => sfmt(n?.rush_yoe_per_att, 2) },
-  { key: 'eff',  label: 'EFF%',    kind: 'ngs', cell: (_, __, n) => n?.rush_efficiency != null ? `${n.rush_efficiency.toFixed(1)}%` : null },
-  { key: 'rzd',  label: 'RZ TD',   kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_rush_tds ?? null },
-  { key: 'rzp',  label: 'RZ%',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_carries ? pct(sit.rz_rush_tds ?? 0, sit.rz_carries) + '%' : null },
-  { key: 'tdp',  label: '3D%',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_carries ? pct(sit.third_rush_fd ?? 0, sit.third_carries) + '%' : null },
-  { key: 'lng',  label: 'LNG',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_rush ?? null },
-  { key: 'rwpa',   label: 'WPA',     kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w ? sfmt((w.rush_wpa ?? 0) + (w.rec_wpa ?? 0), 3) : null },
-  { key: 'rbstuf', label: 'STF%',    kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.stuff_rate != null ? `${a.stuff_rate.toFixed(1)}%` : null },
-  { key: 'rbfl',   label: 'FUM',     kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
+  { key: 'g',    label: 'G',       kind: 'trad',                        cell: (_, g) => g },
+  { key: 'snp',  label: 'SNP',     kind: 'snap',                        cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
+  { key: 'spct', label: 'SNP%',    kind: 'snap',                        cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
+  // Rushing
+  { key: 'car',  label: 'CAR',     kind: 'trad', group: 'Rushing',      cell: t => t.carries },
+  { key: 'ryds', label: 'YDS',     kind: 'trad', group: 'Rushing', highlight: true, cell: t => t.rush_yards },
+  { key: 'ypc',  label: 'Y/C',     kind: 'trad', group: 'Rushing',      cell: t => ratio(t.rush_yards, t.carries) },
+  { key: 'rtd',  label: 'TD',      kind: 'trad', group: 'Rushing',      cell: t => t.rush_tds },
+  { key: 'ryg',  label: 'Y/G',     kind: 'trad', group: 'Rushing',      cell: (t, g) => ratio(t.rush_yards, g) },
+  // Receiving
+  { key: 'tgt',  label: 'TGT',     kind: 'trad', group: 'Receiving',    cell: t => t.targets > 0 ? t.targets : null },
+  { key: 'rec',  label: 'REC',     kind: 'trad', group: 'Receiving',    cell: t => t.targets > 0 ? t.receptions : null },
+  { key: 'rcy',  label: 'YDS',     kind: 'trad', group: 'Receiving',    cell: t => t.targets > 0 ? t.rec_yards : null },
+  { key: 'scr',  label: 'SCR YDS', kind: 'trad', group: 'Receiving',    cell: t => t.rush_yards + t.rec_yards > 0 ? t.rush_yards + t.rec_yards : null },
+  // Passing (trick plays / pass-catchers who throw)
+  { key: 'patt', label: 'ATT',     kind: 'trad', group: 'Passing',      cell: t => t.attempts > 0 ? t.attempts : null },
+  { key: 'pyds', label: 'YDS',     kind: 'trad', group: 'Passing',      cell: t => t.attempts > 0 ? t.pass_yards : null },
+  { key: 'ptd',  label: 'TD',      kind: 'trad', group: 'Passing',      cell: t => t.attempts > 0 ? t.pass_tds : null },
+  // Advanced / NGS / Situational / WPA
+  { key: 'epac',   label: 'EPA/Car', kind: 'adv', signed: true,         cell: t => t.carries > 0 ? sfmt(t.rush_epa / t.carries, 3) : null },
+  { key: 'rbstuf', label: 'STF%',    kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.stuff_rate != null ? `${a.stuff_rate.toFixed(1)}%` : null },
+  { key: 'rbfl',   label: 'FUM',     kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
+  { key: 'rwpa',   label: 'WPA',     kind: 'adv', wpaOnly: true, signed: true, cell: (_, __, _n, _sn, _sit, w) => w ? sfmt((w.rush_wpa ?? 0) + (w.rec_wpa ?? 0), 3) : null },
+  { key: 'ryoe',   label: 'RYOE',    kind: 'ngs', signed: true,         cell: (_, __, n) => sfmt(n?.rush_yoe) },
+  { key: 'ryoa',   label: 'RYOE/A',  kind: 'ngs', signed: true,         cell: (_, __, n) => sfmt(n?.rush_yoe_per_att, 2) },
+  { key: 'eff',    label: 'EFF%',    kind: 'ngs',                       cell: (_, __, n) => n?.rush_efficiency != null ? `${n.rush_efficiency.toFixed(1)}%` : null },
+  { key: 'rzd',    label: 'RZ TD',   kind: 'sit',                       cell: (_, __, _n, _sn, sit) => sit?.rz_rush_tds ?? null },
+  { key: 'rzp',    label: 'RZ%',     kind: 'sit',                       cell: (_, __, _n, _sn, sit) => sit?.rz_carries ? pct(sit.rz_rush_tds ?? 0, sit.rz_carries) + '%' : null },
+  { key: 'tdp',    label: '3D%',     kind: 'sit',                       cell: (_, __, _n, _sn, sit) => sit?.third_carries ? pct(sit.third_rush_fd ?? 0, sit.third_carries) + '%' : null },
+  { key: 'lng',    label: 'LNG',     kind: 'sit',                       cell: (_, __, _n, _sn, sit) => sit?.lng_rush ?? null },
 ]
 
 const WR_COLS: Col[] = [
-  { key: 'g',    label: 'G',         kind: 'trad', cell: (_, g) => g },
-  { key: 'snp',  label: 'SNP',       kind: 'snap', cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
-  { key: 'spct', label: 'SNP%',      kind: 'snap', cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
-  { key: 'tgt',  label: 'TGT',       kind: 'trad', cell: t => t.targets },
-  { key: 'rec',  label: 'REC',       kind: 'trad', cell: t => t.receptions },
-  { key: 'yds',  label: 'YDS',       kind: 'trad', highlight: true, cell: t => t.rec_yards },
-  { key: 'ypr',  label: 'Y/R',       kind: 'trad', cell: t => ratio(t.rec_yards, t.receptions) },
-  { key: 'td',   label: 'TD',        kind: 'trad', cell: t => t.rec_tds },
-  { key: 'cpct', label: 'CTH%',      kind: 'trad', cell: t => pct(t.receptions, t.targets) },
-  { key: 'ytgt', label: 'Y/TGT',     kind: 'trad', cell: t => ratio(t.rec_yards, t.targets) },
-  { key: 'yg',   label: 'Y/G',       kind: 'trad', cell: (t, g) => ratio(t.rec_yards, g) },
-  { key: 'car',  label: 'CAR',       kind: 'trad', cell: t => t.carries > 0 ? t.carries : null },
-  { key: 'ryd',  label: 'RUSH YDS',  kind: 'trad', cell: t => t.carries > 0 ? t.rush_yards : null },
-  { key: 'patt', label: 'P.ATT',     kind: 'trad', cell: t => t.attempts > 0 ? t.attempts : null },
-  { key: 'pyds', label: 'P.YDS',     kind: 'trad', cell: t => t.attempts > 0 ? t.pass_yards : null },
-  { key: 'ptd',  label: 'P.TD',      kind: 'trad', cell: t => t.attempts > 0 ? t.pass_tds : null },
-  { key: 'epat', label: 'EPA/Tgt',   kind: 'adv', signed: true, cell: t => t.targets > 0 ? sfmt(t.rec_epa / t.targets, 3) : null },
-  { key: 'ayt',  label: 'AY/TGT',    kind: 'adv', cell: t => t.targets > 0 ? ratio(t.air_yards, t.targets) : null },
-  { key: 'yacr', label: 'YAC/R',     kind: 'adv', cell: t => t.receptions > 0 ? ratio(t.yac, t.receptions) : null },
-  { key: 'sep',  label: 'SEP',       kind: 'ngs', cell: (_, __, n) => dfmt(n?.avg_separation) },
-  { key: 'cush', label: 'CUSH',      kind: 'ngs', cell: (_, __, n) => dfmt(n?.avg_cushion) },
-  { key: 'tgd',  label: 'TGT DEPTH', kind: 'ngs', cell: (_, __, n) => dfmt(n?.avg_target_depth) },
-  { key: 'yacx', label: 'YAC+',      kind: 'ngs', signed: true, cell: (_, __, n) => sfmt(n?.avg_yac_above_exp) },
-  { key: 'aysh', label: 'AY SH%',    kind: 'ngs', cell: (_, __, n) => n?.air_yards_share != null ? `${n.air_yards_share.toFixed(1)}%` : null },
-  { key: 'rzd',  label: 'RZ TD',     kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_rec_tds ?? null },
-  { key: 'rzp',  label: 'RZ%',       kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.rz_targets ? pct(sit.rz_rec_tds ?? 0, sit.rz_targets) + '%' : null },
-  { key: 'tdp',  label: '3D%',       kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.third_targets ? pct(sit.third_rec_fd ?? 0, sit.third_targets) + '%' : null },
-  { key: 'lng',  label: 'LNG',       kind: 'sit',  cell: (_, __, _n, _sn, sit) => sit?.lng_rec ?? null },
-  { key: 'recwpa', label: 'WPA',     kind: 'wpa', signed: true, cell: (_, __, _n, _sn, _sit, w) => w?.rec_wpa != null ? sfmt(w.rec_wpa, 3) : null },
-  { key: 'racr',   label: 'RACR',    kind: 'adv', cell: t => t.air_yards > 0 ? (t.rec_yards / t.air_yards).toFixed(2) : null },
-  { key: 'tgtsh',  label: 'TGT%',    kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.target_share != null ? `${a.target_share.toFixed(1)}%` : null },
-  { key: 'aysh',   label: 'AY%',     kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.air_yards_share != null ? `${a.air_yards_share.toFixed(1)}%` : null },
-  { key: 'wrfl',   label: 'FUM',     kind: 'adv', cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
+  { key: 'g',    label: 'G',         kind: 'trad',                      cell: (_, g) => g },
+  { key: 'snp',  label: 'SNP',       kind: 'snap',                      cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
+  { key: 'spct', label: 'SNP%',      kind: 'snap',                      cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
+  // Receiving
+  { key: 'tgt',  label: 'TGT',       kind: 'trad', group: 'Receiving',  cell: t => t.targets },
+  { key: 'rec',  label: 'REC',       kind: 'trad', group: 'Receiving',  cell: t => t.receptions },
+  { key: 'yds',  label: 'YDS',       kind: 'trad', group: 'Receiving', highlight: true, cell: t => t.rec_yards },
+  { key: 'ypr',  label: 'Y/R',       kind: 'trad', group: 'Receiving',  cell: t => ratio(t.rec_yards, t.receptions) },
+  { key: 'td',   label: 'TD',        kind: 'trad', group: 'Receiving',  cell: t => t.rec_tds },
+  { key: 'cpct', label: 'CTH%',      kind: 'trad', group: 'Receiving',  cell: t => pct(t.receptions, t.targets) },
+  { key: 'ytgt', label: 'Y/TGT',     kind: 'trad', group: 'Receiving',  cell: t => ratio(t.rec_yards, t.targets) },
+  { key: 'yg',   label: 'Y/G',       kind: 'trad', group: 'Receiving',  cell: (t, g) => ratio(t.rec_yards, g) },
+  // Rushing
+  { key: 'car',  label: 'CAR',       kind: 'trad', group: 'Rushing',    cell: t => t.carries > 0 ? t.carries : null },
+  { key: 'ryd',  label: 'YDS',       kind: 'trad', group: 'Rushing',    cell: t => t.carries > 0 ? t.rush_yards : null },
+  // Passing
+  { key: 'patt', label: 'ATT',       kind: 'trad', group: 'Passing',    cell: t => t.attempts > 0 ? t.attempts : null },
+  { key: 'pyds', label: 'YDS',       kind: 'trad', group: 'Passing',    cell: t => t.attempts > 0 ? t.pass_yards : null },
+  { key: 'ptd',  label: 'TD',        kind: 'trad', group: 'Passing',    cell: t => t.attempts > 0 ? t.pass_tds : null },
+  // Advanced / NGS / Situational / WPA
+  { key: 'epat',   label: 'EPA/Tgt', kind: 'adv',  signed: true,        cell: t => t.targets > 0 ? sfmt(t.rec_epa / t.targets, 3) : null },
+  { key: 'ayt',    label: 'AY/TGT',  kind: 'adv',                       cell: t => t.targets > 0 ? ratio(t.air_yards, t.targets) : null },
+  { key: 'yacr',   label: 'YAC/R',   kind: 'adv',                       cell: t => t.receptions > 0 ? ratio(t.yac, t.receptions) : null },
+  { key: 'racr',   label: 'RACR',    kind: 'adv',                       cell: t => t.air_yards > 0 ? (t.rec_yards / t.air_yards).toFixed(2) : null },
+  { key: 'tgtsh',  label: 'TGT%',    kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.target_share != null ? `${a.target_share.toFixed(1)}%` : null },
+  { key: 'aysh',   label: 'AY%',     kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.air_yards_share != null ? `${a.air_yards_share.toFixed(1)}%` : null },
+  { key: 'wrfl',   label: 'FUM',     kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },
+  { key: 'recwpa', label: 'WPA',     kind: 'adv',  wpaOnly: true, signed: true, cell: (_, __, _n, _sn, _sit, w) => w?.rec_wpa != null ? sfmt(w.rec_wpa, 3) : null },
+  { key: 'sep',    label: 'SEP',     kind: 'ngs',                       cell: (_, __, n) => dfmt(n?.avg_separation) },
+  { key: 'cush',   label: 'CUSH',    kind: 'ngs',                       cell: (_, __, n) => dfmt(n?.avg_cushion) },
+  { key: 'tgd',    label: 'TGT DEP', kind: 'ngs',                       cell: (_, __, n) => dfmt(n?.avg_target_depth) },
+  { key: 'yacx',   label: 'YAC+',    kind: 'ngs',  signed: true,        cell: (_, __, n) => sfmt(n?.avg_yac_above_exp) },
+  { key: 'ngsaysh',label: 'AY SH%',  kind: 'ngs',                       cell: (_, __, n) => n?.air_yards_share != null ? `${n.air_yards_share.toFixed(1)}%` : null },
+  { key: 'rzd',    label: 'RZ TD',   kind: 'sit',                       cell: (_, __, _n, _sn, sit) => sit?.rz_rec_tds ?? null },
+  { key: 'rzp',    label: 'RZ%',     kind: 'sit',                       cell: (_, __, _n, _sn, sit) => sit?.rz_targets ? pct(sit.rz_rec_tds ?? 0, sit.rz_targets) + '%' : null },
+  { key: 'tdp',    label: '3D%',     kind: 'sit',                       cell: (_, __, _n, _sn, sit) => sit?.third_targets ? pct(sit.third_rec_fd ?? 0, sit.third_targets) + '%' : null },
+  { key: 'lng',    label: 'LNG',     kind: 'sit',                       cell: (_, __, _n, _sn, sit) => sit?.lng_rec ?? null },
 ]
 
 const DEF_COLS: Col[] = [
@@ -157,16 +333,49 @@ const DEF_COLS: Col[] = [
   { key: 'qbh',  label: 'QBH',  kind: 'trad', cell: t => t.qb_hits > 0 ? t.qb_hits : null },
 ]
 
+const K_COLS: Col[] = [
+  { key: 'g',     label: 'G',    kind: 'trad',                   cell: (_, g) => g },
+  { key: 'snp',   label: 'SNP',  kind: 'snap',                   cell: (_, __, _n, sn) => sn?.st_snaps ?? null },
+  { key: 'spct',  label: 'SNP%', kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${sn.avg_st_pct.toFixed(0)}%` : null },
+  { key: 'fgm',   label: 'FG',   kind: 'trad', highlight: true,  cell: t => t.fg_att > 0 ? `${t.fg_made}/${t.fg_att}` : null },
+  { key: 'fgpct', label: 'FG%',  kind: 'trad',                   cell: t => t.fg_att > 0 ? pct(t.fg_made, t.fg_att) : null },
+  { key: 'xpm',   label: 'XP',   kind: 'trad',                   cell: t => t.xp_att > 0 ? `${t.xp_made}/${t.xp_att}` : null },
+  { key: 'xppct', label: 'XP%',  kind: 'trad',                   cell: t => t.xp_att > 0 ? pct(t.xp_made, t.xp_att) : null },
+  { key: 'pts',   label: 'PTS',  kind: 'trad',                   cell: t => (t.fg_made * 3 + t.xp_made) > 0 ? t.fg_made * 3 + t.xp_made : null },
+]
+
+const P_COLS: Col[] = [
+  { key: 'g',    label: 'G',     kind: 'trad',                   cell: (_, g) => g },
+  { key: 'snp',  label: 'SNP',   kind: 'snap',                   cell: (_, __, _n, sn) => sn?.st_snaps ?? null },
+  { key: 'spct', label: 'SNP%',  kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${sn.avg_st_pct.toFixed(0)}%` : null },
+  { key: 'pnt',  label: 'PUNTS', kind: 'trad', highlight: true,  cell: t => t.punts > 0 ? t.punts : null },
+  { key: 'pyds', label: 'YDS',   kind: 'trad',                   cell: t => t.punts > 0 ? t.punt_yards : null },
+  { key: 'pavg', label: 'AVG',   kind: 'trad',                   cell: t => t.punts > 0 ? ratio(t.punt_yards, t.punts) : null },
+  { key: 'pypg', label: 'YDS/G', kind: 'trad',                   cell: (t, g) => t.punts > 0 ? ratio(t.punt_yards, g) : null },
+]
+
+const OL_COLS: Col[] = [
+  { key: 'g',    label: 'G',    kind: 'trad', cell: (_, g) => g },
+  { key: 'snp',  label: 'SNP',  kind: 'snap', cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
+  { key: 'spct', label: 'SNP%', kind: 'snap', cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
+]
+
+const OL_POSITIONS = new Set(['C', 'G', 'T', 'OT', 'OG', 'OL', 'LS', 'OC'])
+
 function detectPos(t: Totals, position?: string | null): string {
   if (position === 'QB' || t.attempts > 10) return 'QB'
   if (position === 'RB' || (t.carries > 20 && t.targets < t.carries * 0.7)) return 'RB'
   if (position === 'WR' || position === 'TE' || t.targets > 20) return 'WR'
+  if (position === 'K'  || t.fg_att > 0) return 'K'
+  if (position === 'P'  || t.punts  > 0) return 'P'
+  if (OL_POSITIONS.has(position ?? '')) return 'OL'
   return 'DEF'
 }
 
 // — highlights bar —
-function HighlightsBar({ pos, totals, games, ngs }: {
+function HighlightsBar({ pos, totals, games, ngs, ranks }: {
   pos: string; totals: Totals; games: number; ngs: Record<number, NgsStats>
+  ranks?: Record<string, string | null>  // map of stat label -> rank suffix
 }) {
   const ngsEntries = Object.entries(ngs).sort(([a], [b]) => Number(b) - Number(a))
   const cpoeVals = ngsEntries.map(([, n]) => n.cpoe).filter((v): v is number => v != null)
@@ -202,6 +411,28 @@ function HighlightsBar({ pos, totals, games, ngs }: {
       { label: 'EPA / Target', value: epat != null ? `${epat >= 0 ? '+' : ''}${epat.toFixed(3)}` : null, note: 'Exp. Points Added', green: epat != null && epat >= 0, red: epat != null && epat < 0 },
       { label: 'Y / Target', value: totals.targets > 0 ? (totals.rec_yards / totals.targets).toFixed(1) : null },
     ]
+  } else if (pos === 'K') {
+    const fgPct = totals.fg_att > 0 ? (totals.fg_made / totals.fg_att * 100).toFixed(1) : null
+    const xpPct = totals.xp_att > 0 ? (totals.xp_made / totals.xp_att * 100).toFixed(1) : null
+    const pts = totals.fg_made * 3 + totals.xp_made
+    stats = [
+      { label: 'FG Made', value: totals.fg_att > 0 ? `${totals.fg_made}/${totals.fg_att}` : null },
+      { label: 'FG%', value: fgPct != null ? `${fgPct}%` : null },
+      { label: 'XP Made', value: totals.xp_att > 0 ? `${totals.xp_made}/${totals.xp_att}` : null, note: xpPct != null ? `${xpPct}%` : undefined },
+      { label: 'Points', value: pts > 0 ? pts.toLocaleString() : null },
+    ]
+  } else if (pos === 'P') {
+    const avg = totals.punts > 0 ? (totals.punt_yards / totals.punts).toFixed(1) : null
+    stats = [
+      { label: 'Punts', value: totals.punts > 0 ? totals.punts.toString() : null },
+      { label: 'Yards', value: totals.punt_yards > 0 ? totals.punt_yards.toLocaleString() : null },
+      { label: 'Avg', value: avg != null ? `${avg} yds` : null, note: 'Yards per punt' },
+      { label: 'Yds / G', value: games > 0 && totals.punts > 0 ? (totals.punt_yards / games).toFixed(1) : null },
+    ]
+  } else if (pos === 'OL') {
+    stats = [
+      { label: 'Games', value: games > 0 ? games.toLocaleString() : null, note: 'Career games played' },
+    ]
   } else {
     const tot = totals.solo_tackles + totals.assist_tackles
     stats = [
@@ -214,16 +445,22 @@ function HighlightsBar({ pos, totals, games, ngs }: {
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-      {stats.map(s => (
-        <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className={`text-2xl font-black tabular-nums leading-none mb-1.5
-            ${s.value == null ? 'text-gray-700' : s.green ? 'text-emerald-400' : s.red ? 'text-red-400' : 'text-white'}`}>
-            {s.value ?? '—'}
+      {stats.map(s => {
+        const rank = ranks?.[s.label]
+        return (
+          <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className={`text-2xl font-black tabular-nums leading-none mb-1.5
+              ${s.value == null ? 'text-gray-700' : s.green ? 'text-emerald-400' : s.red ? 'text-red-400' : 'text-white'}`}>
+              {s.value ?? '—'}
+            </div>
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">{s.label}</div>
+            {s.note && <div className="text-xs text-gray-700 mt-0.5">{s.note}</div>}
+            {rank && (
+              <div className="text-[10px] text-indigo-400 mt-1 font-semibold uppercase tracking-wider">{rank}</div>
+            )}
           </div>
-          <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">{s.label}</div>
-          {s.note && <div className="text-xs text-gray-700 mt-0.5">{s.note}</div>}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -260,7 +497,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
 }) {
   const allTotals = sumGames(seasons.flatMap(s => bySeason[s]))
   const pos = detectPos(allTotals, position)
-  const allCols = pos === 'QB' ? QB_COLS : pos === 'RB' ? RB_COLS : pos === 'WR' ? WR_COLS : DEF_COLS
+  const allCols = pos === 'QB' ? QB_COLS : pos === 'RB' ? RB_COLS : pos === 'WR' ? WR_COLS : pos === 'K' ? K_COLS : pos === 'P' ? P_COLS : pos === 'OL' ? OL_COLS : DEF_COLS
 
   const hasNgs  = Object.keys(ngs).length > 0
   const hasSnaps = Object.keys(snapTotals).length > 0
@@ -271,15 +508,18 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
     !(c.kind === 'ngs'  && !hasNgs) &&
     !(c.kind === 'snap' && !hasSnaps) &&
     !(c.kind === 'sit'  && !hasSit) &&
-    !(c.kind === 'wpa'  && !hasWpa)
+    !(c.wpaOnly && !hasWpa)
   )
 
-  const tradCount = cols.filter(c => c.kind === 'trad').length
-  const advCount  = cols.filter(c => c.kind === 'adv').length
-  const ngsCount  = cols.filter(c => c.kind === 'ngs').length
-  const snapCount = cols.filter(c => c.kind === 'snap').length
-  const sitCount  = cols.filter(c => c.kind === 'sit').length
-  const wpaCount  = cols.filter(c => c.kind === 'wpa').length
+  // Build consecutive sections for the group header row
+  type Sec = { label: string; count: number; kind: ColKind; group?: string }
+  const sections: Sec[] = []
+  for (const c of cols) {
+    const lbl = c.kind === 'trad' ? (c.group ?? '') : c.kind === 'adv' ? 'Advanced' : c.kind === 'ngs' ? 'Next Gen' : c.kind === 'snap' ? 'Snaps' : c.kind === 'sit' ? 'Situational' : ''
+    const last = sections[sections.length - 1]
+    if (last && last.label === lbl && last.kind === c.kind) last.count++
+    else sections.push({ label: lbl, count: 1, kind: c.kind, group: c.group })
+  }
 
   const hasAdv  = advStats != null && Object.keys(advStats).length > 0
 
@@ -323,26 +563,41 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
             {showGroupHeaders && (
               <tr className="border-b border-gray-800/50">
                 <th colSpan={2} />
-                {tradCount > 0 && <th colSpan={tradCount} className="py-1 text-center text-[10px] font-semibold text-gray-600 uppercase tracking-widest border-l border-gray-800/40">Stats</th>}
-                {advCount  > 0 && <th colSpan={advCount}  className="py-1 text-center text-[10px] font-semibold text-amber-500/60 uppercase tracking-widest bg-amber-950/20 border-l border-gray-800/40">Advanced</th>}
-                {ngsCount  > 0 && <th colSpan={ngsCount}  className="py-1 text-center text-[10px] font-semibold text-indigo-400 uppercase tracking-widest bg-indigo-950/25 border-l border-gray-800/40">Next Gen</th>}
-                {snapCount > 0 && <th colSpan={snapCount} className="py-1 text-center text-[10px] font-semibold text-gray-700 uppercase tracking-widest border-l border-gray-800/40">Snaps</th>}
-                {sitCount  > 0 && <th colSpan={sitCount}  className="py-1 text-center text-[10px] font-semibold text-teal-500/60 uppercase tracking-widest bg-teal-950/20 border-l border-gray-800/40">Situational</th>}
-                {wpaCount  > 0 && <th colSpan={wpaCount}  className="py-1 text-center text-[10px] font-semibold text-violet-400/60 uppercase tracking-widest bg-violet-950/20 border-l border-gray-800/40">WPA</th>}
+                {sections.map((s, i) => {
+                  if (s.kind === 'trad' && !s.group) return <th key={i} colSpan={s.count} />
+                  const cls =
+                    s.kind === 'trad' && s.group === 'Passing'   ? 'text-sky-400/80 bg-sky-950/25 border-l border-sky-900/40' :
+                    s.kind === 'trad' && s.group === 'Rushing'   ? 'text-orange-400/80 bg-orange-950/25 border-l border-orange-900/40' :
+                    s.kind === 'trad' && s.group === 'Receiving' ? 'text-emerald-400/80 bg-emerald-950/25 border-l border-emerald-900/40' :
+                    s.kind === 'adv'  ? 'text-amber-500/60 bg-amber-950/20 border-l border-gray-800/40' :
+                    s.kind === 'ngs'  ? 'text-indigo-400 bg-indigo-950/25 border-l border-gray-800/40' :
+                    s.kind === 'snap' ? 'text-gray-700 border-l border-gray-800/40' :
+                    s.kind === 'sit'  ? 'text-teal-500/60 bg-teal-950/20 border-l border-gray-800/40' : 'text-gray-600'
+                  return (
+                    <th key={i} colSpan={s.count} className={`py-1 text-center text-[10px] font-semibold uppercase tracking-widest ${cls}`}>
+                      {s.label}
+                    </th>
+                  )
+                })}
               </tr>
             )}
             <tr className="border-b border-gray-800">
               <th className={`${thBase} text-gray-500 pl-4`}>Season</th>
               <th className={`${thBase} text-gray-500`}>Team</th>
               {cols.map((c, i) => {
-                const sep = i > 0 && cols[i - 1].kind !== c.kind
+                const sep = i > 0 && (cols[i - 1].kind !== c.kind || cols[i - 1].group !== c.group)
+                const isPass = c.kind === 'trad' && c.group === 'Passing'
+                const isRush = c.kind === 'trad' && c.group === 'Rushing'
+                const isRec  = c.kind === 'trad' && c.group === 'Receiving'
                 return (
                   <th key={c.key} className={`${thBase} ${sep ? 'border-l border-gray-800/40' : ''}
-                    ${c.kind === 'adv'  ? 'text-amber-300/50 bg-amber-950/10' :
+                    ${isPass ? 'text-sky-400/50 bg-sky-950/10' :
+                      isRush ? 'text-orange-400/50 bg-orange-950/10' :
+                      isRec  ? 'text-emerald-400/50 bg-emerald-950/10' :
+                      c.kind === 'adv'  ? 'text-amber-300/50 bg-amber-950/10' :
                       c.kind === 'ngs'  ? 'text-indigo-300/50 bg-indigo-950/10' :
                       c.kind === 'snap' ? 'text-gray-700' :
-                      c.kind === 'sit'  ? 'text-teal-400/50 bg-teal-950/10' :
-                      c.kind === 'wpa'  ? 'text-violet-400/50 bg-violet-950/10' : 'text-gray-500'}`}>
+                      c.kind === 'sit'  ? 'text-teal-400/50 bg-teal-950/10' : 'text-gray-500'}`}>
                     {c.label}
                   </th>
                 )
@@ -373,19 +628,23 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
                     </div>
                   </td>
                   {cols.map((c, i) => {
-                    const sep = i > 0 && cols[i - 1].kind !== c.kind
+                    const sep = i > 0 && (cols[i - 1].kind !== c.kind || cols[i - 1].group !== c.group)
                     const raw = c.cell(t, games.length, n, sn, sit, w, a)
                     const isNull = raw === null || raw === undefined
                     const strVal = isNull ? null : String(raw)
                     const isPos = c.signed && !isNull && strVal!.startsWith('+')
                     const isNeg = c.signed && !isNull && strVal!.startsWith('-')
+                    const bgClass =
+                      c.kind === 'trad' && c.group === 'Passing'   ? 'bg-sky-950/10' :
+                      c.kind === 'trad' && c.group === 'Rushing'   ? 'bg-orange-950/10' :
+                      c.kind === 'trad' && c.group === 'Receiving' ? 'bg-emerald-950/10' :
+                      c.kind === 'adv'  ? 'bg-amber-950/10'  :
+                      c.kind === 'ngs'  ? 'bg-indigo-950/10' :
+                      c.kind === 'sit'  ? 'bg-teal-950/10'   :
+                      ''
                     return (
-                      <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums
+                      <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums ${bgClass}
                         ${sep ? 'border-l border-gray-800/30' : ''}
-                        ${c.kind === 'adv'  ? 'bg-amber-950/10'  : ''}
-                        ${c.kind === 'ngs'  ? 'bg-indigo-950/10' : ''}
-                        ${c.kind === 'sit'  ? 'bg-teal-950/10'   : ''}
-                        ${c.kind === 'wpa'  ? 'bg-violet-950/10' : ''}
                         ${isNull   ? 'text-gray-700' :
                           isPos    ? 'text-emerald-400 font-semibold' :
                           isNeg    ? 'text-red-400 font-semibold' :
@@ -393,7 +652,6 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
                           c.kind === 'ngs'  ? 'text-gray-200' :
                           c.kind === 'adv'  ? 'text-amber-200/80' :
                           c.kind === 'sit'  ? 'text-teal-200/80' :
-                          c.kind === 'wpa'  ? 'text-violet-200/80' :
                           'text-gray-300'}`}>
                         {isNull ? '—' : strVal}
                       </td>
@@ -407,22 +665,26 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
                 <td className="py-2.5 pl-4 pr-3 text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Career</td>
                 <td className="py-2.5 px-3 text-gray-600 text-xs">{careerGames}G</td>
                 {cols.map((c, i) => {
-                  const sep = i > 0 && cols[i - 1].kind !== c.kind
-                  const raw = (c.kind === 'trad' || c.kind === 'adv' || c.kind === 'sit' || c.kind === 'wpa')
+                  const sep = i > 0 && (cols[i - 1].kind !== c.kind || cols[i - 1].group !== c.group)
+                  const raw = (c.kind === 'trad' || c.kind === 'adv' || c.kind === 'sit')
                     ? c.cell(careerT, careerGames, undefined, undefined, careerSit, careerWpaTotals, careerAdvTotals)
                     : null
                   const isNull = raw === null || raw === undefined
                   const strVal = isNull ? null : String(raw)
                   const isPos = c.signed && !isNull && strVal!.startsWith('+')
                   const isNeg = c.signed && !isNull && strVal!.startsWith('-')
+                  const bgClass =
+                    c.kind === 'trad' && c.group === 'Passing'   ? 'bg-sky-950/10' :
+                    c.kind === 'trad' && c.group === 'Rushing'   ? 'bg-orange-950/10' :
+                    c.kind === 'trad' && c.group === 'Receiving' ? 'bg-emerald-950/10' :
+                    c.kind === 'adv'  ? 'bg-amber-950/10'  :
+                    c.kind === 'ngs'  ? 'bg-indigo-950/10' :
+                    c.kind === 'sit'  ? 'bg-teal-950/10' : ''
                   return (
-                    <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums font-semibold
+                    <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums font-semibold ${bgClass}
                       ${sep ? 'border-l border-gray-800/30' : ''}
-                      ${c.kind === 'adv' ? 'bg-amber-950/10' : ''}
-                      ${c.kind === 'ngs' ? 'bg-indigo-950/10 text-gray-700' : ''}
-                      ${c.kind === 'sit' ? 'bg-teal-950/10' : ''}
-                      ${c.kind === 'wpa' ? 'bg-violet-950/10' : ''}
-                      ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-400' : isNeg ? 'text-red-400' : c.highlight ? 'text-white' : c.kind === 'adv' ? 'text-amber-200/80' : c.kind === 'sit' ? 'text-teal-200/80' : c.kind === 'wpa' ? 'text-violet-200/80' : 'text-gray-300'}`}>
+                      ${c.kind === 'ngs' ? 'text-gray-700' : ''}
+                      ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-400' : isNeg ? 'text-red-400' : c.highlight ? 'text-white' : c.kind === 'adv' ? 'text-amber-200/80' : c.kind === 'sit' ? 'text-teal-200/80' : 'text-gray-300'}`}>
                       {isNull ? '—' : String(raw)}
                     </td>
                   )
@@ -453,7 +715,7 @@ function TeamSplits({ seasons, bySeason, position }: {
 
   const allTotals = sumGames(seasons.flatMap(s => bySeason[s]))
   const pos = detectPos(allTotals, position)
-  const colSet = pos === 'QB' ? QB_COLS : pos === 'RB' ? RB_COLS : pos === 'WR' ? WR_COLS : DEF_COLS
+  const colSet = pos === 'QB' ? QB_COLS : pos === 'RB' ? RB_COLS : pos === 'WR' ? WR_COLS : pos === 'K' ? K_COLS : pos === 'P' ? P_COLS : pos === 'OL' ? OL_COLS : DEF_COLS
   const cols = colSet.filter(c => c.kind === 'trad' && c.key !== 'g')
 
   return (
@@ -543,6 +805,18 @@ function getGameCols(pos: string): GameCol[] {
     { label: 'TD',  cell: g => g.rec_tds > 0 ? g.rec_tds : null },
     { label: 'EPA', cell: g => sfmt(g.rec_epa, 1) },
   ]
+  if (pos === 'K') return [
+    { label: 'FG',   cell: g => g.fg_att > 0 ? `${g.fg_made}/${g.fg_att}` : null, highlight: true },
+    { label: 'FG%',  cell: g => g.fg_att > 0 ? pct(g.fg_made, g.fg_att) : null },
+    { label: 'XP',   cell: g => g.xp_att > 0 ? `${g.xp_made}/${g.xp_att}` : null },
+    { label: 'PTS',  cell: g => (g.fg_made * 3 + g.xp_made) > 0 ? g.fg_made * 3 + g.xp_made : null },
+  ]
+  if (pos === 'P') return [
+    { label: 'PUNTS', cell: g => g.punts > 0 ? g.punts : null, highlight: true },
+    { label: 'YDS',   cell: g => g.punts > 0 ? g.punt_yards : null },
+    { label: 'AVG',   cell: g => g.punts > 0 ? ratio(g.punt_yards, g.punts) : null },
+  ]
+  if (pos === 'OL') return []
   return [
     { label: 'TOT',  cell: g => g.solo_tackles + g.assist_tackles, highlight: true },
     { label: 'SOLO', cell: g => g.solo_tackles },
@@ -671,8 +945,10 @@ function ComparableCard({ p, pos }: { p: PlayerComparable; pos: string }) {
   } else if (pos === 'RB') {
     const ypc = p.carries > 0 ? (p.rush_yards / p.carries).toFixed(1) : '—'
     statLine = `${p.rush_yards.toLocaleString()} YDS · ${p.rush_tds} TD · ${ypc} Y/C`
-  } else {
+  } else if (pos === 'WR') {
     statLine = `${p.rec_yards.toLocaleString()} YDS · ${p.rec_tds} TD · ${p.targets} TGT`
+  } else {
+    statLine = `${p.games}G · ${p.first_season}–${p.last_season}`
   }
 
   return (
@@ -754,6 +1030,7 @@ export default function PlayerPage() {
   const [player, setPlayer] = useState<PlayerProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [seasonMap, setSeasonMap] = useState<Record<number, string>>({})
+  const [recentLeaders, setRecentLeaders] = useState<{ season: number; leaders: LeagueLeader[] } | null>(null)
 
   const statsRef = useRef<HTMLDivElement>(null)
   const advRef   = useRef<HTMLDivElement>(null)
@@ -773,6 +1050,17 @@ export default function PlayerPage() {
       })
       .finally(() => setLoading(false))
   }, [playerId])
+
+  // Fetch league leaders for the player's most recent regular season so we can show "5th in NFL" context
+  useEffect(() => {
+    if (!player) return
+    const regSeasons = [...new Set(player.games.filter(g => g.game_type === 'REG').map(g => g.season))]
+    if (regSeasons.length === 0) return
+    const recent = Math.max(...regSeasons)
+    api.leaders(recent)
+      .then(leaders => setRecentLeaders({ season: recent, leaders }))
+      .catch(() => setRecentLeaders(null))
+  }, [player?.player_id])
 
   useEffect(() => {
     if (!player || !player.entry_year) return
@@ -843,70 +1131,89 @@ export default function PlayerPage() {
   const allTotals   = seasons.length > 0 ? sumGames(seasons.flatMap(s => regBySeason[s])) : sumGames([])
   const careerGames = seasons.reduce((acc, s) => acc + regBySeason[s].length, 0)
   const playerPos   = detectPos(allTotals, player.position)
-  const hasAdvanced = playerPos !== 'DEF'
+  const hasAdvanced = ['QB', 'RB', 'WR'].includes(playerPos)
+
+  // Career awards (lookup against PAST_AWARDS by player name)
+  const careerAwards = getPlayerAwards(player.player_name)
+
+  // League ranks for the most recent regular season (computed once leaders load)
+  const ranks: Record<string, string | null> = recentLeaders
+    ? computeHighlightRanks(playerPos, player.player_id, recentLeaders.leaders, recentLeaders.season)
+    : {}
 
   const careerInFlight = player.entry_year != null
     ? Object.entries(seasonMap).some(([y, s]) => Number(y) >= player.entry_year! && (s === 'loading' || s === 'queued'))
     : false
 
+  const PLAYOFF_WEEKS: Record<number, string> = { 19: 'Wild Card', 20: 'Divisional', 21: 'Conference', 22: 'Super Bowl' }
+  const wkLabel = (w: number) => PLAYOFF_WEEKS[w] ?? `Week ${w}`
+
+  const crumbs: Crumb[] = []
+  if (fromGame) {
+    if (fromGame.fromWeek !== undefined) {
+      crumbs.push({ label: wkLabel(fromGame.fromWeek), to: `/?season=${fromGame.season}&week=${fromGame.fromWeek}` })
+    }
+    crumbs.push({
+      label: `${fromGame.awayTeam} @ ${fromGame.homeTeam}`,
+      to: `/games/${fromGame.gameId}`,
+      state: { fromWeek: fromGame.fromWeek },
+    })
+  }
+  crumbs.push({ label: player.player_name })
+
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav />
+      <Nav crumbs={crumbs} />
       <div className="max-w-6xl mx-auto px-4 py-8">
-
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 mb-6">
-          <button onClick={() => navigate(`/?season=${CURRENT_NFL_SEASON}`)} className="font-black text-base tracking-tight shrink-0">
-            <span className="text-white">NFL</span><span className="text-indigo-500">DB</span>
-          </button>
-          {fromGame && (
-            <>
-              <span className="text-gray-700">/</span>
-              <Link to={`/?season=${fromGame.season}`} className="text-gray-400 hover:text-white text-sm transition-colors">{fromGame.season}</Link>
-              {fromGame.fromWeek !== undefined && (
-                <>
-                  <span className="text-gray-700">/</span>
-                  <Link to={`/?season=${fromGame.season}&week=${fromGame.fromWeek}`} className="text-gray-400 hover:text-white text-sm transition-colors">Wk {fromGame.fromWeek}</Link>
-                </>
-              )}
-              <span className="text-gray-700">/</span>
-              <Link to={`/games/${fromGame.gameId}`} state={{ fromWeek: fromGame.fromWeek }} className="text-gray-400 hover:text-white text-sm transition-colors">{fromGame.awayTeam} @ {fromGame.homeTeam}</Link>
-            </>
-          )}
-          <span className="text-gray-700">/</span>
-          <span className="text-gray-400 text-sm truncate">{player.player_name}</span>
-          <button
-            onClick={() => fromGame ? navigate(`/games/${fromGame.gameId}`, { state: { fromWeek: fromGame.fromWeek } }) : navigate(-1)}
-            className="ml-auto shrink-0 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
-          >
-            ← Back
-          </button>
-        </div>
+        <button onClick={() => navigate(-1)} className={`${backBtnCls} mb-6`}>← Back</button>
 
         {/* Profile header */}
-        <div className="flex items-center gap-5 mb-8">
+        <div className="flex items-start gap-6 mb-8 flex-wrap">
           {player.headshot_url
-            ? <img src={player.headshot_url} alt={player.player_name} className="w-20 h-20 rounded-full object-cover bg-gray-800 shrink-0 object-top" />
-            : <div className="w-20 h-20 rounded-full bg-gray-800 shrink-0" />
+            ? <img src={player.headshot_url} alt={player.player_name} className="w-24 h-24 rounded-full object-cover bg-gray-800 shrink-0 object-top ring-2 ring-gray-800" />
+            : <div className="w-24 h-24 rounded-full bg-gray-800 shrink-0" />
           }
           <div className="flex-1 min-w-0">
-            <h1 className="text-3xl font-bold text-white leading-tight">{player.player_name}</h1>
-            <div className="text-gray-400 mt-1 flex flex-wrap items-center gap-x-1 text-sm">
-              {player.position && <span className="font-medium">{player.position}</span>}
-              {recentTeams.length > 0 && (
-                <>
-                  <span className="text-gray-700 mx-0.5">·</span>
-                  {recentTeams.map((t, i) => (
-                    <span key={t} className="flex items-center gap-1">
-                      {i > 0 && <span className="text-gray-700 mx-0.5">/</span>}
-                      <Link to={`/teams/${t}`} className="hover:text-indigo-400 transition-colors">{t}</Link>
-                    </span>
-                  ))}
-                </>
-              )}
-              {player.jersey_number !== null && currentTeam && <><span className="text-gray-700 mx-0.5">·</span><span>#{player.jersey_number}</span></>}
-            </div>
-            <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-600">
+            {(player.position || player.jersey_number != null) && (
+              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                {player.position && <span>{player.position}</span>}
+                {player.jersey_number != null && (
+                  <>
+                    {player.position && <span className="text-gray-700">·</span>}
+                    <span className="text-gray-600">#{player.jersey_number}</span>
+                  </>
+                )}
+              </div>
+            )}
+            <h1 className="text-4xl font-black text-white tracking-tight leading-none mt-1">{player.player_name}</h1>
+
+            {/* Team chips — prominent and clearly clickable */}
+            {recentTeams.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {recentTeams.map(t => (
+                  <Link
+                    key={t}
+                    to={`/teams/${t}`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-indigo-500 rounded-lg transition-colors group"
+                  >
+                    <img src={teamLogoUrl(t)} className="w-5 h-5 object-contain" alt="" />
+                    <span className="text-sm font-bold text-white">{t}</span>
+                    <span className="text-xs text-gray-400 group-hover:text-gray-200 transition-colors">{teamName(t)}</span>
+                    <span className="text-indigo-400 text-xs">→</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* Award badges */}
+            {careerAwards.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {careerAwards.map(a => <AwardBadge key={`${a.season}-${a.award}`} season={a.season} award={a.award} />)}
+              </div>
+            )}
+
+            {/* Bio */}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-gray-600">
               {player.height && <span>{player.height}</span>}
               {player.weight && <span>{player.weight} lbs</span>}
               {player.age && <span>Age {player.age}</span>}
@@ -923,7 +1230,13 @@ export default function PlayerPage() {
             totals={allTotals}
             games={careerGames}
             ngs={player.ngs ?? {}}
+            ranks={ranks}
           />
+        )}
+
+        {/* Career trajectory chart — primary stat by season */}
+        {seasons.length > 1 && (
+          <CareerTrajectory seasons={seasons} bySeason={regBySeason} pos={playerPos} />
         )}
 
         {/* Sticky section nav */}
@@ -951,7 +1264,7 @@ export default function PlayerPage() {
           advStats={player.adv_stats ?? {}}
           position={player.position}
           onlyKinds={['trad', 'snap']}
-          showGroupHeaders={false}
+          showGroupHeaders={true}
         />
         {careerInFlight && (
           <p className="text-xs text-gray-600 -mt-2 mb-4 pl-1 flex items-center gap-1.5">
@@ -975,7 +1288,7 @@ export default function PlayerPage() {
               wpa={player.wpa ?? {}}
               advStats={player.adv_stats ?? {}}
               position={player.position}
-              onlyKinds={['adv', 'ngs', 'sit', 'wpa']}
+              onlyKinds={['adv', 'ngs', 'sit']}
             />
           </>
         )}

@@ -9,7 +9,6 @@ import PlayerPage from './pages/PlayerPage'
 import LeadersPage from './pages/LeadersPage'
 import StandingsPage from './pages/StandingsPage'
 
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
