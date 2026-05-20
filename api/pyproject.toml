@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Quiet but useful: short tracebacks, show local vars only on failure
+addopts = "-q --tb=short --strict-markers"
+markers = [
+    "invariant: data-quality invariant tests that must hold on every dataset",
+]

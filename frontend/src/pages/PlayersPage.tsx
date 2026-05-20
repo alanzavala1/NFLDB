@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { LeagueLeader, SeasonEntry } from '../api'
 import Nav from '../components/Nav'
@@ -210,7 +210,6 @@ function PlayerTable({ players, cols, sortKey, sortDir, onSort }: {
 
 export default function PlayersPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const [seasons, setSeasons] = useState<SeasonEntry[]>([])
   const [leaders, setLeaders] = useState<LeagueLeader[]>([])
   const [loading, setLoading] = useState(true)

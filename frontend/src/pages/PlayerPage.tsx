@@ -1125,7 +1125,6 @@ export default function PlayerPage() {
 
   const recentGames = allSeasons.length > 0 ? allBySeason[allSeasons[0]] : []
   const recentTeams = [...new Set(recentGames.map(g => g.team))]
-  const currentTeam = recentGames[recentGames.length - 1]?.team ?? player.team
 
   // Highlights bar and career table use regular season only
   const allTotals   = seasons.length > 0 ? sumGames(seasons.flatMap(s => regBySeason[s])) : sumGames([])

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { api, CURRENT_NFL_SEASON } from '../api'
+import { api } from '../api'
 import type { Game, LeagueLeader, SearchResult, SeasonEntry, WeekGroup } from '../api'
 import { teamLogoUrl, teamName } from '../utils/teams'
 import Nav, { backBtnCls } from '../components/Nav'
@@ -814,7 +814,6 @@ function HomeDashboard({ season, schedule }: { season: number; schedule: WeekGro
 
 export default function SchedulePage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const [seasons, setSeasons] = useState<SeasonEntry[]>([])
   const [season, setSeason] = useState<number | null>(() => {
     const s = searchParams.get('season')

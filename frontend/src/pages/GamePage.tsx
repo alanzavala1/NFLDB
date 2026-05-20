@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { api, CURRENT_NFL_SEASON } from '../api'
+import { api } from '../api'
 import type { GameDetail, PlayerStats, WinProbPlay } from '../api'
 import Nav, { backBtnCls } from '../components/Nav'
 import type { Crumb } from '../components/Nav'
@@ -665,7 +665,6 @@ function WinProbabilityChart({ game }: { game: GameDetail }) {
   const finalWp = data[data.length - 1]?.wp ?? 50
   const scoringPlays = data.filter(d => d.td)
   const turnovers = data.filter(d => d.turnover)
-  const qtTicks = [0, 900, 1800, 2700, 3600].filter(t => t <= maxT + 1)
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
@@ -713,7 +712,7 @@ function WinProbabilityChart({ game }: { game: GameDetail }) {
 
             <XAxis dataKey="t" type="number" domain={[0, maxT]}
               ticks={[450, 1350, 2250, 3150, ...(maxT > 3600 ? [3825] : [])]}
-              tickFormatter={v => ({ 450: 'Q1', 1350: 'Q2', 2250: 'Q3', 3150: 'Q4', 3825: 'OT' }[v] ?? '')}
+              tickFormatter={v => (({ 450: 'Q1', 1350: 'Q2', 2250: 'Q3', 3150: 'Q4', 3825: 'OT' } as Record<number, string>)[v] ?? '')}
               tick={{ fill: '#4b5563', fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis domain={[0, 100]} ticks={[0, 50, 100]}
               tickFormatter={v => v === 50 ? '50%' : `${v}%`}
