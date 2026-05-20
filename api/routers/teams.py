@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from config import CURRENT_SEASON
 from database import get_cursor, query_to_dict
 from routers.schedule import attach_records
+from schemas.teams import RosterPlayer
 
 router = APIRouter()
 
@@ -98,7 +99,7 @@ def get_team(team: str, season: int = Query(2025)):
     return {"team": team, "season": season, "games": games, "leaders": leaders, "playoff_leaders": playoff_leaders}
 
 
-@router.get("/teams/{team}/roster")
+@router.get("/teams/{team}/roster", response_model=list[RosterPlayer])
 def get_team_roster(team: str, season: int = Query(default=None)):
     if season is None:
         season = CURRENT_SEASON

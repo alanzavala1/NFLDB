@@ -1,3 +1,5 @@
+import type { SeasonStatus } from './types'
+
 const BASE = '/api'
 
 // NFL season year = calendar year the season starts (Sep onward = this year, Jan–Aug = last year)
@@ -6,10 +8,9 @@ export const CURRENT_NFL_SEASON = ((): number => {
   return now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
 })()
 
-export interface SeasonEntry {
-  season: number
-  status: 'loaded' | 'loading' | 'queued' | 'available' | 'error'
-}
+// Backed by the Pydantic SeasonStatus model (api/schemas/meta.py).
+// Re-exported under the historical name so existing pages keep working.
+export type SeasonEntry = SeasonStatus
 
 export interface Game {
   game_id: string

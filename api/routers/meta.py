@@ -7,16 +7,17 @@ from fastapi.responses import StreamingResponse
 from config import CURRENT_SEASON, FIRST_SEASON
 from database import query_to_dict
 from ingest_queue import ingest_logs, queue_season, season_status
+from schemas.meta import HealthResponse, LoadSeasonResponse, SeasonStatus
 
 router = APIRouter()
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse)
 def health():
     return {"status": "ok"}
 
 
-@router.get("/seasons")
+@router.get("/seasons", response_model=list[SeasonStatus])
 def get_seasons():
     try:
         loaded = {r["season"] for r in query_to_dict("SELECT DISTINCT season FROM schedules")}
@@ -31,7 +32,7 @@ def get_seasons():
     ]
 
 
-@router.post("/seasons/{year}/load")
+@router.post("/seasons/{year}/load", response_model=LoadSeasonResponse)
 def load_season(year: int, force: bool = False):
     if year < FIRST_SEASON or year > CURRENT_SEASON:
         raise HTTPException(status_code=400, detail=f"Season must be between {FIRST_SEASON} and {CURRENT_SEASON}")

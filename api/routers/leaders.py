@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 
 from config import CURRENT_SEASON, DIVISIONS, TEAM_NAMES
 from database import query_to_dict
+from schemas.standings import DivisionStandings
 from sql_helpers import ROSTER_CTE, safe_query
 
 router = APIRouter()
@@ -143,7 +144,7 @@ def get_wpa_leaders(season: int = Query(default=None)):
     return {"passing": passing, "rushing": rushing, "receiving": receiving}
 
 
-@router.get("/standings")
+@router.get("/standings", response_model=list[DivisionStandings])
 def get_standings(season: int = Query(default=None)):
     if season is None:
         season = CURRENT_SEASON
