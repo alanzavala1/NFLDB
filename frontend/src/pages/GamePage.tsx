@@ -22,7 +22,8 @@ function ypa(y: number, a: number) { return a === 0 ? '—' : (y / a).toFixed(1)
 
 // ── Card 1: Scoreboard ────────────────────────────────────────────────────────
 
-function formatGameday(s: string) {
+function formatGameday(s: string | null) {
+  if (!s) return 'TBD'
   const [y, m, d] = s.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
@@ -550,8 +551,8 @@ type KeyPlayKind = 'td' | 'fg' | 'int' | 'fum'
 interface KeyPlayItem {
   qtr: number
   rem: number
-  team: string
-  desc: string
+  team: string | null
+  desc: string | null
   kind: KeyPlayKind
   wpSwing: number  // points of WP added for the offense
 }
@@ -564,7 +565,7 @@ function detectKeyPlays(plays: WinProbPlay[]): KeyPlayItem[] {
     const homeSwing = (p.home_wp - prevHomeWp) * 100
     if (p.touchdown === 1) {
       out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'td', wpSwing: homeSwing })
-    } else if (/field goal is good/i.test(p.desc)) {
+    } else if (/field goal is good/i.test(p.desc ?? '')) {
       out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'fg', wpSwing: homeSwing })
     }
     if (p.interception === 1) {
@@ -603,7 +604,7 @@ function KeyPlays({ game }: { game: GameDetail }) {
           return (
             <div key={i} className={`flex items-center gap-3 px-4 py-2.5 border-l-2 ${isHome ? 'border-l-indigo-500/60' : 'border-l-rose-500/60'}`}>
               <div className="shrink-0 w-12 text-[11px] text-gray-500 font-mono tabular-nums">{fmtRemaining(p.rem)}</div>
-              <img src={teamLogoUrl(p.team)} className="w-5 h-5 object-contain shrink-0 opacity-70" alt="" />
+              <img src={teamLogoUrl(p.team ?? '')} className="w-5 h-5 object-contain shrink-0 opacity-70" alt="" />
               <span className={`shrink-0 inline-block text-[10px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${meta.color} ${meta.bg}`}>
                 {meta.label}
               </span>
@@ -637,8 +638,8 @@ function WpTooltip({ active, payload }: any) {
 }
 
 interface ChartPoint {
-  t: number; wp: number; rem: number; desc: string
-  td: boolean; turnover: boolean; posteam: string
+  t: number; wp: number; rem: number; desc: string | null
+  td: boolean; turnover: boolean; posteam: string | null
   homeTeam: string; awayTeam: string
 }
 

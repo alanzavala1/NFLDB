@@ -57,7 +57,8 @@ function dayOfWeek(gameday: string): number {
   return new Date(y, m - 1, d).getDay()
 }
 
-function primetimeBadge(gameday: string, gametime: string | null): string | null {
+function primetimeBadge(gameday: string | null, gametime: string | null): string | null {
+  if (!gameday) return null
   const dow = dayOfWeek(gameday)
   const hour = gametime ? parseInt(gametime.split(':')[0], 10) : 0
   if (dow === 4) return 'TNF'
@@ -531,7 +532,7 @@ function RecentResultsFeed({ schedule }: { schedule: WeekGroup[] }) {
   const all = schedule
     .flatMap(w => w.games)
     .filter(g => g.away_score !== null && g.home_score !== null)
-    .sort((a, b) => b.gameday.localeCompare(a.gameday))
+    .sort((a, b) => (b.gameday ?? '').localeCompare(a.gameday ?? ''))
     .slice(0, 6)
   if (!all.length) return null
 

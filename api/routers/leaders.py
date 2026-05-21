@@ -5,13 +5,15 @@ from fastapi import APIRouter, Query
 
 from config import CURRENT_SEASON, DIVISIONS, TEAM_NAMES
 from database import query_to_dict
+from schemas.leaders import LeagueLeader, WpaLeaders
+from schemas.schedule import SearchResult
 from schemas.standings import DivisionStandings
 from sql_helpers import ROSTER_CTE, safe_query
 
 router = APIRouter()
 
 
-@router.get("/leaders")
+@router.get("/leaders", response_model=list[LeagueLeader])
 def get_leaders(season: int = Query(default=None)):
     if season is None:
         season = CURRENT_SEASON
@@ -70,7 +72,7 @@ def get_leaders(season: int = Query(default=None)):
     return rows
 
 
-@router.get("/wpa-leaders")
+@router.get("/wpa-leaders", response_model=WpaLeaders)
 def get_wpa_leaders(season: int = Query(default=None)):
     if season is None:
         season = CURRENT_SEASON
@@ -236,7 +238,7 @@ def get_standings(season: int = Query(default=None)):
     return result
 
 
-@router.get("/search")
+@router.get("/search", response_model=list[SearchResult])
 def search(q: str = Query(..., min_length=1)):
     q = q.strip()
     if not q:

@@ -14,7 +14,7 @@ class StandingsRow(BaseModel):
     away: str
     div:  str
     strk: str   # "W2", "L1", "—"
-    gb:   str = "—"
+    gb:   str   # "—" for the division leader, e.g. "1", "2.5" otherwise
 
 
 class DivisionStandings(BaseModel):

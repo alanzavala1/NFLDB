@@ -152,7 +152,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleWeek"
+                  },
+                  "title": "Response Get Schedule Schedule Get"
+                }
               }
             }
           },
@@ -201,7 +207,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Game"
+                  },
+                  "title": "Response Get Games Games Get"
+                }
               }
             }
           },
@@ -238,7 +250,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/GameDetail"
+                }
               }
             }
           },
@@ -275,7 +289,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerProfile"
+                }
               }
             }
           },
@@ -324,7 +340,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerComparable"
+                  },
+                  "title": "Response Get Player Comparables Players  Player Id  Comparables Get"
+                }
               }
             }
           },
@@ -371,7 +393,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TeamProfile"
+                }
               }
             }
           },
@@ -460,7 +484,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAnalyticsResponse"
+                }
               }
             }
           },
@@ -497,7 +523,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LeagueLeader"
+                  },
+                  "title": "Response Get Leaders Leaders Get"
+                }
               }
             }
           },
@@ -534,7 +566,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/WpaLeaders"
+                }
               }
             }
           },
@@ -615,7 +649,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SearchResult"
+                  },
+                  "title": "Response Search Search Get"
+                }
               }
             }
           },
@@ -656,6 +696,765 @@
         ],
         "title": "DivisionStandings"
       },
+      "Game": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "game_type": {
+            "type": "string",
+            "title": "Game Type"
+          },
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "gameday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gameday"
+          },
+          "gametime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gametime"
+          },
+          "away_team": {
+            "type": "string",
+            "title": "Away Team"
+          },
+          "home_team": {
+            "type": "string",
+            "title": "Home Team"
+          },
+          "away_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Score"
+          },
+          "home_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Score"
+          },
+          "away_qb_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Qb Name"
+          },
+          "home_qb_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Qb Name"
+          },
+          "spread_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Line"
+          },
+          "total_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Line"
+          },
+          "roof": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roof"
+          },
+          "surface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface"
+          },
+          "temp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temp"
+          },
+          "wind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind"
+          },
+          "stadium": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stadium"
+          },
+          "overtime": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overtime"
+          },
+          "div_game": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Div Game"
+          },
+          "away_record": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Record"
+          },
+          "home_record": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Record"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "season",
+          "game_type",
+          "week",
+          "gameday",
+          "gametime",
+          "away_team",
+          "home_team",
+          "away_score",
+          "home_score",
+          "away_qb_name",
+          "home_qb_name",
+          "spread_line",
+          "total_line",
+          "roof",
+          "surface",
+          "temp",
+          "wind",
+          "stadium",
+          "overtime",
+          "div_game"
+        ],
+        "title": "Game",
+        "description": "A scheduled game; scores are null for unplayed games."
+      },
+      "GameDetail": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "game_type": {
+            "type": "string",
+            "title": "Game Type"
+          },
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "gameday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gameday"
+          },
+          "gametime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gametime"
+          },
+          "away_team": {
+            "type": "string",
+            "title": "Away Team"
+          },
+          "home_team": {
+            "type": "string",
+            "title": "Home Team"
+          },
+          "away_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Score"
+          },
+          "home_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Score"
+          },
+          "away_qb_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Qb Name"
+          },
+          "home_qb_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Qb Name"
+          },
+          "spread_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Line"
+          },
+          "total_line": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Line"
+          },
+          "roof": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roof"
+          },
+          "surface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface"
+          },
+          "temp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temp"
+          },
+          "wind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind"
+          },
+          "stadium": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stadium"
+          },
+          "overtime": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overtime"
+          },
+          "div_game": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Div Game"
+          },
+          "away_record": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Record"
+          },
+          "home_record": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Record"
+          },
+          "away": {
+            "items": {
+              "$ref": "#/components/schemas/GamePlayerStats"
+            },
+            "type": "array",
+            "title": "Away"
+          },
+          "home": {
+            "items": {
+              "$ref": "#/components/schemas/GamePlayerStats"
+            },
+            "type": "array",
+            "title": "Home"
+          },
+          "quarter_scores": {
+            "items": {
+              "$ref": "#/components/schemas/QuarterScore"
+            },
+            "type": "array",
+            "title": "Quarter Scores"
+          },
+          "win_prob": {
+            "items": {
+              "$ref": "#/components/schemas/WinProbPlay"
+            },
+            "type": "array",
+            "title": "Win Prob"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "season",
+          "game_type",
+          "week",
+          "gameday",
+          "gametime",
+          "away_team",
+          "home_team",
+          "away_score",
+          "home_score",
+          "away_qb_name",
+          "home_qb_name",
+          "spread_line",
+          "total_line",
+          "roof",
+          "surface",
+          "temp",
+          "wind",
+          "stadium",
+          "overtime",
+          "div_game",
+          "away",
+          "home",
+          "quarter_scores",
+          "win_prob"
+        ],
+        "title": "GameDetail",
+        "description": "Game detail returned by /games/{id}: game header + rosters + scoring + WP."
+      },
+      "GamePlayerStats": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "type": "string",
+            "title": "Player Name"
+          },
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "jersey_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jersey Number"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "attempts": {
+            "type": "number",
+            "title": "Attempts"
+          },
+          "completions": {
+            "type": "number",
+            "title": "Completions"
+          },
+          "pass_yards": {
+            "type": "number",
+            "title": "Pass Yards"
+          },
+          "pass_tds": {
+            "type": "number",
+            "title": "Pass Tds"
+          },
+          "interceptions_thrown": {
+            "type": "number",
+            "title": "Interceptions Thrown"
+          },
+          "sacks_taken": {
+            "type": "number",
+            "title": "Sacks Taken"
+          },
+          "pass_epa": {
+            "type": "number",
+            "title": "Pass Epa"
+          },
+          "targets": {
+            "type": "number",
+            "title": "Targets"
+          },
+          "receptions": {
+            "type": "number",
+            "title": "Receptions"
+          },
+          "rec_yards": {
+            "type": "number",
+            "title": "Rec Yards"
+          },
+          "rec_tds": {
+            "type": "number",
+            "title": "Rec Tds"
+          },
+          "air_yards": {
+            "type": "number",
+            "title": "Air Yards"
+          },
+          "yac": {
+            "type": "number",
+            "title": "Yac"
+          },
+          "rec_epa": {
+            "type": "number",
+            "title": "Rec Epa"
+          },
+          "carries": {
+            "type": "number",
+            "title": "Carries"
+          },
+          "rush_yards": {
+            "type": "number",
+            "title": "Rush Yards"
+          },
+          "rush_tds": {
+            "type": "number",
+            "title": "Rush Tds"
+          },
+          "rush_epa": {
+            "type": "number",
+            "title": "Rush Epa"
+          },
+          "solo_tackles": {
+            "type": "number",
+            "title": "Solo Tackles"
+          },
+          "assist_tackles": {
+            "type": "number",
+            "title": "Assist Tackles"
+          },
+          "tackles_for_loss": {
+            "type": "number",
+            "title": "Tackles For Loss"
+          },
+          "sacks": {
+            "type": "number",
+            "title": "Sacks"
+          },
+          "qb_hits": {
+            "type": "number",
+            "title": "Qb Hits"
+          },
+          "def_interceptions": {
+            "type": "number",
+            "title": "Def Interceptions"
+          },
+          "pass_breakups": {
+            "type": "number",
+            "title": "Pass Breakups"
+          },
+          "forced_fumbles": {
+            "type": "number",
+            "title": "Forced Fumbles"
+          },
+          "fumble_recoveries": {
+            "type": "number",
+            "title": "Fumble Recoveries"
+          },
+          "fg_att": {
+            "type": "number",
+            "title": "Fg Att"
+          },
+          "fg_made": {
+            "type": "number",
+            "title": "Fg Made"
+          },
+          "xp_att": {
+            "type": "number",
+            "title": "Xp Att"
+          },
+          "xp_made": {
+            "type": "number",
+            "title": "Xp Made"
+          },
+          "punts": {
+            "type": "number",
+            "title": "Punts"
+          },
+          "punt_yards": {
+            "type": "number",
+            "title": "Punt Yards"
+          },
+          "punt_returns": {
+            "type": "number",
+            "title": "Punt Returns"
+          },
+          "punt_return_yards": {
+            "type": "number",
+            "title": "Punt Return Yards"
+          },
+          "punt_return_tds": {
+            "type": "number",
+            "title": "Punt Return Tds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "player_name",
+          "team",
+          "week",
+          "position",
+          "jersey_number",
+          "headshot_url",
+          "attempts",
+          "completions",
+          "pass_yards",
+          "pass_tds",
+          "interceptions_thrown",
+          "sacks_taken",
+          "pass_epa",
+          "targets",
+          "receptions",
+          "rec_yards",
+          "rec_tds",
+          "air_yards",
+          "yac",
+          "rec_epa",
+          "carries",
+          "rush_yards",
+          "rush_tds",
+          "rush_epa",
+          "solo_tackles",
+          "assist_tackles",
+          "tackles_for_loss",
+          "sacks",
+          "qb_hits",
+          "def_interceptions",
+          "pass_breakups",
+          "forced_fumbles",
+          "fumble_recoveries",
+          "fg_att",
+          "fg_made",
+          "xp_att",
+          "xp_made",
+          "punts",
+          "punt_yards",
+          "punt_returns",
+          "punt_return_yards",
+          "punt_return_tds"
+        ],
+        "title": "GamePlayerStats",
+        "description": "Per-game player line returned in /games/{id} under away[] / home[].\n\nStat columns come back as DOUBLE from DuckDB (DEFAULT 0), so they are\nfloats even when conceptually counts (touchdowns, attempts, etc.)."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -683,6 +1482,231 @@
         ],
         "title": "HealthResponse"
       },
+      "LeagueLeader": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "type": "string",
+            "title": "Player Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "games_played": {
+            "type": "integer",
+            "title": "Games Played"
+          },
+          "attempts": {
+            "type": "number",
+            "title": "Attempts"
+          },
+          "completions": {
+            "type": "number",
+            "title": "Completions"
+          },
+          "pass_yards": {
+            "type": "number",
+            "title": "Pass Yards"
+          },
+          "pass_tds": {
+            "type": "number",
+            "title": "Pass Tds"
+          },
+          "interceptions_thrown": {
+            "type": "number",
+            "title": "Interceptions Thrown"
+          },
+          "sacks_taken": {
+            "type": "number",
+            "title": "Sacks Taken"
+          },
+          "pass_epa": {
+            "type": "number",
+            "title": "Pass Epa"
+          },
+          "carries": {
+            "type": "number",
+            "title": "Carries"
+          },
+          "rush_yards": {
+            "type": "number",
+            "title": "Rush Yards"
+          },
+          "rush_tds": {
+            "type": "number",
+            "title": "Rush Tds"
+          },
+          "rush_epa": {
+            "type": "number",
+            "title": "Rush Epa"
+          },
+          "targets": {
+            "type": "number",
+            "title": "Targets"
+          },
+          "receptions": {
+            "type": "number",
+            "title": "Receptions"
+          },
+          "rec_yards": {
+            "type": "number",
+            "title": "Rec Yards"
+          },
+          "rec_tds": {
+            "type": "number",
+            "title": "Rec Tds"
+          },
+          "yac": {
+            "type": "number",
+            "title": "Yac"
+          },
+          "air_yards": {
+            "type": "number",
+            "title": "Air Yards"
+          },
+          "rec_epa": {
+            "type": "number",
+            "title": "Rec Epa"
+          },
+          "solo_tackles": {
+            "type": "number",
+            "title": "Solo Tackles"
+          },
+          "assist_tackles": {
+            "type": "number",
+            "title": "Assist Tackles"
+          },
+          "tackles_for_loss": {
+            "type": "number",
+            "title": "Tackles For Loss"
+          },
+          "sacks": {
+            "type": "number",
+            "title": "Sacks"
+          },
+          "qb_hits": {
+            "type": "number",
+            "title": "Qb Hits"
+          },
+          "def_interceptions": {
+            "type": "number",
+            "title": "Def Interceptions"
+          },
+          "pass_breakups": {
+            "type": "number",
+            "title": "Pass Breakups"
+          },
+          "forced_fumbles": {
+            "type": "number",
+            "title": "Forced Fumbles"
+          },
+          "fumble_recoveries": {
+            "type": "number",
+            "title": "Fumble Recoveries"
+          },
+          "fg_att": {
+            "type": "number",
+            "title": "Fg Att"
+          },
+          "fg_made": {
+            "type": "number",
+            "title": "Fg Made"
+          },
+          "xp_att": {
+            "type": "number",
+            "title": "Xp Att"
+          },
+          "xp_made": {
+            "type": "number",
+            "title": "Xp Made"
+          },
+          "punts": {
+            "type": "number",
+            "title": "Punts"
+          },
+          "punt_yards": {
+            "type": "number",
+            "title": "Punt Yards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "player_name",
+          "position",
+          "team",
+          "headshot_url",
+          "games_played",
+          "attempts",
+          "completions",
+          "pass_yards",
+          "pass_tds",
+          "interceptions_thrown",
+          "sacks_taken",
+          "pass_epa",
+          "carries",
+          "rush_yards",
+          "rush_tds",
+          "rush_epa",
+          "targets",
+          "receptions",
+          "rec_yards",
+          "rec_tds",
+          "yac",
+          "air_yards",
+          "rec_epa",
+          "solo_tackles",
+          "assist_tackles",
+          "tackles_for_loss",
+          "sacks",
+          "qb_hits",
+          "def_interceptions",
+          "pass_breakups",
+          "forced_fumbles",
+          "fumble_recoveries",
+          "fg_att",
+          "fg_made",
+          "xp_att",
+          "xp_made",
+          "punts",
+          "punt_yards"
+        ],
+        "title": "LeagueLeader",
+        "description": "One row per player in /leaders. Stat fields are season totals from\nSUM() over player_game_stats, returned as DOUBLE.\n\nAll stat fields are required-and-non-null: the underlying columns have\nDEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable\nstats like RB pass_yards). Roster-joined fields (position/team) may be\nnull because the join is LEFT and roster data can be missing."
+      },
       "LoadSeasonResponse": {
         "properties": {
           "season": {
@@ -707,6 +1731,1041 @@
           "status"
         ],
         "title": "LoadSeasonResponse"
+      },
+      "NgsStats": {
+        "properties": {
+          "avg_time_to_throw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Time To Throw"
+          },
+          "adot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adot"
+          },
+          "avg_completed_air_yards": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Completed Air Yards"
+          },
+          "cpoe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpoe"
+          },
+          "aggressiveness": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aggressiveness"
+          },
+          "expected_cmp_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Cmp Pct"
+          },
+          "ngs_passer_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ngs Passer Rating"
+          },
+          "rush_yoe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rush Yoe"
+          },
+          "rush_yoe_per_att": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rush Yoe Per Att"
+          },
+          "rush_efficiency": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rush Efficiency"
+          },
+          "avg_time_to_los": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Time To Los"
+          },
+          "pct_vs_8_defenders": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Vs 8 Defenders"
+          },
+          "avg_separation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Separation"
+          },
+          "avg_cushion": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Cushion"
+          },
+          "avg_target_depth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Target Depth"
+          },
+          "avg_yac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Yac"
+          },
+          "avg_yac_above_exp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Yac Above Exp"
+          },
+          "catch_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catch Pct"
+          },
+          "air_yards_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Yards Share"
+          }
+        },
+        "type": "object",
+        "title": "NgsStats",
+        "description": "Next Gen Stats per season. Fields populated depend on role.\n\nNOTE: unlike most of our models, these sub-views are genuinely sparse \u2014\na QB row only has passing fields, a WR row only has receiving fields.\nThe helper builds the dict from non-null SELECT results, so absent\nfields mean \"doesn't apply.\" Defaults are kept so each instance can\ncarry any subset."
+      },
+      "PlayerAdvStats": {
+        "properties": {
+          "fumbles_lost": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fumbles Lost"
+          },
+          "target_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Share"
+          },
+          "air_yards_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Yards Share"
+          },
+          "stuff_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stuff Rate"
+          },
+          "stuffed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stuffed"
+          },
+          "carries_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carries Total"
+          }
+        },
+        "type": "object",
+        "title": "PlayerAdvStats",
+        "description": "Per-season advanced stats \u2014 sparse by player role."
+      },
+      "PlayerComparable": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "type": "string",
+            "title": "Player Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "similarity": {
+            "type": "number",
+            "title": "Similarity"
+          },
+          "games": {
+            "type": "integer",
+            "title": "Games"
+          },
+          "first_season": {
+            "type": "integer",
+            "title": "First Season"
+          },
+          "last_season": {
+            "type": "integer",
+            "title": "Last Season"
+          },
+          "pass_yards": {
+            "type": "number",
+            "title": "Pass Yards"
+          },
+          "pass_tds": {
+            "type": "number",
+            "title": "Pass Tds"
+          },
+          "rush_yards": {
+            "type": "number",
+            "title": "Rush Yards"
+          },
+          "rush_tds": {
+            "type": "number",
+            "title": "Rush Tds"
+          },
+          "carries": {
+            "type": "number",
+            "title": "Carries"
+          },
+          "rec_yards": {
+            "type": "number",
+            "title": "Rec Yards"
+          },
+          "rec_tds": {
+            "type": "number",
+            "title": "Rec Tds"
+          },
+          "targets": {
+            "type": "number",
+            "title": "Targets"
+          },
+          "att": {
+            "type": "number",
+            "title": "Att"
+          },
+          "cmp": {
+            "type": "number",
+            "title": "Cmp"
+          },
+          "ints": {
+            "type": "number",
+            "title": "Ints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "player_name",
+          "position",
+          "team",
+          "headshot_url",
+          "similarity",
+          "games",
+          "first_season",
+          "last_season",
+          "pass_yards",
+          "pass_tds",
+          "rush_yards",
+          "rush_tds",
+          "carries",
+          "rec_yards",
+          "rec_tds",
+          "targets",
+          "att",
+          "cmp",
+          "ints"
+        ],
+        "title": "PlayerComparable",
+        "description": "Cosine-similarity neighbor returned by /players/{id}/comparables."
+      },
+      "PlayerGame": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "opponent": {
+            "type": "string",
+            "title": "Opponent"
+          },
+          "location": {
+            "type": "string",
+            "enum": [
+              "home",
+              "away"
+            ],
+            "title": "Location"
+          },
+          "gameday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gameday"
+          },
+          "away_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Score"
+          },
+          "home_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Score"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "W",
+                  "L",
+                  "T"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "game_type": {
+            "type": "string",
+            "title": "Game Type"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "jersey_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jersey Number"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "attempts": {
+            "type": "number",
+            "title": "Attempts"
+          },
+          "completions": {
+            "type": "number",
+            "title": "Completions"
+          },
+          "pass_yards": {
+            "type": "number",
+            "title": "Pass Yards"
+          },
+          "pass_tds": {
+            "type": "number",
+            "title": "Pass Tds"
+          },
+          "interceptions_thrown": {
+            "type": "number",
+            "title": "Interceptions Thrown"
+          },
+          "sacks_taken": {
+            "type": "number",
+            "title": "Sacks Taken"
+          },
+          "pass_epa": {
+            "type": "number",
+            "title": "Pass Epa"
+          },
+          "targets": {
+            "type": "number",
+            "title": "Targets"
+          },
+          "receptions": {
+            "type": "number",
+            "title": "Receptions"
+          },
+          "rec_yards": {
+            "type": "number",
+            "title": "Rec Yards"
+          },
+          "rec_tds": {
+            "type": "number",
+            "title": "Rec Tds"
+          },
+          "air_yards": {
+            "type": "number",
+            "title": "Air Yards"
+          },
+          "yac": {
+            "type": "number",
+            "title": "Yac"
+          },
+          "rec_epa": {
+            "type": "number",
+            "title": "Rec Epa"
+          },
+          "carries": {
+            "type": "number",
+            "title": "Carries"
+          },
+          "rush_yards": {
+            "type": "number",
+            "title": "Rush Yards"
+          },
+          "rush_tds": {
+            "type": "number",
+            "title": "Rush Tds"
+          },
+          "rush_epa": {
+            "type": "number",
+            "title": "Rush Epa"
+          },
+          "solo_tackles": {
+            "type": "number",
+            "title": "Solo Tackles"
+          },
+          "assist_tackles": {
+            "type": "number",
+            "title": "Assist Tackles"
+          },
+          "tackles_for_loss": {
+            "type": "number",
+            "title": "Tackles For Loss"
+          },
+          "sacks": {
+            "type": "number",
+            "title": "Sacks"
+          },
+          "qb_hits": {
+            "type": "number",
+            "title": "Qb Hits"
+          },
+          "def_interceptions": {
+            "type": "number",
+            "title": "Def Interceptions"
+          },
+          "pass_breakups": {
+            "type": "number",
+            "title": "Pass Breakups"
+          },
+          "forced_fumbles": {
+            "type": "number",
+            "title": "Forced Fumbles"
+          },
+          "fumble_recoveries": {
+            "type": "number",
+            "title": "Fumble Recoveries"
+          },
+          "fg_att": {
+            "type": "number",
+            "title": "Fg Att"
+          },
+          "fg_made": {
+            "type": "number",
+            "title": "Fg Made"
+          },
+          "xp_att": {
+            "type": "number",
+            "title": "Xp Att"
+          },
+          "xp_made": {
+            "type": "number",
+            "title": "Xp Made"
+          },
+          "punts": {
+            "type": "number",
+            "title": "Punts"
+          },
+          "punt_yards": {
+            "type": "number",
+            "title": "Punt Yards"
+          },
+          "punt_returns": {
+            "type": "number",
+            "title": "Punt Returns"
+          },
+          "punt_return_yards": {
+            "type": "number",
+            "title": "Punt Return Yards"
+          },
+          "punt_return_tds": {
+            "type": "number",
+            "title": "Punt Return Tds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "season",
+          "week",
+          "team",
+          "opponent",
+          "location",
+          "gameday",
+          "away_score",
+          "home_score",
+          "result",
+          "game_type",
+          "position",
+          "jersey_number",
+          "headshot_url",
+          "attempts",
+          "completions",
+          "pass_yards",
+          "pass_tds",
+          "interceptions_thrown",
+          "sacks_taken",
+          "pass_epa",
+          "targets",
+          "receptions",
+          "rec_yards",
+          "rec_tds",
+          "air_yards",
+          "yac",
+          "rec_epa",
+          "carries",
+          "rush_yards",
+          "rush_tds",
+          "rush_epa",
+          "solo_tackles",
+          "assist_tackles",
+          "tackles_for_loss",
+          "sacks",
+          "qb_hits",
+          "def_interceptions",
+          "pass_breakups",
+          "forced_fumbles",
+          "fumble_recoveries",
+          "fg_att",
+          "fg_made",
+          "xp_att",
+          "xp_made",
+          "punts",
+          "punt_yards",
+          "punt_returns",
+          "punt_return_yards",
+          "punt_return_tds"
+        ],
+        "title": "PlayerGame",
+        "description": "One row in the player's game log."
+      },
+      "PlayerProfile": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "type": "string",
+            "title": "Player Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "jersey_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jersey Number"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight"
+          },
+          "age": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          },
+          "college": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "College"
+          },
+          "years_exp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Years Exp"
+          },
+          "entry_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Year"
+          },
+          "rookie_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rookie Year"
+          },
+          "draft_club": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Club"
+          },
+          "draft_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Number"
+          },
+          "games_played": {
+            "type": "integer",
+            "title": "Games Played"
+          },
+          "season_totals": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Season Totals"
+          },
+          "games": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerGame"
+            },
+            "type": "array",
+            "title": "Games"
+          },
+          "ngs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NgsStats"
+            },
+            "type": "object",
+            "title": "Ngs"
+          },
+          "snap_totals": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SnapTotals"
+            },
+            "type": "object",
+            "title": "Snap Totals"
+          },
+          "situational": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SituationalStats"
+            },
+            "type": "object",
+            "title": "Situational"
+          },
+          "wpa": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PlayerWpa"
+            },
+            "type": "object",
+            "title": "Wpa"
+          },
+          "adv_stats": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PlayerAdvStats"
+            },
+            "type": "object",
+            "title": "Adv Stats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "player_name",
+          "position",
+          "team",
+          "jersey_number",
+          "headshot_url",
+          "height",
+          "weight",
+          "age",
+          "college",
+          "years_exp",
+          "entry_year",
+          "rookie_year",
+          "draft_club",
+          "draft_number",
+          "games_played",
+          "season_totals",
+          "games",
+          "ngs",
+          "snap_totals",
+          "situational",
+          "wpa",
+          "adv_stats"
+        ],
+        "title": "PlayerProfile",
+        "description": "Full /players/{id} payload."
+      },
+      "PlayerWpa": {
+        "properties": {
+          "pass_wpa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Wpa"
+          },
+          "rec_wpa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rec Wpa"
+          },
+          "rush_wpa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rush Wpa"
+          }
+        },
+        "type": "object",
+        "title": "PlayerWpa",
+        "description": "Per-season WPA attribution. Sparse by role (passer/rusher/receiver)."
+      },
+      "QuarterScore": {
+        "properties": {
+          "qtr": {
+            "type": "integer",
+            "title": "Qtr"
+          },
+          "away": {
+            "type": "integer",
+            "title": "Away"
+          },
+          "home": {
+            "type": "integer",
+            "title": "Home"
+          }
+        },
+        "type": "object",
+        "required": [
+          "qtr",
+          "away",
+          "home"
+        ],
+        "title": "QuarterScore"
       },
       "RosterPlayer": {
         "properties": {
@@ -755,9 +2814,99 @@
         "type": "object",
         "required": [
           "player_id",
-          "player_name"
+          "player_name",
+          "position",
+          "jersey_number",
+          "headshot_url"
         ],
-        "title": "RosterPlayer"
+        "title": "RosterPlayer",
+        "description": "A player on a team's roster for a given season."
+      },
+      "ScheduleWeek": {
+        "properties": {
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "games": {
+            "items": {
+              "$ref": "#/components/schemas/Game"
+            },
+            "type": "array",
+            "title": "Games"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week",
+          "games"
+        ],
+        "title": "ScheduleWeek",
+        "description": "A week of games returned by /schedule."
+      },
+      "SearchResult": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "player",
+              "team"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "name",
+          "position",
+          "team",
+          "headshot_url"
+        ],
+        "title": "SearchResult",
+        "description": "A single search hit. `type` discriminates player vs team."
       },
       "SeasonStatus": {
         "properties": {
@@ -783,6 +2932,308 @@
           "status"
         ],
         "title": "SeasonStatus"
+      },
+      "SituationalStats": {
+        "properties": {
+          "lng_pass": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lng Pass"
+          },
+          "lng_rush": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lng Rush"
+          },
+          "lng_rec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lng Rec"
+          },
+          "rz_pass_att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Pass Att"
+          },
+          "rz_cmp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Cmp"
+          },
+          "rz_pass_tds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Pass Tds"
+          },
+          "rz_targets": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Targets"
+          },
+          "rz_rec_tds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Rec Tds"
+          },
+          "rz_carries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Carries"
+          },
+          "rz_rush_tds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Rush Tds"
+          },
+          "third_pass_att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Pass Att"
+          },
+          "third_pass_fd": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Pass Fd"
+          },
+          "third_targets": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Targets"
+          },
+          "third_rec_fd": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Rec Fd"
+          },
+          "third_carries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Carries"
+          },
+          "third_rush_fd": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Rush Fd"
+          },
+          "fd_pass": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fd Pass"
+          },
+          "fd_rec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fd Rec"
+          },
+          "fd_rush": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fd Rush"
+          }
+        },
+        "type": "object",
+        "title": "SituationalStats",
+        "description": "Per-season situational splits \u2014 sparse by design. See NgsStats note."
+      },
+      "SnapTotals": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "offense_snaps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offense Snaps"
+          },
+          "defense_snaps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defense Snaps"
+          },
+          "st_snaps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "St Snaps"
+          },
+          "avg_offense_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Offense Pct"
+          },
+          "avg_defense_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Defense Pct"
+          },
+          "avg_st_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg St Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "offense_snaps",
+          "defense_snaps",
+          "st_snaps",
+          "avg_offense_pct",
+          "avg_defense_pct",
+          "avg_st_pct"
+        ],
+        "title": "SnapTotals",
+        "description": "Per-season snap counts. snap_counts SQL always returns every column,\njust NULL where the player has no snaps of that type."
       },
       "StandingsRow": {
         "properties": {
@@ -832,8 +3283,7 @@
           },
           "gb": {
             "type": "string",
-            "title": "Gb",
-            "default": "\u2014"
+            "title": "Gb"
           }
         },
         "type": "object",
@@ -848,9 +3298,1054 @@
           "home",
           "away",
           "div",
-          "strk"
+          "strk",
+          "gb"
         ],
         "title": "StandingsRow"
+      },
+      "TeamAnalyticsResponse": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "league": {
+            "items": {
+              "$ref": "#/components/schemas/TeamAnalyticsRow"
+            },
+            "type": "array",
+            "title": "League"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "league"
+        ],
+        "title": "TeamAnalyticsResponse",
+        "description": "/team-analytics?season=\u2026 returns the season plus per-team rows."
+      },
+      "TeamAnalyticsRow": {
+        "properties": {
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "games": {
+            "type": "integer",
+            "title": "Games"
+          },
+          "wins": {
+            "type": "integer",
+            "title": "Wins"
+          },
+          "losses": {
+            "type": "integer",
+            "title": "Losses"
+          },
+          "ties": {
+            "type": "integer",
+            "title": "Ties"
+          },
+          "pf_total": {
+            "type": "integer",
+            "title": "Pf Total"
+          },
+          "pa_total": {
+            "type": "integer",
+            "title": "Pa Total"
+          },
+          "ppg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ppg"
+          },
+          "papg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Papg"
+          },
+          "pt_diff_per_game": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pt Diff Per Game"
+          },
+          "pts_per_drive": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pts Per Drive"
+          },
+          "pts_per_drive_allowed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pts Per Drive Allowed"
+          },
+          "total_drives": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Drives"
+          },
+          "total_drives_allowed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Drives Allowed"
+          },
+          "rz_td_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Td Pct"
+          },
+          "rz_td_pct_allowed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Td Pct Allowed"
+          },
+          "off_turnovers_total": {
+            "type": "integer",
+            "title": "Off Turnovers Total"
+          },
+          "def_takeaways_total": {
+            "type": "integer",
+            "title": "Def Takeaways Total"
+          },
+          "turnover_diff_per_game": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Diff Per Game"
+          },
+          "off_plays_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Plays Count"
+          },
+          "off_epa_play": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Epa Play"
+          },
+          "off_pass_epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Pass Epa"
+          },
+          "off_rush_epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Rush Epa"
+          },
+          "off_success_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Success Pct"
+          },
+          "off_explosive_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Explosive Pct"
+          },
+          "proe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proe"
+          },
+          "third_down_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Down Pct"
+          },
+          "def_epa_play": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Epa Play"
+          },
+          "def_pass_epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Pass Epa"
+          },
+          "def_rush_epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Rush Epa"
+          },
+          "def_success_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Success Pct"
+          },
+          "def_explosive_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Explosive Pct"
+          },
+          "def_sack_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Sack Pct"
+          },
+          "third_down_stop_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Down Stop Pct"
+          },
+          "ppg_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ppg Rank"
+          },
+          "pts_per_drive_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pts Per Drive Rank"
+          },
+          "off_epa_play_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Epa Play Rank"
+          },
+          "off_pass_epa_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Pass Epa Rank"
+          },
+          "off_rush_epa_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Rush Epa Rank"
+          },
+          "off_success_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Success Rank"
+          },
+          "off_explosive_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Explosive Rank"
+          },
+          "third_down_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Down Rank"
+          },
+          "rz_td_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Td Rank"
+          },
+          "proe_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proe Rank"
+          },
+          "papg_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Papg Rank"
+          },
+          "pts_per_drive_allowed_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pts Per Drive Allowed Rank"
+          },
+          "def_epa_play_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Epa Play Rank"
+          },
+          "def_pass_epa_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Pass Epa Rank"
+          },
+          "def_rush_epa_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Rush Epa Rank"
+          },
+          "def_success_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Success Rank"
+          },
+          "def_explosive_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Explosive Rank"
+          },
+          "third_down_stop_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Down Stop Rank"
+          },
+          "rz_td_allowed_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rz Td Allowed Rank"
+          },
+          "def_sack_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Sack Rank"
+          },
+          "pt_diff_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pt Diff Rank"
+          },
+          "to_diff_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Diff Rank"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team",
+          "games",
+          "wins",
+          "losses",
+          "ties",
+          "pf_total",
+          "pa_total",
+          "ppg",
+          "papg",
+          "pt_diff_per_game",
+          "pts_per_drive",
+          "pts_per_drive_allowed",
+          "total_drives",
+          "total_drives_allowed",
+          "rz_td_pct",
+          "rz_td_pct_allowed",
+          "off_turnovers_total",
+          "def_takeaways_total",
+          "turnover_diff_per_game",
+          "off_plays_count",
+          "off_epa_play",
+          "off_pass_epa",
+          "off_rush_epa",
+          "off_success_pct",
+          "off_explosive_pct",
+          "proe",
+          "third_down_pct",
+          "def_epa_play",
+          "def_pass_epa",
+          "def_rush_epa",
+          "def_success_pct",
+          "def_explosive_pct",
+          "def_sack_pct",
+          "third_down_stop_pct",
+          "ppg_rank",
+          "pts_per_drive_rank",
+          "off_epa_play_rank",
+          "off_pass_epa_rank",
+          "off_rush_epa_rank",
+          "off_success_rank",
+          "off_explosive_rank",
+          "third_down_rank",
+          "rz_td_rank",
+          "proe_rank",
+          "papg_rank",
+          "pts_per_drive_allowed_rank",
+          "def_epa_play_rank",
+          "def_pass_epa_rank",
+          "def_rush_epa_rank",
+          "def_success_rank",
+          "def_explosive_rank",
+          "third_down_stop_rank",
+          "rz_td_allowed_rank",
+          "def_sack_rank",
+          "pt_diff_rank",
+          "to_diff_rank"
+        ],
+        "title": "TeamAnalyticsRow",
+        "description": "One row per team. Rank columns are 1-based with 1 = best (for that team).\n\nHigher-is-better metrics use DESC ranks; lower-is-better metrics use ASC,\nso rank=1 always means \"best in the league\" regardless of metric direction.\n\nMost rate metrics can legitimately be NULL (e.g. PROE is NULL for seasons\nbefore nflfastR added pass_oe; rz_td_pct is NULL for teams that never\nreached the red zone), so all of them are required-but-nullable."
+      },
+      "TeamGame": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "gameday": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gameday"
+          },
+          "gametime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gametime"
+          },
+          "away_team": {
+            "type": "string",
+            "title": "Away Team"
+          },
+          "home_team": {
+            "type": "string",
+            "title": "Home Team"
+          },
+          "away_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Score"
+          },
+          "home_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Score"
+          },
+          "stadium": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stadium"
+          },
+          "roof": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roof"
+          },
+          "surface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface"
+          },
+          "temp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temp"
+          },
+          "wind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind"
+          },
+          "away_record": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Record"
+          },
+          "home_record": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Record"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "season",
+          "week",
+          "gameday",
+          "gametime",
+          "away_team",
+          "home_team",
+          "away_score",
+          "home_score",
+          "stadium",
+          "roof",
+          "surface",
+          "temp",
+          "wind",
+          "away_record",
+          "home_record"
+        ],
+        "title": "TeamGame",
+        "description": "A team's schedule row inside /teams/{team}. Records walked forward\nby attach_records() are required (always set on this endpoint)."
+      },
+      "TeamLeader": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "type": "string",
+            "title": "Player Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "jersey_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jersey Number"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "games_played": {
+            "type": "integer",
+            "title": "Games Played"
+          },
+          "attempts": {
+            "type": "number",
+            "title": "Attempts"
+          },
+          "completions": {
+            "type": "number",
+            "title": "Completions"
+          },
+          "pass_yards": {
+            "type": "number",
+            "title": "Pass Yards"
+          },
+          "pass_tds": {
+            "type": "number",
+            "title": "Pass Tds"
+          },
+          "interceptions_thrown": {
+            "type": "number",
+            "title": "Interceptions Thrown"
+          },
+          "sacks_taken": {
+            "type": "number",
+            "title": "Sacks Taken"
+          },
+          "pass_epa": {
+            "type": "number",
+            "title": "Pass Epa"
+          },
+          "carries": {
+            "type": "number",
+            "title": "Carries"
+          },
+          "rush_yards": {
+            "type": "number",
+            "title": "Rush Yards"
+          },
+          "rush_tds": {
+            "type": "number",
+            "title": "Rush Tds"
+          },
+          "rush_epa": {
+            "type": "number",
+            "title": "Rush Epa"
+          },
+          "targets": {
+            "type": "number",
+            "title": "Targets"
+          },
+          "receptions": {
+            "type": "number",
+            "title": "Receptions"
+          },
+          "rec_yards": {
+            "type": "number",
+            "title": "Rec Yards"
+          },
+          "rec_tds": {
+            "type": "number",
+            "title": "Rec Tds"
+          },
+          "air_yards": {
+            "type": "number",
+            "title": "Air Yards"
+          },
+          "yac": {
+            "type": "number",
+            "title": "Yac"
+          },
+          "rec_epa": {
+            "type": "number",
+            "title": "Rec Epa"
+          },
+          "solo_tackles": {
+            "type": "number",
+            "title": "Solo Tackles"
+          },
+          "assist_tackles": {
+            "type": "number",
+            "title": "Assist Tackles"
+          },
+          "tackles_for_loss": {
+            "type": "number",
+            "title": "Tackles For Loss"
+          },
+          "sacks": {
+            "type": "number",
+            "title": "Sacks"
+          },
+          "qb_hits": {
+            "type": "number",
+            "title": "Qb Hits"
+          },
+          "def_interceptions": {
+            "type": "number",
+            "title": "Def Interceptions"
+          },
+          "pass_breakups": {
+            "type": "number",
+            "title": "Pass Breakups"
+          },
+          "forced_fumbles": {
+            "type": "number",
+            "title": "Forced Fumbles"
+          },
+          "fumble_recoveries": {
+            "type": "number",
+            "title": "Fumble Recoveries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "player_name",
+          "position",
+          "jersey_number",
+          "headshot_url",
+          "games_played",
+          "attempts",
+          "completions",
+          "pass_yards",
+          "pass_tds",
+          "interceptions_thrown",
+          "sacks_taken",
+          "pass_epa",
+          "carries",
+          "rush_yards",
+          "rush_tds",
+          "rush_epa",
+          "targets",
+          "receptions",
+          "rec_yards",
+          "rec_tds",
+          "air_yards",
+          "yac",
+          "rec_epa",
+          "solo_tackles",
+          "assist_tackles",
+          "tackles_for_loss",
+          "sacks",
+          "qb_hits",
+          "def_interceptions",
+          "pass_breakups",
+          "forced_fumbles",
+          "fumble_recoveries"
+        ],
+        "title": "TeamLeader",
+        "description": "Per-player season totals for one team. Returned twice on /teams/{team}:\nonce for regular season (leaders), once for playoffs (playoff_leaders)."
+      },
+      "TeamProfile": {
+        "properties": {
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "games": {
+            "items": {
+              "$ref": "#/components/schemas/TeamGame"
+            },
+            "type": "array",
+            "title": "Games"
+          },
+          "leaders": {
+            "items": {
+              "$ref": "#/components/schemas/TeamLeader"
+            },
+            "type": "array",
+            "title": "Leaders"
+          },
+          "playoff_leaders": {
+            "items": {
+              "$ref": "#/components/schemas/TeamLeader"
+            },
+            "type": "array",
+            "title": "Playoff Leaders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team",
+          "season",
+          "games",
+          "leaders",
+          "playoff_leaders"
+        ],
+        "title": "TeamProfile",
+        "description": "Response for /teams/{team}?season=\u2026"
       },
       "ValidationError": {
         "properties": {
@@ -891,6 +4386,199 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WinProbPlay": {
+        "properties": {
+          "game_seconds_remaining": {
+            "type": "integer",
+            "title": "Game Seconds Remaining"
+          },
+          "qtr": {
+            "type": "integer",
+            "title": "Qtr"
+          },
+          "home_wp": {
+            "type": "number",
+            "title": "Home Wp"
+          },
+          "touchdown": {
+            "type": "integer",
+            "title": "Touchdown"
+          },
+          "interception": {
+            "type": "integer",
+            "title": "Interception"
+          },
+          "fumble_lost": {
+            "type": "integer",
+            "title": "Fumble Lost"
+          },
+          "posteam": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posteam"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_seconds_remaining",
+          "qtr",
+          "home_wp",
+          "touchdown",
+          "interception",
+          "fumble_lost",
+          "posteam",
+          "desc"
+        ],
+        "title": "WinProbPlay"
+      },
+      "WpaLeader": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "type": "string",
+            "title": "Player Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "wpa": {
+            "type": "number",
+            "title": "Wpa"
+          },
+          "games_played": {
+            "type": "integer",
+            "title": "Games Played"
+          },
+          "attempts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempts"
+          },
+          "carries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carries"
+          },
+          "receptions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "player_name",
+          "position",
+          "team",
+          "headshot_url",
+          "wpa",
+          "games_played"
+        ],
+        "title": "WpaLeader",
+        "description": "One row in passing/rushing/receiving WPA leaders.\n\nThe volume column (attempts/carries/receptions) varies per sub-list.\nOnly one is populated per row \u2014 the others are simply absent from\nthe SQL projection, so they remain optional + None."
+      },
+      "WpaLeaders": {
+        "properties": {
+          "passing": {
+            "items": {
+              "$ref": "#/components/schemas/WpaLeader"
+            },
+            "type": "array",
+            "title": "Passing"
+          },
+          "rushing": {
+            "items": {
+              "$ref": "#/components/schemas/WpaLeader"
+            },
+            "type": "array",
+            "title": "Rushing"
+          },
+          "receiving": {
+            "items": {
+              "$ref": "#/components/schemas/WpaLeader"
+            },
+            "type": "array",
+            "title": "Receiving"
+          }
+        },
+        "type": "object",
+        "required": [
+          "passing",
+          "rushing",
+          "receiving"
+        ],
+        "title": "WpaLeaders",
+        "description": "The full /wpa-leaders payload: three sub-lists."
       }
     }
   }

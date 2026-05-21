@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from database import query_to_dict
+from schemas.schedule import Game, GameDetail, ScheduleWeek
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, safe_query, team_sql
 
 router = APIRouter()
@@ -44,7 +45,7 @@ def attach_records(games: list[dict]) -> list[dict]:
     return games
 
 
-@router.get("/schedule")
+@router.get("/schedule", response_model=list[ScheduleWeek])
 def get_schedule(season: int = Query(2025)):
     rows = query_to_dict(
         """
@@ -66,7 +67,7 @@ def get_schedule(season: int = Query(2025)):
     return [{"week": w, "games": games} for w, games in sorted(grouped.items())]
 
 
-@router.get("/games")
+@router.get("/games", response_model=list[Game])
 def get_games(
     week: int = Query(..., ge=1, le=22),
     season: int = Query(2025),
@@ -106,7 +107,7 @@ def get_games(
     return rows
 
 
-@router.get("/games/{game_id}")
+@router.get("/games/{game_id}", response_model=GameDetail)
 def get_game(game_id: str):
     games = query_to_dict(
         """

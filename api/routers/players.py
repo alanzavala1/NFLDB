@@ -4,6 +4,8 @@ import math
 from fastapi import APIRouter, HTTPException, Query
 
 from database import query_to_dict
+from schemas.leaders import PlayerComparable
+from schemas.players import PlayerProfile
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, STAT_COLS, safe_query
 
 router = APIRouter()
@@ -369,7 +371,7 @@ def _get_snap_first_games(player_id: str, with_stats: bool = False) -> list[dict
     """, [player_id, player_id, player_id] + pgs_param)
 
 
-@router.get("/players/{player_id}")
+@router.get("/players/{player_id}", response_model=PlayerProfile)
 def get_player(player_id: str):
     profile_rows = query_to_dict(
         """
@@ -654,6 +656,6 @@ def _get_player_comparables(player_id: str, n: int = 8) -> list[dict]:
     return result
 
 
-@router.get("/players/{player_id}/comparables")
+@router.get("/players/{player_id}/comparables", response_model=list[PlayerComparable])
 def get_player_comparables(player_id: str, n: int = Query(default=8, ge=1, le=20)):
     return _get_player_comparables(player_id, n)

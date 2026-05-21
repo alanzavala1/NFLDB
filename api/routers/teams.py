@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, Query
 from config import CURRENT_SEASON
 from database import get_cursor, query_to_dict
 from routers.schedule import attach_records
-from schemas.teams import RosterPlayer
+from schemas.analytics import TeamAnalyticsResponse
+from schemas.teams import RosterPlayer, TeamProfile
 
 router = APIRouter()
 
@@ -41,7 +42,7 @@ _LEADER_COLS = """
 """
 
 
-@router.get("/teams/{team}")
+@router.get("/teams/{team}", response_model=TeamProfile)
 def get_team(team: str, season: int = Query(2025)):
     games = query_to_dict(
         """
@@ -365,7 +366,7 @@ def _get_team_analytics(season: int) -> list[dict]:
         return []
 
 
-@router.get("/team-analytics")
+@router.get("/team-analytics", response_model=TeamAnalyticsResponse)
 def get_team_analytics(season: int = Query(default=None)):
     if season is None:
         season = CURRENT_SEASON

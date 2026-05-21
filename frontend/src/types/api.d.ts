@@ -287,6 +287,213 @@ export interface components {
             /** Teams */
             teams: components["schemas"]["StandingsRow"][];
         };
+        /**
+         * Game
+         * @description A scheduled game; scores are null for unplayed games.
+         */
+        Game: {
+            /** Game Id */
+            game_id: string;
+            /** Season */
+            season: number;
+            /** Game Type */
+            game_type: string;
+            /** Week */
+            week: number;
+            /** Gameday */
+            gameday: string | null;
+            /** Gametime */
+            gametime: string | null;
+            /** Away Team */
+            away_team: string;
+            /** Home Team */
+            home_team: string;
+            /** Away Score */
+            away_score: number | null;
+            /** Home Score */
+            home_score: number | null;
+            /** Away Qb Name */
+            away_qb_name: string | null;
+            /** Home Qb Name */
+            home_qb_name: string | null;
+            /** Spread Line */
+            spread_line: number | null;
+            /** Total Line */
+            total_line: number | null;
+            /** Roof */
+            roof: string | null;
+            /** Surface */
+            surface: string | null;
+            /** Temp */
+            temp: number | null;
+            /** Wind */
+            wind: number | null;
+            /** Stadium */
+            stadium: string | null;
+            /** Overtime */
+            overtime: number | null;
+            /** Div Game */
+            div_game: number | null;
+            /** Away Record */
+            away_record?: string | null;
+            /** Home Record */
+            home_record?: string | null;
+        };
+        /**
+         * GameDetail
+         * @description Game detail returned by /games/{id}: game header + rosters + scoring + WP.
+         */
+        GameDetail: {
+            /** Game Id */
+            game_id: string;
+            /** Season */
+            season: number;
+            /** Game Type */
+            game_type: string;
+            /** Week */
+            week: number;
+            /** Gameday */
+            gameday: string | null;
+            /** Gametime */
+            gametime: string | null;
+            /** Away Team */
+            away_team: string;
+            /** Home Team */
+            home_team: string;
+            /** Away Score */
+            away_score: number | null;
+            /** Home Score */
+            home_score: number | null;
+            /** Away Qb Name */
+            away_qb_name: string | null;
+            /** Home Qb Name */
+            home_qb_name: string | null;
+            /** Spread Line */
+            spread_line: number | null;
+            /** Total Line */
+            total_line: number | null;
+            /** Roof */
+            roof: string | null;
+            /** Surface */
+            surface: string | null;
+            /** Temp */
+            temp: number | null;
+            /** Wind */
+            wind: number | null;
+            /** Stadium */
+            stadium: string | null;
+            /** Overtime */
+            overtime: number | null;
+            /** Div Game */
+            div_game: number | null;
+            /** Away Record */
+            away_record?: string | null;
+            /** Home Record */
+            home_record?: string | null;
+            /** Away */
+            away: components["schemas"]["GamePlayerStats"][];
+            /** Home */
+            home: components["schemas"]["GamePlayerStats"][];
+            /** Quarter Scores */
+            quarter_scores: components["schemas"]["QuarterScore"][];
+            /** Win Prob */
+            win_prob: components["schemas"]["WinProbPlay"][];
+        };
+        /**
+         * GamePlayerStats
+         * @description Per-game player line returned in /games/{id} under away[] / home[].
+         *
+         *     Stat columns come back as DOUBLE from DuckDB (DEFAULT 0), so they are
+         *     floats even when conceptually counts (touchdowns, attempts, etc.).
+         */
+        GamePlayerStats: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string;
+            /** Team */
+            team: string;
+            /** Week */
+            week: number;
+            /** Position */
+            position: string | null;
+            /** Jersey Number */
+            jersey_number: number | null;
+            /** Headshot Url */
+            headshot_url: string | null;
+            /** Attempts */
+            attempts: number;
+            /** Completions */
+            completions: number;
+            /** Pass Yards */
+            pass_yards: number;
+            /** Pass Tds */
+            pass_tds: number;
+            /** Interceptions Thrown */
+            interceptions_thrown: number;
+            /** Sacks Taken */
+            sacks_taken: number;
+            /** Pass Epa */
+            pass_epa: number;
+            /** Targets */
+            targets: number;
+            /** Receptions */
+            receptions: number;
+            /** Rec Yards */
+            rec_yards: number;
+            /** Rec Tds */
+            rec_tds: number;
+            /** Air Yards */
+            air_yards: number;
+            /** Yac */
+            yac: number;
+            /** Rec Epa */
+            rec_epa: number;
+            /** Carries */
+            carries: number;
+            /** Rush Yards */
+            rush_yards: number;
+            /** Rush Tds */
+            rush_tds: number;
+            /** Rush Epa */
+            rush_epa: number;
+            /** Solo Tackles */
+            solo_tackles: number;
+            /** Assist Tackles */
+            assist_tackles: number;
+            /** Tackles For Loss */
+            tackles_for_loss: number;
+            /** Sacks */
+            sacks: number;
+            /** Qb Hits */
+            qb_hits: number;
+            /** Def Interceptions */
+            def_interceptions: number;
+            /** Pass Breakups */
+            pass_breakups: number;
+            /** Forced Fumbles */
+            forced_fumbles: number;
+            /** Fumble Recoveries */
+            fumble_recoveries: number;
+            /** Fg Att */
+            fg_att: number;
+            /** Fg Made */
+            fg_made: number;
+            /** Xp Att */
+            xp_att: number;
+            /** Xp Made */
+            xp_made: number;
+            /** Punts */
+            punts: number;
+            /** Punt Yards */
+            punt_yards: number;
+            /** Punt Returns */
+            punt_returns: number;
+            /** Punt Return Yards */
+            punt_return_yards: number;
+            /** Punt Return Tds */
+            punt_return_tds: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -300,6 +507,96 @@ export interface components {
              */
             status: "ok";
         };
+        /**
+         * LeagueLeader
+         * @description One row per player in /leaders. Stat fields are season totals from
+         *     SUM() over player_game_stats, returned as DOUBLE.
+         *
+         *     All stat fields are required-and-non-null: the underlying columns have
+         *     DEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable
+         *     stats like RB pass_yards). Roster-joined fields (position/team) may be
+         *     null because the join is LEFT and roster data can be missing.
+         */
+        LeagueLeader: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string;
+            /** Position */
+            position: string | null;
+            /** Team */
+            team: string | null;
+            /** Headshot Url */
+            headshot_url: string | null;
+            /** Games Played */
+            games_played: number;
+            /** Attempts */
+            attempts: number;
+            /** Completions */
+            completions: number;
+            /** Pass Yards */
+            pass_yards: number;
+            /** Pass Tds */
+            pass_tds: number;
+            /** Interceptions Thrown */
+            interceptions_thrown: number;
+            /** Sacks Taken */
+            sacks_taken: number;
+            /** Pass Epa */
+            pass_epa: number;
+            /** Carries */
+            carries: number;
+            /** Rush Yards */
+            rush_yards: number;
+            /** Rush Tds */
+            rush_tds: number;
+            /** Rush Epa */
+            rush_epa: number;
+            /** Targets */
+            targets: number;
+            /** Receptions */
+            receptions: number;
+            /** Rec Yards */
+            rec_yards: number;
+            /** Rec Tds */
+            rec_tds: number;
+            /** Yac */
+            yac: number;
+            /** Air Yards */
+            air_yards: number;
+            /** Rec Epa */
+            rec_epa: number;
+            /** Solo Tackles */
+            solo_tackles: number;
+            /** Assist Tackles */
+            assist_tackles: number;
+            /** Tackles For Loss */
+            tackles_for_loss: number;
+            /** Sacks */
+            sacks: number;
+            /** Qb Hits */
+            qb_hits: number;
+            /** Def Interceptions */
+            def_interceptions: number;
+            /** Pass Breakups */
+            pass_breakups: number;
+            /** Forced Fumbles */
+            forced_fumbles: number;
+            /** Fumble Recoveries */
+            fumble_recoveries: number;
+            /** Fg Att */
+            fg_att: number;
+            /** Fg Made */
+            fg_made: number;
+            /** Xp Att */
+            xp_att: number;
+            /** Xp Made */
+            xp_made: number;
+            /** Punts */
+            punts: number;
+            /** Punt Yards */
+            punt_yards: number;
+        };
         /** LoadSeasonResponse */
         LoadSeasonResponse: {
             /** Season */
@@ -310,18 +607,360 @@ export interface components {
              */
             status: "loaded" | "queued" | "loading" | "error" | "available";
         };
-        /** RosterPlayer */
+        /**
+         * NgsStats
+         * @description Next Gen Stats per season. Fields populated depend on role.
+         *
+         *     NOTE: unlike most of our models, these sub-views are genuinely sparse —
+         *     a QB row only has passing fields, a WR row only has receiving fields.
+         *     The helper builds the dict from non-null SELECT results, so absent
+         *     fields mean "doesn't apply." Defaults are kept so each instance can
+         *     carry any subset.
+         */
+        NgsStats: {
+            /** Avg Time To Throw */
+            avg_time_to_throw?: number | null;
+            /** Adot */
+            adot?: number | null;
+            /** Avg Completed Air Yards */
+            avg_completed_air_yards?: number | null;
+            /** Cpoe */
+            cpoe?: number | null;
+            /** Aggressiveness */
+            aggressiveness?: number | null;
+            /** Expected Cmp Pct */
+            expected_cmp_pct?: number | null;
+            /** Ngs Passer Rating */
+            ngs_passer_rating?: number | null;
+            /** Rush Yoe */
+            rush_yoe?: number | null;
+            /** Rush Yoe Per Att */
+            rush_yoe_per_att?: number | null;
+            /** Rush Efficiency */
+            rush_efficiency?: number | null;
+            /** Avg Time To Los */
+            avg_time_to_los?: number | null;
+            /** Pct Vs 8 Defenders */
+            pct_vs_8_defenders?: number | null;
+            /** Avg Separation */
+            avg_separation?: number | null;
+            /** Avg Cushion */
+            avg_cushion?: number | null;
+            /** Avg Target Depth */
+            avg_target_depth?: number | null;
+            /** Avg Yac */
+            avg_yac?: number | null;
+            /** Avg Yac Above Exp */
+            avg_yac_above_exp?: number | null;
+            /** Catch Pct */
+            catch_pct?: number | null;
+            /** Air Yards Share */
+            air_yards_share?: number | null;
+        };
+        /**
+         * PlayerAdvStats
+         * @description Per-season advanced stats — sparse by player role.
+         */
+        PlayerAdvStats: {
+            /** Fumbles Lost */
+            fumbles_lost?: number | null;
+            /** Target Share */
+            target_share?: number | null;
+            /** Air Yards Share */
+            air_yards_share?: number | null;
+            /** Stuff Rate */
+            stuff_rate?: number | null;
+            /** Stuffed */
+            stuffed?: number | null;
+            /** Carries Total */
+            carries_total?: number | null;
+        };
+        /**
+         * PlayerComparable
+         * @description Cosine-similarity neighbor returned by /players/{id}/comparables.
+         */
+        PlayerComparable: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string;
+            /** Position */
+            position: string | null;
+            /** Team */
+            team: string | null;
+            /** Headshot Url */
+            headshot_url: string | null;
+            /** Similarity */
+            similarity: number;
+            /** Games */
+            games: number;
+            /** First Season */
+            first_season: number;
+            /** Last Season */
+            last_season: number;
+            /** Pass Yards */
+            pass_yards: number;
+            /** Pass Tds */
+            pass_tds: number;
+            /** Rush Yards */
+            rush_yards: number;
+            /** Rush Tds */
+            rush_tds: number;
+            /** Carries */
+            carries: number;
+            /** Rec Yards */
+            rec_yards: number;
+            /** Rec Tds */
+            rec_tds: number;
+            /** Targets */
+            targets: number;
+            /** Att */
+            att: number;
+            /** Cmp */
+            cmp: number;
+            /** Ints */
+            ints: number;
+        };
+        /**
+         * PlayerGame
+         * @description One row in the player's game log.
+         */
+        PlayerGame: {
+            /** Game Id */
+            game_id: string;
+            /** Season */
+            season: number;
+            /** Week */
+            week: number;
+            /** Team */
+            team: string;
+            /** Opponent */
+            opponent: string;
+            /**
+             * Location
+             * @enum {string}
+             */
+            location: "home" | "away";
+            /** Gameday */
+            gameday: string | null;
+            /** Away Score */
+            away_score: number | null;
+            /** Home Score */
+            home_score: number | null;
+            /** Result */
+            result: ("W" | "L" | "T") | null;
+            /** Game Type */
+            game_type: string;
+            /** Position */
+            position: string | null;
+            /** Jersey Number */
+            jersey_number: number | null;
+            /** Headshot Url */
+            headshot_url: string | null;
+            /** Attempts */
+            attempts: number;
+            /** Completions */
+            completions: number;
+            /** Pass Yards */
+            pass_yards: number;
+            /** Pass Tds */
+            pass_tds: number;
+            /** Interceptions Thrown */
+            interceptions_thrown: number;
+            /** Sacks Taken */
+            sacks_taken: number;
+            /** Pass Epa */
+            pass_epa: number;
+            /** Targets */
+            targets: number;
+            /** Receptions */
+            receptions: number;
+            /** Rec Yards */
+            rec_yards: number;
+            /** Rec Tds */
+            rec_tds: number;
+            /** Air Yards */
+            air_yards: number;
+            /** Yac */
+            yac: number;
+            /** Rec Epa */
+            rec_epa: number;
+            /** Carries */
+            carries: number;
+            /** Rush Yards */
+            rush_yards: number;
+            /** Rush Tds */
+            rush_tds: number;
+            /** Rush Epa */
+            rush_epa: number;
+            /** Solo Tackles */
+            solo_tackles: number;
+            /** Assist Tackles */
+            assist_tackles: number;
+            /** Tackles For Loss */
+            tackles_for_loss: number;
+            /** Sacks */
+            sacks: number;
+            /** Qb Hits */
+            qb_hits: number;
+            /** Def Interceptions */
+            def_interceptions: number;
+            /** Pass Breakups */
+            pass_breakups: number;
+            /** Forced Fumbles */
+            forced_fumbles: number;
+            /** Fumble Recoveries */
+            fumble_recoveries: number;
+            /** Fg Att */
+            fg_att: number;
+            /** Fg Made */
+            fg_made: number;
+            /** Xp Att */
+            xp_att: number;
+            /** Xp Made */
+            xp_made: number;
+            /** Punts */
+            punts: number;
+            /** Punt Yards */
+            punt_yards: number;
+            /** Punt Returns */
+            punt_returns: number;
+            /** Punt Return Yards */
+            punt_return_yards: number;
+            /** Punt Return Tds */
+            punt_return_tds: number;
+        };
+        /**
+         * PlayerProfile
+         * @description Full /players/{id} payload.
+         */
+        PlayerProfile: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string;
+            /** Position */
+            position: string | null;
+            /** Team */
+            team: string | null;
+            /** Jersey Number */
+            jersey_number: number | null;
+            /** Headshot Url */
+            headshot_url: string | null;
+            /** Height */
+            height: number | null;
+            /** Weight */
+            weight: number | null;
+            /** Age */
+            age: number | null;
+            /** College */
+            college: string | null;
+            /** Years Exp */
+            years_exp: number | null;
+            /** Entry Year */
+            entry_year: number | null;
+            /** Rookie Year */
+            rookie_year: number | null;
+            /** Draft Club */
+            draft_club: string | null;
+            /** Draft Number */
+            draft_number: number | null;
+            /** Games Played */
+            games_played: number;
+            /** Season Totals */
+            season_totals: {
+                [key: string]: number;
+            };
+            /** Games */
+            games: components["schemas"]["PlayerGame"][];
+            /** Ngs */
+            ngs: {
+                [key: string]: components["schemas"]["NgsStats"];
+            };
+            /** Snap Totals */
+            snap_totals: {
+                [key: string]: components["schemas"]["SnapTotals"];
+            };
+            /** Situational */
+            situational: {
+                [key: string]: components["schemas"]["SituationalStats"];
+            };
+            /** Wpa */
+            wpa: {
+                [key: string]: components["schemas"]["PlayerWpa"];
+            };
+            /** Adv Stats */
+            adv_stats: {
+                [key: string]: components["schemas"]["PlayerAdvStats"];
+            };
+        };
+        /**
+         * PlayerWpa
+         * @description Per-season WPA attribution. Sparse by role (passer/rusher/receiver).
+         */
+        PlayerWpa: {
+            /** Pass Wpa */
+            pass_wpa?: number | null;
+            /** Rec Wpa */
+            rec_wpa?: number | null;
+            /** Rush Wpa */
+            rush_wpa?: number | null;
+        };
+        /** QuarterScore */
+        QuarterScore: {
+            /** Qtr */
+            qtr: number;
+            /** Away */
+            away: number;
+            /** Home */
+            home: number;
+        };
+        /**
+         * RosterPlayer
+         * @description A player on a team's roster for a given season.
+         */
         RosterPlayer: {
             /** Player Id */
             player_id: string;
             /** Player Name */
             player_name: string;
             /** Position */
-            position?: string | null;
+            position: string | null;
             /** Jersey Number */
-            jersey_number?: number | null;
+            jersey_number: number | null;
             /** Headshot Url */
-            headshot_url?: string | null;
+            headshot_url: string | null;
+        };
+        /**
+         * ScheduleWeek
+         * @description A week of games returned by /schedule.
+         */
+        ScheduleWeek: {
+            /** Week */
+            week: number;
+            /** Games */
+            games: components["schemas"]["Game"][];
+        };
+        /**
+         * SearchResult
+         * @description A single search hit. `type` discriminates player vs team.
+         */
+        SearchResult: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "player" | "team";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Position */
+            position: string | null;
+            /** Team */
+            team: string | null;
+            /** Headshot Url */
+            headshot_url: string | null;
         };
         /** SeasonStatus */
         SeasonStatus: {
@@ -332,6 +971,71 @@ export interface components {
              * @enum {string}
              */
             status: "loaded" | "queued" | "loading" | "error" | "available";
+        };
+        /**
+         * SituationalStats
+         * @description Per-season situational splits — sparse by design. See NgsStats note.
+         */
+        SituationalStats: {
+            /** Lng Pass */
+            lng_pass?: number | null;
+            /** Lng Rush */
+            lng_rush?: number | null;
+            /** Lng Rec */
+            lng_rec?: number | null;
+            /** Rz Pass Att */
+            rz_pass_att?: number | null;
+            /** Rz Cmp */
+            rz_cmp?: number | null;
+            /** Rz Pass Tds */
+            rz_pass_tds?: number | null;
+            /** Rz Targets */
+            rz_targets?: number | null;
+            /** Rz Rec Tds */
+            rz_rec_tds?: number | null;
+            /** Rz Carries */
+            rz_carries?: number | null;
+            /** Rz Rush Tds */
+            rz_rush_tds?: number | null;
+            /** Third Pass Att */
+            third_pass_att?: number | null;
+            /** Third Pass Fd */
+            third_pass_fd?: number | null;
+            /** Third Targets */
+            third_targets?: number | null;
+            /** Third Rec Fd */
+            third_rec_fd?: number | null;
+            /** Third Carries */
+            third_carries?: number | null;
+            /** Third Rush Fd */
+            third_rush_fd?: number | null;
+            /** Fd Pass */
+            fd_pass?: number | null;
+            /** Fd Rec */
+            fd_rec?: number | null;
+            /** Fd Rush */
+            fd_rush?: number | null;
+        };
+        /**
+         * SnapTotals
+         * @description Per-season snap counts. snap_counts SQL always returns every column,
+         *     just NULL where the player has no snaps of that type.
+         */
+        SnapTotals: {
+            /** Season */
+            season: number;
+            /** Offense Snaps */
+            offense_snaps: number | null;
+            /** Defense Snaps */
+            defense_snaps: number | null;
+            /** St Snaps */
+            st_snaps: number | null;
+            /** Avg Offense Pct */
+            avg_offense_pct: number | null;
+            /** Avg Defense Pct */
+            avg_defense_pct: number | null;
+            /** Avg St Pct */
+            avg_st_pct: number | null;
         };
         /** StandingsRow */
         StandingsRow: {
@@ -357,11 +1061,271 @@ export interface components {
             div: string;
             /** Strk */
             strk: string;
-            /**
-             * Gb
-             * @default —
-             */
+            /** Gb */
             gb: string;
+        };
+        /**
+         * TeamAnalyticsResponse
+         * @description /team-analytics?season=… returns the season plus per-team rows.
+         */
+        TeamAnalyticsResponse: {
+            /** Season */
+            season: number;
+            /** League */
+            league: components["schemas"]["TeamAnalyticsRow"][];
+        };
+        /**
+         * TeamAnalyticsRow
+         * @description One row per team. Rank columns are 1-based with 1 = best (for that team).
+         *
+         *     Higher-is-better metrics use DESC ranks; lower-is-better metrics use ASC,
+         *     so rank=1 always means "best in the league" regardless of metric direction.
+         *
+         *     Most rate metrics can legitimately be NULL (e.g. PROE is NULL for seasons
+         *     before nflfastR added pass_oe; rz_td_pct is NULL for teams that never
+         *     reached the red zone), so all of them are required-but-nullable.
+         */
+        TeamAnalyticsRow: {
+            /** Team */
+            team: string;
+            /** Games */
+            games: number;
+            /** Wins */
+            wins: number;
+            /** Losses */
+            losses: number;
+            /** Ties */
+            ties: number;
+            /** Pf Total */
+            pf_total: number;
+            /** Pa Total */
+            pa_total: number;
+            /** Ppg */
+            ppg: number | null;
+            /** Papg */
+            papg: number | null;
+            /** Pt Diff Per Game */
+            pt_diff_per_game: number | null;
+            /** Pts Per Drive */
+            pts_per_drive: number | null;
+            /** Pts Per Drive Allowed */
+            pts_per_drive_allowed: number | null;
+            /** Total Drives */
+            total_drives: number | null;
+            /** Total Drives Allowed */
+            total_drives_allowed: number | null;
+            /** Rz Td Pct */
+            rz_td_pct: number | null;
+            /** Rz Td Pct Allowed */
+            rz_td_pct_allowed: number | null;
+            /** Off Turnovers Total */
+            off_turnovers_total: number;
+            /** Def Takeaways Total */
+            def_takeaways_total: number;
+            /** Turnover Diff Per Game */
+            turnover_diff_per_game: number | null;
+            /** Off Plays Count */
+            off_plays_count: number | null;
+            /** Off Epa Play */
+            off_epa_play: number | null;
+            /** Off Pass Epa */
+            off_pass_epa: number | null;
+            /** Off Rush Epa */
+            off_rush_epa: number | null;
+            /** Off Success Pct */
+            off_success_pct: number | null;
+            /** Off Explosive Pct */
+            off_explosive_pct: number | null;
+            /** Proe */
+            proe: number | null;
+            /** Third Down Pct */
+            third_down_pct: number | null;
+            /** Def Epa Play */
+            def_epa_play: number | null;
+            /** Def Pass Epa */
+            def_pass_epa: number | null;
+            /** Def Rush Epa */
+            def_rush_epa: number | null;
+            /** Def Success Pct */
+            def_success_pct: number | null;
+            /** Def Explosive Pct */
+            def_explosive_pct: number | null;
+            /** Def Sack Pct */
+            def_sack_pct: number | null;
+            /** Third Down Stop Pct */
+            third_down_stop_pct: number | null;
+            /** Ppg Rank */
+            ppg_rank: number | null;
+            /** Pts Per Drive Rank */
+            pts_per_drive_rank: number | null;
+            /** Off Epa Play Rank */
+            off_epa_play_rank: number | null;
+            /** Off Pass Epa Rank */
+            off_pass_epa_rank: number | null;
+            /** Off Rush Epa Rank */
+            off_rush_epa_rank: number | null;
+            /** Off Success Rank */
+            off_success_rank: number | null;
+            /** Off Explosive Rank */
+            off_explosive_rank: number | null;
+            /** Third Down Rank */
+            third_down_rank: number | null;
+            /** Rz Td Rank */
+            rz_td_rank: number | null;
+            /** Proe Rank */
+            proe_rank: number | null;
+            /** Papg Rank */
+            papg_rank: number | null;
+            /** Pts Per Drive Allowed Rank */
+            pts_per_drive_allowed_rank: number | null;
+            /** Def Epa Play Rank */
+            def_epa_play_rank: number | null;
+            /** Def Pass Epa Rank */
+            def_pass_epa_rank: number | null;
+            /** Def Rush Epa Rank */
+            def_rush_epa_rank: number | null;
+            /** Def Success Rank */
+            def_success_rank: number | null;
+            /** Def Explosive Rank */
+            def_explosive_rank: number | null;
+            /** Third Down Stop Rank */
+            third_down_stop_rank: number | null;
+            /** Rz Td Allowed Rank */
+            rz_td_allowed_rank: number | null;
+            /** Def Sack Rank */
+            def_sack_rank: number | null;
+            /** Pt Diff Rank */
+            pt_diff_rank: number | null;
+            /** To Diff Rank */
+            to_diff_rank: number | null;
+        };
+        /**
+         * TeamGame
+         * @description A team's schedule row inside /teams/{team}. Records walked forward
+         *     by attach_records() are required (always set on this endpoint).
+         */
+        TeamGame: {
+            /** Game Id */
+            game_id: string;
+            /** Season */
+            season: number;
+            /** Week */
+            week: number;
+            /** Gameday */
+            gameday: string | null;
+            /** Gametime */
+            gametime: string | null;
+            /** Away Team */
+            away_team: string;
+            /** Home Team */
+            home_team: string;
+            /** Away Score */
+            away_score: number | null;
+            /** Home Score */
+            home_score: number | null;
+            /** Stadium */
+            stadium: string | null;
+            /** Roof */
+            roof: string | null;
+            /** Surface */
+            surface: string | null;
+            /** Temp */
+            temp: number | null;
+            /** Wind */
+            wind: number | null;
+            /** Away Record */
+            away_record: string | null;
+            /** Home Record */
+            home_record: string | null;
+        };
+        /**
+         * TeamLeader
+         * @description Per-player season totals for one team. Returned twice on /teams/{team}:
+         *     once for regular season (leaders), once for playoffs (playoff_leaders).
+         */
+        TeamLeader: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string;
+            /** Position */
+            position: string | null;
+            /** Jersey Number */
+            jersey_number: number | null;
+            /** Headshot Url */
+            headshot_url: string | null;
+            /** Games Played */
+            games_played: number;
+            /** Attempts */
+            attempts: number;
+            /** Completions */
+            completions: number;
+            /** Pass Yards */
+            pass_yards: number;
+            /** Pass Tds */
+            pass_tds: number;
+            /** Interceptions Thrown */
+            interceptions_thrown: number;
+            /** Sacks Taken */
+            sacks_taken: number;
+            /** Pass Epa */
+            pass_epa: number;
+            /** Carries */
+            carries: number;
+            /** Rush Yards */
+            rush_yards: number;
+            /** Rush Tds */
+            rush_tds: number;
+            /** Rush Epa */
+            rush_epa: number;
+            /** Targets */
+            targets: number;
+            /** Receptions */
+            receptions: number;
+            /** Rec Yards */
+            rec_yards: number;
+            /** Rec Tds */
+            rec_tds: number;
+            /** Air Yards */
+            air_yards: number;
+            /** Yac */
+            yac: number;
+            /** Rec Epa */
+            rec_epa: number;
+            /** Solo Tackles */
+            solo_tackles: number;
+            /** Assist Tackles */
+            assist_tackles: number;
+            /** Tackles For Loss */
+            tackles_for_loss: number;
+            /** Sacks */
+            sacks: number;
+            /** Qb Hits */
+            qb_hits: number;
+            /** Def Interceptions */
+            def_interceptions: number;
+            /** Pass Breakups */
+            pass_breakups: number;
+            /** Forced Fumbles */
+            forced_fumbles: number;
+            /** Fumble Recoveries */
+            fumble_recoveries: number;
+        };
+        /**
+         * TeamProfile
+         * @description Response for /teams/{team}?season=…
+         */
+        TeamProfile: {
+            /** Team */
+            team: string;
+            /** Season */
+            season: number;
+            /** Games */
+            games: components["schemas"]["TeamGame"][];
+            /** Leaders */
+            leaders: components["schemas"]["TeamLeader"][];
+            /** Playoff Leaders */
+            playoff_leaders: components["schemas"]["TeamLeader"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -375,6 +1339,67 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WinProbPlay */
+        WinProbPlay: {
+            /** Game Seconds Remaining */
+            game_seconds_remaining: number;
+            /** Qtr */
+            qtr: number;
+            /** Home Wp */
+            home_wp: number;
+            /** Touchdown */
+            touchdown: number;
+            /** Interception */
+            interception: number;
+            /** Fumble Lost */
+            fumble_lost: number;
+            /** Posteam */
+            posteam: string | null;
+            /** Desc */
+            desc: string | null;
+        };
+        /**
+         * WpaLeader
+         * @description One row in passing/rushing/receiving WPA leaders.
+         *
+         *     The volume column (attempts/carries/receptions) varies per sub-list.
+         *     Only one is populated per row — the others are simply absent from
+         *     the SQL projection, so they remain optional + None.
+         */
+        WpaLeader: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string;
+            /** Position */
+            position: string | null;
+            /** Team */
+            team: string | null;
+            /** Headshot Url */
+            headshot_url: string | null;
+            /** Wpa */
+            wpa: number;
+            /** Games Played */
+            games_played: number;
+            /** Attempts */
+            attempts?: number | null;
+            /** Carries */
+            carries?: number | null;
+            /** Receptions */
+            receptions?: number | null;
+        };
+        /**
+         * WpaLeaders
+         * @description The full /wpa-leaders payload: three sub-lists.
+         */
+        WpaLeaders: {
+            /** Passing */
+            passing: components["schemas"]["WpaLeader"][];
+            /** Rushing */
+            rushing: components["schemas"]["WpaLeader"][];
+            /** Receiving */
+            receiving: components["schemas"]["WpaLeader"][];
         };
     };
     responses: never;
@@ -506,7 +1531,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScheduleWeek"][];
                 };
             };
             /** @description Validation Error */
@@ -538,7 +1563,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["Game"][];
                 };
             };
             /** @description Validation Error */
@@ -569,7 +1594,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GameDetail"];
                 };
             };
             /** @description Validation Error */
@@ -600,7 +1625,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PlayerProfile"];
                 };
             };
             /** @description Validation Error */
@@ -633,7 +1658,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PlayerComparable"][];
                 };
             };
             /** @description Validation Error */
@@ -666,7 +1691,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TeamProfile"];
                 };
             };
             /** @description Validation Error */
@@ -730,7 +1755,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TeamAnalyticsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -761,7 +1786,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LeagueLeader"][];
                 };
             };
             /** @description Validation Error */
@@ -792,7 +1817,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WpaLeaders"];
                 };
             };
             /** @description Validation Error */
@@ -854,7 +1879,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SearchResult"][];
                 };
             };
             /** @description Validation Error */

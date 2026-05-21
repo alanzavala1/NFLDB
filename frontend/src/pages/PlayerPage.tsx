@@ -19,8 +19,8 @@ function passerRating(cmp: number, att: number, yds: number, td: number, int_: n
 }
 function pct(a: number, b: number, dec = 1): string | null { return b > 0 ? (a / b * 100).toFixed(dec) : null }
 function ratio(y: number, a: number, dec = 1): string | null { return a > 0 ? (y / a).toFixed(dec) : null }
-function sfmt(x: number | undefined, dec = 1): string | null { if (x == null) return null; return `${x >= 0 ? '+' : ''}${x.toFixed(dec)}` }
-function dfmt(x: number | undefined, dec = 1): string | null { if (x == null) return null; return x.toFixed(dec) }
+function sfmt(x: number | null | undefined, dec = 1): string | null { if (x == null) return null; return `${x >= 0 ? '+' : ''}${x.toFixed(dec)}` }
+function dfmt(x: number | null | undefined, dec = 1): string | null { if (x == null) return null; return x.toFixed(dec) }
 
 // — aggregation —
 function sumGames(games: PlayerGame[]) {
@@ -214,7 +214,7 @@ type Col = {
 const QB_COLS: Col[] = [
   { key: 'g',    label: 'G',       kind: 'trad',                        cell: (_, g) => g },
   { key: 'snp',  label: 'SNP',     kind: 'snap',                        cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
-  { key: 'spct', label: 'SNP%',    kind: 'snap',                        cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
+  { key: 'spct', label: 'SNP%',    kind: 'snap',                        cell: (_, __, _n, sn) => sn ? `${(sn.avg_offense_pct ?? 0).toFixed(0)}%` : null },
   // Passing
   { key: 'cmp',  label: 'CMP',     kind: 'trad', group: 'Passing',      cell: t => t.completions },
   { key: 'att',  label: 'ATT',     kind: 'trad', group: 'Passing',      cell: t => t.attempts },
@@ -249,7 +249,7 @@ const QB_COLS: Col[] = [
 const RB_COLS: Col[] = [
   { key: 'g',    label: 'G',       kind: 'trad',                        cell: (_, g) => g },
   { key: 'snp',  label: 'SNP',     kind: 'snap',                        cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
-  { key: 'spct', label: 'SNP%',    kind: 'snap',                        cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
+  { key: 'spct', label: 'SNP%',    kind: 'snap',                        cell: (_, __, _n, sn) => sn ? `${(sn.avg_offense_pct ?? 0).toFixed(0)}%` : null },
   // Rushing
   { key: 'car',  label: 'CAR',     kind: 'trad', group: 'Rushing',      cell: t => t.carries },
   { key: 'ryds', label: 'YDS',     kind: 'trad', group: 'Rushing', highlight: true, cell: t => t.rush_yards },
@@ -282,7 +282,7 @@ const RB_COLS: Col[] = [
 const WR_COLS: Col[] = [
   { key: 'g',    label: 'G',         kind: 'trad',                      cell: (_, g) => g },
   { key: 'snp',  label: 'SNP',       kind: 'snap',                      cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
-  { key: 'spct', label: 'SNP%',      kind: 'snap',                      cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
+  { key: 'spct', label: 'SNP%',      kind: 'snap',                      cell: (_, __, _n, sn) => sn ? `${(sn.avg_offense_pct ?? 0).toFixed(0)}%` : null },
   // Receiving
   { key: 'tgt',  label: 'TGT',       kind: 'trad', group: 'Receiving',  cell: t => t.targets },
   { key: 'rec',  label: 'REC',       kind: 'trad', group: 'Receiving',  cell: t => t.receptions },
@@ -321,8 +321,8 @@ const WR_COLS: Col[] = [
 
 const DEF_COLS: Col[] = [
   { key: 'g',    label: 'G',    kind: 'trad', cell: (_, g) => g },
-  { key: 'snp',  label: 'SNP',  kind: 'snap', cell: (_, __, _n, sn) => sn ? (sn.defense_snaps > 0 ? sn.defense_snaps : sn.st_snaps) : null },
-  { key: 'spct', label: 'SNP%', kind: 'snap', cell: (_, __, _n, sn) => sn ? (sn.defense_snaps > 0 ? `${sn.avg_defense_pct.toFixed(0)}%` : `${sn.avg_st_pct.toFixed(0)}%`) : null },
+  { key: 'snp',  label: 'SNP',  kind: 'snap', cell: (_, __, _n, sn) => sn ? ((sn.defense_snaps ?? 0) > 0 ? sn.defense_snaps : sn.st_snaps) : null },
+  { key: 'spct', label: 'SNP%', kind: 'snap', cell: (_, __, _n, sn) => sn ? ((sn.defense_snaps ?? 0) > 0 ? `${(sn.avg_defense_pct ?? 0).toFixed(0)}%` : `${(sn.avg_st_pct ?? 0).toFixed(0)}%`) : null },
   { key: 'tot',  label: 'TOT',  kind: 'trad', highlight: true, cell: t => t.solo_tackles + t.assist_tackles },
   { key: 'solo', label: 'SOLO', kind: 'trad', cell: t => t.solo_tackles },
   { key: 'ast',  label: 'AST',  kind: 'trad', cell: t => t.assist_tackles },
@@ -336,7 +336,7 @@ const DEF_COLS: Col[] = [
 const K_COLS: Col[] = [
   { key: 'g',     label: 'G',    kind: 'trad',                   cell: (_, g) => g },
   { key: 'snp',   label: 'SNP',  kind: 'snap',                   cell: (_, __, _n, sn) => sn?.st_snaps ?? null },
-  { key: 'spct',  label: 'SNP%', kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${sn.avg_st_pct.toFixed(0)}%` : null },
+  { key: 'spct',  label: 'SNP%', kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${(sn.avg_st_pct ?? 0).toFixed(0)}%` : null },
   { key: 'fgm',   label: 'FG',   kind: 'trad', highlight: true,  cell: t => t.fg_att > 0 ? `${t.fg_made}/${t.fg_att}` : null },
   { key: 'fgpct', label: 'FG%',  kind: 'trad',                   cell: t => t.fg_att > 0 ? pct(t.fg_made, t.fg_att) : null },
   { key: 'xpm',   label: 'XP',   kind: 'trad',                   cell: t => t.xp_att > 0 ? `${t.xp_made}/${t.xp_att}` : null },
@@ -347,7 +347,7 @@ const K_COLS: Col[] = [
 const P_COLS: Col[] = [
   { key: 'g',    label: 'G',     kind: 'trad',                   cell: (_, g) => g },
   { key: 'snp',  label: 'SNP',   kind: 'snap',                   cell: (_, __, _n, sn) => sn?.st_snaps ?? null },
-  { key: 'spct', label: 'SNP%',  kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${sn.avg_st_pct.toFixed(0)}%` : null },
+  { key: 'spct', label: 'SNP%',  kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${(sn.avg_st_pct ?? 0).toFixed(0)}%` : null },
   { key: 'pnt',  label: 'PUNTS', kind: 'trad', highlight: true,  cell: t => t.punts > 0 ? t.punts : null },
   { key: 'pyds', label: 'YDS',   kind: 'trad',                   cell: t => t.punts > 0 ? t.punt_yards : null },
   { key: 'pavg', label: 'AVG',   kind: 'trad',                   cell: t => t.punts > 0 ? ratio(t.punt_yards, t.punts) : null },
@@ -357,7 +357,7 @@ const P_COLS: Col[] = [
 const OL_COLS: Col[] = [
   { key: 'g',    label: 'G',    kind: 'trad', cell: (_, g) => g },
   { key: 'snp',  label: 'SNP',  kind: 'snap', cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
-  { key: 'spct', label: 'SNP%', kind: 'snap', cell: (_, __, _n, sn) => sn ? `${sn.avg_offense_pct.toFixed(0)}%` : null },
+  { key: 'spct', label: 'SNP%', kind: 'snap', cell: (_, __, _n, sn) => sn ? `${(sn.avg_offense_pct ?? 0).toFixed(0)}%` : null },
 ]
 
 const OL_POSITIONS = new Set(['C', 'G', 'T', 'OT', 'OG', 'OL', 'LS', 'OC'])
