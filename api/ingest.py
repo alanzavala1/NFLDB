@@ -574,6 +574,15 @@ def run_ingest(seasons: list[int], log=print):
         n = team_analytics_builder.materialize(season)
         log(f"  team_season_analytics[{season}]: {n} rows")
 
+    # Rebuild player comparables — career stats shifted with the new ingest,
+    # so z-scores and neighbor rankings need to be recomputed across all
+    # players. Done once per ingest batch (not per season) to amortize cost.
+    log("\nRebuilding player comparables...")
+    import comparables_builder
+    summary_n, pairs_n = comparables_builder.materialize()
+    log(f"  player_career_summary: {summary_n} players")
+    log(f"  player_comparables:    {pairs_n} rows")
+
     log("\nDone.")
 
 

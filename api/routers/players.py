@@ -1,6 +1,4 @@
 """Player profile, advanced stats, and comparable-player endpoints."""
-import math
-
 from fastapi import APIRouter, HTTPException, Query
 
 from database import query_to_dict
@@ -474,188 +472,15 @@ CASE
     }
 
 
-# ── Comparable players (cosine similarity over z-scored per-game rates) ──────
 
-def _comp_pos_group(pos: str | None, att: int, carries: int, tgts: int) -> str:
-    if pos == 'QB': return 'QB'
-    if pos in ('RB', 'FB'): return 'RB'
-    if pos in ('WR', 'TE'): return 'WRTE'
-    if att > carries and att > tgts and att >= 50: return 'QB'
-    if carries >= tgts and carries >= 50: return 'RB'
-    if tgts >= 30: return 'WRTE'
-    return 'OTHER'
+# ── Comparable players ───────────────────────────────────────────────────────
+# Reads from materialized tables maintained by comparables_builder (run during
+# ingest). On a cold table the builder lazily rebuilds; thereafter the
+# endpoint is a single keyed JOIN.
 
-
-def _comp_feature_vec(r: dict, pg: str) -> list[float]:
-    g   = max(r['games'],   1)
-    att = max(r['att'],     1)
-    car = max(r['carries'], 1)
-    tgt = max(r['tgts'],    1)
-    rec = max(r['rec'],     1)
-    if pg == 'QB':
-        return [
-            r['cmp']      / att,
-            r['pass_yds'] / att,
-            r['pass_tds'] / att,
-            r['ints']     / att,
-            r['pass_epa'] / att,
-            r['rush_yds'] / g,
-            r['rush_tds'] / g,
-        ]
-    elif pg == 'RB':
-        return [
-            r['rush_yds'] / car,
-            r['rush_tds'] / car,
-            r['rush_yds'] / g,
-            r['rush_epa'] / car,
-            r['rec_yds']  / g,
-            r['rec']      / g,
-            r['tgts']     / g,
-        ]
-    else:
-        return [
-            r['rec']     / tgt,
-            r['rec_yds'] / rec,
-            r['rec_tds'] / rec,
-            r['rec_yds'] / g,
-            r['rec_epa'] / tgt,
-            r['air_yds'] / tgt,
-            r['yac']     / rec,
-        ]
-
-
-def _zscore_normalize(vecs: list[list[float]]) -> list[list[float]]:
-    if not vecs: return vecs
-    n_feat = len(vecs[0])
-    out = [list(v) for v in vecs]
-    for j in range(n_feat):
-        vals = [v[j] for v in vecs]
-        mu  = sum(vals) / len(vals)
-        std = math.sqrt(sum((x - mu) ** 2 for x in vals) / len(vals))
-        for i in range(len(out)):
-            out[i][j] = (out[i][j] - mu) / std if std > 0 else 0.0
-    return out
-
-
-def _cosine(a: list[float], b: list[float]) -> float:
-    dot   = sum(x * y for x, y in zip(a, b))
-    mag_a = math.sqrt(sum(x * x for x in a))
-    mag_b = math.sqrt(sum(x * x for x in b))
-    if mag_a == 0 or mag_b == 0: return 0.0
-    return dot / (mag_a * mag_b)
-
-
-def _get_player_comparables(player_id: str, n: int = 8) -> list[dict]:
-    rows = safe_query("""
-        WITH recent_roster AS (
-            SELECT player_id, position, team, headshot_url
-            FROM rosters
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY season DESC) = 1
-        ),
-        career AS (
-            SELECT
-                pgs.player_id,
-                MAX(pgs.player_name)          AS player_name,
-                COUNT(DISTINCT pgs.game_id)   AS games,
-                MIN(pgs.season)               AS first_season,
-                MAX(pgs.season)               AS last_season,
-                SUM(pgs.attempts)             AS att,
-                SUM(pgs.completions)          AS cmp,
-                SUM(pgs.pass_yards)           AS pass_yds,
-                SUM(pgs.pass_tds)             AS pass_tds,
-                SUM(pgs.interceptions_thrown) AS ints,
-                SUM(pgs.pass_epa)             AS pass_epa,
-                SUM(pgs.carries)              AS carries,
-                SUM(pgs.rush_yards)           AS rush_yds,
-                SUM(pgs.rush_tds)             AS rush_tds,
-                SUM(pgs.rush_epa)             AS rush_epa,
-                SUM(pgs.targets)              AS tgts,
-                SUM(pgs.receptions)           AS rec,
-                SUM(pgs.rec_yards)            AS rec_yds,
-                SUM(pgs.rec_tds)              AS rec_tds,
-                SUM(pgs.rec_epa)              AS rec_epa,
-                SUM(pgs.air_yards)            AS air_yds,
-                SUM(pgs.yac)                  AS yac
-            FROM player_game_stats pgs
-            JOIN schedules s ON pgs.game_id = s.game_id AND s.game_type = 'REG'
-            GROUP BY pgs.player_id
-            HAVING COUNT(DISTINCT pgs.game_id) >= 16
-        )
-        SELECT c.*, r.position, r.team, r.headshot_url
-        FROM career c
-        LEFT JOIN recent_roster r ON r.player_id = c.player_id
-    """)
-
-    if not rows:
-        return []
-
-    target = next((r for r in rows if r['player_id'] == player_id), None)
-    if target is None:
-        return []
-
-    tpg = _comp_pos_group(target.get('position'), target['att'], target['carries'], target['tgts'])
-    if tpg == 'OTHER':
-        return []
-
-    pool = [r for r in rows if _comp_pos_group(r.get('position'), r['att'], r['carries'], r['tgts']) == tpg]
-
-    # Minimum sample filters per position
-    min_att = {'QB': 200, 'RB': 0, 'WRTE': 0}
-    min_car = {'QB': 0, 'RB': 100, 'WRTE': 0}
-    min_tgt = {'QB': 0, 'RB': 0, 'WRTE': 50}
-    pool = [r for r in pool
-            if r['att'] >= min_att[tpg]
-            and r['carries'] >= min_car[tpg]
-            and r['tgts'] >= min_tgt[tpg]]
-
-    if len(pool) < 2:
-        return []
-
-    vecs = [_comp_feature_vec(r, tpg) for r in pool]
-    normed = _zscore_normalize(vecs)
-
-    target_idx = next((i for i, r in enumerate(pool) if r['player_id'] == player_id), None)
-    if target_idx is None:
-        return []
-
-    target_vec = normed[target_idx]
-
-    scored = []
-    for i, (r, v) in enumerate(zip(pool, normed)):
-        if r['player_id'] == player_id:
-            continue
-        sim = max(0.0, _cosine(target_vec, v))
-        scored.append((sim, r))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-
-    result = []
-    for sim, r in scored[:n]:
-        result.append({
-            'player_id':    r['player_id'],
-            'player_name':  r['player_name'],
-            'position':     r.get('position'),
-            'team':         r.get('team'),
-            'headshot_url': r.get('headshot_url'),
-            'similarity':   round(sim * 100, 1),
-            'games':        r['games'],
-            'first_season': r['first_season'],
-            'last_season':  r['last_season'],
-            'pass_yards':   r['pass_yds'],
-            'pass_tds':     r['pass_tds'],
-            'rush_yards':   r['rush_yds'],
-            'rush_tds':     r['rush_tds'],
-            'carries':      r['carries'],
-            'rec_yards':    r['rec_yds'],
-            'rec_tds':      r['rec_tds'],
-            'targets':      r['tgts'],
-            'att':          r['att'],
-            'cmp':          r['cmp'],
-            'ints':         r['ints'],
-        })
-    return result
+import comparables_builder
 
 
 @router.get("/players/{player_id}/comparables", response_model=list[PlayerComparable])
 def get_player_comparables(player_id: str, n: int = Query(default=8, ge=1, le=20)):
-    return _get_player_comparables(player_id, n)
+    return comparables_builder.read_or_materialize(player_id, n)

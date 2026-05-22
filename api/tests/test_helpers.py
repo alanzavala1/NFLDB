@@ -1,5 +1,9 @@
 """Unit tests for pure helper functions (no DB, no I/O)."""
-from routers.players import _comp_pos_group, _cosine, _zscore_normalize
+from comparables_builder import (
+    comp_pos_group as _comp_pos_group,
+    cosine as _cosine,
+    zscore_normalize as _zscore_normalize,
+)
 from routers.schedule import attach_records
 
 

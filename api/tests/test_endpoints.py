@@ -100,6 +100,23 @@ def test_team_analytics_creates_materialized_table(client, seeded_conn):
     assert "team_season_analytics" in tables
 
 
+def test_player_comparables_endpoint_returns_typed_shape(client):
+    """The endpoint must return the right shape even when the seeded data
+    has no players with >= 16 career games (so the materialized tables are
+    empty and the read returns [])."""
+    r = client.get("/players/00-BUF-QB1/comparables")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+def test_player_comparables_creates_materialized_tables(client, seeded_conn):
+    """First call lazily creates player_career_summary + player_comparables."""
+    client.get("/players/00-BUF-QB1/comparables")
+    tables = {r[0] for r in seeded_conn.execute("SHOW TABLES").fetchall()}
+    assert "player_career_summary" in tables
+    assert "player_comparables"   in tables
+
+
 def test_search_finds_player_and_team(client):
     r = client.get("/search?q=mahomes")
     assert r.status_code == 200
