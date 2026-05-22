@@ -380,10 +380,10 @@ function PlayerStats({ game }: { game: GameDetail }) {
   }
 
   const TH = (label: string) => (
-    <th className="py-2.5 px-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">{label}</th>
+    <th key={label} className="py-2.5 px-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">{label}</th>
   )
   const THL = (label: string) => (
-    <th className="py-2.5 px-4 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{label}</th>
+    <th key={label} className="py-2.5 px-4 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{label}</th>
   )
   const TD = (val: string | number, dim = false) => {
     const empty = val === 0 || val === '0'

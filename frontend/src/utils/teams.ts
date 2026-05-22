@@ -1,4 +1,7 @@
-// Maps nfl_data_py abbreviations → ESPN logo abbreviations
+// Maps nfl_data_py abbreviations → ESPN logo abbreviations.
+// nfl_data_py uses 3-letter alternates for some teams in the rosters table
+// (BLT/CLV/ARZ/HST/SL) that don't match the standard codes used elsewhere
+// — normalize them to the schedules-table abbreviations ESPN serves.
 const ABBREV_MAP: Record<string, string> = {
   // Current
   LA: 'LAR',
@@ -6,9 +9,14 @@ const ABBREV_MAP: Record<string, string> = {
   STL: 'LAR',   // St. Louis Rams
   SD:  'LAC',   // San Diego Chargers
   OAK: 'LV',    // Oakland Raiders
-  HOU: 'TEN',   // Houston Oilers (became Titans) — best approximation
   // Legacy names that ESPN still serves
   JAC: 'JAX',
+  // Alternate abbreviations that appear in the rosters table
+  BLT: 'BAL',   // Baltimore Ravens
+  CLV: 'CLE',   // Cleveland Browns
+  ARZ: 'ARI',   // Arizona Cardinals
+  HST: 'HOU',   // Houston Texans
+  SL:  'LAR',   // St. Louis Rams (now Rams)
 }
 
 export function teamLogoUrl(team: string): string {
@@ -36,6 +44,10 @@ const TEAM_NAMES: Record<string, string> = {
   // Historical
   OAK: 'Oakland Raiders',      SD:  'San Diego Chargers',
   STL: 'St. Louis Rams',       JAC: 'Jacksonville Jaguars',
+  // Alternate abbreviations that appear in the rosters table
+  BLT: 'Baltimore Ravens',     CLV: 'Cleveland Browns',
+  ARZ: 'Arizona Cardinals',    HST: 'Houston Texans',
+  SL:  'St. Louis Rams',
 }
 
 export function teamName(abbrev: string): string {
