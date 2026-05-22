@@ -78,6 +78,28 @@ def test_leaders_sums_across_games(client):
     assert allen["games_played"] == 3
 
 
+def test_team_analytics_endpoint(client):
+    """Endpoint returns the typed shape even when the underlying plays table
+    is absent — the materialized table is created (empty) and read."""
+    r = client.get("/team-analytics?season=2024")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["season"] == 2024
+    assert isinstance(body["league"], list)
+
+
+def test_team_analytics_creates_materialized_table(client, seeded_conn):
+    """First call lazily creates team_season_analytics.
+
+    This is the key behavior of read_or_materialize: the table doesn't
+    need to exist ahead of time. If it doesn't, we materialize on demand.
+    """
+    client.get("/team-analytics?season=2024")
+    # Table now exists
+    tables = {r[0] for r in seeded_conn.execute("SHOW TABLES").fetchall()}
+    assert "team_season_analytics" in tables
+
+
 def test_search_finds_player_and_team(client):
     r = client.get("/search?q=mahomes")
     assert r.status_code == 200

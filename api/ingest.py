@@ -566,6 +566,14 @@ def run_ingest(seasons: list[int], log=print):
     log(f"\nLoading advanced stats for {seasons}...")
     load_advanced_stats(conn, seasons, log=log)
 
+    # Materialize team-analytics so /team-analytics serves a precomputed
+    # SELECT instead of running a 150-line CTE per request.
+    log("\nMaterializing team analytics...")
+    import team_analytics_builder
+    for season in seasons:
+        n = team_analytics_builder.materialize(season)
+        log(f"  team_season_analytics[{season}]: {n} rows")
+
     log("\nDone.")
 
 
