@@ -15,12 +15,12 @@
  * names that the pages were already importing.
  */
 import type {
-  DivisionStandings, Game, GameDetail, GamePlayerStats, LeagueLeader,
-  NgsStats, PlayerAdvStats, PlayerComparable, PlayerGame, PlayerProfile,
-  PlayerWpa, RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus,
-  SituationalStats, SnapTotals, StandingsRow, TeamAnalyticsResponse,
-  TeamAnalyticsRow, TeamGame, TeamLeader, TeamProfile, WinProbPlay,
-  WpaLeader, WpaLeaders,
+  CombineData, DepthChartEntry, DivisionStandings, DraftInfo, Game,
+  GameDetail, GamePlayerStats, InjuryStatus, LeagueLeader, NgsStats,
+  PlayerAdvStats, PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa,
+  RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus, SituationalStats,
+  SnapTotals, StandingsRow, TeamAnalyticsResponse, TeamAnalyticsRow,
+  TeamGame, TeamLeader, TeamProfile, WinProbPlay, WpaLeader, WpaLeaders,
 } from './types'
 
 const BASE = '/api'
@@ -34,10 +34,11 @@ export const CURRENT_NFL_SEASON = ((): number => {
 // ── Generated types, re-exported under both their current names and the
 //     historical aliases so pages don't have to be touched on every rename ───
 export type {
-  DivisionStandings, Game, GameDetail, LeagueLeader, NgsStats,
-  PlayerAdvStats, PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa,
-  RosterPlayer, SearchResult, SituationalStats, SnapTotals, TeamGame,
-  TeamLeader, TeamProfile, WinProbPlay, WpaLeader, WpaLeaders,
+  CombineData, DepthChartEntry, DivisionStandings, DraftInfo, Game,
+  GameDetail, InjuryStatus, LeagueLeader, NgsStats, PlayerAdvStats,
+  PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa, RosterPlayer,
+  SearchResult, SituationalStats, SnapTotals, TeamGame, TeamLeader,
+  TeamProfile, WinProbPlay, WpaLeader, WpaLeaders,
 }
 
 export type SeasonEntry        = SeasonStatus
@@ -60,6 +61,10 @@ export const api = {
   player:        (playerId: string)            => get<PlayerProfile>(`/players/${playerId}`),
   team:          (abbrev: string, season: number) => get<TeamProfile>(`/teams/${abbrev}?season=${season}`),
   teamRoster:    (team: string, season: number) => get<RosterPlayer[]>(`/teams/${team}/roster?season=${season}`),
+  teamDepthChart: (team: string, season: number, week?: number) =>
+    get<DepthChartEntry[]>(`/teams/${team}/depth-chart?season=${season}${week != null ? `&week=${week}` : ''}`),
+  teamInjuries:  (team: string, season: number, week?: number) =>
+    get<InjuryStatus[]>(`/teams/${team}/injuries?season=${season}${week != null ? `&week=${week}` : ''}`),
   teamAnalytics: (season: number)              => get<TeamAnalyticsResponse>(`/team-analytics?season=${season}`),
   standings:     (season: number)              => get<DivisionStandings[]>(`/standings?season=${season}`),
   leaders:       (season: number)              => get<LeagueLeader[]>(`/leaders?season=${season}`),

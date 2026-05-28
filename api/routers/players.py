@@ -469,7 +469,72 @@ CASE
         "situational": _get_situational_stats(player_id),
         "wpa": _get_player_wpa(player_id),
         "adv_stats": _get_player_advanced_stats(player_id),
+        "draft":          _get_draft_info(player_id),
+        "combine":        _get_combine_data(player_id),
+        "current_injury": _get_current_injury(player_id),
+        "depth":          _get_current_depth(player_id),
     }
+
+
+# ── Supplemental vendor lookups ──────────────────────────────────────────────
+# Each returns the dict (or None) for a single player. safe_query returns []
+# on missing tables, so cold DBs that haven't ingested supplemental data
+# yet just see null fields rather than errors.
+
+def _get_draft_info(player_id: str) -> dict | None:
+    rows = safe_query("""
+        SELECT season, round, pick, team, college, age,
+               probowls, allpro, car_av, games
+        FROM draft_picks
+        WHERE gsis_id = ?
+        LIMIT 1
+    """, [player_id])
+    return rows[0] if rows else None
+
+
+def _get_combine_data(player_id: str) -> dict | None:
+    """Combine joins on pfr_id, not gsis_id — bridge via the id_map table."""
+    rows = safe_query("""
+        WITH p AS (SELECT pfr_id FROM id_map WHERE gsis_id = ? LIMIT 1)
+        SELECT c.draft_year, c.draft_round, c.draft_ovr, c.school, c.pos,
+               c.ht, c.wt, c.forty, c.bench, c.vertical,
+               c.broad_jump, c.cone, c.shuttle
+        FROM combine_data c
+        JOIN p ON p.pfr_id = c.pfr_id
+        LIMIT 1
+    """, [player_id])
+    return rows[0] if rows else None
+
+
+def _get_current_injury(player_id: str) -> dict | None:
+    """Most recent injury entry, regardless of how old. The UI annotates
+    with the season+week so users see whether it's current or historical."""
+    rows = safe_query("""
+        SELECT season, week, team,
+               report_primary_injury, report_secondary_injury, report_status,
+               practice_primary_injury, practice_status,
+               full_name, position, gsis_id
+        FROM injuries
+        WHERE gsis_id = ?
+        ORDER BY season DESC, week DESC
+        LIMIT 1
+    """, [player_id])
+    return rows[0] if rows else None
+
+
+def _get_current_depth(player_id: str) -> dict | None:
+    """Most recent depth-chart slot, formation-agnostic. UI surfaces it as
+    a badge (e.g. 'WR1' or 'LT')."""
+    rows = safe_query("""
+        SELECT season, week, club_code AS team, formation,
+               depth_position, depth_team,
+               gsis_id, full_name, position, jersey_number
+        FROM depth_charts
+        WHERE gsis_id = ?
+        ORDER BY season DESC, week DESC
+        LIMIT 1
+    """, [player_id])
+    return rows[0] if rows else None
 
 
 

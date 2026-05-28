@@ -14,9 +14,10 @@
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
 import { api } from './api'
 import type {
-  DivisionStandings, GameDetail, LeagueLeader, PlayerComparable,
-  PlayerProfile, RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus,
-  TeamAnalyticsResponse, TeamProfile, WpaLeaders,
+  DepthChartEntry, DivisionStandings, GameDetail, InjuryStatus,
+  LeagueLeader, PlayerComparable, PlayerProfile, RosterPlayer,
+  ScheduleWeek, SearchResult, SeasonStatus, TeamAnalyticsResponse,
+  TeamProfile, WpaLeaders,
 } from './types'
 
 // Past-season data is immutable, so override the global 5-minute staleTime
@@ -100,6 +101,34 @@ export function useTeamRoster(abbrev: string | undefined, season: number | null,
   return useQuery({
     queryKey: ['team-roster', abbrev, season] as const,
     queryFn: () => api.teamRoster(abbrev!, season!),
+    enabled: !!abbrev && season != null,
+    ...options,
+  })
+}
+
+export function useTeamDepthChart(
+  abbrev: string | undefined,
+  season: number | null,
+  week?: number,
+  options?: Options<DepthChartEntry[]>,
+) {
+  return useQuery({
+    queryKey: ['team-depth-chart', abbrev, season, week] as const,
+    queryFn: () => api.teamDepthChart(abbrev!, season!, week),
+    enabled: !!abbrev && season != null,
+    ...options,
+  })
+}
+
+export function useTeamInjuries(
+  abbrev: string | undefined,
+  season: number | null,
+  week?: number,
+  options?: Options<InjuryStatus[]>,
+) {
+  return useQuery({
+    queryKey: ['team-injuries', abbrev, season, week] as const,
+    queryFn: () => api.teamInjuries(abbrev!, season!, week),
     enabled: !!abbrev && season != null,
     ...options,
   })

@@ -464,9 +464,148 @@
         }
       }
     },
+    "/teams/{team}/depth-chart": {
+      "get": {
+        "summary": "Get Team Depth Chart",
+        "description": "Most recent depth chart for the team. If `week` is omitted, returns\nthe latest week we have data for in the given season.",
+        "operationId": "get_team_depth_chart_teams__team__depth_chart_get",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Team"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Season"
+            }
+          },
+          {
+            "name": "week",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Week"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DepthChartEntry"
+                  },
+                  "title": "Response Get Team Depth Chart Teams  Team  Depth Chart Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teams/{team}/injuries": {
+      "get": {
+        "summary": "Get Team Injuries",
+        "description": "Most recent injury report for the team. If `week` is omitted, returns\nthe latest week we have data for in the given season.",
+        "operationId": "get_team_injuries_teams__team__injuries_get",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Team"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Season"
+            }
+          },
+          {
+            "name": "week",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Week"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InjuryStatus"
+                  },
+                  "title": "Response Get Team Injuries Teams  Team  Injuries Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team-analytics": {
       "get": {
         "summary": "Get Team Analytics",
+        "description": "Read precomputed team analytics from the materialized table.\n\nThe heavy aggregation (150-line CTE over plays + schedules) used to run\non every request. It now runs once during ingest and writes to the\n`team_season_analytics` table; this endpoint is a simple keyed SELECT.\n\nIf the row is missing (fresh DB, never-ingested season), the builder\nlazily materializes on first hit so the system self-heals.",
         "operationId": "get_team_analytics_team_analytics_get",
         "parameters": [
           {
@@ -675,6 +814,279 @@
   },
   "components": {
     "schemas": {
+      "CombineData": {
+        "properties": {
+          "draft_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Year"
+          },
+          "draft_round": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Round"
+          },
+          "draft_ovr": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Ovr"
+          },
+          "school": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "School"
+          },
+          "pos": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pos"
+          },
+          "ht": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ht"
+          },
+          "wt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wt"
+          },
+          "forty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forty"
+          },
+          "bench": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bench"
+          },
+          "vertical": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vertical"
+          },
+          "broad_jump": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broad Jump"
+          },
+          "cone": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cone"
+          },
+          "shuttle": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shuttle"
+          }
+        },
+        "type": "object",
+        "required": [
+          "draft_year",
+          "draft_round",
+          "draft_ovr",
+          "school",
+          "pos",
+          "ht",
+          "wt",
+          "forty",
+          "bench",
+          "vertical",
+          "broad_jump",
+          "cone",
+          "shuttle"
+        ],
+        "title": "CombineData",
+        "description": "One row per combine participant. Heights are recorded as '6-2' strings\nby the source; we leave them as strings for display rather than coercing."
+      },
+      "DepthChartEntry": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "formation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formation"
+          },
+          "depth_position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth Position"
+          },
+          "depth_team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth Team"
+          },
+          "gsis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gsis Id"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "jersey_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jersey Number"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "week",
+          "team",
+          "formation",
+          "depth_position",
+          "depth_team",
+          "gsis_id",
+          "full_name",
+          "position",
+          "jersey_number"
+        ],
+        "title": "DepthChartEntry",
+        "description": "A weekly depth-chart slot. depth_team is \"1\"/\"2\"/\"3\", where \"1\" is\nthe starter at that depth_position."
+      },
       "DivisionStandings": {
         "properties": {
           "division": {
@@ -695,6 +1107,107 @@
           "teams"
         ],
         "title": "DivisionStandings"
+      },
+      "DraftInfo": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "round": {
+            "type": "integer",
+            "title": "Round"
+          },
+          "pick": {
+            "type": "integer",
+            "title": "Pick"
+          },
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "college": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "College"
+          },
+          "age": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          },
+          "probowls": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probowls"
+          },
+          "allpro": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allpro"
+          },
+          "car_av": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Car Av"
+          },
+          "games": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Games"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "round",
+          "pick",
+          "team",
+          "college",
+          "age",
+          "probowls",
+          "allpro",
+          "car_av",
+          "games"
+        ],
+        "title": "DraftInfo",
+        "description": "One row per drafted player from `draft_picks`. Career achievement\nfields (`probowls`, `allpro`, `car_av`) come pre-aggregated from PFR."
       },
       "Game": {
         "properties": {
@@ -1481,6 +1994,126 @@
           "status"
         ],
         "title": "HealthResponse"
+      },
+      "InjuryStatus": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "report_primary_injury": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Primary Injury"
+          },
+          "report_secondary_injury": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Secondary Injury"
+          },
+          "report_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Status"
+          },
+          "practice_primary_injury": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice Primary Injury"
+          },
+          "practice_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practice Status"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "gsis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gsis Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "week",
+          "team",
+          "report_primary_injury",
+          "report_secondary_injury",
+          "report_status",
+          "practice_primary_injury",
+          "practice_status",
+          "full_name",
+          "position",
+          "gsis_id"
+        ],
+        "title": "InjuryStatus",
+        "description": "A weekly injury report entry. We surface the most recent one for a\nplayer on the player view; a list for team/game views."
       },
       "LeagueLeader": {
         "properties": {
@@ -2673,6 +3306,46 @@
             },
             "type": "object",
             "title": "Adv Stats"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "combine": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CombineData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_injury": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InjuryStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "depth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepthChartEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2699,7 +3372,11 @@
           "snap_totals",
           "situational",
           "wpa",
-          "adv_stats"
+          "adv_stats",
+          "draft",
+          "combine",
+          "current_injury",
+          "depth"
         ],
         "title": "PlayerProfile",
         "description": "Full /players/{id} payload."

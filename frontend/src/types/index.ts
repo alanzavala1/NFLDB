@@ -52,3 +52,9 @@ export type PlayerAdvStats   = Schemas['PlayerAdvStats']
 // Team analytics
 export type TeamAnalyticsRow      = Schemas['TeamAnalyticsRow']
 export type TeamAnalyticsResponse = Schemas['TeamAnalyticsResponse']
+
+// Supplemental vendor data (Wave 1)
+export type DraftInfo       = Schemas['DraftInfo']
+export type CombineData     = Schemas['CombineData']
+export type InjuryStatus    = Schemas['InjuryStatus']
+export type DepthChartEntry = Schemas['DepthChartEntry']

@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from schemas.supplemental import CombineData, DepthChartEntry, DraftInfo, InjuryStatus
+
 
 class PlayerGame(BaseModel):
     """One row in the player's game log."""
@@ -189,3 +191,9 @@ class PlayerProfile(BaseModel):
     situational: dict[int, SituationalStats]
     wpa:         dict[int, PlayerWpa]
     adv_stats:   dict[int, PlayerAdvStats]
+
+    # Supplemental vendor data — all null if not yet ingested or not applicable
+    draft:          DraftInfo        | None
+    combine:        CombineData      | None
+    current_injury: InjuryStatus     | None  # most-recent-week injury, if from the same season as their last game
+    depth:          DepthChartEntry  | None  # most-recent-week depth chart slot, ditto

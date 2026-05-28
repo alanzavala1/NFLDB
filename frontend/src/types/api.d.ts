@@ -191,6 +191,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/teams/{team}/depth-chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Team Depth Chart
+         * @description Most recent depth chart for the team. If `week` is omitted, returns
+         *     the latest week we have data for in the given season.
+         */
+        get: operations["get_team_depth_chart_teams__team__depth_chart_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/{team}/injuries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Team Injuries
+         * @description Most recent injury report for the team. If `week` is omitted, returns
+         *     the latest week we have data for in the given season.
+         */
+        get: operations["get_team_injuries_teams__team__injuries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/team-analytics": {
         parameters: {
             query?: never;
@@ -198,7 +240,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Team Analytics */
+        /**
+         * Get Team Analytics
+         * @description Read precomputed team analytics from the materialized table.
+         *
+         *     The heavy aggregation (150-line CTE over plays + schedules) used to run
+         *     on every request. It now runs once during ingest and writes to the
+         *     `team_season_analytics` table; this endpoint is a simple keyed SELECT.
+         *
+         *     If the row is missing (fresh DB, never-ingested season), the builder
+         *     lazily materializes on first hit so the system self-heals.
+         */
         get: operations["get_team_analytics_team_analytics_get"];
         put?: never;
         post?: never;
@@ -280,12 +332,99 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * CombineData
+         * @description One row per combine participant. Heights are recorded as '6-2' strings
+         *     by the source; we leave them as strings for display rather than coercing.
+         */
+        CombineData: {
+            /** Draft Year */
+            draft_year: number | null;
+            /** Draft Round */
+            draft_round: number | null;
+            /** Draft Ovr */
+            draft_ovr: number | null;
+            /** School */
+            school: string | null;
+            /** Pos */
+            pos: string | null;
+            /** Ht */
+            ht: string | null;
+            /** Wt */
+            wt: number | null;
+            /** Forty */
+            forty: number | null;
+            /** Bench */
+            bench: number | null;
+            /** Vertical */
+            vertical: number | null;
+            /** Broad Jump */
+            broad_jump: number | null;
+            /** Cone */
+            cone: number | null;
+            /** Shuttle */
+            shuttle: number | null;
+        };
+        /**
+         * DepthChartEntry
+         * @description A weekly depth-chart slot. depth_team is "1"/"2"/"3", where "1" is
+         *     the starter at that depth_position.
+         */
+        DepthChartEntry: {
+            /** Season */
+            season: number;
+            /** Week */
+            week: number;
+            /** Team */
+            team: string;
+            /** Formation */
+            formation: string | null;
+            /** Depth Position */
+            depth_position: string | null;
+            /** Depth Team */
+            depth_team: string | null;
+            /** Gsis Id */
+            gsis_id: string | null;
+            /** Full Name */
+            full_name: string | null;
+            /** Position */
+            position: string | null;
+            /** Jersey Number */
+            jersey_number: string | null;
+        };
         /** DivisionStandings */
         DivisionStandings: {
             /** Division */
             division: string;
             /** Teams */
             teams: components["schemas"]["StandingsRow"][];
+        };
+        /**
+         * DraftInfo
+         * @description One row per drafted player from `draft_picks`. Career achievement
+         *     fields (`probowls`, `allpro`, `car_av`) come pre-aggregated from PFR.
+         */
+        DraftInfo: {
+            /** Season */
+            season: number;
+            /** Round */
+            round: number;
+            /** Pick */
+            pick: number;
+            /** Team */
+            team: string;
+            /** College */
+            college: string | null;
+            /** Age */
+            age: number | null;
+            /** Probowls */
+            probowls: number | null;
+            /** Allpro */
+            allpro: number | null;
+            /** Car Av */
+            car_av: number | null;
+            /** Games */
+            games: number | null;
         };
         /**
          * Game
@@ -506,6 +645,35 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /**
+         * InjuryStatus
+         * @description A weekly injury report entry. We surface the most recent one for a
+         *     player on the player view; a list for team/game views.
+         */
+        InjuryStatus: {
+            /** Season */
+            season: number;
+            /** Week */
+            week: number;
+            /** Team */
+            team: string;
+            /** Report Primary Injury */
+            report_primary_injury: string | null;
+            /** Report Secondary Injury */
+            report_secondary_injury: string | null;
+            /** Report Status */
+            report_status: string | null;
+            /** Practice Primary Injury */
+            practice_primary_injury: string | null;
+            /** Practice Status */
+            practice_status: string | null;
+            /** Full Name */
+            full_name: string | null;
+            /** Position */
+            position: string | null;
+            /** Gsis Id */
+            gsis_id: string | null;
         };
         /**
          * LeagueLeader
@@ -893,6 +1061,10 @@ export interface components {
             adv_stats: {
                 [key: string]: components["schemas"]["PlayerAdvStats"];
             };
+            draft: components["schemas"]["DraftInfo"] | null;
+            combine: components["schemas"]["CombineData"] | null;
+            current_injury: components["schemas"]["InjuryStatus"] | null;
+            depth: components["schemas"]["DepthChartEntry"] | null;
         };
         /**
          * PlayerWpa
@@ -1725,6 +1897,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RosterPlayer"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_team_depth_chart_teams__team__depth_chart_get: {
+        parameters: {
+            query?: {
+                season?: number;
+                week?: number | null;
+            };
+            header?: never;
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepthChartEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_team_injuries_teams__team__injuries_get: {
+        parameters: {
+            query?: {
+                season?: number;
+                week?: number | null;
+            };
+            header?: never;
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InjuryStatus"][];
                 };
             };
             /** @description Validation Error */
