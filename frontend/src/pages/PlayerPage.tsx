@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, PlayerComparable, SeasonEntry, LeagueLeader } from '../api'
+import type { PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader } from '../api'
+import { useLeaders, usePlayer, usePlayerComparables, useSeasons } from '../queries'
 import Nav, { backBtnCls } from '../components/Nav'
 import type { Crumb } from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
@@ -990,15 +992,7 @@ function ComparableCard({ p, pos }: { p: PlayerComparable; pos: string }) {
 }
 
 function ComparablesSection({ playerId, pos }: { playerId: string; pos: string }) {
-  const [comps, setComps] = useState<PlayerComparable[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    api.comparables(playerId)
-      .then(setComps)
-      .catch(() => setComps([]))
-      .finally(() => setLoading(false))
-  }, [playerId])
+  const { data: comps = [], isPending: loading } = usePlayerComparables(playerId)
 
   if (loading) return (
     <div className="mt-8">
@@ -1027,10 +1021,7 @@ export default function PlayerPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const fromGame = (location.state as any)?.fromGame
-  const [player, setPlayer] = useState<PlayerProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [seasonMap, setSeasonMap] = useState<Record<number, string>>({})
-  const [recentLeaders, setRecentLeaders] = useState<{ season: number; leaders: LeagueLeader[] } | null>(null)
+  const qc = useQueryClient()
 
   const statsRef = useRef<HTMLDivElement>(null)
   const advRef   = useRef<HTMLDivElement>(null)
@@ -1041,62 +1032,53 @@ export default function PlayerPage() {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  useEffect(() => {
-    if (!playerId) return
-    Promise.all([api.player(playerId), api.seasons()])
-      .then(([p, allSeasons]) => {
-        setPlayer(p)
-        setSeasonMap(Object.fromEntries(allSeasons.map(s => [s.season, s.status])))
-      })
-      .finally(() => setLoading(false))
-  }, [playerId])
+  const { data: player, isPending: loading } = usePlayer(playerId)
 
-  // Fetch league leaders for the player's most recent regular season so we can show "5th in NFL" context
+  // Poll seasons while any ingest is in-flight so the UI updates as
+  // seasons finish loading. TanStack handles dedup + cancellation.
+  const { data: seasonsList = [] } = useSeasons({
+    refetchInterval: (q): number | false => {
+      const d = q.state.data
+      return d?.some(s => s.status === 'loading' || s.status === 'queued') ? 4000 : false
+    },
+  })
+  const seasonMap = useMemo(
+    () => Object.fromEntries(seasonsList.map(s => [s.season, s.status])) as Record<number, string>,
+    [seasonsList],
+  )
+
+  // Most recent regular season the player appears in -> drives the "5th in NFL" context
+  const recentSeason = useMemo(() => {
+    if (!player) return null
+    const regSeasons = [...new Set(player.games.filter(g => g.game_type === 'REG').map(g => g.season))]
+    return regSeasons.length === 0 ? null : Math.max(...regSeasons)
+  }, [player])
+
+  const { data: recentLeadersData } = useLeaders(recentSeason)
+  const recentLeaders: { season: number; leaders: LeagueLeader[] } | null =
+    recentSeason != null && recentLeadersData ? { season: recentSeason, leaders: recentLeadersData } : null
+
+  // Fire-and-forget: queue any seasons we don't yet have for this player.
+  // The seasons poll above picks up the status changes; when newly-finished
+  // seasons would affect this player, we invalidate their query.
+  useEffect(() => {
+    if (!player || !player.entry_year) return
+    const loadedForPlayer = new Set(player.games.map(g => g.season))
+    for (let y = CURRENT_NFL_SEASON; y >= player.entry_year; y--) {
+      if (!loadedForPlayer.has(y) && seasonMap[y] === 'available') {
+        api.loadSeason(y)
+      }
+    }
+  }, [player?.player_id, player?.entry_year, seasonMap])
+
   useEffect(() => {
     if (!player) return
-    const regSeasons = [...new Set(player.games.filter(g => g.game_type === 'REG').map(g => g.season))]
-    if (regSeasons.length === 0) return
-    const recent = Math.max(...regSeasons)
-    api.leaders(recent)
-      .then(leaders => setRecentLeaders({ season: recent, leaders }))
-      .catch(() => setRecentLeaders(null))
-  }, [player?.player_id])
-
-  useEffect(() => {
-    if (!player || !player.entry_year) return
     const loadedForPlayer = new Set(player.games.map(g => g.season))
-    const toQueue: number[] = []
-    for (let y = CURRENT_NFL_SEASON; y >= player.entry_year; y--) {
-      if (!loadedForPlayer.has(y) && seasonMap[y] === 'available') toQueue.push(y)
-    }
-    if (toQueue.length === 0) return
-    toQueue.forEach(y => api.loadSeason(y))
-    setSeasonMap(prev => { const n = { ...prev }; toQueue.forEach(y => { n[y] = 'queued' }); return n })
-  }, [player?.player_id, player?.entry_year])
-
-  useEffect(() => {
-    if (!player || !player.entry_year) return
-    const entryYear = player.entry_year
-    const anyInFlight = Object.entries(seasonMap).some(([y, s]) =>
-      Number(y) >= entryYear && (s === 'loading' || s === 'queued')
+    const newlyDone = seasonsList.some(
+      s => s.status === 'loaded' && !loadedForPlayer.has(s.season) && s.season >= (player.entry_year ?? 0),
     )
-    if (!anyInFlight) return
-    const loadedForPlayer = new Set(player.games.map(g => g.season))
-    const interval = setInterval(async () => {
-      const allSeasons = await api.seasons().catch(() => [] as SeasonEntry[])
-      const updated = Object.fromEntries(allSeasons.map(s => [s.season, s.status]))
-      setSeasonMap(updated)
-      const newlyDone = allSeasons.filter(
-        s => s.season >= entryYear && !loadedForPlayer.has(s.season) && s.status === 'loaded'
-      )
-      if (newlyDone.length > 0) api.player(playerId!).then(setPlayer)
-      const stillInFlight = allSeasons.some(
-        s => s.season >= entryYear && (s.status === 'loading' || s.status === 'queued')
-      )
-      if (!stillInFlight) clearInterval(interval)
-    }, 4000)
-    return () => clearInterval(interval)
-  }, [player?.player_id, seasonMap])
+    if (newlyDone) qc.invalidateQueries({ queryKey: ['player', playerId] })
+  }, [seasonsList, player, playerId, qc])
 
   if (loading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
   if (!player) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Player not found.</p></div>
