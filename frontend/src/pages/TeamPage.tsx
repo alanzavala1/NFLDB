@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, Tooltip, Cell, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { api } from '../api'
 import type { TeamProfile, TeamGame, TeamLeader, SeasonEntry, RosterPlayer, TeamAnalyticsTeam } from '../api'
+import { useTeamDepthChart, useTeamInjuries } from '../queries'
 import Nav, { backBtnCls } from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
@@ -1095,6 +1096,98 @@ function TeamAnalytics({ team, season }: { team: string; season: number }) {
   )
 }
 
+// ── Current-week injury report + starting lineup ────────────────────────────
+// Both use vendor data loaded by load_supplemental_data — fall back to a
+// "Not yet available" empty state if the season hasn't been refreshed since
+// the supplemental ingest landed.
+
+function injuryToneClasses(status: string | null | undefined): string {
+  switch (status) {
+    case 'Out':           return 'bg-rose-950/40 border-rose-800/70 text-rose-300'
+    case 'Doubtful':      return 'bg-orange-950/40 border-orange-800/70 text-orange-300'
+    case 'Questionable':  return 'bg-amber-950/40 border-amber-800/70 text-amber-300'
+    case 'Probable':      return 'bg-emerald-950/40 border-emerald-800/70 text-emerald-300'
+    default:              return 'bg-gray-900 border-gray-800 text-gray-400'
+  }
+}
+
+function InjuryReportPanel({ team, season }: { team: string; season: number }) {
+  const { data: injuries = [], isPending } = useTeamInjuries(team, season)
+  if (isPending) return null
+  if (injuries.length === 0) return null
+
+  // injuries are already ordered server-side by severity
+  const headline = `Week ${injuries[0].week} Injury Report`
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
+        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{headline}</span>
+        <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{injuries.length} listed</span>
+      </div>
+      <ul className="divide-y divide-gray-800/60">
+        {injuries.map((inj, i) => (
+          <li key={`${inj.gsis_id}-${i}`} className="px-4 py-2.5 flex items-center gap-3 text-sm">
+            <span className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${injuryToneClasses(inj.report_status)}`}>
+              {inj.report_status ?? '—'}
+            </span>
+            <span className="shrink-0 text-[11px] text-gray-600 w-9 text-center font-bold">{inj.position ?? ''}</span>
+            <span className="flex-1 min-w-0 text-gray-200 truncate">{inj.full_name ?? '—'}</span>
+            <span className="text-xs text-gray-500 truncate max-w-[40%]">
+              {inj.report_primary_injury ?? '—'}
+              {inj.report_secondary_injury && <span className="text-gray-700"> · {inj.report_secondary_injury}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function StartingLineupPanel({ team, season }: { team: string; season: number }) {
+  const { data: depth = [], isPending } = useTeamDepthChart(team, season)
+  if (isPending) return null
+
+  const starters = depth.filter(d => d.depth_team === '1')
+  const offense = starters.filter(d => d.formation === 'Offense')
+  const defense = starters.filter(d => d.formation === 'Defense')
+
+  if (offense.length === 0 && defense.length === 0) return null
+
+  const week = depth[0]?.week
+  const headline = week ? `Week ${week} Starting Lineup` : 'Starting Lineup'
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
+        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{headline}</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-800/60">
+        {offense.length > 0 && <LineupColumn label="Offense" rows={offense} />}
+        {defense.length > 0 && <LineupColumn label="Defense" rows={defense} />}
+      </div>
+    </div>
+  )
+}
+
+function LineupColumn({ label, rows }: { label: string; rows: { depth_position: string | null; full_name: string | null; position: string | null }[] }) {
+  return (
+    <div className="p-3">
+      <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-1">{label}</div>
+      <ul className="space-y-0.5">
+        {rows.map((r, i) => (
+          <li key={`${r.depth_position}-${i}`} className="flex items-center gap-2 px-1 py-1 text-sm">
+            <span className="shrink-0 text-[10px] font-bold text-indigo-400 w-10 uppercase tracking-wider">
+              {r.depth_position ?? r.position ?? ''}
+            </span>
+            <span className="flex-1 min-w-0 text-gray-300 truncate">{r.full_name ?? '—'}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 // ── Season detail ────────────────────────────────────────────────────────────
 
 function SeasonDetail({ profile }: { profile: TeamProfile }) {
@@ -1134,6 +1227,10 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
       </div>
       <SeasonSummary profile={profile} />
       <TeamAnalytics team={profile.team} season={profile.season} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <InjuryReportPanel team={profile.team} season={profile.season} />
+        <StartingLineupPanel team={profile.team} season={profile.season} />
+      </div>
       <ScoreChart profile={profile} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col">

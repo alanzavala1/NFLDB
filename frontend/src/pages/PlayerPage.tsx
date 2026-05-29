@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader } from '../api'
+import type { PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader, CombineData, DepthChartEntry, DraftInfo, InjuryStatus } from '../api'
 import { useLeaders, usePlayer, usePlayerComparables, useSeasons } from '../queries'
 import Nav, { backBtnCls } from '../components/Nav'
 import type { Crumb } from '../components/Nav'
@@ -1015,6 +1015,134 @@ function ComparablesSection({ playerId, pos }: { playerId: string; pos: string }
   )
 }
 
+// — status strip: depth role + most-recent injury report —
+
+function injuryToneClasses(status: string | null | undefined): string {
+  switch (status) {
+    case 'Out':           return 'bg-rose-950/60 border-rose-800 text-rose-300'
+    case 'Doubtful':      return 'bg-orange-950/60 border-orange-800 text-orange-300'
+    case 'Questionable':  return 'bg-amber-950/60 border-amber-800 text-amber-300'
+    case 'Probable':      return 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+    default:              return 'bg-gray-900 border-gray-800 text-gray-400'
+  }
+}
+
+function StatusStrip({ depth, injury, latestPlayedSeason }: {
+  depth: DepthChartEntry | null
+  injury: InjuryStatus | null
+  latestPlayedSeason: number | null
+}) {
+  if (!depth && !injury) return null
+
+  // Only treat injury as "current" if it's from the player's latest played season.
+  // Otherwise label it as a historical report so users aren't confused.
+  const injuryIsCurrent = injury && latestPlayedSeason != null && injury.season === latestPlayedSeason
+  const depthIsCurrent  = depth  && latestPlayedSeason != null && depth.season  === latestPlayedSeason
+
+  return (
+    <div className="flex flex-wrap gap-2 mt-3">
+      {depth && depthIsCurrent && depth.depth_position && depth.depth_team === '1' && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-emerald-950/50 border border-emerald-800 text-emerald-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          Starting {depth.depth_position}
+        </span>
+      )}
+      {depth && depthIsCurrent && depth.depth_position && depth.depth_team !== '1' && (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-gray-900 border border-gray-800 text-gray-400">
+          {depth.depth_position} · {depth.depth_team === '2' ? 'Backup' : `Depth ${depth.depth_team}`}
+        </span>
+      )}
+      {injury && injury.report_status && (
+        <span
+          title={[injury.report_primary_injury, injury.report_secondary_injury].filter(Boolean).join(' / ')}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border ${injuryToneClasses(injury.report_status)}`}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+          {injuryIsCurrent ? injury.report_status : `${injury.report_status} (W${injury.week}, ${injury.season})`}
+          {injury.report_primary_injury && (
+            <span className="font-normal normal-case opacity-80">· {injury.report_primary_injury}</span>
+          )}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// — background card: draft + combine + PFR career achievements —
+
+function combineHasAny(c: CombineData | null): boolean {
+  if (!c) return false
+  return c.forty != null || c.vertical != null || c.bench != null
+      || c.broad_jump != null || c.cone != null || c.shuttle != null
+}
+
+function BackgroundCard({ draft, combine }: { draft: DraftInfo | null; combine: CombineData | null }) {
+  if (!draft && !combineHasAny(combine)) return null
+
+  const career: Array<{ label: string; value: string }> = []
+  if (draft) {
+    if (draft.car_av   != null) career.push({ label: 'Career AV',  value: String(Math.round(draft.car_av)) })
+    if (draft.probowls != null && draft.probowls > 0) career.push({ label: 'Pro Bowls', value: String(draft.probowls) })
+    if (draft.allpro   != null && draft.allpro   > 0) career.push({ label: 'All-Pro',   value: String(draft.allpro) })
+    if (draft.games    != null) career.push({ label: 'Games',      value: String(draft.games) })
+  }
+
+  return (
+    <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+      {draft && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Drafted</div>
+          <div className="text-sm text-gray-300">
+            <span className="font-black text-white">Round {draft.round}, Pick {draft.pick}</span>
+            <span className="text-gray-500"> · {draft.season}</span>
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            by <span className="text-gray-300 font-semibold">{draft.team}</span>
+            {draft.college && <span> · {draft.college}</span>}
+          </div>
+        </div>
+      )}
+
+      {career.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Career</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            {career.map(c => (
+              <div key={c.label} className="flex items-baseline justify-between">
+                <span className="text-[11px] text-gray-500">{c.label}</span>
+                <span className="text-sm font-bold text-white tabular-nums">{c.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {combineHasAny(combine) && combine && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Combine</div>
+          <div className="grid grid-cols-3 gap-x-3 gap-y-1.5">
+            {combine.forty      != null && <CombineStat label="40 yd"   value={combine.forty.toFixed(2)} />}
+            {combine.vertical   != null && <CombineStat label="Vert"    value={`${combine.vertical}"`} />}
+            {combine.bench      != null && <CombineStat label="Bench"   value={String(combine.bench)} />}
+            {combine.broad_jump != null && <CombineStat label="Broad"   value={`${combine.broad_jump}"`} />}
+            {combine.cone       != null && <CombineStat label="3-cone"  value={combine.cone.toFixed(2)} />}
+            {combine.shuttle    != null && <CombineStat label="Shuttle" value={combine.shuttle.toFixed(2)} />}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CombineStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
+      <span className="text-sm font-bold text-white tabular-nums">{value}</span>
+    </div>
+  )
+}
+
 // — page —
 export default function PlayerPage() {
   const { playerId } = useParams<{ playerId: string }>()
@@ -1193,6 +1321,13 @@ export default function PlayerPage() {
               </div>
             )}
 
+            {/* Status strip: starting role + injury report (current or historical) */}
+            <StatusStrip
+              depth={player.depth ?? null}
+              injury={player.current_injury ?? null}
+              latestPlayedSeason={allSeasons[0] ?? null}
+            />
+
             {/* Bio */}
             <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-gray-600">
               {player.height && <span>{player.height}</span>}
@@ -1203,6 +1338,9 @@ export default function PlayerPage() {
             </div>
           </div>
         </div>
+
+        {/* Background: draft pick + career achievements + combine */}
+        <BackgroundCard draft={player.draft ?? null} combine={player.combine ?? null} />
 
         {/* Highlights bar — regular season only */}
         {seasons.length > 0 && (
