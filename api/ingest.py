@@ -490,19 +490,26 @@ def load_supplemental_data(conn, seasons: list[int], log=print) -> None:
         log(f"    skipped: {e}")
 
     # ── Historical sources (full replace) ──────────────────────────────────
-    # Draft picks: pull a generous historical window so PlayerPage works for
-    # players drafted in any era we have rosters for.
-    draft_years = list(range(1999, max(seasons) + 1))
-    log(f"  Draft picks (years {draft_years[0]}-{draft_years[-1]})...")
+    # Draft picks and combine: pull a wide fixed window, NOT tied to the
+    # current ingest's seasons. Earlier we used range(1999, max(seasons)+1),
+    # which silently truncated these tables when a user re-ingested an old
+    # season (e.g. re-loading 2009 would replace draft_picks with only
+    # 1999-2009). Now the historical tables are always rebuilt with the
+    # complete range regardless of which season triggered the ingest.
+    _HISTORICAL_RANGE = list(range(1999, 2030))  # 2030 is a comfortable
+                                                 # forward cap; the source
+                                                 # naturally caps at the
+                                                 # latest available draft.
+    log(f"  Draft picks ({_HISTORICAL_RANGE[0]}+)...")
     try:
-        df = nfl_data_py.import_draft_picks(draft_years)
+        df = nfl_data_py.import_draft_picks(_HISTORICAL_RANGE)
         _replace_table(conn, "draft_picks", df, log=log)
     except Exception as e:
         log(f"    skipped: {e}")
 
-    log(f"  Combine data (years {draft_years[0]}-{draft_years[-1]})...")
+    log(f"  Combine data ({_HISTORICAL_RANGE[0]}+)...")
     try:
-        df = nfl_data_py.import_combine_data(draft_years)
+        df = nfl_data_py.import_combine_data(_HISTORICAL_RANGE)
         _replace_table(conn, "combine_data", df, log=log)
     except Exception as e:
         log(f"    skipped: {e}")
