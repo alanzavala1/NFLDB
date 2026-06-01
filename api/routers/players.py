@@ -482,9 +482,14 @@ CASE
 # yet just see null fields rather than errors.
 
 def _get_draft_info(player_id: str) -> dict | None:
+    # Vendor leaves car_av as NULL everywhere; w_av (Weighted Career AV) is
+    # the populated PFR metric. Surface w_av under the same response key
+    # so the frontend doesn't need to know about the rename.
     rows = safe_query("""
         SELECT season, round, pick, team, college, age,
-               probowls, allpro, car_av, games
+               probowls, allpro,
+               COALESCE(car_av, w_av) AS car_av,
+               games
         FROM draft_picks
         WHERE gsis_id = ?
         LIMIT 1
@@ -493,16 +498,26 @@ def _get_draft_info(player_id: str) -> dict | None:
 
 
 def _get_combine_data(player_id: str) -> dict | None:
-    """Combine joins on pfr_id, not gsis_id — bridge via the id_map table."""
+    """Combine joins on pfr_id, not gsis_id. id_map is the canonical bridge
+    but its pfr_id coverage is spotty for pre-2010 players (only ~60%).
+    draft_picks carries its own pfr_player_id at ~90% coverage, so fall
+    back to it when id_map comes up empty."""
     rows = safe_query("""
-        WITH p AS (SELECT pfr_id FROM id_map WHERE gsis_id = ? LIMIT 1)
+        WITH p AS (
+            SELECT COALESCE(
+                (SELECT pfr_player_id FROM draft_picks
+                  WHERE gsis_id = ? AND pfr_player_id IS NOT NULL LIMIT 1),
+                (SELECT pfr_id FROM id_map
+                  WHERE gsis_id = ? AND pfr_id IS NOT NULL LIMIT 1)
+            ) AS pfr_id
+        )
         SELECT c.draft_year, c.draft_round, c.draft_ovr, c.school, c.pos,
                c.ht, c.wt, c.forty, c.bench, c.vertical,
                c.broad_jump, c.cone, c.shuttle
-        FROM combine_data c
-        JOIN p ON p.pfr_id = c.pfr_id
+        FROM combine_data c, p
+        WHERE c.pfr_id = p.pfr_id
         LIMIT 1
-    """, [player_id])
+    """, [player_id, player_id])
     return rows[0] if rows else None
 
 
