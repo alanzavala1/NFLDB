@@ -1076,69 +1076,89 @@ function combineHasAny(c: CombineData | null): boolean {
       || c.broad_jump != null || c.cone != null || c.shuttle != null
 }
 
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
+}
+
+function BigStat({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</span>
+      <span className="text-2xl font-black text-white tabular-nums leading-tight mt-0.5">{value}</span>
+      {sub && <span className="text-[10px] text-gray-600 uppercase tracking-wider mt-0.5">{sub}</span>}
+    </div>
+  )
+}
+
 function BackgroundCard({ draft, combine }: { draft: DraftInfo | null; combine: CombineData | null }) {
   if (!draft && !combineHasAny(combine)) return null
 
   const career: Array<{ label: string; value: string }> = []
   if (draft) {
-    if (draft.car_av   != null) career.push({ label: 'Career AV',  value: String(Math.round(draft.car_av)) })
+    if (draft.car_av   != null) career.push({ label: 'AV',         value: String(Math.round(draft.car_av)) })
     if (draft.probowls != null && draft.probowls > 0) career.push({ label: 'Pro Bowls', value: String(draft.probowls) })
     if (draft.allpro   != null && draft.allpro   > 0) career.push({ label: 'All-Pro',   value: String(draft.allpro) })
-    if (draft.games    != null) career.push({ label: 'Games',      value: String(draft.games) })
+    if (draft.games    != null && draft.games    > 0) career.push({ label: 'Games',     value: String(draft.games) })
   }
 
   return (
     <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
       {draft && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Drafted</div>
-          <div className="text-sm text-gray-300">
-            <span className="font-black text-white">Round {draft.round}, Pick {draft.pick}</span>
-            <span className="text-gray-500"> · {draft.season}</span>
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
-            by <span className="text-gray-300 font-semibold">{draft.team}</span>
-            {draft.college && <span> · {draft.college}</span>}
+        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950/40 via-gray-900 to-gray-900 border border-indigo-900/60 rounded-xl p-5">
+          {/* Draft pick = hero treatment: big ordinal "1st Round", big pick number, drafting team's logo as visual anchor */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Drafted</div>
+              <div className="text-3xl font-black text-white leading-none">
+                {ordinal(draft.round)} <span className="text-indigo-300">Round</span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-5xl font-black text-white tabular-nums leading-none">#{draft.pick}</span>
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">overall · {draft.season}</span>
+              </div>
+              {draft.college && (
+                <div className="mt-3 text-xs text-gray-400">
+                  <span className="text-gray-600 uppercase tracking-wider text-[10px] font-bold">College</span>
+                  <span className="ml-2 text-gray-200 font-semibold">{draft.college}</span>
+                </div>
+              )}
+            </div>
+            <Link
+              to={`/teams/${draft.team}`}
+              className="shrink-0 flex flex-col items-center gap-1 hover:opacity-90 transition-opacity"
+              title={`Drafted by ${teamName(draft.team)}`}
+            >
+              <img src={teamLogoUrl(draft.team)} className="w-16 h-16 object-contain" alt="" />
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{draft.team}</span>
+            </Link>
           </div>
         </div>
       )}
 
       {career.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Career</div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-            {career.map(c => (
-              <div key={c.label} className="flex items-baseline justify-between">
-                <span className="text-[11px] text-gray-500">{c.label}</span>
-                <span className="text-sm font-bold text-white tabular-nums">{c.value}</span>
-              </div>
-            ))}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Career Achievements</div>
+          <div className={`grid gap-3 ${career.length >= 3 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+            {career.map(c => <BigStat key={c.label} label={c.label} value={c.value} />)}
           </div>
         </div>
       )}
 
       {combineHasAny(combine) && combine && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Combine</div>
-          <div className="grid grid-cols-3 gap-x-3 gap-y-1.5">
-            {combine.forty      != null && <CombineStat label="40 yd"   value={combine.forty.toFixed(2)} />}
-            {combine.vertical   != null && <CombineStat label="Vert"    value={`${combine.vertical}"`} />}
-            {combine.bench      != null && <CombineStat label="Bench"   value={String(combine.bench)} />}
-            {combine.broad_jump != null && <CombineStat label="Broad"   value={`${combine.broad_jump}"`} />}
-            {combine.cone       != null && <CombineStat label="3-cone"  value={combine.cone.toFixed(2)} />}
-            {combine.shuttle    != null && <CombineStat label="Shuttle" value={combine.shuttle.toFixed(2)} />}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Combine</div>
+          <div className="grid grid-cols-3 gap-3">
+            {combine.forty      != null && <BigStat label="40 yd"   value={combine.forty.toFixed(2)} sub="seconds" />}
+            {combine.vertical   != null && <BigStat label="Vert"    value={`${combine.vertical}″`} />}
+            {combine.bench      != null && <BigStat label="Bench"   value={String(combine.bench)} sub="reps" />}
+            {combine.broad_jump != null && <BigStat label="Broad"   value={`${combine.broad_jump}″`} />}
+            {combine.cone       != null && <BigStat label="3-cone"  value={combine.cone.toFixed(2)} sub="seconds" />}
+            {combine.shuttle    != null && <BigStat label="Shuttle" value={combine.shuttle.toFixed(2)} sub="seconds" />}
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function CombineStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
-      <span className="text-sm font-bold text-white tabular-nums">{value}</span>
     </div>
   )
 }
