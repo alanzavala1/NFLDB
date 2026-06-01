@@ -490,13 +490,18 @@ def load_supplemental_data(conn, seasons: list[int], log=print) -> None:
         log(f"    skipped: {e}")
 
     # ── Historical sources (full replace) ──────────────────────────────────
-    # Draft picks and combine: pull a wide fixed window, NOT tied to the
-    # current ingest's seasons. Earlier we used range(1999, max(seasons)+1),
-    # which silently truncated these tables when a user re-ingested an old
-    # season (e.g. re-loading 2009 would replace draft_picks with only
-    # 1999-2009). Now the historical tables are always rebuilt with the
-    # complete range regardless of which season triggered the ingest.
-    _HISTORICAL_RANGE = list(range(1999, 2030))  # 2030 is a comfortable
+    # Pull a wide fixed window, NOT tied to the current ingest's seasons.
+    # Earlier we used range(1999, max(seasons)+1), which silently truncated
+    # these tables when a user re-ingested an old season (e.g. re-loading
+    # 2009 would replace draft_picks with only 1999-2009). Now the
+    # historical tables are always rebuilt with the complete range
+    # regardless of which season triggered the ingest.
+    #
+    # Draft picks: vendor data starts at 1980, so go back that far to
+    # cover Brett Favre (1991), Peyton (1998), Randy Moss (1998), etc.
+    # Combine data: vendor data only starts at 2000; earlier years return
+    # empty, no harm in asking.
+    _HISTORICAL_RANGE = list(range(1980, 2030))  # 2030 is a comfortable
                                                  # forward cap; the source
                                                  # naturally caps at the
                                                  # latest available draft.
