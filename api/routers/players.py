@@ -66,6 +66,30 @@ def _get_ngs(player_id: str) -> dict:
         s = row.pop("season")
         result.setdefault(s, {}).update({k: v for k, v in row.items() if v is not None})
 
+    # CPOE fallback from play-by-play. NGS tracking starts at 2016 — without
+    # this, pre-2016 QBs (Favre, Romo, Brees through 2015, etc.) would have
+    # an empty cell where every other QB has a value. nflfastR computes
+    # cpoe per play with a statistical model covering 2006+, so use it to
+    # fill seasons that NGS doesn't already provide.
+    #
+    # NGS value wins when present (tracking-based, more authoritative for
+    # the years it covers); plays-derived only fills the gaps.
+    for row in safe_query("""
+        SELECT season,
+               ROUND(AVG(cpoe), 1) AS cpoe
+        FROM plays
+        WHERE passer_player_id = ?
+          AND pass_attempt = 1
+          AND season_type = 'REG'
+          AND cpoe IS NOT NULL
+        GROUP BY season
+        HAVING COUNT(*) >= 100
+    """, [player_id]):
+        s = int(row["season"])
+        d = result.setdefault(s, {})
+        if d.get("cpoe") is None and row["cpoe"] is not None:
+            d["cpoe"] = row["cpoe"]
+
     return result
 
 
