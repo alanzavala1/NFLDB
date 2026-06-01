@@ -1027,40 +1027,42 @@ function injuryToneClasses(status: string | null | undefined): string {
   }
 }
 
-function StatusStrip({ depth, injury, latestPlayedSeason }: {
+function StatusStrip({ depth, injury }: {
   depth: DepthChartEntry | null
   injury: InjuryStatus | null
-  latestPlayedSeason: number | null
 }) {
-  if (!depth && !injury) return null
+  // StatusStrip is intended as "what's going on with this player RIGHT NOW".
+  // For retired players, the most-recent depth and injury entries are
+  // years old and showing them as "Starting QB" / "Out" is misleading. Drop
+  // any data not from the current NFL season — if nothing survives, the
+  // strip doesn't render at all (correct behavior for retired players).
+  const depthCurrent  = depth  && depth.season  === CURRENT_NFL_SEASON ? depth  : null
+  const injuryCurrent = injury && injury.season === CURRENT_NFL_SEASON ? injury : null
 
-  // Only treat injury as "current" if it's from the player's latest played season.
-  // Otherwise label it as a historical report so users aren't confused.
-  const injuryIsCurrent = injury && latestPlayedSeason != null && injury.season === latestPlayedSeason
-  const depthIsCurrent  = depth  && latestPlayedSeason != null && depth.season  === latestPlayedSeason
+  if (!depthCurrent && !injuryCurrent) return null
 
   return (
     <div className="flex flex-wrap gap-2 mt-3">
-      {depth && depthIsCurrent && depth.depth_position && depth.depth_team === '1' && (
+      {depthCurrent && depthCurrent.depth_position && depthCurrent.depth_team === '1' && (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-emerald-950/50 border border-emerald-800 text-emerald-300">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          Starting {depth.depth_position}
+          Starting {depthCurrent.depth_position}
         </span>
       )}
-      {depth && depthIsCurrent && depth.depth_position && depth.depth_team !== '1' && (
+      {depthCurrent && depthCurrent.depth_position && depthCurrent.depth_team !== '1' && (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-gray-900 border border-gray-800 text-gray-400">
-          {depth.depth_position} · {depth.depth_team === '2' ? 'Backup' : `Depth ${depth.depth_team}`}
+          {depthCurrent.depth_position} · {depthCurrent.depth_team === '2' ? 'Backup' : `Depth ${depthCurrent.depth_team}`}
         </span>
       )}
-      {injury && injury.report_status && (
+      {injuryCurrent && injuryCurrent.report_status && (
         <span
-          title={[injury.report_primary_injury, injury.report_secondary_injury].filter(Boolean).join(' / ')}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border ${injuryToneClasses(injury.report_status)}`}
+          title={[injuryCurrent.report_primary_injury, injuryCurrent.report_secondary_injury].filter(Boolean).join(' / ')}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border ${injuryToneClasses(injuryCurrent.report_status)}`}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-current" />
-          {injuryIsCurrent ? injury.report_status : `${injury.report_status} (W${injury.week}, ${injury.season})`}
-          {injury.report_primary_injury && (
-            <span className="font-normal normal-case opacity-80">· {injury.report_primary_injury}</span>
+          {injuryCurrent.report_status}
+          {injuryCurrent.report_primary_injury && (
+            <span className="font-normal normal-case opacity-80">· {injuryCurrent.report_primary_injury}</span>
           )}
         </span>
       )}
@@ -1159,12 +1161,20 @@ function DraftCardContent({ player }: { player: PlayerProfile }) {
 function CareerCardContent({ player }: { player: PlayerProfile }) {
   const draft = player.draft
   const career: Array<{ label: string; value: string }> = []
+
+  // PFR-sourced fields (Pro Bowls, All-Pros, weighted career AV) only exist
+  // for drafted players — the upstream draft_picks dataset is keyed on the
+  // draft. UDFAs (Romo, Kurt Warner, Tony Romo, etc.) won't have these.
   if (draft) {
-    if (draft.car_av   != null) career.push({ label: 'AV',         value: String(Math.round(draft.car_av)) })
+    if (draft.car_av   != null && draft.car_av   > 0) career.push({ label: 'AV',         value: String(Math.round(draft.car_av)) })
     if (draft.probowls != null && draft.probowls > 0) career.push({ label: 'Pro Bowls', value: String(draft.probowls) })
     if (draft.allpro   != null && draft.allpro   > 0) career.push({ label: 'All-Pro',   value: String(draft.allpro) })
-    if (draft.games    != null && draft.games    > 0) career.push({ label: 'Games',     value: String(draft.games) })
   }
+
+  // Games played: prefer PFR's count, fall back to our own ingest count so
+  // UDFAs and any player missing from draft_picks still get a Games tile.
+  const games = (draft?.games != null && draft.games > 0) ? draft.games : player.games_played
+  if (games > 0) career.push({ label: 'Games', value: String(games) })
 
   return (
     <>
@@ -1409,7 +1419,6 @@ export default function PlayerPage() {
             <StatusStrip
               depth={player.depth ?? null}
               injury={player.current_injury ?? null}
-              latestPlayedSeason={allSeasons[0] ?? null}
             />
 
             {/* Bio */}
