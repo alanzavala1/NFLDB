@@ -52,6 +52,20 @@ class InjuryStatus(BaseModel):
     gsis_id: str | None             # exposed for team-wide views
 
 
+class PlayerAward(BaseModel):
+    """A single major award win for a player.
+
+    Sourced from the seeded `player_awards` table — major postseason
+    voting awards: MVP, OPOY, DPOY, OROY, DROY, CPOY. Joined back to
+    rosters on (player_name, season) during ingest so each row carries
+    the player's gsis_id when available.
+    """
+    season: int
+    award:  str   # 'MVP' | 'OPOY' | 'DPOY' | 'OROY' | 'DROY' | 'CPOY'
+    team:   str | None
+    position: str | None
+
+
 class DepthChartEntry(BaseModel):
     """A weekly depth-chart slot. depth_team is "1"/"2"/"3", where "1" is
     the starter at that depth_position."""

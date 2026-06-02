@@ -676,6 +676,42 @@ export interface components {
             gsis_id: string | null;
         };
         /**
+         * KickingStats
+         * @description Per-season kicker/punter splits derived from play-by-play — sparse by role.
+         *
+         *     Raw counts/totals are stored (not pre-computed rates) so the frontend can
+         *     aggregate a career row by simple summation and recompute averages against
+         *     the season-total attempt/punt counts it already has.
+         */
+        KickingStats: {
+            /** Fg Long */
+            fg_long?: number | null;
+            /** Fg 0 39 Made */
+            fg_0_39_made?: number | null;
+            /** Fg 0 39 Att */
+            fg_0_39_att?: number | null;
+            /** Fg 40 49 Made */
+            fg_40_49_made?: number | null;
+            /** Fg 40 49 Att */
+            fg_40_49_att?: number | null;
+            /** Fg 50 Made */
+            fg_50_made?: number | null;
+            /** Fg 50 Att */
+            fg_50_att?: number | null;
+            /** Fg Blocked */
+            fg_blocked?: number | null;
+            /** Punt Net Yards */
+            punt_net_yards?: number | null;
+            /** Punt Inside 20 */
+            punt_inside_20?: number | null;
+            /** Punt Touchbacks */
+            punt_touchbacks?: number | null;
+            /** Punt Long */
+            punt_long?: number | null;
+            /** Punt Blocked */
+            punt_blocked?: number | null;
+        };
+        /**
          * LeagueLeader
          * @description One row per player in /leaders. Stat fields are season totals from
          *     SUM() over player_game_stats, returned as DOUBLE.
@@ -842,6 +878,35 @@ export interface components {
             stuffed?: number | null;
             /** Carries Total */
             carries_total?: number | null;
+            /** Def Tds */
+            def_tds?: number | null;
+            /** Penalties */
+            penalties?: number | null;
+            /** Penalty Yards */
+            penalty_yards?: number | null;
+            /** False Starts */
+            false_starts?: number | null;
+            /** Holding */
+            holding?: number | null;
+        };
+        /**
+         * PlayerAward
+         * @description A single major award win for a player.
+         *
+         *     Sourced from the seeded `player_awards` table — major postseason
+         *     voting awards: MVP, OPOY, DPOY, OROY, DROY, CPOY. Joined back to
+         *     rosters on (player_name, season) during ingest so each row carries
+         *     the player's gsis_id when available.
+         */
+        PlayerAward: {
+            /** Season */
+            season: number;
+            /** Award */
+            award: string;
+            /** Team */
+            team: string | null;
+            /** Position */
+            position: string | null;
         };
         /**
          * PlayerComparable
@@ -1053,6 +1118,10 @@ export interface components {
             situational: {
                 [key: string]: components["schemas"]["SituationalStats"];
             };
+            /** Kicking */
+            kicking: {
+                [key: string]: components["schemas"]["KickingStats"];
+            };
             /** Wpa */
             wpa: {
                 [key: string]: components["schemas"]["PlayerWpa"];
@@ -1065,6 +1134,8 @@ export interface components {
             combine: components["schemas"]["CombineData"] | null;
             current_injury: components["schemas"]["InjuryStatus"] | null;
             depth: components["schemas"]["DepthChartEntry"] | null;
+            /** Awards */
+            awards: components["schemas"]["PlayerAward"][];
         };
         /**
          * PlayerWpa

@@ -5,15 +5,40 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import AUTO_LOAD_SEASONS, CURRENT_SEASON, FIRST_SEASON
-from database import query_to_dict
+from database import get_connection, query_to_dict
 from ingest_queue import queue_season, start_worker
 from routers import leaders, meta, players, schedule, teams
+
+
+def _ensure_player_awards() -> None:
+    """Build the player_awards table on startup if it's missing or empty.
+
+    The data is a static seed (see awards_seed.py) — refreshing it doesn't
+    require network calls, so we can do it transparently on every cold
+    boot. Skips if the table already has rows so subsequent restarts are
+    instant.
+    """
+    try:
+        conn = get_connection()
+        n = conn.execute(
+            "SELECT COUNT(*) FROM player_awards"
+        ).fetchone()[0] if any(
+            r[0] == 'player_awards' for r in conn.execute("SHOW TABLES").fetchall()
+        ) else 0
+        if n == 0:
+            import ingest
+            ingest._load_player_awards(conn)
+    except Exception as e:
+        print(f"awards seed load failed (non-fatal): {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start the single background ingest worker
     start_worker()
+
+    # Static seed data — populate on first boot if not already loaded
+    _ensure_player_awards()
 
     # Auto-queue the N most recent seasons that aren't already in the DB
     try:

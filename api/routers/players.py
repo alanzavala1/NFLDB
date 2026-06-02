@@ -271,6 +271,42 @@ def _get_player_advanced_stats(player_id: str) -> dict:
         if row["target_share"]    is not None: d["target_share"]    = float(row["target_share"])
         if row["air_yards_share"] is not None: d["air_yards_share"] = float(row["air_yards_share"])
 
+    # Penalties committed — most useful for OL, where the vendor data has no
+    # blocking box-score. False starts and offensive holding are the signature
+    # lineman infractions; total count + yards round it out. penalty_player_id
+    # is gsis-format so it joins directly on player_id.
+    for row in safe_query("""
+        SELECT season,
+            COUNT(*)                                                   AS penalties,
+            SUM(COALESCE(penalty_yards, 0))                            AS penalty_yards,
+            COUNT(*) FILTER (WHERE penalty_type = 'False Start')       AS false_starts,
+            COUNT(*) FILTER (WHERE penalty_type = 'Offensive Holding') AS holding
+        FROM plays
+        WHERE penalty = 1 AND penalty_player_id = ? AND season_type = 'REG'
+        GROUP BY season
+    """, [pid]):
+        s = int(row["season"])
+        d = result.setdefault(s, {})
+        d["penalties"]     = int(row["penalties"] or 0)
+        d["penalty_yards"] = int(row["penalty_yards"] or 0)
+        d["false_starts"]  = int(row["false_starts"] or 0)
+        d["holding"]       = int(row["holding"] or 0)
+
+    # Defensive touchdowns — INT or fumble returned for a score. Restricting to
+    # interception/fumble plays (not just return_touchdown=1) excludes punt and
+    # kickoff return TDs, isolating true pick-6 / scoop-and-score plays.
+    for row in safe_query("""
+        SELECT season, COUNT(*) AS def_tds
+        FROM plays
+        WHERE td_player_id = ? AND return_touchdown = 1
+          AND (interception = 1 OR fumble = 1)
+          AND season_type = 'REG'
+        GROUP BY season
+    """, [pid]):
+        s = int(row["season"])
+        if row["def_tds"]:
+            result.setdefault(s, {})["def_tds"] = int(row["def_tds"])
+
     # Stuff rate — % of rush carries stopped at or behind the line of scrimmage
     for row in safe_query("""
         SELECT season,
@@ -287,6 +323,65 @@ def _get_player_advanced_stats(player_id: str) -> dict:
         d["stuffed"]        = int(row["stuffed"] or 0)
         d["carries_total"]  = int(row["carries_total"] or 0)
         if row["stuff_rate"] is not None: d["stuff_rate"] = float(row["stuff_rate"])
+
+    return result
+
+
+def _get_kicking_stats(player_id: str) -> dict:
+    """Per-season kicker and punter splits from play-by-play.
+
+    Kickers: field goals by distance bucket (<40 / 40-49 / 50+), longest made,
+    blocked. Punters: net yards, inside-20, touchbacks, longest, blocked.
+    Raw counts are returned; the frontend computes rates/averages and the
+    career row by summation. Covers 1999+ (the span of the plays table).
+    """
+    result: dict[int, dict] = {}
+
+    # Kicker — field goals by distance. field_goal_result is 'made'/'missed'/'blocked'.
+    for row in safe_query("""
+        SELECT season,
+            MAX(CASE WHEN field_goal_result = 'made' THEN kick_distance END)                          AS fg_long,
+            COUNT(*) FILTER (WHERE kick_distance < 40)                                                 AS fg_0_39_att,
+            COUNT(*) FILTER (WHERE kick_distance < 40 AND field_goal_result = 'made')                  AS fg_0_39_made,
+            COUNT(*) FILTER (WHERE kick_distance BETWEEN 40 AND 49)                                    AS fg_40_49_att,
+            COUNT(*) FILTER (WHERE kick_distance BETWEEN 40 AND 49 AND field_goal_result = 'made')     AS fg_40_49_made,
+            COUNT(*) FILTER (WHERE kick_distance >= 50)                                                AS fg_50_att,
+            COUNT(*) FILTER (WHERE kick_distance >= 50 AND field_goal_result = 'made')                 AS fg_50_made,
+            COUNT(*) FILTER (WHERE field_goal_result = 'blocked')                                      AS fg_blocked
+        FROM plays
+        WHERE kicker_player_id = ? AND field_goal_attempt = 1 AND season_type = 'REG'
+        GROUP BY season
+    """, [player_id]):
+        s = int(row.pop("season"))
+        result.setdefault(s, {}).update(
+            {k: int(v) for k, v in row.items() if v is not None}
+        )
+
+    # Punter — net yards, placement. Net = gross − return − 20·touchbacks.
+    for row in safe_query("""
+        SELECT season,
+            COUNT(*)                                          AS punts,
+            SUM(kick_distance)                                AS gross_yards,
+            SUM(COALESCE(return_yards, 0))                    AS return_yards,
+            COUNT(*) FILTER (WHERE touchback = 1)             AS punt_touchbacks,
+            COUNT(*) FILTER (WHERE punt_inside_twenty = 1)    AS punt_inside_20,
+            MAX(kick_distance)                                AS punt_long,
+            COUNT(*) FILTER (WHERE punt_blocked = 1)          AS punt_blocked
+        FROM plays
+        WHERE punter_player_id = ? AND punt_attempt = 1 AND season_type = 'REG'
+        GROUP BY season
+    """, [player_id]):
+        s = int(row.pop("season"))
+        gross = row["gross_yards"] or 0
+        ret = row["return_yards"] or 0
+        tb = row["punt_touchbacks"] or 0
+        d = result.setdefault(s, {})
+        d["punt_net_yards"]  = int(gross - ret - 20 * tb)
+        d["punt_inside_20"]  = int(row["punt_inside_20"] or 0)
+        d["punt_touchbacks"] = int(tb)
+        if row["punt_long"] is not None:
+            d["punt_long"] = int(row["punt_long"])
+        d["punt_blocked"] = int(row["punt_blocked"] or 0)
 
     return result
 
@@ -491,12 +586,14 @@ CASE
         "ngs": _get_ngs(player_id),
         "snap_totals": _get_snap_totals(player_id),
         "situational": _get_situational_stats(player_id),
+        "kicking": _get_kicking_stats(player_id),
         "wpa": _get_player_wpa(player_id),
         "adv_stats": _get_player_advanced_stats(player_id),
         "draft":          _get_draft_info(player_id),
         "combine":        _get_combine_data(player_id),
         "current_injury": _get_current_injury(player_id),
         "depth":          _get_current_depth(player_id),
+        "awards":         _get_player_awards(player_id),
     }
 
 
@@ -559,6 +656,18 @@ def _get_current_injury(player_id: str) -> dict | None:
         LIMIT 1
     """, [player_id])
     return rows[0] if rows else None
+
+
+def _get_player_awards(player_id: str) -> list[dict]:
+    """All major postseason voting awards for a player, ordered season DESC.
+    Joins on gsis_id which is populated by the ingest-time name-to-roster
+    join in `_load_player_awards`."""
+    return safe_query("""
+        SELECT season, award, team, position
+        FROM player_awards
+        WHERE gsis_id = ?
+        ORDER BY season DESC, award
+    """, [player_id])
 
 
 def _get_current_depth(player_id: str) -> dict | None:

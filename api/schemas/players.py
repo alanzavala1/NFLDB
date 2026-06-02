@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from schemas.supplemental import CombineData, DepthChartEntry, DraftInfo, InjuryStatus
+from schemas.supplemental import CombineData, DepthChartEntry, DraftInfo, InjuryStatus, PlayerAward
 
 
 class PlayerGame(BaseModel):
@@ -147,6 +147,30 @@ class SituationalStats(BaseModel):
     fd_rush: int | None = None
 
 
+class KickingStats(BaseModel):
+    """Per-season kicker/punter splits derived from play-by-play — sparse by role.
+
+    Raw counts/totals are stored (not pre-computed rates) so the frontend can
+    aggregate a career row by simple summation and recompute averages against
+    the season-total attempt/punt counts it already has.
+    """
+    # Kicker: field goals by distance bucket
+    fg_long:       int | None = None   # longest made FG (yards)
+    fg_0_39_made:  int | None = None
+    fg_0_39_att:   int | None = None
+    fg_40_49_made: int | None = None
+    fg_40_49_att:  int | None = None
+    fg_50_made:    int | None = None
+    fg_50_att:     int | None = None
+    fg_blocked:    int | None = None
+    # Punter
+    punt_net_yards:  int | None = None   # total net yards; net avg = net_yards / punts
+    punt_inside_20:  int | None = None
+    punt_touchbacks: int | None = None
+    punt_long:       int | None = None
+    punt_blocked:    int | None = None
+
+
 class PlayerWpa(BaseModel):
     """Per-season WPA attribution. Sparse by role (passer/rusher/receiver)."""
     pass_wpa: float | None = None
@@ -162,6 +186,12 @@ class PlayerAdvStats(BaseModel):
     stuff_rate:      float | None = None
     stuffed:         int | None = None
     carries_total:   int | None = None
+    def_tds:         int | None = None
+    # Penalties (primarily surfaced for OL, where no blocking box-score exists)
+    penalties:       int | None = None
+    penalty_yards:   int | None = None
+    false_starts:    int | None = None
+    holding:         int | None = None
 
 
 class PlayerProfile(BaseModel):
@@ -189,6 +219,7 @@ class PlayerProfile(BaseModel):
     ngs:         dict[int, NgsStats]
     snap_totals: dict[int, SnapTotals]
     situational: dict[int, SituationalStats]
+    kicking:     dict[int, KickingStats]
     wpa:         dict[int, PlayerWpa]
     adv_stats:   dict[int, PlayerAdvStats]
 
@@ -197,3 +228,4 @@ class PlayerProfile(BaseModel):
     combine:        CombineData      | None
     current_injury: InjuryStatus     | None  # most-recent-week injury, if from the same season as their last game
     depth:          DepthChartEntry  | None  # most-recent-week depth chart slot, ditto
+    awards:         list[PlayerAward]        # major postseason voting awards, season DESC; [] when none

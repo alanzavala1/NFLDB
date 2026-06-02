@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader, CombineData, DepthChartEntry, InjuryStatus } from '../api'
+import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, KickingStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader, CombineData, DepthChartEntry, InjuryStatus } from '../api'
 import { useLeaders, usePlayer, usePlayerComparables, useSeasons } from '../queries'
 import Nav, { backBtnCls } from '../components/Nav'
 import type { Crumb } from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
-import { PAST_AWARDS, AWARD_LABEL, type AwardKey } from '../utils/awards'
+import { AWARD_LABEL, type AwardKey } from '../utils/awards'
 
 // — helpers —
 function passerRating(cmp: number, att: number, yds: number, td: number, int_: number): string | null {
@@ -33,6 +33,7 @@ function sumGames(games: PlayerGame[]) {
     targets: 0, receptions: 0, rec_yards: 0, rec_tds: 0, yac: 0, air_yards: 0, rec_epa: 0,
     solo_tackles: 0, assist_tackles: 0, tackles_for_loss: 0,
     sacks: 0, qb_hits: 0, def_interceptions: 0, pass_breakups: 0,
+    forced_fumbles: 0, fumble_recoveries: 0,
     fg_att: 0, fg_made: 0, xp_att: 0, xp_made: 0,
     punts: 0, punt_yards: 0,
   }
@@ -46,15 +47,10 @@ function sumGames(games: PlayerGame[]) {
 type Totals = ReturnType<typeof sumGames>
 
 // — awards lookup —
-function getPlayerAwards(playerName: string): Array<{ season: number; award: AwardKey }> {
-  const won: Array<{ season: number; award: AwardKey }> = []
-  for (const [season, list] of Object.entries(PAST_AWARDS)) {
-    for (const a of list) {
-      if (a.player === playerName) won.push({ season: Number(season), award: a.award })
-    }
-  }
-  return won.sort((a, b) => b.season - a.season)
-}
+// Awards are sourced from the player_awards backend table via the API
+// (player.awards on PlayerProfile). The old hardcoded PAST_AWARDS table
+// in src/utils/awards.ts is being retired; AWARD_LABEL still lives there
+// because it's a small display-only enum.
 
 function AwardBadge({ season, award }: { season: number; award: AwardKey }) {
   const isMvp = award === 'MVP'
@@ -209,7 +205,11 @@ function computeHighlightRanks(pos: string, playerId: string, leaders: LeagueLea
 type ColKind = 'trad' | 'adv' | 'ngs' | 'snap' | 'sit'
 type Col = {
   key: string; label: string; kind: ColKind; group?: string; wpaOnly?: boolean; signed?: boolean; highlight?: boolean
-  cell: (t: Totals, games: number, n?: NgsStats, sn?: SnapTotals, sit?: SituationalStats, w?: PlayerWpa, a?: PlayerAdvStats) => string | number | null
+  // `derived` marks trad columns whose value needs data beyond (totals, games)
+  // — e.g. play-by-play kicking splits. TeamSplits skips these since it only
+  // has per-team game totals, not the per-season derived dicts.
+  derived?: boolean
+  cell: (t: Totals, games: number, n?: NgsStats, sn?: SnapTotals, sit?: SituationalStats, w?: PlayerWpa, a?: PlayerAdvStats, k?: KickingStats) => string | number | null
 }
 
 // — column definitions —
@@ -333,17 +333,29 @@ const DEF_COLS: Col[] = [
   { key: 'int',  label: 'INT',  kind: 'trad', cell: t => t.def_interceptions > 0 ? t.def_interceptions : null },
   { key: 'pbu',  label: 'PBU',  kind: 'trad', cell: t => t.pass_breakups > 0 ? t.pass_breakups : null },
   { key: 'qbh',  label: 'QBH',  kind: 'trad', cell: t => t.qb_hits > 0 ? t.qb_hits : null },
+  { key: 'ff',   label: 'FF',   kind: 'trad', cell: t => t.forced_fumbles > 0 ? t.forced_fumbles : null },
+  { key: 'fr',   label: 'FR',   kind: 'trad', cell: t => t.fumble_recoveries > 0 ? t.fumble_recoveries : null },
+  { key: 'dtd',  label: 'TD',   kind: 'trad', derived: true, cell: (_, __, _n, _sn, _sit, _w, a) => a?.def_tds ? a.def_tds : null },
 ]
 
+const fgBucket = (m?: number | null, a?: number | null): string | null =>
+  a && a > 0 ? `${m ?? 0}/${a}` : null
+
 const K_COLS: Col[] = [
-  { key: 'g',     label: 'G',    kind: 'trad',                   cell: (_, g) => g },
-  { key: 'snp',   label: 'SNP',  kind: 'snap',                   cell: (_, __, _n, sn) => sn?.st_snaps ?? null },
-  { key: 'spct',  label: 'SNP%', kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${(sn.avg_st_pct ?? 0).toFixed(0)}%` : null },
-  { key: 'fgm',   label: 'FG',   kind: 'trad', highlight: true,  cell: t => t.fg_att > 0 ? `${t.fg_made}/${t.fg_att}` : null },
-  { key: 'fgpct', label: 'FG%',  kind: 'trad',                   cell: t => t.fg_att > 0 ? pct(t.fg_made, t.fg_att) : null },
-  { key: 'xpm',   label: 'XP',   kind: 'trad',                   cell: t => t.xp_att > 0 ? `${t.xp_made}/${t.xp_att}` : null },
-  { key: 'xppct', label: 'XP%',  kind: 'trad',                   cell: t => t.xp_att > 0 ? pct(t.xp_made, t.xp_att) : null },
-  { key: 'pts',   label: 'PTS',  kind: 'trad',                   cell: t => (t.fg_made * 3 + t.xp_made) > 0 ? t.fg_made * 3 + t.xp_made : null },
+  { key: 'g',     label: 'G',     kind: 'trad',                   cell: (_, g) => g },
+  { key: 'snp',   label: 'SNP',   kind: 'snap',                   cell: (_, __, _n, sn) => sn?.st_snaps ?? null },
+  { key: 'spct',  label: 'SNP%',  kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${(sn.avg_st_pct ?? 0).toFixed(0)}%` : null },
+  // Field goals — totals
+  { key: 'fgm',   label: 'FG',    kind: 'trad', group: 'Field Goals', highlight: true, cell: t => t.fg_att > 0 ? `${t.fg_made}/${t.fg_att}` : null },
+  { key: 'fgpct', label: 'FG%',   kind: 'trad', group: 'Field Goals', cell: t => t.fg_att > 0 ? pct(t.fg_made, t.fg_att) : null },
+  { key: 'lng',   label: 'LNG',   kind: 'trad', group: 'Field Goals', derived: true, cell: (_, __, _n, _sn, _sit, _w, _a, k) => k?.fg_long ?? null },
+  // Field goals — by distance bucket (the signature kicker split)
+  { key: 'fg39',  label: '<40',   kind: 'trad', group: 'By Distance', derived: true, cell: (_, __, _n, _sn, _sit, _w, _a, k) => fgBucket(k?.fg_0_39_made, k?.fg_0_39_att) },
+  { key: 'fg49',  label: '40-49', kind: 'trad', group: 'By Distance', derived: true, cell: (_, __, _n, _sn, _sit, _w, _a, k) => fgBucket(k?.fg_40_49_made, k?.fg_40_49_att) },
+  { key: 'fg50',  label: '50+',   kind: 'trad', group: 'By Distance', derived: true, cell: (_, __, _n, _sn, _sit, _w, _a, k) => fgBucket(k?.fg_50_made, k?.fg_50_att) },
+  // Extra points & scoring
+  { key: 'xpm',   label: 'XP',    kind: 'trad', cell: t => t.xp_att > 0 ? `${t.xp_made}/${t.xp_att}` : null },
+  { key: 'pts',   label: 'PTS',   kind: 'trad', cell: t => (t.fg_made * 3 + t.xp_made) > 0 ? t.fg_made * 3 + t.xp_made : null },
 ]
 
 const P_COLS: Col[] = [
@@ -351,15 +363,24 @@ const P_COLS: Col[] = [
   { key: 'snp',  label: 'SNP',   kind: 'snap',                   cell: (_, __, _n, sn) => sn?.st_snaps ?? null },
   { key: 'spct', label: 'SNP%',  kind: 'snap',                   cell: (_, __, _n, sn) => sn ? `${(sn.avg_st_pct ?? 0).toFixed(0)}%` : null },
   { key: 'pnt',  label: 'PUNTS', kind: 'trad', highlight: true,  cell: t => t.punts > 0 ? t.punts : null },
-  { key: 'pyds', label: 'YDS',   kind: 'trad',                   cell: t => t.punts > 0 ? t.punt_yards : null },
   { key: 'pavg', label: 'AVG',   kind: 'trad',                   cell: t => t.punts > 0 ? ratio(t.punt_yards, t.punts) : null },
-  { key: 'pypg', label: 'YDS/G', kind: 'trad',                   cell: (t, g) => t.punts > 0 ? ratio(t.punt_yards, g) : null },
+  // Net average and placement (derived) — what actually separates punters
+  { key: 'pnet', label: 'NET',   kind: 'trad', group: 'Net & Placement', derived: true, cell: (t, _g, _n, _sn, _sit, _w, _a, k) => t.punts > 0 && k?.punt_net_yards != null ? ratio(k.punt_net_yards, t.punts) : null },
+  { key: 'plng', label: 'LNG',   kind: 'trad', group: 'Net & Placement', derived: true, cell: (_, __, _n, _sn, _sit, _w, _a, k) => k?.punt_long ?? null },
+  { key: 'pin20',label: 'IN20',  kind: 'trad', group: 'Net & Placement', derived: true, cell: (_, __, _n, _sn, _sit, _w, _a, k) => k?.punt_inside_20 ?? null },
+  { key: 'ptb',  label: 'TB',    kind: 'trad', group: 'Net & Placement', derived: true, cell: (_, __, _n, _sn, _sit, _w, _a, k) => k?.punt_touchbacks ?? null },
 ]
 
 const OL_COLS: Col[] = [
-  { key: 'g',    label: 'G',    kind: 'trad', cell: (_, g) => g },
-  { key: 'snp',  label: 'SNP',  kind: 'snap', cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
-  { key: 'spct', label: 'SNP%', kind: 'snap', cell: (_, __, _n, sn) => sn ? `${(sn.avg_offense_pct ?? 0).toFixed(0)}%` : null },
+  { key: 'g',    label: 'G',     kind: 'trad', cell: (_, g) => g },
+  { key: 'snp',  label: 'SNP',   kind: 'snap', cell: (_, __, _n, sn) => sn ? sn.offense_snaps : null },
+  { key: 'spct', label: 'SNP%',  kind: 'snap', cell: (_, __, _n, sn) => sn ? `${(sn.avg_offense_pct ?? 0).toFixed(0)}%` : null },
+  // Penalties — the only individual accountability stat the vendor data carries
+  // for linemen. Grouped so the table reads as a real position view, not a stub.
+  { key: 'pen',  label: 'PEN',   kind: 'trad', group: 'Penalties', derived: true, cell: (_, __, _n, sn, _sit, _w, a) => a?.penalties ?? (sn ? 0 : null) },
+  { key: 'peny', label: 'YDS',   kind: 'trad', group: 'Penalties', derived: true, cell: (_, __, _n, sn, _sit, _w, a) => a?.penalty_yards ?? (sn ? 0 : null) },
+  { key: 'fs',   label: 'FS',    kind: 'trad', group: 'Penalties', derived: true, cell: (_, __, _n, sn, _sit, _w, a) => a?.false_starts ?? (sn ? 0 : null) },
+  { key: 'hold', label: 'HOLD',  kind: 'trad', group: 'Penalties', derived: true, cell: (_, __, _n, sn, _sit, _w, a) => a?.holding ?? (sn ? 0 : null) },
 ]
 
 const OL_POSITIONS = new Set(['C', 'G', 'T', 'OT', 'OG', 'OL', 'LS', 'OC'])
@@ -485,12 +506,13 @@ function aggregateSituational(situational: Record<number, SituationalStats>): Si
 }
 
 // — career stats table —
-function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, advStats, position, onlyKinds, showGroupHeaders = true }: {
+function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking, wpa, advStats, position, onlyKinds, showGroupHeaders = true }: {
   seasons: number[]
   bySeason: Record<number, PlayerGame[]>
   ngs: Record<number, NgsStats>
   snapTotals: Record<number, SnapTotals>
   situational: Record<number, SituationalStats>
+  kicking?: Record<number, KickingStats>
   wpa?: Record<number, PlayerWpa>
   advStats?: Record<number, PlayerAdvStats>
   position?: string | null
@@ -530,12 +552,22 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
     const totalFL = vals.reduce((acc, v) => acc + (v.fumbles_lost ?? 0), 0)
     const totalStuffed = vals.reduce((acc, v) => acc + (v.stuffed ?? 0), 0)
     const totalCarries = vals.reduce((acc, v) => acc + (v.carries_total ?? 0), 0)
+    const totalDefTds = vals.reduce((acc, v) => acc + (v.def_tds ?? 0), 0)
+    const totalPen = vals.reduce((acc, v) => acc + (v.penalties ?? 0), 0)
+    const totalPenYds = vals.reduce((acc, v) => acc + (v.penalty_yards ?? 0), 0)
+    const totalFS = vals.reduce((acc, v) => acc + (v.false_starts ?? 0), 0)
+    const totalHold = vals.reduce((acc, v) => acc + (v.holding ?? 0), 0)
     const tshVals = vals.map(v => v.target_share).filter((v): v is number => v != null)
     const ayshVals = vals.map(v => v.air_yards_share).filter((v): v is number => v != null)
     return {
       fumbles_lost: totalFL,
       stuffed: totalStuffed,
       carries_total: totalCarries,
+      def_tds: totalDefTds,
+      penalties: totalPen,
+      penalty_yards: totalPenYds,
+      false_starts: totalFS,
+      holding: totalHold,
       stuff_rate: totalCarries > 0 ? parseFloat((100 * totalStuffed / totalCarries).toFixed(1)) : undefined,
       target_share: tshVals.length > 0 ? parseFloat((tshVals.reduce((a, b) => a + b, 0) / tshVals.length).toFixed(1)) : undefined,
       air_yards_share: ayshVals.length > 0 ? parseFloat((ayshVals.reduce((a, b) => a + b, 0) / ayshVals.length).toFixed(1)) : undefined,
@@ -549,6 +581,31 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
   } : undefined
 
   const careerSit = hasSit ? aggregateSituational(situational) : undefined
+
+  // Career kicking/punting: sum counts, max the "longest" fields. Net/FG-rate
+  // averages are recomputed in the cell against the season-total counts.
+  const hasKick = kicking != null && Object.keys(kicking).length > 0
+  const careerKick: KickingStats | undefined = hasKick ? (() => {
+    const vals = seasons.map(s => kicking![s]).filter(Boolean)
+    const sum = (f: (k: KickingStats) => number | null | undefined) =>
+      vals.reduce((acc, v) => acc + (f(v) ?? 0), 0)
+    const maxOf = (f: (k: KickingStats) => number | null | undefined) => {
+      const xs = vals.map(f).filter((x): x is number => x != null)
+      return xs.length ? Math.max(...xs) : undefined
+    }
+    return {
+      fg_long:       maxOf(k => k.fg_long),
+      fg_0_39_made:  sum(k => k.fg_0_39_made),  fg_0_39_att:  sum(k => k.fg_0_39_att),
+      fg_40_49_made: sum(k => k.fg_40_49_made), fg_40_49_att: sum(k => k.fg_40_49_att),
+      fg_50_made:    sum(k => k.fg_50_made),    fg_50_att:    sum(k => k.fg_50_att),
+      fg_blocked:    sum(k => k.fg_blocked),
+      punt_net_yards:  sum(k => k.punt_net_yards),
+      punt_inside_20:  sum(k => k.punt_inside_20),
+      punt_touchbacks: sum(k => k.punt_touchbacks),
+      punt_long:       maxOf(k => k.punt_long),
+      punt_blocked:    sum(k => k.punt_blocked),
+    }
+  })() : undefined
 
   const careerT = sumGames(seasons.flatMap(s => bySeason[s]))
   const careerGames = seasons.reduce((acc, s) => acc + bySeason[s].length, 0)
@@ -615,6 +672,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
               const sit = situational[s] as SituationalStats | undefined
               const w = wpa?.[s] as PlayerWpa | undefined
               const a = advStats?.[s] as PlayerAdvStats | undefined
+              const k = kicking?.[s] as KickingStats | undefined
               const teams = [...new Set(games.map(g => g.team))]
               return (
                 <tr key={s} className="border-t border-gray-800/60 hover:bg-gray-800/30">
@@ -631,7 +689,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
                   </td>
                   {cols.map((c, i) => {
                     const sep = i > 0 && (cols[i - 1].kind !== c.kind || cols[i - 1].group !== c.group)
-                    const raw = c.cell(t, games.length, n, sn, sit, w, a)
+                    const raw = c.cell(t, games.length, n, sn, sit, w, a, k)
                     const isNull = raw === null || raw === undefined
                     const strVal = isNull ? null : String(raw)
                     const isPos = c.signed && !isNull && strVal!.startsWith('+')
@@ -669,7 +727,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, wpa, adv
                 {cols.map((c, i) => {
                   const sep = i > 0 && (cols[i - 1].kind !== c.kind || cols[i - 1].group !== c.group)
                   const raw = (c.kind === 'trad' || c.kind === 'adv' || c.kind === 'sit')
-                    ? c.cell(careerT, careerGames, undefined, undefined, careerSit, careerWpaTotals, careerAdvTotals)
+                    ? c.cell(careerT, careerGames, undefined, undefined, careerSit, careerWpaTotals, careerAdvTotals, careerKick)
                     : null
                   const isNull = raw === null || raw === undefined
                   const strVal = isNull ? null : String(raw)
@@ -749,7 +807,7 @@ function TeamSplits({ seasons, bySeason, position }: {
   const allTotals = sumGames(seasons.flatMap(s => bySeason[s]))
   const pos = detectPos(allTotals, position)
   const colSet = pos === 'QB' ? QB_COLS : pos === 'RB' ? RB_COLS : pos === 'WR' ? WR_COLS : pos === 'K' ? K_COLS : pos === 'P' ? P_COLS : pos === 'OL' ? OL_COLS : DEF_COLS
-  const cols = colSet.filter(c => c.kind === 'trad' && c.key !== 'g')
+  const cols = colSet.filter(c => c.kind === 'trad' && c.key !== 'g' && !c.derived)
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
@@ -1207,10 +1265,10 @@ function CareerCardContent({ player }: { player: PlayerProfile }) {
   const games = (draft?.games != null && draft.games > 0) ? draft.games : player.games_played
   if (games > 0) career.push({ label: 'Games', value: String(games) })
 
-  // Major awards (MVP, OPOY, DPOY, OROY, DROY, CPOY) sourced from the
-  // PAST_AWARDS ground-truth table. Lives in the same card so a player's
-  // honors are one logical block: stat tiles + award badges.
-  const awards = getPlayerAwards(player.player_name)
+  // Major awards (MVP, OPOY, DPOY, OROY, DROY, CPOY) come straight from
+  // the player_awards backend table (PlayerProfile.awards). The previous
+  // hardcoded frontend lookup is gone — this is just a render of API data.
+  const awards = player.awards ?? []
 
   const hasContent = career.length > 0 || awards.length > 0
 
@@ -1226,7 +1284,7 @@ function CareerCardContent({ player }: { player: PlayerProfile }) {
           )}
           {awards.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {awards.map(a => <AwardBadge key={`${a.season}-${a.award}`} season={a.season} award={a.award} />)}
+              {awards.map(a => <AwardBadge key={`${a.season}-${a.award}`} season={a.season} award={a.award as AwardKey} />)}
             </div>
           )}
         </div>
@@ -1514,6 +1572,7 @@ export default function PlayerPage() {
           ngs={player.ngs ?? {}}
           snapTotals={player.snap_totals ?? {}}
           situational={player.situational ?? {}}
+          kicking={player.kicking ?? {}}
           wpa={player.wpa ?? {}}
           advStats={player.adv_stats ?? {}}
           position={player.position}

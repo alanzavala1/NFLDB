@@ -2115,6 +2115,156 @@
         "title": "InjuryStatus",
         "description": "A weekly injury report entry. We surface the most recent one for a\nplayer on the player view; a list for team/game views."
       },
+      "KickingStats": {
+        "properties": {
+          "fg_long": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg Long"
+          },
+          "fg_0_39_made": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg 0 39 Made"
+          },
+          "fg_0_39_att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg 0 39 Att"
+          },
+          "fg_40_49_made": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg 40 49 Made"
+          },
+          "fg_40_49_att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg 40 49 Att"
+          },
+          "fg_50_made": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg 50 Made"
+          },
+          "fg_50_att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg 50 Att"
+          },
+          "fg_blocked": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg Blocked"
+          },
+          "punt_net_yards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Punt Net Yards"
+          },
+          "punt_inside_20": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Punt Inside 20"
+          },
+          "punt_touchbacks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Punt Touchbacks"
+          },
+          "punt_long": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Punt Long"
+          },
+          "punt_blocked": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Punt Blocked"
+          }
+        },
+        "type": "object",
+        "title": "KickingStats",
+        "description": "Per-season kicker/punter splits derived from play-by-play \u2014 sparse by role.\n\nRaw counts/totals are stored (not pre-computed rates) so the frontend can\naggregate a career row by simple summation and recompute averages against\nthe season-total attempt/punt counts it already has."
+      },
       "LeagueLeader": {
         "properties": {
           "player_id": {
@@ -2648,11 +2798,109 @@
               }
             ],
             "title": "Carries Total"
+          },
+          "def_tds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Tds"
+          },
+          "penalties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Penalties"
+          },
+          "penalty_yards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Penalty Yards"
+          },
+          "false_starts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "False Starts"
+          },
+          "holding": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holding"
           }
         },
         "type": "object",
         "title": "PlayerAdvStats",
         "description": "Per-season advanced stats \u2014 sparse by player role."
+      },
+      "PlayerAward": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "award": {
+            "type": "string",
+            "title": "Award"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "award",
+          "team",
+          "position"
+        ],
+        "title": "PlayerAward",
+        "description": "A single major award win for a player.\n\nSourced from the seeded `player_awards` table \u2014 major postseason\nvoting awards: MVP, OPOY, DPOY, OROY, DROY, CPOY. Joined back to\nrosters on (player_name, season) during ingest so each row carries\nthe player's gsis_id when available."
       },
       "PlayerComparable": {
         "properties": {
@@ -3293,6 +3541,13 @@
             "type": "object",
             "title": "Situational"
           },
+          "kicking": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/KickingStats"
+            },
+            "type": "object",
+            "title": "Kicking"
+          },
           "wpa": {
             "additionalProperties": {
               "$ref": "#/components/schemas/PlayerWpa"
@@ -3346,6 +3601,13 @@
                 "type": "null"
               }
             ]
+          },
+          "awards": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerAward"
+            },
+            "type": "array",
+            "title": "Awards"
           }
         },
         "type": "object",
@@ -3371,12 +3633,14 @@
           "ngs",
           "snap_totals",
           "situational",
+          "kicking",
           "wpa",
           "adv_stats",
           "draft",
           "combine",
           "current_injury",
-          "depth"
+          "depth",
+          "awards"
         ],
         "title": "PlayerProfile",
         "description": "Full /players/{id} payload."

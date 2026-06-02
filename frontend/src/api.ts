@@ -16,8 +16,8 @@
  */
 import type {
   CombineData, DepthChartEntry, DivisionStandings, DraftInfo, Game,
-  GameDetail, GamePlayerStats, InjuryStatus, LeagueLeader, NgsStats,
-  PlayerAdvStats, PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa,
+  GameDetail, GamePlayerStats, InjuryStatus, KickingStats, LeagueLeader, NgsStats,
+  PlayerAdvStats, PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa,
   RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus, SituationalStats,
   SnapTotals, StandingsRow, TeamAnalyticsResponse, TeamAnalyticsRow,
   TeamGame, TeamLeader, TeamProfile, WinProbPlay, WpaLeader, WpaLeaders,
@@ -35,10 +35,10 @@ export const CURRENT_NFL_SEASON = ((): number => {
 //     historical aliases so pages don't have to be touched on every rename ───
 export type {
   CombineData, DepthChartEntry, DivisionStandings, DraftInfo, Game,
-  GameDetail, InjuryStatus, LeagueLeader, NgsStats, PlayerAdvStats,
-  PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa, RosterPlayer,
-  SearchResult, SituationalStats, SnapTotals, TeamGame, TeamLeader,
-  TeamProfile, WinProbPlay, WpaLeader, WpaLeaders,
+  GameDetail, InjuryStatus, KickingStats, LeagueLeader, NgsStats, PlayerAdvStats,
+  PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa,
+  RosterPlayer, SearchResult, SituationalStats, SnapTotals, TeamGame,
+  TeamLeader, TeamProfile, WinProbPlay, WpaLeader, WpaLeaders,
 }
 
 export type SeasonEntry        = SeasonStatus
