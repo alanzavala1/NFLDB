@@ -576,6 +576,7 @@ function QuickNavStrip({ season, current }: { season: number; current: 'home' | 
     { label: 'All Weeks', to: `/?season=${season}&view=weeks`, active: current === 'weeks' },
     { label: 'Standings', to: `/standings?season=${season}` },
     { label: 'Leaders',   to: `/leaders?season=${season}` },
+    { label: 'Splits',    to: `/splits` },
   ]
   return (
     <div className="flex gap-2 mb-8 flex-wrap">

@@ -12,6 +12,7 @@ const TeamPage      = lazy(() => import('./pages/TeamPage'))
 const PlayerPage    = lazy(() => import('./pages/PlayerPage'))
 const LeadersPage   = lazy(() => import('./pages/LeadersPage'))
 const StandingsPage = lazy(() => import('./pages/StandingsPage'))
+const SplitsPage    = lazy(() => import('./pages/SplitsPage'))
 
 // Past seasons are immutable, so cache them aggressively.
 // Current season can mutate but only on a weekly cadence, so 5 minutes
@@ -48,6 +49,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/players/:playerId"  element={<PlayerPage />} />
             <Route path="/leaders"            element={<LeadersPage />} />
             <Route path="/standings"          element={<StandingsPage />} />
+            <Route path="/splits"             element={<SplitsPage />} />
           </Routes>
         </Suspense>
       </BrowserRouter>
