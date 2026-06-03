@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, KickingStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader, CombineData, DepthChartEntry, InjuryStatus } from '../api'
-import { useLeaders, usePlayer, usePlayerComparables, useSeasons } from '../queries'
+import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, KickingStats, PlayerWpa, PlayerAdvStats, PlayerComparable, PlayerSplit, LeagueLeader, CombineData, DepthChartEntry, InjuryStatus } from '../api'
+import { useLeaders, usePlayer, usePlayerComparables, usePlayerSplits, useSeasons } from '../queries'
 import Nav, { backBtnCls } from '../components/Nav'
 import type { Crumb } from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
@@ -1080,6 +1080,290 @@ function ComparableCard({ p, pos }: { p: PlayerComparable; pos: string }) {
   )
 }
 
+// — situational splits: the player's stat line conditioned on one dimension —
+// One long-format dataset (passing / rushing / receiving categories); the
+// panel picks the column set + dimension list per category.
+
+type SplitCategory = 'passing' | 'rushing' | 'receiving'
+
+const SPLIT_VALUE_LABELS: Record<string, string> = {
+  '1': '1st Down', '2': '2nd Down', '3': '3rd Down', '4': '4th Down',
+  short: 'Short (< 15 air yds)', deep: 'Deep (15+ air yds)',
+  left: 'Left', middle: 'Middle', right: 'Right',
+  guard: 'Guard', tackle: 'Tackle', end: 'End',
+  leading: 'Leading', tied: 'Tied', trailing: 'Trailing',
+  shotgun: 'Shotgun', under_center: 'Under Center',
+}
+function splitValueLabel(dim: string, value: string): string {
+  if (dim === 'quarter') return value === 'OT' ? 'OT' : `Q${value}`
+  return SPLIT_VALUE_LABELS[value] ?? value
+}
+
+type SplitCol = { label: string; get: (r: PlayerSplit) => string | number | null; signed?: boolean; highlight?: boolean; heat?: 'epa' | 'success' }
+
+const PASSING_SPLIT_COLS: SplitCol[] = [
+  { label: 'ATT',     get: r => r.att ?? null },
+  { label: 'CMP%',    get: r => r.att ? pct(r.cmp ?? 0, r.att) : null },
+  { label: 'YDS',     get: r => r.yards ?? null, highlight: true },
+  { label: 'Y/A',     get: r => r.att ? ratio(r.yards ?? 0, r.att) : null },
+  { label: 'TD',      get: r => r.td ?? null },
+  { label: 'INT',     get: r => r.interceptions ?? null },
+  { label: 'RATE',    get: r => passerRating(r.cmp ?? 0, r.att ?? 0, r.yards ?? 0, r.td ?? 0, r.interceptions ?? 0) },
+  { label: 'aDOT',    get: r => r.att ? ratio(r.air_yards ?? 0, r.att) : null },
+  { label: 'EPA/att', get: r => sfmt(r.epa, 3), signed: true, heat: 'epa' },
+  { label: 'SUCC%',   get: r => r.success_pct != null ? r.success_pct.toFixed(1) : null, heat: 'success' },
+  { label: 'CPOE',    get: r => sfmt(r.cpoe), signed: true },
+]
+
+const RUSHING_SPLIT_COLS: SplitCol[] = [
+  { label: 'CAR',     get: r => r.att ?? null },
+  { label: 'YDS',     get: r => r.yards ?? null, highlight: true },
+  { label: 'Y/C',     get: r => r.att ? ratio(r.yards ?? 0, r.att) : null },
+  { label: 'TD',      get: r => r.td ?? null },
+  { label: 'EPA/att', get: r => sfmt(r.epa, 3), signed: true, heat: 'epa' },
+  { label: 'SUCC%',   get: r => r.success_pct != null ? r.success_pct.toFixed(1) : null, heat: 'success' },
+]
+
+const RECEIVING_SPLIT_COLS: SplitCol[] = [
+  { label: 'TGT',     get: r => r.att ?? null },
+  { label: 'REC',     get: r => r.cmp ?? null },
+  { label: 'CTH%',    get: r => r.att ? pct(r.cmp ?? 0, r.att) : null },
+  { label: 'YDS',     get: r => r.yards ?? null, highlight: true },
+  { label: 'Y/R',     get: r => r.cmp ? ratio(r.yards ?? 0, r.cmp) : null },
+  { label: 'TD',      get: r => r.td ?? null },
+  { label: 'aDOT',    get: r => r.att ? ratio(r.air_yards ?? 0, r.att) : null },
+  { label: 'YAC',     get: r => r.yac ?? null },
+  { label: 'EPA/tgt', get: r => sfmt(r.epa, 3), signed: true, heat: 'epa' },
+  { label: 'SUCC%',   get: r => r.success_pct != null ? r.success_pct.toFixed(1) : null, heat: 'success' },
+]
+
+const _COMMON_SPLIT_DIMS: { key: string; label: string }[] = [
+  { key: 'down',        label: 'Down' },
+  { key: 'game_script', label: 'Game Script' },
+  { key: 'quarter',     label: 'Quarter' },
+  { key: 'shotgun',     label: 'Formation' },
+]
+
+const SPLIT_CATEGORY_CONFIG: Record<SplitCategory, {
+  label: string
+  dims: { key: string; label: string }[]
+  cols: SplitCol[]
+}> = {
+  passing: {
+    label: 'Passing',
+    dims: [{ key: 'pass_depth', label: 'Pass Depth' }, { key: 'pass_location', label: 'Direction' }, ..._COMMON_SPLIT_DIMS],
+    cols: PASSING_SPLIT_COLS,
+  },
+  rushing: {
+    label: 'Rushing',
+    dims: [{ key: 'run_gap', label: 'Gap' }, { key: 'run_direction', label: 'Direction' }, ..._COMMON_SPLIT_DIMS],
+    cols: RUSHING_SPLIT_COLS,
+  },
+  receiving: {
+    label: 'Receiving',
+    dims: [{ key: 'target_depth', label: 'Target Depth' }, { key: 'target_direction', label: 'Direction' }, ..._COMMON_SPLIT_DIMS],
+    cols: RECEIVING_SPLIT_COLS,
+  },
+}
+
+// Synthesize a "Total" row across a dimension's splits. Counting stats sum;
+// rate stats (epa/att, success, cpoe) are attempt-weighted so the total
+// reconciles with the player's overall line for that dimension.
+function aggregateSplitRows(rows: PlayerSplit[]): PlayerSplit | null {
+  if (rows.length === 0) return null
+  const sum = (f: (r: PlayerSplit) => number | null | undefined) =>
+    rows.reduce((a, r) => a + (f(r) ?? 0), 0)
+  const att = sum(r => r.att)
+  const wavg = (f: (r: PlayerSplit) => number | null | undefined) =>
+    att > 0 ? rows.reduce((a, r) => a + (f(r) ?? 0) * (r.att ?? 0), 0) / att : null
+  return {
+    season: rows[0].season, category: rows[0].category, split_dim: rows[0].split_dim,
+    split_value: '__total__', sort_order: 999,
+    att, cmp: sum(r => r.cmp), yards: sum(r => r.yards), td: sum(r => r.td),
+    interceptions: sum(r => r.interceptions), air_yards: sum(r => r.air_yards),
+    yac: sum(r => r.yac),
+    epa: wavg(r => r.epa),
+    success_pct: wavg(r => r.success_pct),
+    cpoe: wavg(r => r.cpoe),
+  }
+}
+
+function SplitsPanel({ playerId, sectionRef }: {
+  playerId: string
+  sectionRef: React.RefObject<HTMLDivElement | null>
+}) {
+  const { data: splits = [], isPending } = usePlayerSplits(playerId)
+  const [category, setCategory] = useState<SplitCategory | null>(null)
+  const [season, setSeason] = useState<number | null>(null)
+  const [dim, setDim] = useState<string | null>(null)
+
+  // Which categories this player actually has rows for (a RB has rushing +
+  // receiving; a WR only receiving; a QB only passing).
+  const categories = useMemo(() => {
+    const present = new Set(splits.map(s => s.category))
+    return (['passing', 'rushing', 'receiving'] as SplitCategory[]).filter(c => present.has(c))
+  }, [splits])
+
+  const activeCategory = (category && categories.includes(category)) ? category : (categories[0] ?? null)
+  const config = activeCategory ? SPLIT_CATEGORY_CONFIG[activeCategory] : null
+
+  const catRows = useMemo(
+    () => splits.filter(s => s.category === activeCategory),
+    [splits, activeCategory],
+  )
+  const seasons = useMemo(
+    () => [...new Set(catRows.map(s => s.season))].sort((a, b) => b - a),
+    [catRows],
+  )
+  const activeSeason = (season != null && seasons.includes(season)) ? season : (seasons[0] ?? null)
+  const activeDim = (dim && config?.dims.some(d => d.key === dim)) ? dim : (config?.dims[0]?.key ?? null)
+
+  // Splits only exist for qualified ball-handlers. Everyone else: no section.
+  if (isPending || !config || !activeDim) return null
+
+  const rows = catRows
+    .filter(s => s.season === activeSeason && s.split_dim === activeDim)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  const totalRow = aggregateSplitRows(rows)
+
+  // Subtle green→red tint on rate cells, scaled by how far a split sits from
+  // the player's own average for this view. Self-contained (no league
+  // baseline) — it answers "where does this player beat / trail their norm".
+  const heatStyle = (r: PlayerSplit, c: SplitCol): React.CSSProperties | undefined => {
+    if (!c.heat || !totalRow) return undefined
+    const val  = c.heat === 'epa' ? r.epa : r.success_pct
+    const base = c.heat === 'epa' ? totalRow.epa : totalRow.success_pct
+    if (val == null || base == null) return undefined
+    const delta = val - base
+    const alpha = Math.min(0.3, Math.abs(delta) * (c.heat === 'epa' ? 0.7 : 0.022))
+    if (alpha < 0.03) return undefined
+    return { backgroundColor: `rgba(${delta >= 0 ? '16,185,129' : '244,63,94'}, ${alpha.toFixed(3)})` }
+  }
+
+  // One-line takeaway: the split where the player is most effective (by EPA),
+  // ignoring tiny samples.
+  const insight = (() => {
+    const eligible = rows.filter(r => (r.att ?? 0) >= 10 && r.epa != null)
+    if (eligible.length < 2) return null
+    const best = eligible.reduce((a, b) => (b.epa! > a.epa! ? b : a))
+    return { label: splitValueLabel(activeDim, best.split_value), epa: best.epa! }
+  })()
+
+  const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-left'
+  const segWrap = 'inline-flex items-center gap-0.5 bg-gray-900 border border-gray-800 rounded-lg p-0.5'
+
+  const renderRow = (r: PlayerSplit, isTotal: boolean) => (
+    <tr key={r.split_value} className={isTotal
+      ? 'border-t-2 border-gray-700 bg-gray-800/40'
+      : 'border-t border-gray-800/60 hover:bg-gray-800/30'}>
+      <td className={`py-2.5 pl-4 pr-3 whitespace-nowrap ${isTotal
+        ? 'text-xs font-bold text-gray-400 uppercase tracking-wider'
+        : 'font-semibold text-white'}`}>
+        {isTotal ? 'Total' : splitValueLabel(activeDim, r.split_value)}
+      </td>
+      {config.cols.map(c => {
+        const raw = c.get(r)
+        const isNull = raw == null
+        const str = isNull ? '—' : String(raw)
+        const isPos = c.signed && !isNull && str.startsWith('+')
+        const isNeg = c.signed && !isNull && str.startsWith('-')
+        return (
+          <td key={c.label}
+            style={isTotal ? undefined : heatStyle(r, c)}
+            className={`py-2.5 px-3 whitespace-nowrap tabular-nums ${isTotal ? 'font-semibold' : ''} ${
+            isNull ? 'text-gray-700'
+              : isPos ? 'text-emerald-300 font-semibold'
+              : isNeg ? 'text-red-300 font-semibold'
+              : c.highlight ? 'text-white font-bold'
+              : 'text-gray-200'}`}>
+            {str}
+          </td>
+        )
+      })}
+    </tr>
+  )
+
+  return (
+    <div ref={sectionRef} className="scroll-mt-12 mt-8">
+      <div className="flex items-baseline justify-between gap-3 mb-3">
+        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Splits</span>
+        {insight && (
+          <span className="text-xs text-gray-500">
+            Best: <span className="text-emerald-400 font-semibold">{insight.label}</span>
+            <span className="text-gray-600"> · {sfmt(insight.epa, 2)} EPA</span>
+          </span>
+        )}
+      </div>
+
+      {/* Controls: category (RBs) + season + dimension */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {categories.length > 1 && (
+          <div className={segWrap}>
+            {categories.map(c => (
+              <button
+                key={c}
+                onClick={() => { setCategory(c); setDim(null); setSeason(null) }}
+                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-colors ${
+                  activeCategory === c ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
+              >
+                {SPLIT_CATEGORY_CONFIG[c].label}
+              </button>
+            ))}
+          </div>
+        )}
+        {seasons.length > 1 && (
+          <select
+            value={activeSeason ?? ''}
+            onChange={e => setSeason(Number(e.target.value))}
+            className="bg-gray-900 border border-gray-800 text-gray-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gray-600"
+          >
+            {seasons.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
+        <div className={`${segWrap} flex-wrap`}>
+          {config.dims.map(d => (
+            <button
+              key={d.key}
+              onClick={() => setDim(d.key)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                activeDim === d.key ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800">
+                <th className={`${thBase} text-gray-500 pl-4`}>
+                  {config.dims.find(d => d.key === activeDim)?.label}
+                </th>
+                {config.cols.map(c => (
+                  <th key={c.label} className={`${thBase} text-gray-500`}>{c.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => renderRow(r, false))}
+              {rows.length > 1 && totalRow && renderRow(totalRow, true)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-2 px-1">
+        <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: 'rgba(16,185,129,0.4)' }} />
+        <span className="text-[11px] text-gray-600">above this player's average for the split</span>
+        <span className="inline-block w-2.5 h-2.5 rounded-sm ml-2" style={{ backgroundColor: 'rgba(244,63,94,0.4)' }} />
+        <span className="text-[11px] text-gray-600">below · regular season</span>
+      </div>
+    </div>
+  )
+}
+
 function ComparablesSection({ playerId, pos }: { playerId: string; pos: string }) {
   const { data: comps = [], isPending: loading } = usePlayerComparables(playerId)
 
@@ -1352,9 +1636,10 @@ export default function PlayerPage() {
 
   const statsRef = useRef<HTMLDivElement>(null)
   const advRef   = useRef<HTMLDivElement>(null)
-  const postRef  = useRef<HTMLDivElement>(null)
-  const logRef   = useRef<HTMLDivElement>(null)
-  const compRef  = useRef<HTMLDivElement>(null)
+  const postRef   = useRef<HTMLDivElement>(null)
+  const logRef    = useRef<HTMLDivElement>(null)
+  const compRef   = useRef<HTMLDivElement>(null)
+  const splitsRef = useRef<HTMLDivElement>(null)
   function scrollTo(ref: { current: HTMLDivElement | null | undefined }) {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -1557,6 +1842,7 @@ export default function PlayerPage() {
             <button onClick={() => scrollTo(statsRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Stats</button>
             {hasAdvanced && <button onClick={() => scrollTo(advRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Advanced</button>}
             {playoffSeasons.length > 0 && <button onClick={() => scrollTo(postRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Postseason</button>}
+            {['QB', 'RB', 'WR'].includes(playerPos) && <button onClick={() => scrollTo(splitsRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Splits</button>}
             <button onClick={() => scrollTo(logRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Game Log</button>
             <button onClick={() => scrollTo(compRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Comparables</button>
           </div>
@@ -1628,6 +1914,9 @@ export default function PlayerPage() {
 
           </>
         )}
+
+        {/* Situational passing splits — QBs only (self-hides otherwise) */}
+        <SplitsPanel playerId={player.player_id} sectionRef={splitsRef} />
 
         {/* Team splits — regular season only */}
         <TeamSplits seasons={seasons} bySeason={regBySeason} position={player.position} />

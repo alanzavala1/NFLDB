@@ -49,10 +49,12 @@ export type SituationalStats = Schemas['SituationalStats']
 export type KickingStats     = Schemas['KickingStats']
 export type PlayerWpa        = Schemas['PlayerWpa']
 export type PlayerAdvStats   = Schemas['PlayerAdvStats']
+export type PlayerSplit      = Schemas['PlayerSplit']
 
 // Team analytics
 export type TeamAnalyticsRow      = Schemas['TeamAnalyticsRow']
 export type TeamAnalyticsResponse = Schemas['TeamAnalyticsResponse']
+export type TeamSplit             = Schemas['TeamSplit']
 
 // Supplemental vendor data (Wave 1)
 export type DraftInfo       = Schemas['DraftInfo']

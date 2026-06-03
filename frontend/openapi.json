@@ -363,6 +363,49 @@
         }
       }
     },
+    "/players/{player_id}/splits": {
+      "get": {
+        "summary": "Get Player Splits",
+        "operationId": "get_player_splits_players__player_id__splits_get",
+        "parameters": [
+          {
+            "name": "player_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Player Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerSplit"
+                  },
+                  "title": "Response Get Player Splits Players  Player Id  Splits Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/teams/{team}": {
       "get": {
         "summary": "Get Team",
@@ -516,6 +559,59 @@
                     "$ref": "#/components/schemas/DepthChartEntry"
                   },
                   "title": "Response Get Team Depth Chart Teams  Team  Depth Chart Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teams/{team}/splits": {
+      "get": {
+        "summary": "Get Team Splits",
+        "description": "Team offense/defense rate profile conditioned on each situational\ndimension. Reads the materialized table; self-heals on a cold table.",
+        "operationId": "get_team_splits_teams__team__splits_get",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Team"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamSplit"
+                  },
+                  "title": "Response Get Team Splits Teams  Team  Splits Get"
                 }
               }
             }
@@ -3645,6 +3741,167 @@
         "title": "PlayerProfile",
         "description": "Full /players/{id} payload."
       },
+      "PlayerSplit": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "split_dim": {
+            "type": "string",
+            "title": "Split Dim"
+          },
+          "split_value": {
+            "type": "string",
+            "title": "Split Value"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Att"
+          },
+          "cmp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cmp"
+          },
+          "yards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yards"
+          },
+          "td": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Td"
+          },
+          "interceptions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interceptions"
+          },
+          "air_yards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Yards"
+          },
+          "yac": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yac"
+          },
+          "epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epa"
+          },
+          "success_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pct"
+          },
+          "cpoe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpoe"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "category",
+          "split_dim",
+          "split_value",
+          "sort_order",
+          "att",
+          "cmp",
+          "yards",
+          "td",
+          "interceptions",
+          "air_yards",
+          "yac",
+          "epa",
+          "success_pct",
+          "cpoe"
+        ],
+        "title": "PlayerSplit",
+        "description": "One row of a player's stat line conditioned on a single situational\ndimension. Long-format: (season, category, split_dim, split_value) +\nmetrics. Served by /players/{id}/splits, grouped client-side by dim."
+      },
       "PlayerWpa": {
         "properties": {
           "pass_wpa": {
@@ -5287,6 +5544,138 @@
         ],
         "title": "TeamProfile",
         "description": "Response for /teams/{team}?season=\u2026"
+      },
+      "TeamSplit": {
+        "properties": {
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "split_dim": {
+            "type": "string",
+            "title": "Split Dim"
+          },
+          "split_value": {
+            "type": "string",
+            "title": "Split Value"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "plays": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plays"
+          },
+          "epa_play": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epa Play"
+          },
+          "success_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pct"
+          },
+          "pass_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate"
+          },
+          "yards_play": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yards Play"
+          },
+          "explosive_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explosive Pct"
+          },
+          "pass_epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Epa"
+          },
+          "rush_epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rush Epa"
+          }
+        },
+        "type": "object",
+        "required": [
+          "side",
+          "split_dim",
+          "split_value",
+          "sort_order",
+          "plays",
+          "epa_play",
+          "success_pct",
+          "pass_rate",
+          "yards_play",
+          "explosive_pct",
+          "pass_epa",
+          "rush_epa"
+        ],
+        "title": "TeamSplit",
+        "description": "One row of a team's rate profile conditioned on a situational dimension.\nLong-format: (side, split_dim, split_value) + rate metrics. Served by\n/teams/{team}/splits, grouped client-side by side + dim."
       },
       "ValidationError": {
         "properties": {

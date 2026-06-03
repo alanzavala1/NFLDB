@@ -117,6 +117,23 @@ def test_player_comparables_creates_materialized_tables(client, seeded_conn):
     assert "player_comparables"   in tables
 
 
+def test_player_splits_endpoint_returns_typed_shape(client):
+    """The fixture has no `plays` table, so the splits builder can't produce
+    rows — the endpoint must still return an empty list (not error), matching
+    how every play-derived path degrades on a cold DB."""
+    r = client.get("/players/00-BUF-QB1/splits")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+def test_team_splits_endpoint_returns_typed_shape(client):
+    """No `plays` table in the fixture, so team splits can't materialize — the
+    endpoint must still return an empty list, not error."""
+    r = client.get("/teams/BUF/splits?season=2023")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
 def test_search_finds_player_and_team(client):
     r = client.get("/search?q=mahomes")
     assert r.status_code == 200

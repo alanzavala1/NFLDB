@@ -194,6 +194,27 @@ class PlayerAdvStats(BaseModel):
     holding:         int | None = None
 
 
+class PlayerSplit(BaseModel):
+    """One row of a player's stat line conditioned on a single situational
+    dimension. Long-format: (season, category, split_dim, split_value) +
+    metrics. Served by /players/{id}/splits, grouped client-side by dim."""
+    season: int
+    category: str
+    split_dim: str
+    split_value: str
+    sort_order: int | None
+    att: int | None
+    cmp: int | None
+    yards: int | None
+    td: int | None
+    interceptions: int | None
+    air_yards: int | None
+    yac: int | None
+    epa: float | None
+    success_pct: float | None
+    cpoe: float | None
+
+
 class PlayerProfile(BaseModel):
     """Full /players/{id} payload."""
     player_id: str

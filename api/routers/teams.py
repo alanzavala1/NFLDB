@@ -2,10 +2,11 @@
 from fastapi import APIRouter, HTTPException, Query
 
 import team_analytics_builder
+import team_splits_builder
 from config import CURRENT_SEASON
 from database import query_to_dict
 from routers.schedule import attach_records
-from schemas.analytics import TeamAnalyticsResponse
+from schemas.analytics import TeamAnalyticsResponse, TeamSplit
 from schemas.supplemental import DepthChartEntry, InjuryStatus
 from schemas.teams import RosterPlayer, TeamProfile
 from sql_helpers import safe_query
@@ -160,6 +161,15 @@ def get_team_depth_chart(team: str, season: int = Query(default=None), week: int
             depth_team
     """, params + [team, season])
     return rows
+
+
+@router.get("/teams/{team}/splits", response_model=list[TeamSplit])
+def get_team_splits(team: str, season: int = Query(default=None)):
+    """Team offense/defense rate profile conditioned on each situational
+    dimension. Reads the materialized table; self-heals on a cold table."""
+    if season is None:
+        season = CURRENT_SEASON
+    return team_splits_builder.read_or_materialize(team, season)
 
 
 @router.get("/teams/{team}/injuries", response_model=list[InjuryStatus])

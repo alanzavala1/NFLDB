@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, Tooltip, Cell, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { api } from '../api'
-import type { TeamProfile, TeamGame, TeamLeader, SeasonEntry, RosterPlayer, TeamAnalyticsTeam } from '../api'
-import { useTeamDepthChart, useTeamInjuries } from '../queries'
+import type { TeamProfile, TeamGame, TeamLeader, SeasonEntry, RosterPlayer, TeamAnalyticsTeam, TeamSplit } from '../api'
+import { useTeamDepthChart, useTeamInjuries, useTeamSplits } from '../queries'
 import Nav, { backBtnCls } from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
@@ -1028,6 +1028,185 @@ function buildOverallMetrics(t: TeamAnalyticsTeam): MetricSpec[] {
   ]
 }
 
+// — team situational splits: offense/defense rate profile by situation —
+
+const TEAM_SPLIT_DIMS: { key: string; label: string }[] = [
+  { key: 'down',        label: 'Down' },
+  { key: 'game_script', label: 'Game Script' },
+  { key: 'field_zone',  label: 'Field Zone' },
+  { key: 'quarter',     label: 'Quarter' },
+]
+
+const TEAM_SPLIT_VALUE_LABELS: Record<string, string> = {
+  '1': '1st Down', '2': '2nd Down', '3': '3rd Down', '4': '4th Down',
+  leading: 'Leading', tied: 'Tied', trailing: 'Trailing',
+  red_zone: 'Red Zone', opp_territory: 'Opp Territory', own_territory: 'Own Territory',
+}
+function teamSplitValueLabel(dim: string, value: string): string {
+  if (dim === 'quarter') return value === 'OT' ? 'OT' : `Q${value}`
+  return TEAM_SPLIT_VALUE_LABELS[value] ?? value
+}
+
+const fmtSign3 = (v: number | null | undefined) => v == null ? null : `${v >= 0 ? '+' : ''}${v.toFixed(3)}`
+const fmtPct1  = (v: number | null | undefined) => v == null ? null : `${v.toFixed(1)}%`
+const fmtNum2  = (v: number | null | undefined) => v == null ? null : v.toFixed(2)
+
+type TeamSplitCol = { label: string; get: (r: TeamSplit) => string | null; signed?: boolean; highlight?: boolean; heat?: 'epa' | 'pct' }
+const TEAM_SPLIT_COLS: TeamSplitCol[] = [
+  { label: 'PLAYS',    get: r => r.plays != null ? String(r.plays) : null },
+  { label: 'EPA/play', get: r => fmtSign3(r.epa_play), signed: true, heat: 'epa' },
+  { label: 'SUCC%',    get: r => fmtPct1(r.success_pct), heat: 'pct' },
+  { label: 'YDS/play', get: r => fmtNum2(r.yards_play), highlight: true },
+  { label: 'EXPL%',    get: r => fmtPct1(r.explosive_pct) },
+  { label: 'PASS%',    get: r => fmtPct1(r.pass_rate) },
+  { label: 'PASS EPA', get: r => fmtSign3(r.pass_epa), signed: true },
+  { label: 'RUSH EPA', get: r => fmtSign3(r.rush_epa), signed: true },
+]
+
+function aggregateTeamSplit(rows: TeamSplit[]): TeamSplit | null {
+  if (rows.length === 0) return null
+  const plays = rows.reduce((a, r) => a + (r.plays ?? 0), 0)
+  const wavg = (f: (r: TeamSplit) => number | null | undefined) =>
+    plays > 0 ? rows.reduce((a, r) => a + (f(r) ?? 0) * (r.plays ?? 0), 0) / plays : null
+  return {
+    side: rows[0].side, split_dim: rows[0].split_dim, split_value: '__total__', sort_order: 999,
+    plays,
+    epa_play: wavg(r => r.epa_play), success_pct: wavg(r => r.success_pct),
+    pass_rate: wavg(r => r.pass_rate), yards_play: wavg(r => r.yards_play),
+    explosive_pct: wavg(r => r.explosive_pct),
+    pass_epa: wavg(r => r.pass_epa), rush_epa: wavg(r => r.rush_epa),
+  }
+}
+
+function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
+  const { data: splits = [], isPending } = useTeamSplits(team, season)
+  const [side, setSide] = useState<'offense' | 'defense'>('offense')
+  const [dim, setDim] = useState('game_script')
+
+  const rows = splits
+    .filter(s => s.side === side && s.split_dim === dim)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  const totalRow = aggregateTeamSplit(rows)
+
+  // Heat is goodness-aware: for defense, lower EPA/success allowed is better,
+  // so the sign flips. Green = better than this unit's own average.
+  const heatStyle = (r: TeamSplit, c: TeamSplitCol): React.CSSProperties | undefined => {
+    if (!c.heat || !totalRow) return undefined
+    const val  = c.heat === 'epa' ? r.epa_play : r.success_pct
+    const base = c.heat === 'epa' ? totalRow.epa_play : totalRow.success_pct
+    if (val == null || base == null) return undefined
+    const good = (side === 'offense' ? 1 : -1) * (val - base)
+    const alpha = Math.min(0.3, Math.abs(good) * (c.heat === 'epa' ? 0.7 : 0.022))
+    if (alpha < 0.03) return undefined
+    return { backgroundColor: `rgba(${good >= 0 ? '16,185,129' : '244,63,94'}, ${alpha.toFixed(3)})` }
+  }
+
+  const insight = (() => {
+    const eligible = rows.filter(r => (r.plays ?? 0) >= 15 && r.epa_play != null)
+    if (eligible.length < 2) return null
+    const best = side === 'offense'
+      ? eligible.reduce((a, b) => (b.epa_play! > a.epa_play! ? b : a))
+      : eligible.reduce((a, b) => (b.epa_play! < a.epa_play! ? b : a))
+    return { label: teamSplitValueLabel(dim, best.split_value), epa: best.epa_play! }
+  })()
+
+  const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-left'
+  const segWrap = 'inline-flex items-center gap-0.5 bg-gray-900 border border-gray-800 rounded-lg p-0.5'
+
+  const renderRow = (r: TeamSplit, isTotal: boolean) => (
+    <tr key={r.split_value} className={isTotal
+      ? 'border-t-2 border-gray-700 bg-gray-800/40'
+      : 'border-t border-gray-800/60 hover:bg-gray-800/30'}>
+      <td className={`py-2.5 pl-4 pr-3 whitespace-nowrap ${isTotal
+        ? 'text-xs font-bold text-gray-400 uppercase tracking-wider'
+        : 'font-semibold text-white'}`}>
+        {isTotal ? 'Total' : teamSplitValueLabel(dim, r.split_value)}
+      </td>
+      {TEAM_SPLIT_COLS.map(c => {
+        const raw = c.get(r)
+        const isNull = raw == null
+        const str = isNull ? '—' : raw
+        const isPos = c.signed && !isNull && str.startsWith('+')
+        const isNeg = c.signed && !isNull && str.startsWith('-')
+        return (
+          <td key={c.label}
+            style={isTotal ? undefined : heatStyle(r, c)}
+            className={`py-2.5 px-3 whitespace-nowrap tabular-nums ${isTotal ? 'font-semibold' : ''} ${
+            isNull ? 'text-gray-700'
+              : isPos ? 'text-emerald-300 font-semibold'
+              : isNeg ? 'text-red-300 font-semibold'
+              : c.highlight ? 'text-white font-bold'
+              : 'text-gray-200'}`}>
+            {str}
+          </td>
+        )
+      })}
+    </tr>
+  )
+
+  if (isPending || splits.length === 0) return null
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-baseline justify-between gap-3 mb-2 px-1">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Situational Splits</h3>
+        {insight && (
+          <span className="text-xs text-gray-500">
+            {side === 'offense' ? 'Best' : 'Stingiest'}: <span className="text-emerald-400 font-semibold">{insight.label}</span>
+            <span className="text-gray-600"> · {fmtSign3(insight.epa)} EPA</span>
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className={segWrap}>
+          {(['offense', 'defense'] as const).map(s => (
+            <button key={s} onClick={() => { setSide(s); setDim('game_script') }}
+              className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-colors ${
+                side === s ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className={`${segWrap} flex-wrap`}>
+          {TEAM_SPLIT_DIMS.map(d => (
+            <button key={d.key} onClick={() => setDim(d.key)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                dim === d.key ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800">
+                <th className={`${thBase} text-gray-500 pl-4`}>
+                  {TEAM_SPLIT_DIMS.find(d => d.key === dim)?.label}
+                </th>
+                {TEAM_SPLIT_COLS.map(c => (
+                  <th key={c.label} className={`${thBase} text-gray-500`}>{c.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => renderRow(r, false))}
+              {rows.length > 1 && totalRow && renderRow(totalRow, true)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-2 px-1">
+        <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: 'rgba(16,185,129,0.4)' }} />
+        <span className="text-[11px] text-gray-600">better than this unit's average</span>
+        <span className="inline-block w-2.5 h-2.5 rounded-sm ml-2" style={{ backgroundColor: 'rgba(244,63,94,0.4)' }} />
+        <span className="text-[11px] text-gray-600">worse · {side === 'defense' ? 'lower EPA allowed = better' : 'regular season'}</span>
+      </div>
+    </div>
+  )
+}
+
 function TeamAnalytics({ team, season }: { team: string; season: number }) {
   const [focal, setFocal] = useState<TeamAnalyticsTeam | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1227,6 +1406,7 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
       </div>
       <SeasonSummary profile={profile} />
       <TeamAnalytics team={profile.team} season={profile.season} />
+      <TeamSplitsPanel team={profile.team} season={profile.season} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <InjuryReportPanel team={profile.team} season={profile.season} />
         <StartingLineupPanel team={profile.team} season={profile.season} />

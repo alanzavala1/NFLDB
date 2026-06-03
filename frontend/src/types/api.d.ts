@@ -157,6 +157,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/players/{player_id}/splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Player Splits */
+        get: operations["get_player_splits_players__player_id__splits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teams/{team}": {
         parameters: {
             query?: never;
@@ -204,6 +221,27 @@ export interface paths {
          *     the latest week we have data for in the given season.
          */
         get: operations["get_team_depth_chart_teams__team__depth_chart_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/{team}/splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Team Splits
+         * @description Team offense/defense rate profile conditioned on each situational
+         *     dimension. Reads the materialized table; self-heals on a cold table.
+         */
+        get: operations["get_team_splits_teams__team__splits_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1138,6 +1176,44 @@ export interface components {
             awards: components["schemas"]["PlayerAward"][];
         };
         /**
+         * PlayerSplit
+         * @description One row of a player's stat line conditioned on a single situational
+         *     dimension. Long-format: (season, category, split_dim, split_value) +
+         *     metrics. Served by /players/{id}/splits, grouped client-side by dim.
+         */
+        PlayerSplit: {
+            /** Season */
+            season: number;
+            /** Category */
+            category: string;
+            /** Split Dim */
+            split_dim: string;
+            /** Split Value */
+            split_value: string;
+            /** Sort Order */
+            sort_order: number | null;
+            /** Att */
+            att: number | null;
+            /** Cmp */
+            cmp: number | null;
+            /** Yards */
+            yards: number | null;
+            /** Td */
+            td: number | null;
+            /** Interceptions */
+            interceptions: number | null;
+            /** Air Yards */
+            air_yards: number | null;
+            /** Yac */
+            yac: number | null;
+            /** Epa */
+            epa: number | null;
+            /** Success Pct */
+            success_pct: number | null;
+            /** Cpoe */
+            cpoe: number | null;
+        };
+        /**
          * PlayerWpa
          * @description Per-season WPA attribution. Sparse by role (passer/rusher/receiver).
          */
@@ -1570,6 +1646,38 @@ export interface components {
             /** Playoff Leaders */
             playoff_leaders: components["schemas"]["TeamLeader"][];
         };
+        /**
+         * TeamSplit
+         * @description One row of a team's rate profile conditioned on a situational dimension.
+         *     Long-format: (side, split_dim, split_value) + rate metrics. Served by
+         *     /teams/{team}/splits, grouped client-side by side + dim.
+         */
+        TeamSplit: {
+            /** Side */
+            side: string;
+            /** Split Dim */
+            split_dim: string;
+            /** Split Value */
+            split_value: string;
+            /** Sort Order */
+            sort_order: number | null;
+            /** Plays */
+            plays: number | null;
+            /** Epa Play */
+            epa_play: number | null;
+            /** Success Pct */
+            success_pct: number | null;
+            /** Pass Rate */
+            pass_rate: number | null;
+            /** Yards Play */
+            yards_play: number | null;
+            /** Explosive Pct */
+            explosive_pct: number | null;
+            /** Pass Epa */
+            pass_epa: number | null;
+            /** Rush Epa */
+            rush_epa: number | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1915,6 +2023,37 @@ export interface operations {
             };
         };
     };
+    get_player_splits_players__player_id__splits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerSplit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_team_teams__team__get: {
         parameters: {
             query?: {
@@ -2002,6 +2141,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DepthChartEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_team_splits_teams__team__splits_get: {
+        parameters: {
+            query?: {
+                season?: number;
+            };
+            header?: never;
+            path: {
+                team: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamSplit"][];
                 };
             };
             /** @description Validation Error */

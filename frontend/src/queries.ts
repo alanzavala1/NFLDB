@@ -15,9 +15,9 @@ import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
 import { api } from './api'
 import type {
   DepthChartEntry, DivisionStandings, GameDetail, InjuryStatus,
-  LeagueLeader, PlayerComparable, PlayerProfile, RosterPlayer,
+  LeagueLeader, PlayerComparable, PlayerProfile, PlayerSplit, RosterPlayer,
   ScheduleWeek, SearchResult, SeasonStatus, TeamAnalyticsResponse,
-  TeamProfile, WpaLeaders,
+  TeamProfile, TeamSplit, WpaLeaders,
 } from './types'
 
 // Past-season data is immutable, so override the global 5-minute staleTime
@@ -85,6 +85,17 @@ export function usePlayerComparables(playerId: string | undefined, options?: Opt
   })
 }
 
+export function usePlayerSplits(playerId: string | undefined, options?: Options<PlayerSplit[]>) {
+  return useQuery({
+    queryKey: ['player-splits', playerId] as const,
+    queryFn: () => api.splits(playerId!),
+    enabled: !!playerId,
+    // Splits are materialized during ingest; stable between loads.
+    staleTime: FOREVER,
+    ...options,
+  })
+}
+
 
 // ── Team ─────────────────────────────────────────────────────────────────────
 
@@ -139,6 +150,16 @@ export function useTeamAnalytics(season: number | null, options?: Options<TeamAn
     queryKey: ['team-analytics', season] as const,
     queryFn: () => api.teamAnalytics(season!),
     enabled: season != null,
+    ...options,
+  })
+}
+
+export function useTeamSplits(abbrev: string | undefined, season: number | null, options?: Options<TeamSplit[]>) {
+  return useQuery({
+    queryKey: ['team-splits', abbrev, season] as const,
+    queryFn: () => api.teamSplits(abbrev!, season!),
+    enabled: !!abbrev && season != null,
+    staleTime: FOREVER,
     ...options,
   })
 }

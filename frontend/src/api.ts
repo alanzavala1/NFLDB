@@ -17,10 +17,10 @@
 import type {
   CombineData, DepthChartEntry, DivisionStandings, DraftInfo, Game,
   GameDetail, GamePlayerStats, InjuryStatus, KickingStats, LeagueLeader, NgsStats,
-  PlayerAdvStats, PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa,
+  PlayerAdvStats, PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, PlayerWpa,
   RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus, SituationalStats,
   SnapTotals, StandingsRow, TeamAnalyticsResponse, TeamAnalyticsRow,
-  TeamGame, TeamLeader, TeamProfile, WinProbPlay, WpaLeader, WpaLeaders,
+  TeamGame, TeamLeader, TeamProfile, TeamSplit, WinProbPlay, WpaLeader, WpaLeaders,
 } from './types'
 
 const BASE = '/api'
@@ -36,9 +36,9 @@ export const CURRENT_NFL_SEASON = ((): number => {
 export type {
   CombineData, DepthChartEntry, DivisionStandings, DraftInfo, Game,
   GameDetail, InjuryStatus, KickingStats, LeagueLeader, NgsStats, PlayerAdvStats,
-  PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerWpa,
+  PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, PlayerWpa,
   RosterPlayer, SearchResult, SituationalStats, SnapTotals, TeamGame,
-  TeamLeader, TeamProfile, WinProbPlay, WpaLeader, WpaLeaders,
+  TeamLeader, TeamProfile, TeamSplit, WinProbPlay, WpaLeader, WpaLeaders,
 }
 
 export type SeasonEntry        = SeasonStatus
@@ -66,9 +66,11 @@ export const api = {
   teamInjuries:  (team: string, season: number, week?: number) =>
     get<InjuryStatus[]>(`/teams/${team}/injuries?season=${season}${week != null ? `&week=${week}` : ''}`),
   teamAnalytics: (season: number)              => get<TeamAnalyticsResponse>(`/team-analytics?season=${season}`),
+  teamSplits:    (team: string, season: number) => get<TeamSplit[]>(`/teams/${team}/splits?season=${season}`),
   standings:     (season: number)              => get<DivisionStandings[]>(`/standings?season=${season}`),
   leaders:       (season: number)              => get<LeagueLeader[]>(`/leaders?season=${season}`),
   wpaLeaders:    (season: number)              => get<WpaLeaders>(`/wpa-leaders?season=${season}`),
   comparables:   (playerId: string)            => get<PlayerComparable[]>(`/players/${playerId}/comparables`),
+  splits:        (playerId: string)            => get<PlayerSplit[]>(`/players/${playerId}/splits`),
   search:        (q: string)                   => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
 }

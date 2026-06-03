@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from database import query_to_dict
 from schemas.leaders import PlayerComparable
-from schemas.players import PlayerProfile
+from schemas.players import PlayerProfile, PlayerSplit
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, STAT_COLS, safe_query
 
 router = APIRouter()
@@ -697,3 +697,16 @@ import comparables_builder
 @router.get("/players/{player_id}/comparables", response_model=list[PlayerComparable])
 def get_player_comparables(player_id: str, n: int = Query(default=8, ge=1, le=20)):
     return comparables_builder.read_or_materialize(player_id, n)
+
+
+# ── Situational splits ───────────────────────────────────────────────────────
+# The player's stat line conditioned on one dimension at a time (down, pass
+# depth, location, game script, quarter, formation). Reads from the
+# materialized player_splits table; self-heals on a cold table.
+
+import splits_builder
+
+
+@router.get("/players/{player_id}/splits", response_model=list[PlayerSplit])
+def get_player_splits(player_id: str):
+    return splits_builder.read_or_materialize(player_id)

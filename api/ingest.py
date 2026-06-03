@@ -736,6 +736,21 @@ def run_ingest(seasons: list[int], log=print):
         n = team_analytics_builder.materialize(season)
         log(f"  team_season_analytics[{season}]: {n} rows")
 
+    # Materialize player splits — the player's stat line conditioned on each
+    # situational dimension, precomputed per season.
+    log("\nMaterializing player splits...")
+    import splits_builder
+    for season in seasons:
+        n = splits_builder.materialize(season)
+        log(f"  player_splits[{season}]: {n} rows")
+
+    # Materialize team splits — team offense/defense rate profile by situation.
+    log("\nMaterializing team splits...")
+    import team_splits_builder
+    for season in seasons:
+        n = team_splits_builder.materialize(season)
+        log(f"  team_splits[{season}]: {n} rows")
+
     # Rebuild player comparables — career stats shifted with the new ingest,
     # so z-scores and neighbor rankings need to be recomputed across all
     # players. Done once per ingest batch (not per season) to amortize cost.

@@ -84,3 +84,21 @@ class TeamAnalyticsResponse(BaseModel):
     """/team-analytics?season=… returns the season plus per-team rows."""
     season: int
     league: list[TeamAnalyticsRow]
+
+
+class TeamSplit(BaseModel):
+    """One row of a team's rate profile conditioned on a situational dimension.
+    Long-format: (side, split_dim, split_value) + rate metrics. Served by
+    /teams/{team}/splits, grouped client-side by side + dim."""
+    side: str            # 'offense' | 'defense'
+    split_dim: str
+    split_value: str
+    sort_order: int | None
+    plays: int | None
+    epa_play: float | None
+    success_pct: float | None
+    pass_rate: float | None
+    yards_play: float | None
+    explosive_pct: float | None
+    pass_epa: float | None
+    rush_epa: float | None
