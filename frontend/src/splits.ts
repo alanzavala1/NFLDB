@@ -32,6 +32,7 @@ export type Metric<R> = {
   value: (r: R) => number | null      // numeric — for ranking / best-in-row
   fmt: (v: number) => string          // display string
   higherIsBetter?: boolean            // undefined ⇒ neutral (no winner shading)
+  group?: string                      // section header in the Compare view
 }
 
 const sgn = (v: number, d = 3) => `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
@@ -67,42 +68,42 @@ const intStr = (v: number) => String(v)
 // Comprehensive metric lists — these are the rows shown in the Compare view
 // (and the options in the By-Split pivot's metric dropdown).
 const PASSING_METRICS: Metric<PlayerSplit>[] = [
-  { key: 'att',  label: 'ATT',     value: r => r.att, fmt: intStr },
-  { key: 'cmp',  label: 'CMP',     value: r => r.cmp, fmt: intStr },
-  { key: 'cmpp', label: 'CMP%',    value: r => pct(r.cmp, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
-  { key: 'yds',  label: 'YDS',     value: r => r.yards, fmt: intStr, higherIsBetter: true },
-  { key: 'ya',   label: 'Y/A',     value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
-  { key: 'td',   label: 'TD',      value: r => r.td, fmt: intStr, higherIsBetter: true },
-  { key: 'int',  label: 'INT',     value: r => r.interceptions, fmt: intStr, higherIsBetter: false },
-  { key: 'rate', label: 'RATE',    value: r => passerRating(r.cmp ?? 0, r.att ?? 0, r.yards ?? 0, r.td ?? 0, r.interceptions ?? 0), fmt: v => v.toFixed(1), higherIsBetter: true },
-  { key: 'adot', label: 'aDOT',    value: r => per(r.air_yards, r.att), fmt: v => v.toFixed(1) },
-  { key: 'yac',  label: 'YAC',     value: r => r.yac, fmt: intStr },
-  { key: 'epa',  label: 'EPA/att', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
-  { key: 'succ', label: 'Success%',value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
-  { key: 'cpoe', label: 'CPOE',    value: r => r.cpoe, fmt: v => sgn(v, 1), higherIsBetter: true },
+  { key: 'att',  label: 'ATT',     group: 'Production', value: r => r.att, fmt: intStr },
+  { key: 'cmp',  label: 'CMP',     group: 'Production', value: r => r.cmp, fmt: intStr },
+  { key: 'yds',  label: 'YDS',     group: 'Production', value: r => r.yards, fmt: intStr, higherIsBetter: true },
+  { key: 'td',   label: 'TD',      group: 'Production', value: r => r.td, fmt: intStr, higherIsBetter: true },
+  { key: 'int',  label: 'INT',     group: 'Production', value: r => r.interceptions, fmt: intStr, higherIsBetter: false },
+  { key: 'cmpp', label: 'CMP%',    group: 'Efficiency', value: r => pct(r.cmp, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'ya',   label: 'Y/A',     group: 'Efficiency', value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'rate', label: 'RATE',    group: 'Efficiency', value: r => passerRating(r.cmp ?? 0, r.att ?? 0, r.yards ?? 0, r.td ?? 0, r.interceptions ?? 0), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'adot', label: 'aDOT',    group: 'Efficiency', value: r => per(r.air_yards, r.att), fmt: v => v.toFixed(1) },
+  { key: 'yac',  label: 'YAC/cmp', group: 'Efficiency', value: r => per(r.yac, r.cmp), fmt: v => v.toFixed(1) },
+  { key: 'epa',  label: 'EPA/att', group: 'Advanced',   value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
+  { key: 'succ', label: 'Success%',group: 'Advanced',   value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'cpoe', label: 'CPOE',    group: 'Advanced',   value: r => r.cpoe, fmt: v => sgn(v, 1), higherIsBetter: true },
 ]
 
 const RUSHING_METRICS: Metric<PlayerSplit>[] = [
-  { key: 'car',  label: 'CAR',     value: r => r.att, fmt: intStr },
-  { key: 'yds',  label: 'YDS',     value: r => r.yards, fmt: intStr, higherIsBetter: true },
-  { key: 'ypc',  label: 'Y/C',     value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
-  { key: 'td',   label: 'TD',      value: r => r.td, fmt: intStr, higherIsBetter: true },
-  { key: 'epa',  label: 'EPA/att', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
-  { key: 'succ', label: 'Success%',value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'car',  label: 'CAR',     group: 'Production', value: r => r.att, fmt: intStr },
+  { key: 'yds',  label: 'YDS',     group: 'Production', value: r => r.yards, fmt: intStr, higherIsBetter: true },
+  { key: 'td',   label: 'TD',      group: 'Production', value: r => r.td, fmt: intStr, higherIsBetter: true },
+  { key: 'ypc',  label: 'Y/C',     group: 'Efficiency', value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'epa',  label: 'EPA/att', group: 'Advanced',   value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
+  { key: 'succ', label: 'Success%',group: 'Advanced',   value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
 ]
 
 const RECEIVING_METRICS: Metric<PlayerSplit>[] = [
-  { key: 'tgt',  label: 'TGT',     value: r => r.att, fmt: intStr },
-  { key: 'rec',  label: 'REC',     value: r => r.cmp, fmt: intStr, higherIsBetter: true },
-  { key: 'cth',  label: 'Catch%',  value: r => pct(r.cmp, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
-  { key: 'yds',  label: 'YDS',     value: r => r.yards, fmt: intStr, higherIsBetter: true },
-  { key: 'ypr',  label: 'Y/R',     value: r => per(r.yards, r.cmp), fmt: v => v.toFixed(1), higherIsBetter: true },
-  { key: 'ytgt', label: 'Y/Tgt',   value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
-  { key: 'td',   label: 'TD',      value: r => r.td, fmt: intStr, higherIsBetter: true },
-  { key: 'adot', label: 'aDOT',    value: r => per(r.air_yards, r.att), fmt: v => v.toFixed(1) },
-  { key: 'yac',  label: 'YAC',     value: r => r.yac, fmt: intStr, higherIsBetter: true },
-  { key: 'epa',  label: 'EPA/tgt', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
-  { key: 'succ', label: 'Success%',value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'tgt',  label: 'TGT',     group: 'Production', value: r => r.att, fmt: intStr },
+  { key: 'rec',  label: 'REC',     group: 'Production', value: r => r.cmp, fmt: intStr, higherIsBetter: true },
+  { key: 'yds',  label: 'YDS',     group: 'Production', value: r => r.yards, fmt: intStr, higherIsBetter: true },
+  { key: 'td',   label: 'TD',      group: 'Production', value: r => r.td, fmt: intStr, higherIsBetter: true },
+  { key: 'cth',  label: 'Catch%',  group: 'Efficiency', value: r => pct(r.cmp, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'ypr',  label: 'Y/R',     group: 'Efficiency', value: r => per(r.yards, r.cmp), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'ytgt', label: 'Y/Tgt',   group: 'Efficiency', value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'adot', label: 'aDOT',    group: 'Efficiency', value: r => per(r.air_yards, r.att), fmt: v => v.toFixed(1) },
+  { key: 'yac',  label: 'YAC',     group: 'Efficiency', value: r => r.yac, fmt: intStr, higherIsBetter: true },
+  { key: 'epa',  label: 'EPA/tgt', group: 'Advanced',   value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
+  { key: 'succ', label: 'Success%',group: 'Advanced',   value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
 ]
 
 export type PlayerCategory = 'passing' | 'rushing' | 'receiving'
@@ -128,13 +129,14 @@ export const PLAYER_SPLIT_CONFIG: Record<PlayerCategory, { label: string; dims: 
 // ── Team metrics ─────────────────────────────────────────────────────────────
 
 const TEAM_METRICS: Metric<TeamSplit>[] = [
-  { key: 'epa',      label: 'EPA/play',   value: r => r.epa_play, fmt: v => sgn(v, 3), higherIsBetter: true },
-  { key: 'succ',     label: 'Success%',   value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
-  { key: 'ypp',      label: 'Yds/play',   value: r => r.yards_play, fmt: v => v.toFixed(2), higherIsBetter: true },
-  { key: 'expl',     label: 'Explosive%', value: r => r.explosive_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
-  { key: 'passepa',  label: 'Pass EPA',   value: r => r.pass_epa, fmt: v => sgn(v, 3), higherIsBetter: true },
-  { key: 'rushepa',  label: 'Rush EPA',   value: r => r.rush_epa, fmt: v => sgn(v, 3), higherIsBetter: true },
-  { key: 'passrate', label: 'Pass%',      value: r => r.pass_rate, fmt: v => v.toFixed(1) + '%' },
+  { key: 'plays',    label: 'Plays',      group: 'Volume',     value: r => r.plays, fmt: intStr },
+  { key: 'epa',      label: 'EPA/play',   group: 'Efficiency', value: r => r.epa_play, fmt: v => sgn(v, 3), higherIsBetter: true },
+  { key: 'succ',     label: 'Success%',   group: 'Efficiency', value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'ypp',      label: 'Yds/play',   group: 'Efficiency', value: r => r.yards_play, fmt: v => v.toFixed(2), higherIsBetter: true },
+  { key: 'expl',     label: 'Explosive%', group: 'Efficiency', value: r => r.explosive_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'passepa',  label: 'Pass EPA',   group: 'By type',    value: r => r.pass_epa, fmt: v => sgn(v, 3), higherIsBetter: true },
+  { key: 'rushepa',  label: 'Rush EPA',   group: 'By type',    value: r => r.rush_epa, fmt: v => sgn(v, 3), higherIsBetter: true },
+  { key: 'passrate', label: 'Pass%',      group: 'By type',    value: r => r.pass_rate, fmt: v => v.toFixed(1) + '%' },
 ]
 
 const TEAM_DIMS: Dim[] = [

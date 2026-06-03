@@ -10,7 +10,7 @@
  *
  * Backed by the materialized player_splits / team_splits tables.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { PlayerSplit, TeamSplit, SearchResult } from '../api'
@@ -28,6 +28,39 @@ type PlayerEntity = { id: string; name: string; headshot?: string | null; sub?: 
 type Row = PlayerSplit | TeamSplit
 
 const SEASONS = Array.from({ length: CURRENT_NFL_SEASON - 1998 }, (_, i) => CURRENT_NFL_SEASON - i)
+
+// Distinct accent per selected entity (rgb triples for inline styling).
+const ENTITY_COLORS = ['99,102,241', '20,184,166', '245,158,11', '56,189,248', '244,63,94', '168,85,247']
+const colorOf = (i: number) => ENTITY_COLORS[i % ENTITY_COLORS.length]
+
+type EntityCard = { key: string; label: string; sub?: string; headshot?: string | null; logo?: string; color: string }
+
+// Prominent "matchup" cards for the selected entities (replaces plain chips).
+function MatchupHeader({ entities, onRemove }: { entities: EntityCard[]; onRemove: (key: string) => void }) {
+  return (
+    <div className="flex flex-wrap items-stretch gap-2 mb-5">
+      {entities.map((e, i) => (
+        <div key={e.key} className="group relative flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-xl pl-3 pr-8 py-2.5 min-w-[150px]"
+          style={{ boxShadow: `inset 0 2px 0 0 rgba(${e.color},0.9)` }}>
+          {e.logo
+            ? <img src={e.logo} className="w-10 h-10 object-contain shrink-0" alt="" />
+            : e.headshot
+              ? <img src={e.headshot} className="w-10 h-10 rounded-full object-cover object-top bg-gray-800 shrink-0" style={{ boxShadow: `0 0 0 2px rgba(${e.color},0.55)` }} alt="" />
+              : <div className="w-10 h-10 rounded-full bg-gray-800 shrink-0" />}
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-white truncate leading-tight">{e.label}</div>
+            {e.sub && <div className="text-[11px] text-gray-500 truncate">{e.sub}</div>}
+          </div>
+          <button onClick={() => onRemove(e.key)}
+            className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded text-gray-600 hover:text-red-400 hover:bg-gray-800 transition-colors">×</button>
+          {i < entities.length - 1 && entities.length === 2 && (
+            <span className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-[10px] font-black text-gray-600">VS</span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function Seg<T extends string | number>({ value, options, onChange }: {
   value: T; options: { value: T; label: string }[]; onChange: (v: T) => void
@@ -141,27 +174,9 @@ export default function SplitsPage() {
     ? players.map((_, i) => (playerResults[i]?.data ?? []) as PlayerSplit[])
     : teams.map((_, i) => (teamResults[i]?.data ?? []) as TeamSplit[])
 
-  const entityMeta = mode === 'players'
-    ? players.map(p => ({ key: p.id, label: p.name, headshot: p.headshot as string | null | undefined, logo: undefined as string | undefined }))
-    : teams.map(t => ({ key: t, label: t, headshot: undefined, logo: teamLogoUrl(t) }))
-
-  // Resolve one entity's row for the Compare filter (Overall or a dim+value).
-  function resolveRow(data: Row[]): Row | null {
-    if (mode === 'players') {
-      const rows = data as PlayerSplit[]
-      const dimKey = filterDim === 'overall' ? OVERALL_DIM : filterDim
-      let sel = rows.filter(s => s.category === pCat && s.split_dim === dimKey)
-      if (filterDim !== 'overall') sel = sel.filter(s => s.split_value === filterValue)
-      if (isCareer) return aggregatePlayerSplitRows(sel)
-      sel = sel.filter(s => s.season === season)
-      return filterDim === 'overall' ? aggregatePlayerSplitRows(sel) : (sel[0] ?? null)
-    }
-    const rows = data as TeamSplit[]
-    const dimKey = filterDim === 'overall' ? OVERALL_DIM : filterDim
-    let sel = rows.filter(s => s.side === tSide && s.split_dim === dimKey)
-    if (filterDim !== 'overall') sel = sel.filter(s => s.split_value === filterValue)
-    return filterDim === 'overall' ? aggregateTeamSplitRows(sel) : (sel[0] ?? null)
-  }
+  const entityMeta: EntityCard[] = mode === 'players'
+    ? players.map((p, i) => ({ key: p.id, label: p.name, sub: p.sub, headshot: p.headshot, logo: undefined, color: colorOf(i) }))
+    : teams.map((t, i) => ({ key: t, label: teamName(t), sub: t, logo: teamLogoUrl(t), color: colorOf(i) }))
 
   // Values available for the chosen filter dimension (union across entities).
   const filterValues = useMemo(() => {
@@ -181,6 +196,25 @@ export default function SplitsPage() {
 
   const effFilterValue = filterDim === 'overall' ? null
     : (filterValue && filterValues.includes(filterValue) ? filterValue : (filterValues[0] ?? null))
+
+  // Resolve one entity's row for the Compare filter (Overall or a dim+value).
+  // Uses effFilterValue so a freshly-picked dimension defaults to its first value.
+  function resolveRow(data: Row[]): Row | null {
+    if (mode === 'players') {
+      const rows = data as PlayerSplit[]
+      const dimKey = filterDim === 'overall' ? OVERALL_DIM : filterDim
+      let sel = rows.filter(s => s.category === pCat && s.split_dim === dimKey)
+      if (filterDim !== 'overall') sel = sel.filter(s => s.split_value === effFilterValue)
+      if (isCareer) return aggregatePlayerSplitRows(sel)
+      sel = sel.filter(s => s.season === season)
+      return filterDim === 'overall' ? aggregatePlayerSplitRows(sel) : (sel[0] ?? null)
+    }
+    const rows = data as TeamSplit[]
+    const dimKey = filterDim === 'overall' ? OVERALL_DIM : filterDim
+    let sel = rows.filter(s => s.side === tSide && s.split_dim === dimKey)
+    if (filterDim !== 'overall') sel = sel.filter(s => s.split_value === effFilterValue)
+    return filterDim === 'overall' ? aggregateTeamSplitRows(sel) : (sel[0] ?? null)
+  }
 
   // Defense flips: lower allowed is better.
   const flip = (hib: boolean | undefined) =>
@@ -217,25 +251,10 @@ export default function SplitsPage() {
           <AddEntity mode={mode} onAdd={addEntity} />
         </div>
 
-        {/* Chips */}
+        {/* Matchup cards */}
         {entityCount > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {mode === 'players'
-              ? players.map(p => (
-                <span key={p.id} className="inline-flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg pl-2 pr-1 py-1">
-                  {p.headshot ? <img src={p.headshot} className="w-5 h-5 rounded-full object-cover object-top bg-gray-800" alt="" /> : <div className="w-5 h-5 rounded-full bg-gray-800" />}
-                  <span className="text-sm text-gray-200">{p.name}</span>
-                  <button onClick={() => setPlayers(xs => xs.filter(x => x.id !== p.id))} className="text-gray-600 hover:text-red-400 px-1">×</button>
-                </span>
-              ))
-              : teams.map(t => (
-                <span key={t} className="inline-flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-lg pl-2 pr-1 py-1">
-                  <img src={teamLogoUrl(t)} className="w-5 h-5 object-contain" alt="" />
-                  <span className="text-sm text-gray-200">{t}</span>
-                  <button onClick={() => setTeams(xs => xs.filter(x => x !== t))} className="text-gray-600 hover:text-red-400 px-1">×</button>
-                </span>
-              ))}
-          </div>
+          <MatchupHeader entities={entityMeta}
+            onRemove={k => mode === 'players' ? setPlayers(xs => xs.filter(x => x.id !== k)) : setTeams(xs => xs.filter(x => x !== k))} />
         )}
 
         {entityCount === 0 ? (
@@ -306,31 +325,40 @@ export default function SplitsPage() {
   )
 }
 
-// — Compare: full stat line, stats as rows —
+// Colored, image-bearing column header shared by both tables.
+function ColHead({ c }: { c: EntityCard }) {
+  return (
+    <th key={c.key} className="py-2.5 px-3 text-left whitespace-nowrap border-b-2" style={{ borderBottomColor: `rgba(${c.color},0.9)` }}>
+      <div className="flex items-center gap-1.5">
+        {c.logo ? <img src={c.logo} className="w-6 h-6 object-contain" alt="" />
+          : c.headshot ? <img src={c.headshot} className="w-6 h-6 rounded-full object-cover object-top bg-gray-800" alt="" />
+            : <span className="w-2 h-2 rounded-full" style={{ backgroundColor: `rgb(${c.color})` }} />}
+        <span className="text-xs font-bold text-white">{c.label}</span>
+      </div>
+    </th>
+  )
+}
+
+const bestCellCls = 'text-emerald-300 font-bold bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/30'
+
+// — Compare: full stat line, stats as rows, grouped into sections —
 function CompareTable({ metrics, cols, flip, loading, caption }: {
   metrics: Metric<Row>[]
-  cols: { key: string; label: string; headshot?: string | null; logo?: string; row: Row | null }[]
+  cols: (EntityCard & { row: Row | null })[]
   flip: (hib: boolean | undefined) => boolean | undefined
   loading: boolean
   caption: string
 }) {
   const anyData = cols.some(c => c.row != null)
+  let lastGroup = ''
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800">
-              <th className="py-2.5 pl-4 pr-3 text-xs font-medium text-gray-500 text-left whitespace-nowrap">{caption}</th>
-              {cols.map(c => (
-                <th key={c.key} className="py-2.5 px-3 text-left whitespace-nowrap">
-                  <div className="flex items-center gap-1.5">
-                    {c.logo ? <img src={c.logo} className="w-5 h-5 object-contain" alt="" />
-                      : c.headshot ? <img src={c.headshot} className="w-5 h-5 rounded-full object-cover object-top bg-gray-800" alt="" /> : null}
-                    <span className="text-xs font-semibold text-gray-200">{c.label}</span>
-                  </div>
-                </th>
-              ))}
+            <tr>
+              <th className="py-2.5 pl-4 pr-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-gray-800">{caption}</th>
+              {cols.map(c => <ColHead key={c.key} c={c} />)}
             </tr>
           </thead>
           <tbody>
@@ -339,16 +367,23 @@ function CompareTable({ metrics, cols, flip, loading, caption }: {
             ) : metrics.map(m => {
               const vals = cols.map(c => c.row ? m.value(c.row) : null)
               const best = bestSet(vals, flip(m.higherIsBetter))
+              const newGroup = m.group && m.group !== lastGroup ? (lastGroup = m.group) : null
               return (
-                <tr key={m.key} className="border-t border-gray-800/60 hover:bg-gray-800/30">
-                  <td className="py-2 pl-4 pr-3 whitespace-nowrap text-xs font-semibold text-gray-400 uppercase tracking-wider">{m.label}</td>
-                  {vals.map((v, i) => (
-                    <td key={cols[i].key} className={`py-2 px-3 whitespace-nowrap tabular-nums ${
-                      v == null ? 'text-gray-700' : best.has(i) ? 'text-emerald-300 font-bold bg-emerald-500/10' : 'text-gray-200'}`}>
-                      {v == null ? '—' : m.fmt(v)}
-                    </td>
-                  ))}
-                </tr>
+                <Fragment key={m.key}>
+                  {newGroup && (
+                    <tr className="bg-gray-950/60"><td colSpan={cols.length + 1}
+                      className="py-1.5 pl-4 pr-3 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{newGroup}</td></tr>
+                  )}
+                  <tr className="border-t border-gray-800/50 hover:bg-gray-800/30">
+                    <td className="py-2 pl-4 pr-3 whitespace-nowrap text-xs font-semibold text-gray-400">{m.label}</td>
+                    {vals.map((v, i) => (
+                      <td key={cols[i].key} className={`py-2 px-3 whitespace-nowrap tabular-nums ${
+                        v == null ? 'text-gray-700' : best.has(i) ? bestCellCls : 'text-gray-200'}`}>
+                        {v == null ? '—' : m.fmt(v)}
+                      </td>
+                    ))}
+                  </tr>
+                </Fragment>
               )
             })}
           </tbody>
@@ -365,7 +400,7 @@ function SplitPivot({ mode, catOrSide, season, isCareer, config, metrics, flip, 
   metrics: Metric<Row>[]
   flip: (hib: boolean | undefined) => boolean | undefined
   entityData: Row[][]
-  entityMeta: { key: string; label: string; headshot?: string | null; logo?: string }[]
+  entityMeta: EntityCard[]
   splitDim: string; setSplitDim: (s: string) => void
   metricKey: string; setMetricKey: (s: string) => void
   loading: boolean
@@ -409,17 +444,9 @@ function SplitPivot({ mode, catOrSide, season, isCareer, config, metrics, flip, 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className="py-2.5 pl-4 pr-3 text-xs font-medium text-gray-500 text-left whitespace-nowrap">{config.dims.find(d => d.key === activeDim)?.label}</th>
-                {cols.map(c => (
-                  <th key={c.key} className="py-2.5 px-3 text-left whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      {c.logo ? <img src={c.logo} className="w-5 h-5 object-contain" alt="" />
-                        : c.headshot ? <img src={c.headshot} className="w-5 h-5 rounded-full object-cover object-top bg-gray-800" alt="" /> : null}
-                      <span className="text-xs font-semibold text-gray-200">{c.label}</span>
-                    </div>
-                  </th>
-                ))}
+              <tr>
+                <th className="py-2.5 pl-4 pr-3 text-[11px] font-bold text-indigo-300 uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-gray-800">{config.dims.find(d => d.key === activeDim)?.label}</th>
+                {cols.map(c => <ColHead key={c.key} c={c} />)}
               </tr>
             </thead>
             <tbody>
@@ -437,7 +464,7 @@ function SplitPivot({ mode, catOrSide, season, isCareer, config, metrics, flip, 
                     </td>
                     {cells.map((val, i) => (
                       <td key={cols[i].key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums ${
-                        val == null ? 'text-gray-700' : best.has(i) ? 'text-emerald-300 font-bold bg-emerald-500/10' : 'text-gray-200'}`}>
+                        val == null ? 'text-gray-700' : best.has(i) ? bestCellCls : 'text-gray-200'}`}>
                         {val == null ? '—' : metric.fmt(val)}
                       </td>
                     ))}
