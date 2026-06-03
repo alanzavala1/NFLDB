@@ -40,6 +40,16 @@ const pct = (a: number | null | undefined, b: number | null | undefined) =>
 const per = (a: number | null | undefined, b: number | null | undefined) =>
   b && b > 0 ? (a ?? 0) / b : null
 
+function passerRating(cmp: number, att: number, yds: number, td: number, int: number): number | null {
+  if (att <= 0) return null
+  const clamp = (x: number) => Math.max(0, Math.min(2.375, x))
+  const a = clamp(((cmp / att) - 0.3) * 5)
+  const b = clamp(((yds / att) - 3) * 0.25)
+  const c = clamp((td / att) * 20)
+  const d = clamp(2.375 - (int / att) * 25)
+  return ((a + b + c + d) / 6) * 100
+}
+
 type Dim = { key: string; label: string }
 
 const COMMON_PLAYER_DIMS: Dim[] = [
@@ -53,35 +63,46 @@ const COMMON_PLAYER_DIMS: Dim[] = [
 
 // ── Player metrics ───────────────────────────────────────────────────────────
 
+const intStr = (v: number) => String(v)
+// Comprehensive metric lists — these are the rows shown in the Compare view
+// (and the options in the By-Split pivot's metric dropdown).
 const PASSING_METRICS: Metric<PlayerSplit>[] = [
-  { key: 'epa',  label: 'EPA/att', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
+  { key: 'att',  label: 'ATT',     value: r => r.att, fmt: intStr },
+  { key: 'cmp',  label: 'CMP',     value: r => r.cmp, fmt: intStr },
+  { key: 'cmpp', label: 'CMP%',    value: r => pct(r.cmp, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'yds',  label: 'YDS',     value: r => r.yards, fmt: intStr, higherIsBetter: true },
   { key: 'ya',   label: 'Y/A',     value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
-  { key: 'cmp',  label: 'CMP%',    value: r => pct(r.cmp, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'td',   label: 'TD',      value: r => r.td, fmt: intStr, higherIsBetter: true },
+  { key: 'int',  label: 'INT',     value: r => r.interceptions, fmt: intStr, higherIsBetter: false },
+  { key: 'rate', label: 'RATE',    value: r => passerRating(r.cmp ?? 0, r.att ?? 0, r.yards ?? 0, r.td ?? 0, r.interceptions ?? 0), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'adot', label: 'aDOT',    value: r => per(r.air_yards, r.att), fmt: v => v.toFixed(1) },
+  { key: 'yac',  label: 'YAC',     value: r => r.yac, fmt: intStr },
+  { key: 'epa',  label: 'EPA/att', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
   { key: 'succ', label: 'Success%',value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
   { key: 'cpoe', label: 'CPOE',    value: r => r.cpoe, fmt: v => sgn(v, 1), higherIsBetter: true },
-  { key: 'td',   label: 'TD',      value: r => r.td, fmt: v => String(v), higherIsBetter: true },
-  { key: 'yds',  label: 'Yards',   value: r => r.yards, fmt: v => String(v), higherIsBetter: true },
-  { key: 'att',  label: 'Attempts',value: r => r.att, fmt: v => String(v) },
 ]
 
 const RUSHING_METRICS: Metric<PlayerSplit>[] = [
-  { key: 'epa',  label: 'EPA/att', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
+  { key: 'car',  label: 'CAR',     value: r => r.att, fmt: intStr },
+  { key: 'yds',  label: 'YDS',     value: r => r.yards, fmt: intStr, higherIsBetter: true },
   { key: 'ypc',  label: 'Y/C',     value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'td',   label: 'TD',      value: r => r.td, fmt: intStr, higherIsBetter: true },
+  { key: 'epa',  label: 'EPA/att', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
   { key: 'succ', label: 'Success%',value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
-  { key: 'td',   label: 'TD',      value: r => r.td, fmt: v => String(v), higherIsBetter: true },
-  { key: 'yds',  label: 'Yards',   value: r => r.yards, fmt: v => String(v), higherIsBetter: true },
-  { key: 'car',  label: 'Carries', value: r => r.att, fmt: v => String(v) },
 ]
 
 const RECEIVING_METRICS: Metric<PlayerSplit>[] = [
-  { key: 'epa',  label: 'EPA/tgt', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
-  { key: 'ypr',  label: 'Y/R',     value: r => per(r.yards, r.cmp), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'tgt',  label: 'TGT',     value: r => r.att, fmt: intStr },
+  { key: 'rec',  label: 'REC',     value: r => r.cmp, fmt: intStr, higherIsBetter: true },
   { key: 'cth',  label: 'Catch%',  value: r => pct(r.cmp, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'yds',  label: 'YDS',     value: r => r.yards, fmt: intStr, higherIsBetter: true },
+  { key: 'ypr',  label: 'Y/R',     value: r => per(r.yards, r.cmp), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'ytgt', label: 'Y/Tgt',   value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'td',   label: 'TD',      value: r => r.td, fmt: intStr, higherIsBetter: true },
+  { key: 'adot', label: 'aDOT',    value: r => per(r.air_yards, r.att), fmt: v => v.toFixed(1) },
+  { key: 'yac',  label: 'YAC',     value: r => r.yac, fmt: intStr, higherIsBetter: true },
+  { key: 'epa',  label: 'EPA/tgt', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
   { key: 'succ', label: 'Success%',value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
-  { key: 'yac',  label: 'YAC',     value: r => r.yac, fmt: v => String(v), higherIsBetter: true },
-  { key: 'td',   label: 'TD',      value: r => r.td, fmt: v => String(v), higherIsBetter: true },
-  { key: 'yds',  label: 'Yards',   value: r => r.yards, fmt: v => String(v), higherIsBetter: true },
-  { key: 'tgt',  label: 'Targets', value: r => r.att, fmt: v => String(v) },
 ]
 
 export type PlayerCategory = 'passing' | 'rushing' | 'receiving'
@@ -164,4 +185,22 @@ export function aggregateCareerByValue(rows: PlayerSplit[]): PlayerSplit[] {
   return out
 }
 
+export function aggregateTeamSplitRows(rows: TeamSplit[]): TeamSplit | null {
+  if (rows.length === 0) return null
+  const plays = rows.reduce((a, r) => a + (r.plays ?? 0), 0)
+  const w = (f: (r: TeamSplit) => number | null | undefined) =>
+    plays > 0 ? rows.reduce((a, r) => a + (f(r) ?? 0) * (r.plays ?? 0), 0) / plays : null
+  return {
+    side: rows[0].side, split_dim: rows[0].split_dim, split_value: rows[0].split_value, sort_order: rows[0].sort_order,
+    plays, epa_play: w(r => r.epa_play), success_pct: w(r => r.success_pct), pass_rate: w(r => r.pass_rate),
+    yards_play: w(r => r.yards_play), explosive_pct: w(r => r.explosive_pct),
+    pass_epa: w(r => r.pass_epa), rush_epa: w(r => r.rush_epa),
+  }
+}
+
 export const CAREER_SEASON = 0  // sentinel: aggregate across all seasons
+
+// Dimension that fully partitions every play (no NULL bucket) — summing all
+// its values yields the "Overall" (unfiltered) row. `down` is set on every
+// scrimmage pass/run play, so it covers all of them.
+export const OVERALL_DIM = 'down'
