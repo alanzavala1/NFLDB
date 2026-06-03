@@ -1138,10 +1138,12 @@ const RECEIVING_SPLIT_COLS: SplitCol[] = [
 ]
 
 const _COMMON_SPLIT_DIMS: { key: string; label: string }[] = [
-  { key: 'down',        label: 'Down' },
-  { key: 'game_script', label: 'Game Script' },
-  { key: 'quarter',     label: 'Quarter' },
-  { key: 'shotgun',     label: 'Formation' },
+  { key: 'down',         label: 'Down' },
+  { key: 'game_script',  label: 'Game Script' },
+  { key: 'quarter',      label: 'Quarter' },
+  { key: 'shotgun',      label: 'Formation' },
+  { key: 'opponent',     label: 'Opponent' },
+  { key: 'opp_division', label: 'Division' },
 ]
 
 const SPLIT_CATEGORY_CONFIG: Record<SplitCategory, {
@@ -1188,6 +1190,26 @@ function aggregateSplitRows(rows: PlayerSplit[]): PlayerSplit | null {
   }
 }
 
+// Sentinel season meaning "aggregate across all seasons" (year 0 never occurs).
+const CAREER_SPLIT = 0
+
+// Career view: group a dimension's rows by split_value across seasons and
+// aggregate each group (counting stats sum; rates attempt-weighted), keeping
+// the value/order so the dimension still renders normally.
+function aggregateCareerSplits(rows: PlayerSplit[]): PlayerSplit[] {
+  const byValue = new Map<string, PlayerSplit[]>()
+  for (const r of rows) {
+    const g = byValue.get(r.split_value)
+    if (g) g.push(r); else byValue.set(r.split_value, [r])
+  }
+  const out: PlayerSplit[] = []
+  for (const group of byValue.values()) {
+    const agg = aggregateSplitRows(group)
+    if (agg) out.push({ ...agg, split_value: group[0].split_value, sort_order: group[0].sort_order })
+  }
+  return out
+}
+
 function SplitsPanel({ playerId, sectionRef }: {
   playerId: string
   sectionRef: React.RefObject<HTMLDivElement | null>
@@ -1215,15 +1237,23 @@ function SplitsPanel({ playerId, sectionRef }: {
     () => [...new Set(catRows.map(s => s.season))].sort((a, b) => b - a),
     [catRows],
   )
-  const activeSeason = (season != null && seasons.includes(season)) ? season : (seasons[0] ?? null)
+  // season === CAREER_SPLIT aggregates across every season (most useful for the
+  // opponent split — "vs the Jets all-time"). Otherwise a single season.
+  const activeSeason = (season != null && (season === CAREER_SPLIT || seasons.includes(season)))
+    ? season : (seasons[0] ?? null)
   const activeDim = (dim && config?.dims.some(d => d.key === dim)) ? dim : (config?.dims[0]?.key ?? null)
 
   // Splits only exist for qualified ball-handlers. Everyone else: no section.
   if (isPending || !config || !activeDim) return null
 
-  const rows = catRows
-    .filter(s => s.season === activeSeason && s.split_dim === activeDim)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  // sort_order first; opponent rows (sort_order null) fall back to volume desc.
+  const sortRows = (a: PlayerSplit, b: PlayerSplit) =>
+    (a.sort_order ?? 9999) - (b.sort_order ?? 9999) || (b.att ?? 0) - (a.att ?? 0)
+
+  const dimRows = catRows.filter(s => s.split_dim === activeDim)
+  const rows = activeSeason === CAREER_SPLIT
+    ? aggregateCareerSplits(dimRows).sort(sortRows)
+    : dimRows.filter(s => s.season === activeSeason).sort(sortRows)
   const totalRow = aggregateSplitRows(rows)
 
   // Subtle green→red tint on rate cells, scaled by how far a split sits from
@@ -1259,7 +1289,12 @@ function SplitsPanel({ playerId, sectionRef }: {
       <td className={`py-2.5 pl-4 pr-3 whitespace-nowrap ${isTotal
         ? 'text-xs font-bold text-gray-400 uppercase tracking-wider'
         : 'font-semibold text-white'}`}>
-        {isTotal ? 'Total' : splitValueLabel(activeDim, r.split_value)}
+        {isTotal ? 'Total' : activeDim === 'opponent' ? (
+          <span className="inline-flex items-center gap-1.5">
+            <img src={teamLogoUrl(r.split_value)} alt="" className="w-5 h-5 object-contain" />
+            {r.split_value}
+          </span>
+        ) : splitValueLabel(activeDim, r.split_value)}
       </td>
       {config.cols.map(c => {
         const raw = c.get(r)
@@ -1317,6 +1352,7 @@ function SplitsPanel({ playerId, sectionRef }: {
             onChange={e => setSeason(Number(e.target.value))}
             className="bg-gray-900 border border-gray-800 text-gray-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gray-600"
           >
+            <option value={CAREER_SPLIT}>Career</option>
             {seasons.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         )}

@@ -21,6 +21,7 @@ carries / targets; cmp = completions / receptions; NULL where N/A).
 import duckdb
 
 import splits_core as core
+from config import DIVISIONS
 from database import get_connection, query_to_dict
 
 # Per-category minimum volume in a season for a player to be included — keeps
@@ -71,6 +72,27 @@ def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
 _COMMON_DIMS = [core.DOWN_DIM, core.game_script_dim(1), core.QUARTER_DIM, core.SHOTGUN_DIM]
 
 
+def _opponent_dims() -> list[tuple[str, str, str, str]]:
+    """Opponent (defteam) and the opponent's division. DIVISIONS maps current
+    AND historical abbreviations, so relocated teams (OAK/LV, SD/LAC, …) bucket
+    correctly across 27 seasons."""
+    order = ["AFC East", "AFC North", "AFC South", "AFC West",
+             "NFC East", "NFC North", "NFC South", "NFC West"]
+    div_when = " ".join(f"WHEN '{t}' THEN '{d}'" for t, d in DIVISIONS.items())
+    div_sort_when = " ".join(f"WHEN '{t}' THEN {order.index(d) + 1}" for t, d in DIVISIONS.items())
+    div_expr = f"CASE defteam {div_when} END"
+    div_sort = f"CASE defteam {div_sort_when} END"
+    return [
+        # opponent has no natural integer order — sort_order NULL; the frontend
+        # orders these rows by volume (most-faced first).
+        ("opponent", "defteam", "CAST(NULL AS INTEGER)", "defteam IS NOT NULL"),
+        ("opp_division", div_expr, div_sort, "defteam IS NOT NULL"),
+    ]
+
+
+_OPPONENT_DIMS = _opponent_dims()
+
+
 def _category_dims(category: str) -> list[tuple[str, str, str, str]]:
     if category == "passing":
         lead = [("pass_depth", *core.DEPTH), ("pass_location", *core.PASS_DIR)]
@@ -81,7 +103,7 @@ def _category_dims(category: str) -> list[tuple[str, str, str, str]]:
         ]
     else:  # receiving
         lead = [("target_depth", *core.DEPTH), ("target_direction", *core.PASS_DIR)]
-    return lead + _COMMON_DIMS
+    return lead + _COMMON_DIMS + _OPPONENT_DIMS
 
 
 # ── Per-category SQL ──────────────────────────────────────────────────────────
@@ -91,7 +113,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
     the `base` CTE; metric_select is the aggregation projection in each block."""
     if category == "passing":
         base = f"""
-            passer_player_id AS player_id,
+            passer_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             complete_pass, passing_yards, pass_touchdown, interception,
             air_yards, yards_after_catch, epa, cpoe, {success_col}
@@ -110,7 +132,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             ROUND(AVG(cpoe), 2)               AS cpoe"""
     elif category == "rushing":
         base = f"""
-            rusher_player_id AS player_id,
+            rusher_player_id AS player_id, defteam,
             down, run_gap, run_location, score_differential, qtr, shotgun,
             rushing_yards, rush_touchdown, epa, {success_col}
         FROM plays
@@ -128,7 +150,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             CAST(NULL AS DOUBLE)           AS cpoe"""
     else:  # receiving
         base = f"""
-            receiver_player_id AS player_id,
+            receiver_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             complete_pass, receiving_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, {success_col}
