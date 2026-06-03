@@ -200,6 +200,44 @@ export function aggregateTeamSplitRows(rows: TeamSplit[]): TeamSplit | null {
   }
 }
 
+// ── Quick situational presets (the prominent filter chips) ───────────────────
+
+export type Situation = { label: string; dim: string; value: string }
+
+export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
+  passing: [
+    { label: 'Deep', dim: 'pass_depth', value: 'deep' },
+    { label: 'Short', dim: 'pass_depth', value: 'short' },
+    { label: '3rd Down', dim: 'down', value: '3' },
+    { label: '1st Down', dim: 'down', value: '1' },
+    { label: 'Trailing', dim: 'game_script', value: 'trailing' },
+    { label: 'Leading', dim: 'game_script', value: 'leading' },
+    { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },
+  ],
+  rushing: [
+    { label: '3rd Down', dim: 'down', value: '3' },
+    { label: '1st Down', dim: 'down', value: '1' },
+    { label: 'Off Guard', dim: 'run_gap', value: 'guard' },
+    { label: 'Off End', dim: 'run_gap', value: 'end' },
+    { label: 'Trailing', dim: 'game_script', value: 'trailing' },
+    { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },
+  ],
+  receiving: [
+    { label: 'Deep', dim: 'target_depth', value: 'deep' },
+    { label: 'Short', dim: 'target_depth', value: 'short' },
+    { label: '3rd Down', dim: 'down', value: '3' },
+    { label: 'Trailing', dim: 'game_script', value: 'trailing' },
+    { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },
+  ],
+}
+
+export const TEAM_SITUATIONS: Situation[] = [
+  { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
+  { label: '3rd Down', dim: 'down', value: '3' },
+  { label: 'Trailing', dim: 'game_script', value: 'trailing' },
+  { label: 'Leading', dim: 'game_script', value: 'leading' },
+]
+
 export const CAREER_SEASON = 0  // sentinel: aggregate across all seasons
 
 // Dimension that fully partitions every play (no NULL bucket) — summing all
