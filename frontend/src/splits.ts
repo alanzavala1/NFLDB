@@ -6,7 +6,7 @@
  * numeric accessor (for ranking + best-in-row shading) and a formatter (for
  * display). Also holds the value-label and career-aggregation helpers.
  */
-import type { PlayerSplit, TeamSplit } from './api'
+import type { PlayerSplit, TeamSplit, PlayerGame } from './api'
 
 // ── Value labels ─────────────────────────────────────────────────────────────
 
@@ -237,6 +237,21 @@ export const TEAM_SITUATIONS: Situation[] = [
   { label: 'Trailing', dim: 'game_script', value: 'trailing' },
   { label: 'Leading', dim: 'game_script', value: 'leading' },
 ]
+
+// Map a single game-log row to the PlayerSplit shape so per-game rows reuse the
+// same columns. Rate fields the game log doesn't carry (success%, cpoe) are
+// null; epa is converted to a per-attempt average to match the split metric.
+export function gameToSplitRow(g: PlayerGame, cat: PlayerCategory): PlayerSplit {
+  const base = {
+    season: g.season, category: cat, split_dim: 'game', split_value: g.game_id, sort_order: g.week,
+    att: null as number | null, cmp: null as number | null, yards: null as number | null, td: null as number | null,
+    interceptions: null as number | null, air_yards: null as number | null, yac: null as number | null,
+    epa: null as number | null, success_pct: null as number | null, cpoe: null as number | null,
+  }
+  if (cat === 'passing') return { ...base, att: g.attempts, cmp: g.completions, yards: g.pass_yards, td: g.pass_tds, interceptions: g.interceptions_thrown, air_yards: g.air_yards, yac: g.yac, epa: g.attempts ? g.pass_epa / g.attempts : null }
+  if (cat === 'rushing') return { ...base, att: g.carries, yards: g.rush_yards, td: g.rush_tds, epa: g.carries ? g.rush_epa / g.carries : null }
+  return { ...base, att: g.targets, cmp: g.receptions, yards: g.rec_yards, td: g.rec_tds, air_yards: g.air_yards, yac: g.yac, epa: g.targets ? g.rec_epa / g.targets : null }
+}
 
 export const CAREER_SEASON = 0  // sentinel: aggregate across all seasons
 
