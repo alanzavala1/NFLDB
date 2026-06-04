@@ -258,7 +258,7 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
   const sticky = 'sticky left-0 z-10 bg-gray-900'
   return (
     <div className="overflow-x-auto">
-      <table className="text-sm border-separate" style={{ borderSpacing: 0 }}>
+      <table className="min-w-full text-sm border-separate" style={{ borderSpacing: 0 }}>
         <thead>
           <tr>
             <th rowSpan={2} className={`${sticky} py-2 pl-4 pr-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-gray-800`}>{label}</th>
@@ -299,21 +299,37 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
                     })
                   })}
                 </tr>
-                {isSeason && expandedKeys.has(k) && sections.map((s, si) =>
-                  (s.groups?.get(k) ?? []).slice().sort((a, b) => a.g.week - b.g.week).map(({ g, r }) => (
-                    <tr key={`${si}-${g.game_id}`} className="bg-gray-950/40">
-                      <td className={`${sticky} bg-gray-950 py-1.5 pl-9 pr-3 whitespace-nowrap text-xs border-t border-gray-800/40`}>
-                        <Link to={`/games/${g.game_id}`} className="inline-flex items-center gap-1.5 text-indigo-300 hover:text-indigo-200">
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `rgb(${entities[si].color})` }} />
-                          Wk {g.week} {g.location === 'home' ? 'vs' : '@'} {g.opponent} →
-                        </Link>
-                      </td>
-                      {sections.map((_, qi) => metrics.map((m, mi) => {
-                        const v = qi === si ? m.value(r) : null
-                        return <td key={qi + m.key} className={`py-1.5 px-3 whitespace-nowrap tabular-nums text-xs border-t border-gray-800/40 ${mi === 0 ? 'border-l border-gray-800/50' : ''} ${v == null ? 'text-gray-800' : 'text-gray-400'}`}>{v == null ? '' : m.fmt(v)}</td>
-                      }))}
+                {isSeason && expandedKeys.has(k) && (() => {
+                  // Align games BY WEEK: one row per week, each entity's game that
+                  // week filling its own columns (with a link to the game page).
+                  const weekMaps = sections.map(s => {
+                    const mm = new Map<number, { g: { game_id: string; week: number; location: string; opponent: string }; r: Row }>()
+                    for (const x of (s.groups?.get(k) ?? [])) mm.set(x.g.week, x)
+                    return mm
+                  })
+                  const weeks = [...new Set(weekMaps.flatMap(mm => [...mm.keys()]))].sort((a, b) => a - b)
+                  return weeks.map(w => (
+                    <tr key={`wk-${w}`} className="bg-gray-950/40">
+                      <td className={`${sticky} bg-gray-950 py-1.5 pl-9 pr-3 whitespace-nowrap text-xs text-gray-500 border-t border-gray-800/40`}>Wk {w}</td>
+                      {sections.map((_, si) => {
+                        const x = weekMaps[si].get(w)
+                        return metrics.map((m, mi) => {
+                          const v = x ? m.value(x.r) : null
+                          return (
+                            <td key={si + m.key} className={`py-1.5 px-3 whitespace-nowrap tabular-nums text-xs border-t border-gray-800/40 ${mi === 0 ? 'border-l border-gray-800/50' : ''} ${v == null ? 'text-gray-800' : 'text-gray-400'}`}>
+                              {mi === 0 && x ? (
+                                <div className="flex flex-col leading-tight">
+                                  <span>{v == null ? '—' : m.fmt(v)}</span>
+                                  <Link to={`/games/${x.g.game_id}`} className="text-[10px] text-indigo-400/70 hover:text-indigo-300">{x.g.location === 'home' ? 'vs ' : '@ '}{x.g.opponent}</Link>
+                                </div>
+                              ) : (v == null ? '' : m.fmt(v))}
+                            </td>
+                          )
+                        })
+                      })}
                     </tr>
-                  )))}
+                  ))
+                })()}
               </Fragment>
             )
           })}
