@@ -10,7 +10,7 @@
  * Backed by player_splits / team_splits, the player profile (per-game), and
  * team_season_analytics (opponent defensive ranks).
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
@@ -34,6 +34,15 @@ type TRow = { key: string; label: React.ReactNode; row: Row | null; defRk?: numb
 const SEASONS = Array.from({ length: CURRENT_NFL_SEASON - 1998 }, (_, i) => CURRENT_NFL_SEASON - i)
 const ENTITY_COLORS = ['99,102,241', '20,184,166', '245,158,11', '56,189,248', '244,63,94', '168,85,247']
 const colorOf = (i: number) => ENTITY_COLORS[i % ENTITY_COLORS.length]
+
+// Curated "key stats" per category/side — keeps the side-by-side narrow.
+const KEY_KEYS: Record<string, string[]> = {
+  passing: ['ya', 'td', 'int', 'epa', 'succ'],
+  rushing: ['ypc', 'td', 'epa', 'succ'],
+  receiving: ['ypr', 'td', 'epa', 'succ'],
+  offense: ['epa', 'succ', 'ypp', 'expl'],
+  defense: ['epa', 'succ', 'ypp', 'expl'],
+}
 const selectCls = 'bg-gray-900 border border-gray-800 text-gray-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-gray-600'
 
 function Seg<T extends string | number>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
@@ -229,6 +238,98 @@ function Section({ title, children, open, onToggle }: { title: string; children:
   )
 }
 
+type EntitySecLite = { map: Map<string, Row>; total: Row | null; groups?: Map<string, { g: { game_id: string; week: number; location: string; opponent: string }; r: Row }[]> }
+
+// Side-by-side: rows = split values, columns grouped by entity (each entity's
+// metrics). Sticky label column; best per metric across entities tinted.
+function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defRkFor, isSeason, expandedKeys, onToggleExpand, flip }: {
+  label: string
+  entities: EntityCard[]
+  metrics: Metric<Row>[]
+  keys: string[]
+  keyLabel: (k: string) => React.ReactNode
+  sections: EntitySecLite[]
+  defRkFor?: (k: string) => number | null | undefined
+  isSeason?: boolean
+  expandedKeys: Set<string>
+  onToggleExpand?: (k: string) => void
+  flip: (hib: boolean | undefined) => boolean | undefined
+}) {
+  const sticky = 'sticky left-0 z-10 bg-gray-900'
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-sm border-separate" style={{ borderSpacing: 0 }}>
+        <thead>
+          <tr>
+            <th rowSpan={2} className={`${sticky} py-2 pl-4 pr-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-gray-800`}>{label}</th>
+            {entities.map(e => (
+              <th key={e.key} colSpan={metrics.length} className="py-1.5 px-3 text-left whitespace-nowrap border-b border-l border-gray-800" style={{ color: `rgb(${e.color})` }}>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+                  {e.headshot ? <img src={e.headshot} className="w-5 h-5 rounded-full object-cover object-top bg-gray-800" alt="" /> : e.logo ? <img src={e.logo} className="w-5 h-5 object-contain" alt="" /> : null}
+                  {e.label}
+                </span>
+              </th>
+            ))}
+          </tr>
+          <tr>
+            {entities.map(e => metrics.map((m, mi) => (
+              <th key={e.key + m.key} className={`py-1.5 px-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-gray-800 ${mi === 0 ? 'border-l border-gray-800' : ''}`}>{m.label}</th>
+            )))}
+          </tr>
+        </thead>
+        <tbody>
+          {keys.map(k => {
+            const dr = defRkFor?.(k)
+            const bestByMetric = metrics.map(m => bestSet(sections.map(s => { const r = s.map.get(k); return r ? m.value(r) : null }), flip(m.higherIsBetter)))
+            return (
+              <Fragment key={k}>
+                <tr className="hover:bg-gray-800/20">
+                  <td className={`${sticky} py-2 pl-4 pr-3 whitespace-nowrap font-semibold text-white border-t border-gray-800/50`}>
+                    <span className="inline-flex items-center gap-1.5">
+                      {isSeason && onToggleExpand && <button onClick={() => onToggleExpand(k)} className="text-gray-600 hover:text-white w-3">{expandedKeys.has(k) ? '▾' : '▸'}</button>}
+                      {keyLabel(k)}
+                      {dr != null && <span className="text-amber-500/70 text-[10px] font-bold">#{dr}</span>}
+                    </span>
+                  </td>
+                  {sections.map((s, si) => {
+                    const r = s.map.get(k)
+                    return metrics.map((m, mi) => {
+                      const v = r ? m.value(r) : null
+                      return <td key={si + m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums border-t border-gray-800/50 ${mi === 0 ? 'border-l border-gray-800/50' : ''} ${v == null ? 'text-gray-700' : bestByMetric[mi].has(si) ? 'text-emerald-300 font-bold bg-emerald-500/15' : 'text-gray-200'}`}>{v == null ? '—' : m.fmt(v)}</td>
+                    })
+                  })}
+                </tr>
+                {isSeason && expandedKeys.has(k) && sections.map((s, si) =>
+                  (s.groups?.get(k) ?? []).slice().sort((a, b) => a.g.week - b.g.week).map(({ g, r }) => (
+                    <tr key={`${si}-${g.game_id}`} className="bg-gray-950/40">
+                      <td className={`${sticky} bg-gray-950 py-1.5 pl-9 pr-3 whitespace-nowrap text-xs border-t border-gray-800/40`}>
+                        <Link to={`/games/${g.game_id}`} className="inline-flex items-center gap-1.5 text-indigo-300 hover:text-indigo-200">
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: `rgb(${entities[si].color})` }} />
+                          Wk {g.week} {g.location === 'home' ? 'vs' : '@'} {g.opponent} →
+                        </Link>
+                      </td>
+                      {sections.map((_, qi) => metrics.map((m, mi) => {
+                        const v = qi === si ? m.value(r) : null
+                        return <td key={qi + m.key} className={`py-1.5 px-3 whitespace-nowrap tabular-nums text-xs border-t border-gray-800/40 ${mi === 0 ? 'border-l border-gray-800/50' : ''} ${v == null ? 'text-gray-800' : 'text-gray-400'}`}>{v == null ? '' : m.fmt(v)}</td>
+                      }))}
+                    </tr>
+                  )))}
+              </Fragment>
+            )
+          })}
+          <tr>
+            <td className={`${sticky} bg-gray-800 py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-gray-300 uppercase tracking-wider border-t-2 border-gray-700`}>Total</td>
+            {sections.map((s, si) => metrics.map((m, mi) => {
+              const v = s.total ? m.value(s.total) : null
+              return <td key={si + m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums font-bold bg-gray-800/40 border-t-2 border-gray-700 ${mi === 0 ? 'border-l border-gray-800/50' : ''} ${v == null ? 'text-gray-700' : 'text-gray-200'}`}>{v == null ? '—' : m.fmt(v)}</td>
+            }))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function SplitsPage() {
   const [mode, setMode] = useState<Mode>('players')
   const [players, setPlayers] = useState<PlayerEntity[]>([])
@@ -240,12 +341,14 @@ export default function SplitsPage() {
   const [hidden, setHidden] = useState<Set<string>>(new Set())  // hidden section keys
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+  const [keyStatsOnly, setKeyStatsOnly] = useState(true)  // side-by-side metric focus
 
   const playerResults = useQueries({ queries: players.map(p => ({ queryKey: ['player-splits', p.id] as const, queryFn: () => api.splits(p.id), staleTime: Infinity })) })
   const teamResults = useQueries({ queries: teams.map(t => ({ queryKey: ['team-splits', t, season] as const, queryFn: () => api.teamSplits(t, season), staleTime: Infinity })) })
 
   const config = mode === 'players' ? PLAYER_SPLIT_CONFIG[pCat] : TEAM_SPLIT_CONFIG[tSide]
   const metrics = config.metrics as Metric<Row>[]
+  const catOrSide = mode === 'players' ? pCat : tSide
   const situations: Situation[] = mode === 'players' ? PLAYER_SITUATIONS[pCat] : TEAM_SITUATIONS
   const isCareer = mode === 'players' && season === CAREER_SEASON
   const flip = (hib: boolean | undefined) => (mode === 'teams' && tSide === 'defense' && hib !== undefined) ? !hib : hib
@@ -253,21 +356,20 @@ export default function SplitsPage() {
   const entityData: Row[][] = mode === 'players' ? players.map((_, i) => (playerResults[i]?.data ?? []) as PlayerSplit[]) : teams.map((_, i) => (teamResults[i]?.data ?? []) as TeamSplit[])
   const entityMeta: EntityCard[] = mode === 'players' ? players.map((p, i) => ({ key: p.id, label: p.name, sub: p.sub, headshot: p.headshot, color: colorOf(i) })) : teams.map((t, i) => ({ key: t, label: teamName(t), sub: t, logo: teamLogoUrl(t), color: colorOf(i) }))
   const entityCount = entityMeta.length
-  // The deep "all splits" view is for a single selected entity (no tabs).
-  const showSections = entityCount === 1
   const focusData = entityData[0] ?? []
-  const focusKey = mode === 'players' && entityCount === 1 ? players[0]?.id : undefined
 
-  // Focused player's official game log — source for Season/Opponent sections
-  // and per-game drill-downs, so their totals match the game log exactly.
-  const profile = useQuery({ queryKey: ['player', focusKey] as const, queryFn: () => api.player(focusKey!), enabled: mode === 'players' && !!focusKey, staleTime: Infinity })
-  const games = useMemo(() =>
-    (profile.data?.games ?? [])
-      .filter(g => g.game_type === 'REG' && (isCareer || g.season === season))
-      .map(g => ({ g, r: gameToSplitRow(g, pCat) }))
-      .filter(x => (x.r.att ?? 0) > 0),
-    [profile.data, pCat, season, isCareer])
+  // Each player's official game log — source for Season/Opponent sections and
+  // per-game drill-downs, so their totals match the game log exactly.
+  const playerProfiles = useQueries({ queries: players.map(p => ({ queryKey: ['player', p.id] as const, queryFn: () => api.player(p.id), staleTime: Infinity })) })
+  const playerGames = useMemo(() => mode === 'players'
+    ? players.map((_, i) => (playerProfiles[i]?.data?.games ?? [])
+        .filter(g => g.game_type === 'REG' && (isCareer || g.season === season))
+        .map(g => ({ g, r: gameToSplitRow(g, pCat) }))
+        .filter(x => (x.r.att ?? 0) > 0))
+    : [], [playerProfiles, players, mode, pCat, season, isCareer])
+  const games = playerGames[0] ?? []
   const gameMetrics = useMemo(() => metrics.filter(m => m.key !== 'succ' && m.key !== 'cpoe'), [metrics])
+  const single = entityCount === 1
 
   // Opponent defensive ranks for the season.
   const wantDef = mode === 'players' && !isCareer
@@ -353,6 +455,34 @@ export default function SplitsPage() {
     return { rows: trows, total }
   }
 
+  // Per-entity section data for the side-by-side view: value→row map + total,
+  // and for game-based dims the per-key game lists (for per-game expansion).
+  type EntitySec = { map: Map<string, Row>; total: Row | null; groups?: Map<string, typeof games> }
+  function entitySection(idx: number, dim: string): EntitySec {
+    if (GAME_DIMS.has(dim)) {
+      const gs = playerGames[idx] ?? []
+      const groups = new Map<string, typeof games>()
+      for (const x of gs) {
+        const k = dim === 'season' ? String(x.g.season) : x.g.opponent
+        ;(groups.get(k) ?? groups.set(k, []).get(k)!).push(x)
+      }
+      const map = new Map<string, Row>()
+      for (const [k, grp] of groups) { const agg = aggregatePlayerSplitRows(grp.map(x => x.r)); if (agg) map.set(k, agg) }
+      return { map, total: aggregatePlayerSplitRows(gs.map(x => x.r)), groups }
+    }
+    let rows: Row[]
+    if (mode === 'players') {
+      let r = (entityData[idx] as PlayerSplit[]).filter(s => s.category === pCat && s.split_dim === dim)
+      if (isCareer) r = aggregateCareerByValue(r); else r = r.filter(s => s.season === season)
+      rows = r
+    } else {
+      rows = (entityData[idx] as TeamSplit[]).filter(s => s.side === tSide && s.split_dim === dim)
+    }
+    const map = new Map<string, Row>(rows.map(r => [r.split_value, r]))
+    const total = mode === 'players' ? aggregatePlayerSplitRows(rows as PlayerSplit[]) : aggregateTeamSplitRows(rows as TeamSplit[])
+    return { map, total }
+  }
+
   function addEntity(r: SearchResult) {
     if (r.type === 'team') setTeams(t => t.includes(r.id) ? t : [...t, r.id].slice(0, 6))
     else setPlayers(p => p.some(x => x.id === r.id) ? p : [...p, { id: r.id, name: r.name, headshot: r.headshot_url, sub: [r.position, r.team].filter(Boolean).join(' · ') }].slice(0, 6))
@@ -406,41 +536,63 @@ export default function SplitsPage() {
                 : <StatTable firstCol={mode === 'players' ? 'Player' : 'Team'} rows={summaryRows} metrics={metrics} flip={flip} />}
             </div>
 
-            {/* All splits at once — for a single selected entity */}
-            {!showSections ? (
-              <div className="bg-gray-900/40 border border-gray-800 border-dashed rounded-xl px-5 py-8 text-center text-sm text-gray-500">
-                The full per-split breakdown shows for a <span className="text-gray-300 font-semibold">single</span> entity. Remove one to explore all splits — side-by-side split comparison is coming next.
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Splits for</span>
-                  <span className="text-sm font-bold text-white">{entityMeta[0].label}</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1">Show</span>
-                  {sectionDims.map(d => <Chip key={d.key} active={!hidden.has(d.key)} onClick={() => setHidden(h => { const n = new Set(h); n.has(d.key) ? n.delete(d.key) : n.add(d.key); return n })}>{d.label}</Chip>)}
-                </div>
+            {/* All splits — single = traditional page; multiple = side-by-side */}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{single ? 'Splits for' : 'Splits side-by-side'}</span>
+              {single
+                ? <span className="text-sm font-bold text-white">{entityMeta[0].label}</span>
+                : <Seg value={keyStatsOnly ? 'key' : 'all'} options={[{ value: 'key', label: 'Key stats' }, { value: 'all', label: 'All stats' }]} onChange={v => setKeyStatsOnly(v === 'key')} />}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1">Show</span>
+              {sectionDims.map(d => <Chip key={d.key} active={!hidden.has(d.key)} onClick={() => setHidden(h => { const n = new Set(h); n.has(d.key) ? n.delete(d.key) : n.add(d.key); return n })}>{d.label}</Chip>)}
+            </div>
 
-                <div className="space-y-3">
-                  {visibleDims.map(d => {
-                    const gameBased = GAME_DIMS.has(d.key)
-                    const { rows, total } = sectionData(d.key)
-                    return (
-                      <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
-                        {rows.length === 0
-                          ? <div className="py-6 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
-                          : <StatTable firstCol={d.label} rows={rows} total={total} metrics={gameBased ? gameMetrics : metrics} flip={flip}
-                              hasDefRk={d.key === 'opponent' && wantDef}
-                              naturalSort={!gameBased}
-                              onToggleExpand={gameBased ? (k => setExpandedKeys(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })) : undefined} />}
-                      </Section>
-                    )
-                  })}
-                </div>
-                <p className="text-[11px] text-gray-600 mt-3 px-1">Click a column to sort · ▸ expands Season/Opponent into games (linked to the game page) · Season &amp; Opponent use official game-log totals; other splits are play-by-play · green = best in column · regular season.</p>
-              </>
-            )}
+            <div className="space-y-3">
+              {visibleDims.map(d => {
+                const gameBased = GAME_DIMS.has(d.key)
+                if (single) {
+                  const { rows, total } = sectionData(d.key)
+                  return (
+                    <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
+                      {rows.length === 0
+                        ? <div className="py-6 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
+                        : <StatTable firstCol={d.label} rows={rows} total={total} metrics={gameBased ? gameMetrics : metrics} flip={flip}
+                            hasDefRk={d.key === 'opponent' && wantDef} naturalSort={!gameBased}
+                            onToggleExpand={gameBased ? (k => setExpandedKeys(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })) : undefined} />}
+                    </Section>
+                  )
+                }
+                // side-by-side
+                const base = gameBased ? gameMetrics : metrics
+                const km = keyStatsOnly ? base.filter(m => (KEY_KEYS[catOrSide] ?? []).includes(m.key)) : base
+                const m = km.length ? km : base
+                const secs = entityMeta.map((_, i) => entitySection(i, d.key))
+                const agg = new Map<string, { ord: number; vol: number }>()
+                for (const s of secs) for (const [k, row] of s.map) { const e = agg.get(k) ?? { ord: row.sort_order ?? 9999, vol: 0 }; e.vol += volume(row); agg.set(k, e) }
+                let keys = [...agg.keys()]
+                if (d.key === 'season') keys.sort((a, b) => Number(b) - Number(a))
+                else if (d.key === 'opponent') keys.sort((a, b) => agg.get(b)!.vol - agg.get(a)!.vol || a.localeCompare(b))
+                else keys.sort((a, b) => agg.get(a)!.ord - agg.get(b)!.ord)
+                const keyLabel = (k: string) => d.key === 'season' ? k
+                  : d.key === 'opponent' ? <span className="inline-flex items-center gap-1.5"><img src={teamLogoUrl(k)} className="w-5 h-5 object-contain" alt="" />{k}</span>
+                  : splitValueLabel(d.key, k)
+                return (
+                  <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
+                    {keys.length === 0
+                      ? <div className="py-6 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
+                      : <GroupedTable label={d.label} entities={entityMeta} metrics={m} keys={keys} keyLabel={keyLabel} sections={secs}
+                          defRkFor={d.key === 'opponent' && wantDef ? (k => defRank.get(k)) : undefined}
+                          isSeason={d.key === 'season'} expandedKeys={expandedKeys}
+                          onToggleExpand={d.key === 'season' ? (k => setExpandedKeys(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })) : undefined}
+                          flip={flip} />}
+                  </Section>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-gray-600 mt-3 px-1">
+              {single ? 'Click a column to sort · ' : ''}▸ expands a season into its games (linked to the game page) · Season &amp; Opponent use official game-log totals; other splits are play-by-play · green = best{single ? ' in column' : ''} · regular season.
+            </p>
           </>
         )}
       </div>
