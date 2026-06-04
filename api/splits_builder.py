@@ -181,7 +181,8 @@ def _category_sql(category: str, season: int, available: set[str]) -> str:
     return f"""
     WITH base AS (
         SELECT {base_select}
-          AND season = {s} AND season_type = 'REG' {core.two_pt_filter(available)}
+          AND season = {s} AND season_type = 'REG'
+          {core.two_pt_filter(available)} {core.dead_play_filter(available)}
     ),
     qualified AS (
         SELECT player_id FROM base GROUP BY player_id HAVING COUNT(*) >= {min_vol}

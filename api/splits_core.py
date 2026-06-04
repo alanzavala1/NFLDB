@@ -72,6 +72,16 @@ def two_pt_filter(available: set[str]) -> str:
     return "AND COALESCE(two_point_attempt, 0) = 0" if "two_point_attempt" in available else ""
 
 
+def dead_play_filter(available: set[str]) -> str:
+    """Exclude QB spikes and kneels — they carry pass_attempt/rush_attempt flags
+    in play-by-play but the official stat line doesn't count them, so dropping
+    them keeps split totals aligned with the game-log / PFR numbers."""
+    parts = []
+    if "qb_spike" in available: parts.append("AND COALESCE(qb_spike, 0) = 0")
+    if "qb_kneel" in available: parts.append("AND COALESCE(qb_kneel, 0) = 0")
+    return " ".join(parts)
+
+
 # ── UNION assembly ───────────────────────────────────────────────────────────
 
 def union_blocks(dims, metric_select: str, key_col: str) -> str:

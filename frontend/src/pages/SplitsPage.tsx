@@ -11,6 +11,7 @@
  * team_season_analytics (opponent defensive ranks).
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { PlayerSplit, TeamSplit, SearchResult } from '../api'
@@ -123,9 +124,10 @@ function bestSet(values: (number | null)[], higherIsBetter: boolean | undefined)
 const volume = (r: Row | null) => ((r as PlayerSplit)?.att ?? (r as TeamSplit)?.plays) ?? 0
 
 // A sortable table: rows (entities or split values) × metric columns.
-function StatTable({ firstCol, rows, metrics, flip, hasDefRk, defaultSort, naturalSort, onToggleExpand }: {
+function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defaultSort, naturalSort, onToggleExpand }: {
   firstCol: string
   rows: TRow[]
+  total?: Row | null
   metrics: Metric<Row>[]
   flip: (hib: boolean | undefined) => boolean | undefined
   hasDefRk?: boolean
@@ -199,6 +201,16 @@ function StatTable({ firstCol, rows, metrics, flip, hasDefRk, defaultSort, natur
               })}
             </tr>
           ))}
+          {total && (
+            <tr className="border-t-2 border-gray-700 bg-gray-800/50">
+              <td className="py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-gray-300 uppercase tracking-wider">Total</td>
+              {hasDefRk && <td />}
+              {metrics.map(m => {
+                const v = m.value(total)
+                return <td key={m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums font-bold ${v == null ? 'text-gray-700' : 'text-gray-200'}`}>{v == null ? '—' : m.fmt(v)}</td>
+              })}
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -225,10 +237,9 @@ export default function SplitsPage() {
   const [tSide, setTSide] = useState<TeamSide>('offense')
   const [season, setSeason] = useState<number>(CAREER_SEASON)
   const [situation, setSituation] = useState<Situation | null>(null)
-  const [focusIdx, setFocusIdx] = useState(0)
   const [hidden, setHidden] = useState<Set<string>>(new Set())  // hidden section keys
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
-  const [expandedSeasons, setExpandedSeasons] = useState<Set<number>>(new Set())
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
 
   const playerResults = useQueries({ queries: players.map(p => ({ queryKey: ['player-splits', p.id] as const, queryFn: () => api.splits(p.id), staleTime: Infinity })) })
   const teamResults = useQueries({ queries: teams.map(t => ({ queryKey: ['team-splits', t, season] as const, queryFn: () => api.teamSplits(t, season), staleTime: Infinity })) })
@@ -242,12 +253,21 @@ export default function SplitsPage() {
   const entityData: Row[][] = mode === 'players' ? players.map((_, i) => (playerResults[i]?.data ?? []) as PlayerSplit[]) : teams.map((_, i) => (teamResults[i]?.data ?? []) as TeamSplit[])
   const entityMeta: EntityCard[] = mode === 'players' ? players.map((p, i) => ({ key: p.id, label: p.name, sub: p.sub, headshot: p.headshot, color: colorOf(i) })) : teams.map((t, i) => ({ key: t, label: teamName(t), sub: t, logo: teamLogoUrl(t), color: colorOf(i) }))
   const entityCount = entityMeta.length
-  const effFocus = Math.min(focusIdx, Math.max(0, entityCount - 1))
-  const focusData = entityData[effFocus] ?? []
-  const focusKey = mode === 'players' ? players[effFocus]?.id : undefined
+  // The deep "all splits" view is for a single selected entity (no tabs).
+  const showSections = entityCount === 1
+  const focusData = entityData[0] ?? []
+  const focusKey = mode === 'players' && entityCount === 1 ? players[0]?.id : undefined
 
-  // Focused player's game log (for per-game season expansion).
+  // Focused player's official game log — source for Season/Opponent sections
+  // and per-game drill-downs, so their totals match the game log exactly.
   const profile = useQuery({ queryKey: ['player', focusKey] as const, queryFn: () => api.player(focusKey!), enabled: mode === 'players' && !!focusKey, staleTime: Infinity })
+  const games = useMemo(() =>
+    (profile.data?.games ?? [])
+      .filter(g => g.game_type === 'REG' && (isCareer || g.season === season))
+      .map(g => ({ g, r: gameToSplitRow(g, pCat) }))
+      .filter(x => (x.r.att ?? 0) > 0),
+    [profile.data, pCat, season, isCareer])
+  const gameMetrics = useMemo(() => metrics.filter(m => m.key !== 'succ' && m.key !== 'cpoe'), [metrics])
 
   // Opponent defensive ranks for the season.
   const wantDef = mode === 'players' && !isCareer
@@ -282,27 +302,44 @@ export default function SplitsPage() {
   const sectionDims = mode === 'players' ? [{ key: 'season', label: 'Season' }, ...config.dims] : config.dims
   const DEFAULT_OPEN = mode === 'players' ? ['season', 'down', 'game_script', 'opponent'] : ['down', 'game_script', 'field_zone']
 
-  function dimRows(dim: string): TRow[] {
-    if (dim === 'season') {
-      // per-season aggregate of the focused player's plays, newest first
-      const rows = (focusData as PlayerSplit[]).filter(s => s.category === pCat && s.split_dim === OVERALL_DIM)
-      const bySeason = new Map<number, PlayerSplit[]>()
-      for (const r of rows) (bySeason.get(r.season) ?? bySeason.set(r.season, []).get(r.season)!).push(r)
-      const seasonsDesc = [...bySeason.keys()].sort((a, b) => b - a)
+  // Season & Opponent come from the official game log (so the Total = sum of
+  // the games shown, and each game links to its page). All other dims come
+  // from the play-by-play splits (modeled stats incl. success%/cpoe).
+  const GAME_DIMS = new Set(mode === 'players' ? ['season', 'opponent'] : [])
+
+  function sectionData(dim: string): { rows: TRow[]; total: Row | null } {
+    if (GAME_DIMS.has(dim)) {
+      const groups = new Map<string, typeof games>()
+      for (const x of games) {
+        const k = dim === 'season' ? String(x.g.season) : x.g.opponent
+        ;(groups.get(k) ?? groups.set(k, []).get(k)!).push(x)
+      }
+      const keys = [...groups.keys()]
+      if (dim === 'season') keys.sort((a, b) => Number(b) - Number(a))
+      else keys.sort((a, b) => (groups.get(b)!.length - groups.get(a)!.length) || a.localeCompare(b))
       const out: TRow[] = []
-      const games = (profile.data?.games ?? []).filter(g => g.game_type === 'REG')
-      for (const yr of seasonsDesc) {
-        const agg = aggregatePlayerSplitRows(bySeason.get(yr)!)
-        out.push({ key: `s${yr}`, label: <span className="font-bold">{yr}</span>, row: agg })
-        if (expandedSeasons.has(yr)) {
-          for (const g of games.filter(g => g.season === yr).sort((a, b) => a.week - b.week)) {
-            const gr = gameToSplitRow(g, pCat)
-            if ((gr.att ?? 0) > 0) out.push({ key: `g${g.game_id}`, sub: true, row: gr, label: `Wk ${g.week} ${g.location === 'home' ? 'vs' : '@'} ${g.opponent}` })
+      for (const k of keys) {
+        const grp = groups.get(k)!
+        const pkey = `${dim}:${k}`
+        out.push({
+          key: pkey, row: aggregatePlayerSplitRows(grp.map(x => x.r)),
+          defRk: dim === 'opponent' && wantDef ? (defRank.get(k) ?? null) : undefined,
+          label: dim === 'season'
+            ? <span className="font-bold">{k}</span>
+            : <span className="inline-flex items-center gap-1.5"><img src={teamLogoUrl(k)} className="w-5 h-5 object-contain" alt="" />{k}</span>,
+        })
+        if (expandedKeys.has(pkey)) {
+          for (const { g, r } of [...grp].sort((a, b) => a.g.season - b.g.season || a.g.week - b.g.week)) {
+            out.push({
+              key: `g:${g.game_id}`, sub: true, row: r,
+              label: <Link to={`/games/${g.game_id}`} className="text-indigo-300 hover:text-indigo-200">{g.season} Wk {g.week} {g.location === 'home' ? 'vs' : '@'} {g.opponent} →</Link>,
+            })
           }
         }
       }
-      return out
+      return { rows: out, total: aggregatePlayerSplitRows(games.map(x => x.r)) }
     }
+
     let rows: Row[]
     if (mode === 'players') {
       let r = (focusData as PlayerSplit[]).filter(s => s.category === pCat && s.split_dim === dim)
@@ -311,12 +348,9 @@ export default function SplitsPage() {
     } else {
       rows = (focusData as TeamSplit[]).filter(s => s.side === tSide && s.split_dim === dim)
     }
-    return rows.map(r => ({
-      key: r.split_value,
-      label: dim === 'opponent' ? <span className="inline-flex items-center gap-1.5"><img src={teamLogoUrl(r.split_value)} className="w-5 h-5 object-contain" alt="" />{r.split_value}</span> : splitValueLabel(dim, r.split_value),
-      row: r,
-      defRk: dim === 'opponent' && wantDef ? (defRank.get(r.split_value) ?? null) : undefined,
-    }))
+    const trows: TRow[] = rows.map(r => ({ key: r.split_value, label: splitValueLabel(dim, r.split_value), row: r }))
+    const total = mode === 'players' ? aggregatePlayerSplitRows(rows as PlayerSplit[]) : aggregateTeamSplitRows(rows as TeamSplit[])
+    return { rows: trows, total }
   }
 
   function addEntity(r: SearchResult) {
@@ -372,34 +406,41 @@ export default function SplitsPage() {
                 : <StatTable firstCol={mode === 'players' ? 'Player' : 'Team'} rows={summaryRows} metrics={metrics} flip={flip} />}
             </div>
 
-            {/* All splits at once, for the focused entity */}
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Splits for</span>
-              {entityCount > 1
-                ? <Seg value={effFocus} options={entityMeta.map((e, i) => ({ value: i, label: e.label }))} onChange={setFocusIdx} />
-                : <span className="text-sm font-bold text-white">{entityMeta[0].label}</span>}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 mb-3">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1">Show</span>
-              {sectionDims.map(d => <Chip key={d.key} active={!hidden.has(d.key)} onClick={() => setHidden(h => { const n = new Set(h); n.has(d.key) ? n.delete(d.key) : n.add(d.key); return n })}>{d.label}</Chip>)}
-            </div>
+            {/* All splits at once — for a single selected entity */}
+            {!showSections ? (
+              <div className="bg-gray-900/40 border border-gray-800 border-dashed rounded-xl px-5 py-8 text-center text-sm text-gray-500">
+                The full per-split breakdown shows for a <span className="text-gray-300 font-semibold">single</span> entity. Remove one to explore all splits — side-by-side split comparison is coming next.
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Splits for</span>
+                  <span className="text-sm font-bold text-white">{entityMeta[0].label}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1">Show</span>
+                  {sectionDims.map(d => <Chip key={d.key} active={!hidden.has(d.key)} onClick={() => setHidden(h => { const n = new Set(h); n.has(d.key) ? n.delete(d.key) : n.add(d.key); return n })}>{d.label}</Chip>)}
+                </div>
 
-            <div className="space-y-3">
-              {visibleDims.map(d => {
-                const rows = dimRows(d.key)
-                return (
-                  <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
-                    {rows.length === 0
-                      ? <div className="py-6 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
-                      : <StatTable firstCol={d.label} rows={rows} metrics={metrics} flip={flip}
-                          hasDefRk={d.key === 'opponent' && wantDef}
-                          naturalSort={d.key !== 'season'}
-                          onToggleExpand={d.key === 'season' ? (k => { const yr = Number(k.slice(1)); setExpandedSeasons(s => { const n = new Set(s); n.has(yr) ? n.delete(yr) : n.add(yr); return n }) }) : undefined} />}
-                  </Section>
-                )
-              })}
-            </div>
-            <p className="text-[11px] text-gray-600 mt-3 px-1">Click any column to sort · click ▸ on a season to expand its games · green = best in column · regular season.</p>
+                <div className="space-y-3">
+                  {visibleDims.map(d => {
+                    const gameBased = GAME_DIMS.has(d.key)
+                    const { rows, total } = sectionData(d.key)
+                    return (
+                      <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
+                        {rows.length === 0
+                          ? <div className="py-6 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
+                          : <StatTable firstCol={d.label} rows={rows} total={total} metrics={gameBased ? gameMetrics : metrics} flip={flip}
+                              hasDefRk={d.key === 'opponent' && wantDef}
+                              naturalSort={!gameBased}
+                              onToggleExpand={gameBased ? (k => setExpandedKeys(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })) : undefined} />}
+                      </Section>
+                    )
+                  })}
+                </div>
+                <p className="text-[11px] text-gray-600 mt-3 px-1">Click a column to sort · ▸ expands Season/Opponent into games (linked to the game page) · Season &amp; Opponent use official game-log totals; other splits are play-by-play · green = best in column · regular season.</p>
+              </>
+            )}
           </>
         )}
       </div>
