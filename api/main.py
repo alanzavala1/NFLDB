@@ -40,19 +40,24 @@ async def lifespan(app: FastAPI):
     # Static seed data — populate on first boot if not already loaded
     _ensure_player_awards()
 
-    # Auto-queue the N most recent seasons that aren't already in the DB
+    # Auto-queue the N most recent seasons that aren't already in the DB.
+    # If we can't read what's loaded (e.g. the DB is momentarily locked by
+    # another process), DON'T treat that as "nothing loaded" — that would
+    # re-ingest seasons we already have. Skip auto-load for this boot instead.
     try:
         loaded = {r["season"] for r in query_to_dict("SELECT DISTINCT season FROM schedules")}
-    except Exception:
-        loaded = set()
+    except Exception as e:
+        print(f"startup: could not read loaded seasons ({e}); skipping auto-load this boot")
+        loaded = None
 
-    queued = 0
-    for year in range(CURRENT_SEASON, FIRST_SEASON - 1, -1):
-        if queued >= AUTO_LOAD_SEASONS:
-            break
-        if year not in loaded:
-            queue_season(year, force=False)
-            queued += 1
+    if loaded is not None:
+        queued = 0
+        for year in range(CURRENT_SEASON, FIRST_SEASON - 1, -1):
+            if queued >= AUTO_LOAD_SEASONS:
+                break
+            if year not in loaded:
+                queue_season(year, force=False)
+                queued += 1
 
     yield
 

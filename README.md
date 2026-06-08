@@ -49,6 +49,8 @@ npm run dev                  # runs on :5173
 
 On first startup the API auto-queues the 5 most recent seasons to load. Loading a season takes a few minutes (downloads ~35MB of play-by-play data). Status is visible in the UI.
 
+> **Run a single process.** The API stores data in an embedded DuckDB file, which allows only **one read-write process** at a time. Concurrency is handled *inside* the process (each request gets its own DuckDB cursor; reads run in parallel), so one worker comfortably serves many users. Do **not** run multiple workers (`uvicorn --workers N`, `gunicorn -w N`) or a second server instance against the same DB file — every worker but one will fail to open it. Likewise, stop the server before running offline scripts that write to the DB (e.g. `rematerialize_splits.py`). Scaling past one process would require serving from a read-only connection with ingest moved to a separate offline job.
+
 ## Loading Data
 
 Seasons load automatically as you browse. You can also trigger a load manually:
