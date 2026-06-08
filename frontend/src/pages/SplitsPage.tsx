@@ -11,7 +11,7 @@
  * team_season_analytics (opponent defensive ranks).
  */
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { PlayerSplit, TeamSplit, SearchResult } from '../api'
@@ -357,17 +357,47 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
 }
 
 export default function SplitsPage() {
-  const [mode, setMode] = useState<Mode>('players')
-  const [players, setPlayers] = useState<PlayerEntity[]>([])
-  const [teams, setTeams] = useState<string[]>([])
-  const [pCat, setPCat] = useState<PlayerCategory>('passing')
-  const [tSide, setTSide] = useState<TeamSide>('offense')
-  const [season, setSeason] = useState<number>(CAREER_SEASON)
-  const [situation, setSituation] = useState<Situation | null>(null)
+  // Initial state is hydrated from the URL so any comparison is shareable.
+  const [, setSearchParams] = useSearchParams()
+  const init = useRef(new URLSearchParams(window.location.search)).current
+  const initMode: Mode = init.get('mode') === 'teams' ? 'teams' : 'players'
+  const initCat: PlayerCategory = (['passing', 'rushing', 'receiving'] as string[]).includes(init.get('cat') ?? '') ? init.get('cat') as PlayerCategory : 'passing'
+
+  const [mode, setMode] = useState<Mode>(initMode)
+  const [players, setPlayers] = useState<PlayerEntity[]>(() => {
+    const ids = init.get('p'); return ids ? ids.split(',').filter(Boolean).slice(0, 6).map(id => ({ id, name: '' })) : []
+  })
+  const [teams, setTeams] = useState<string[]>(() => {
+    const t = init.get('t'); return t ? t.split(',').filter(Boolean).slice(0, 6) : []
+  })
+  const [pCat, setPCat] = useState<PlayerCategory>(initCat)
+  const [tSide, setTSide] = useState<TeamSide>(init.get('side') === 'defense' ? 'defense' : 'offense')
+  const [season, setSeason] = useState<number>(() => {
+    const s = init.get('season'); const n = s == null ? CAREER_SEASON : Number(s); return Number.isFinite(n) ? n : CAREER_SEASON
+  })
+  const [situation, setSituation] = useState<Situation | null>(() => {
+    const sit = init.get('sit'); if (!sit) return null
+    const [dim, value] = sit.split(':')
+    const list = initMode === 'teams' ? TEAM_SITUATIONS : PLAYER_SITUATIONS[initCat]
+    return list.find(s => s.dim === dim && s.value === value) ?? null
+  })
   const [hidden, setHidden] = useState<Set<string>>(new Set())  // hidden section keys
   const [openSections, setOpenSections] = useState<Set<string>>(new Set())
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
   const [keyStatsOnly, setKeyStatsOnly] = useState(true)  // side-by-side metric focus
+  const [copied, setCopied] = useState(false)
+
+  // Reflect the live comparison back into the URL (replace, so it doesn't
+  // stack history) — the Copy-link button just grabs window.location.href.
+  useEffect(() => {
+    const p = new URLSearchParams()
+    p.set('mode', mode)
+    if (mode === 'players') { if (players.length) p.set('p', players.map(x => x.id).join(',')); p.set('cat', pCat) }
+    else { if (teams.length) p.set('t', teams.join(',')); p.set('side', tSide) }
+    p.set('season', String(season))
+    if (situation) p.set('sit', `${situation.dim}:${situation.value}`)
+    setSearchParams(p, { replace: true })
+  }, [mode, players, teams, pCat, tSide, season, situation, setSearchParams])
 
   const playerResults = useQueries({ queries: players.map(p => ({ queryKey: ['player-splits', p.id] as const, queryFn: () => api.splits(p.id), staleTime: Infinity })) })
   const teamResults = useQueries({ queries: teams.map(t => ({ queryKey: ['team-splits', t, season] as const, queryFn: () => api.teamSplits(t, season), staleTime: Infinity })) })
@@ -380,13 +410,16 @@ export default function SplitsPage() {
   const flip = (hib: boolean | undefined) => (mode === 'teams' && tSide === 'defense' && hib !== undefined) ? !hib : hib
 
   const entityData: Row[][] = mode === 'players' ? players.map((_, i) => (playerResults[i]?.data ?? []) as PlayerSplit[]) : teams.map((_, i) => (teamResults[i]?.data ?? []) as TeamSplit[])
-  const entityMeta: EntityCard[] = mode === 'players' ? players.map((p, i) => ({ key: p.id, label: p.name, sub: p.sub, headshot: p.headshot, color: colorOf(i) })) : teams.map((t, i) => ({ key: t, label: teamName(t), sub: t, logo: teamLogoUrl(t), color: colorOf(i) }))
-  const entityCount = entityMeta.length
-  const focusData = entityData[0] ?? []
 
   // Each player's official game log — source for Season/Opponent sections and
-  // per-game drill-downs, so their totals match the game log exactly.
+  // per-game drill-downs, so their totals match the game log exactly. Also
+  // backfills name/headshot/sub for players that arrived via a shared URL (id only).
   const playerProfiles = useQueries({ queries: players.map(p => ({ queryKey: ['player', p.id] as const, queryFn: () => api.player(p.id), staleTime: Infinity })) })
+  const entityMeta: EntityCard[] = mode === 'players'
+    ? players.map((p, i) => { const prof = playerProfiles[i]?.data; return { key: p.id, label: p.name || prof?.player_name || p.id, sub: p.sub || (prof ? [prof.position, prof.team].filter(Boolean).join(' · ') : undefined), headshot: p.headshot ?? prof?.headshot_url, color: colorOf(i) } })
+    : teams.map((t, i) => ({ key: t, label: teamName(t), sub: t, logo: teamLogoUrl(t), color: colorOf(i) }))
+  const entityCount = entityMeta.length
+  const focusData = entityData[0] ?? []
   const playerGames = useMemo(() => mode === 'players'
     ? players.map((_, i) => (playerProfiles[i]?.data?.games ?? [])
         .filter(g => g.game_type === 'REG' && (isCareer || g.season === season))
@@ -523,8 +556,16 @@ export default function SplitsPage() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <Nav title="Splits Explorer" />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        <h1 className="text-xl font-bold text-white mb-1">Splits Explorer</h1>
-        <p className="text-sm text-gray-500 mb-5">Compare head-to-head, then explore every split at once for one entity — by season (down to each game), down, situation, opponent and more.</p>
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <h1 className="text-xl font-bold text-white">Splits Explorer</h1>
+          {entityCount > 0 && (
+            <button onClick={() => { navigator.clipboard?.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+              className="shrink-0 inline-flex items-center gap-1.5 bg-gray-900 border border-gray-800 text-gray-300 text-xs font-semibold rounded-lg px-3 py-1.5 hover:border-gray-600 hover:text-white transition-colors">
+              {copied ? '✓ Copied' : '🔗 Copy link'}
+            </button>
+          )}
+        </div>
+        <p className="text-sm text-gray-500 mb-5">Compare head-to-head, then explore every split at once for one entity — by season (down to each game), down, situation, opponent and more. Every view has a shareable link.</p>
 
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <Seg<Mode> value={mode} options={[{ value: 'players', label: 'Players' }, { value: 'teams', label: 'Teams' }]}
