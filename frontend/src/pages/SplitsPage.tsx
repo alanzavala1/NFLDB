@@ -14,19 +14,22 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
-import type { PlayerSplit, TeamSplit, SearchResult } from '../api'
+import type { PlayerSplit, TeamSplit, DefensiveSplit, SearchResult } from '../api'
 import Nav from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 import {
-  PLAYER_SPLIT_CONFIG, TEAM_SPLIT_CONFIG, PLAYER_SITUATIONS, TEAM_SITUATIONS,
+  PLAYER_SPLIT_CONFIG, TEAM_SPLIT_CONFIG, DEFENSE_SPLIT_CONFIG,
+  PLAYER_SITUATIONS, TEAM_SITUATIONS, DEFENSE_SITUATIONS,
   type PlayerCategory, type TeamSide, type Metric, type Situation,
   splitValueLabel, aggregateCareerByValue, aggregatePlayerSplitRows,
-  aggregateTeamSplitRows, gameToSplitRow, CAREER_SEASON, OVERALL_DIM,
+  aggregateTeamSplitRows, aggregateDefenseSplitRows, aggregateDefenseCareerByValue,
+  gameToSplitRow, CAREER_SEASON, OVERALL_DIM,
 } from '../splits'
 
 type Mode = 'players' | 'teams'
+type PCat = PlayerCategory | 'defense'
 type PlayerEntity = { id: string; name: string; headshot?: string | null; sub?: string }
-type Row = PlayerSplit | TeamSplit
+type Row = PlayerSplit | TeamSplit | DefensiveSplit
 type EntityCard = { key: string; label: string; sub?: string; headshot?: string | null; logo?: string; color: string }
 type Sort = { key: string; dir: 'asc' | 'desc' }
 type TRow = { key: string; label: React.ReactNode; row: Row | null; defRk?: number | null; sub?: boolean }
@@ -40,8 +43,9 @@ const KEY_KEYS: Record<string, string[]> = {
   passing: ['ya', 'td', 'int', 'conv', 'cpoe', 'epa', 'succ'],
   rushing: ['ypc', 'td', 'conv', 'epa', 'succ'],
   receiving: ['ypr', 'td', 'conv', 'epa', 'succ'],
-  offense: ['epa', 'succ', 'ypp', 'expl'],
-  defense: ['epa', 'succ', 'ypp', 'expl'],
+  defense: ['tackles', 'tfl', 'sacks', 'qb_hits', 'int'],  // player defense
+  team_offense: ['epa', 'succ', 'ypp', 'expl'],
+  team_defense: ['epa', 'succ', 'ypp', 'expl'],
 }
 // Game-based sections (Season / Opponent) read like a box score, so their
 // key columns lead with total yards and the headline rate (passer rating).
@@ -361,7 +365,7 @@ export default function SplitsPage() {
   const [, setSearchParams] = useSearchParams()
   const init = useRef(new URLSearchParams(window.location.search)).current
   const initMode: Mode = init.get('mode') === 'teams' ? 'teams' : 'players'
-  const initCat: PlayerCategory = (['passing', 'rushing', 'receiving'] as string[]).includes(init.get('cat') ?? '') ? init.get('cat') as PlayerCategory : 'passing'
+  const initCat: PCat = (['passing', 'rushing', 'receiving', 'defense'] as string[]).includes(init.get('cat') ?? '') ? init.get('cat') as PCat : 'passing'
 
   const [mode, setMode] = useState<Mode>(initMode)
   const [players, setPlayers] = useState<PlayerEntity[]>(() => {
@@ -370,7 +374,7 @@ export default function SplitsPage() {
   const [teams, setTeams] = useState<string[]>(() => {
     const t = init.get('t'); return t ? t.split(',').filter(Boolean).slice(0, 6) : []
   })
-  const [pCat, setPCat] = useState<PlayerCategory>(initCat)
+  const [pCat, setPCat] = useState<PCat>(initCat)
   const [tSide, setTSide] = useState<TeamSide>(init.get('side') === 'defense' ? 'defense' : 'offense')
   const [season, setSeason] = useState<number>(() => {
     const s = init.get('season'); const n = s == null ? CAREER_SEASON : Number(s); return Number.isFinite(n) ? n : CAREER_SEASON
@@ -378,7 +382,7 @@ export default function SplitsPage() {
   const [situation, setSituation] = useState<Situation | null>(() => {
     const sit = init.get('sit'); if (!sit) return null
     const [dim, value] = sit.split(':')
-    const list = initMode === 'teams' ? TEAM_SITUATIONS : PLAYER_SITUATIONS[initCat]
+    const list = initMode === 'teams' ? TEAM_SITUATIONS : initCat === 'defense' ? DEFENSE_SITUATIONS : PLAYER_SITUATIONS[initCat]
     return list.find(s => s.dim === dim && s.value === value) ?? null
   })
   const [hidden, setHidden] = useState<Set<string>>(new Set())  // hidden section keys
@@ -399,17 +403,31 @@ export default function SplitsPage() {
     setSearchParams(p, { replace: true })
   }, [mode, players, teams, pCat, tSide, season, situation, setSearchParams])
 
-  const playerResults = useQueries({ queries: players.map(p => ({ queryKey: ['player-splits', p.id] as const, queryFn: () => api.splits(p.id), staleTime: Infinity })) })
+  const isDefense = mode === 'players' && pCat === 'defense'
+  const playerResults = useQueries({ queries: players.map(p => ({ queryKey: ['player-splits', p.id, isDefense] as const, queryFn: () => isDefense ? api.defSplits(p.id) : api.splits(p.id), staleTime: Infinity })) })
   const teamResults = useQueries({ queries: teams.map(t => ({ queryKey: ['team-splits', t, season] as const, queryFn: () => api.teamSplits(t, season), staleTime: Infinity })) })
 
-  const config = mode === 'players' ? PLAYER_SPLIT_CONFIG[pCat] : TEAM_SPLIT_CONFIG[tSide]
+  const config = mode === 'teams' ? TEAM_SPLIT_CONFIG[tSide] : isDefense ? DEFENSE_SPLIT_CONFIG : PLAYER_SPLIT_CONFIG[pCat as PlayerCategory]
   const metrics = config.metrics as Metric<Row>[]
-  const catOrSide = mode === 'players' ? pCat : tSide
-  const situations: Situation[] = mode === 'players' ? PLAYER_SITUATIONS[pCat] : TEAM_SITUATIONS
+  const catOrSide = mode === 'teams' ? `team_${tSide}` : pCat
+  const situations: Situation[] = mode === 'teams' ? TEAM_SITUATIONS : isDefense ? DEFENSE_SITUATIONS : PLAYER_SITUATIONS[pCat as PlayerCategory]
   const isCareer = mode === 'players' && season === CAREER_SEASON
   const flip = (hib: boolean | undefined) => (mode === 'teams' && tSide === 'defense' && hib !== undefined) ? !hib : hib
 
-  const entityData: Row[][] = mode === 'players' ? players.map((_, i) => (playerResults[i]?.data ?? []) as PlayerSplit[]) : teams.map((_, i) => (teamResults[i]?.data ?? []) as TeamSplit[])
+  // Aggregation + dimension matching that work across player offense, player
+  // defense, and team rows (each has a different shape).
+  const aggOverall = (rows: Row[]): Row | null =>
+    isDefense ? aggregateDefenseSplitRows(rows as DefensiveSplit[])
+      : mode === 'players' ? aggregatePlayerSplitRows(rows as PlayerSplit[])
+      : aggregateTeamSplitRows(rows as TeamSplit[])
+  const aggByValue = (rows: Row[]): Row[] =>
+    isDefense ? aggregateDefenseCareerByValue(rows as DefensiveSplit[]) : aggregateCareerByValue(rows as PlayerSplit[])
+  const matchDim = (s: Row, dim: string): boolean =>
+    isDefense ? (s as DefensiveSplit).split_dim === dim
+      : mode === 'players' ? ((s as PlayerSplit).category === pCat && (s as PlayerSplit).split_dim === dim)
+      : ((s as TeamSplit).side === tSide && (s as TeamSplit).split_dim === dim)
+
+  const entityData: Row[][] = mode === 'players' ? players.map((_, i) => (playerResults[i]?.data ?? []) as Row[]) : teams.map((_, i) => (teamResults[i]?.data ?? []) as TeamSplit[])
 
   // Each player's official game log — source for Season/Opponent sections and
   // per-game drill-downs, so their totals match the game log exactly. Also
@@ -420,12 +438,12 @@ export default function SplitsPage() {
     : teams.map((t, i) => ({ key: t, label: teamName(t), sub: t, logo: teamLogoUrl(t), color: colorOf(i) }))
   const entityCount = entityMeta.length
   const focusData = entityData[0] ?? []
-  const playerGames = useMemo(() => mode === 'players'
+  const playerGames = useMemo(() => mode === 'players' && !isDefense
     ? players.map((_, i) => (playerProfiles[i]?.data?.games ?? [])
         .filter(g => g.game_type === 'REG' && (isCareer || g.season === season))
-        .map(g => ({ g, r: gameToSplitRow(g, pCat) }))
+        .map(g => ({ g, r: gameToSplitRow(g, pCat as PlayerCategory) }))
         .filter(x => (x.r.att ?? 0) > 0))
-    : [], [playerProfiles, players, mode, pCat, season, isCareer])
+    : [], [playerProfiles, players, mode, pCat, season, isCareer, isDefense])
   const games = playerGames[0] ?? []
   // Game-log rows carry no first_downs/success/cpoe, so drop the metrics that
   // would otherwise render a misleading 0%/blank in Season & Opponent sections.
@@ -433,26 +451,19 @@ export default function SplitsPage() {
   const single = entityCount === 1
 
   // Opponent defensive ranks for the season.
-  const wantDef = mode === 'players' && !isCareer
+  const wantDef = mode === 'players' && !isCareer && !isDefense
   const analytics = useQuery({ queryKey: ['team-analytics', season] as const, queryFn: () => api.teamAnalytics(season), enabled: wantDef, staleTime: Infinity })
   const defRank = useMemo(() => { const m = new Map<string, number>(); for (const t of analytics.data?.league ?? []) if (t.def_epa_play_rank != null) m.set(t.team, t.def_epa_play_rank); return m }, [analytics.data])
 
   // Summary row per entity (Overall, or the active situation).
   function situationRow(data: Row[]): Row | null {
-    if (mode === 'players') {
-      const rows = data as PlayerSplit[]
-      const dimKey = situation ? situation.dim : OVERALL_DIM
-      let sel = rows.filter(s => s.category === pCat && s.split_dim === dimKey)
-      if (situation) sel = sel.filter(s => s.split_value === situation.value)
-      if (isCareer) return aggregatePlayerSplitRows(sel)
-      sel = sel.filter(s => s.season === season)
-      return situation ? (sel[0] ?? null) : aggregatePlayerSplitRows(sel)
-    }
-    const rows = data as TeamSplit[]
     const dimKey = situation ? situation.dim : OVERALL_DIM
-    let sel = rows.filter(s => s.side === tSide && s.split_dim === dimKey)
+    let sel = data.filter(s => matchDim(s, dimKey))
     if (situation) sel = sel.filter(s => s.split_value === situation.value)
-    return situation ? (sel[0] ?? null) : aggregateTeamSplitRows(sel)
+    if (mode === 'teams') return situation ? (sel[0] ?? null) : aggOverall(sel)
+    if (isCareer) return aggOverall(sel)
+    sel = sel.filter(s => (s as PlayerSplit).season === season)
+    return situation ? (sel[0] ?? null) : aggOverall(sel)
   }
 
   const summaryRows: TRow[] = entityMeta.map((meta, i) => ({
@@ -461,14 +472,15 @@ export default function SplitsPage() {
     row: situationRow(entityData[i]),
   }))
 
-  // Section dimensions (for the focused entity). Season first (players only).
-  const sectionDims = mode === 'players' ? [{ key: 'season', label: 'Season' }, ...config.dims] : config.dims
-  const DEFAULT_OPEN = mode === 'players' ? ['season', 'down', 'game_script', 'opponent'] : ['down', 'game_script', 'field_zone']
+  // Section dimensions (for the focused entity). Season first (offense players
+  // only — it's sourced from the game log, which defense splits don't use).
+  const sectionDims = (mode === 'players' && !isDefense) ? [{ key: 'season', label: 'Season' }, ...config.dims] : config.dims
+  const DEFAULT_OPEN = isDefense ? ['vs_play', 'down', 'field_zone'] : mode === 'players' ? ['season', 'down', 'game_script', 'opponent'] : ['down', 'game_script', 'field_zone']
 
   // Season & Opponent come from the official game log (so the Total = sum of
   // the games shown, and each game links to its page). All other dims come
   // from the play-by-play splits (modeled stats incl. success%/cpoe).
-  const GAME_DIMS = new Set(mode === 'players' ? ['season', 'opponent'] : [])
+  const GAME_DIMS = new Set((mode === 'players' && !isDefense) ? ['season', 'opponent'] : [])
 
   function sectionData(dim: string): { rows: TRow[]; total: Row | null } {
     if (GAME_DIMS.has(dim)) {
@@ -504,17 +516,12 @@ export default function SplitsPage() {
       return { rows: out, total: aggregatePlayerSplitRows(games.map(x => x.r)) }
     }
 
-    let rows: Row[]
+    let rows: Row[] = focusData.filter(s => matchDim(s, dim))
     if (mode === 'players') {
-      let r = (focusData as PlayerSplit[]).filter(s => s.category === pCat && s.split_dim === dim)
-      if (isCareer) r = aggregateCareerByValue(r); else r = r.filter(s => s.season === season)
-      rows = r
-    } else {
-      rows = (focusData as TeamSplit[]).filter(s => s.side === tSide && s.split_dim === dim)
+      if (isCareer) rows = aggByValue(rows); else rows = rows.filter(s => (s as PlayerSplit).season === season)
     }
     const trows: TRow[] = rows.map(r => ({ key: r.split_value, label: splitValueLabel(dim, r.split_value), row: r }))
-    const total = mode === 'players' ? aggregatePlayerSplitRows(rows as PlayerSplit[]) : aggregateTeamSplitRows(rows as TeamSplit[])
-    return { rows: trows, total }
+    return { rows: trows, total: aggOverall(rows) }
   }
 
   // Per-entity section data for the side-by-side view: value→row map + total,
@@ -532,24 +539,19 @@ export default function SplitsPage() {
       for (const [k, grp] of groups) { const agg = aggregatePlayerSplitRows(grp.map(x => x.r)); if (agg) map.set(k, agg) }
       return { map, total: aggregatePlayerSplitRows(gs.map(x => x.r)), groups }
     }
-    let rows: Row[]
+    let rows: Row[] = (entityData[idx] ?? []).filter(s => matchDim(s, dim))
     if (mode === 'players') {
-      let r = (entityData[idx] as PlayerSplit[]).filter(s => s.category === pCat && s.split_dim === dim)
-      if (isCareer) r = aggregateCareerByValue(r); else r = r.filter(s => s.season === season)
-      rows = r
-    } else {
-      rows = (entityData[idx] as TeamSplit[]).filter(s => s.side === tSide && s.split_dim === dim)
+      if (isCareer) rows = aggByValue(rows); else rows = rows.filter(s => (s as PlayerSplit).season === season)
     }
     const map = new Map<string, Row>(rows.map(r => [r.split_value, r]))
-    const total = mode === 'players' ? aggregatePlayerSplitRows(rows as PlayerSplit[]) : aggregateTeamSplitRows(rows as TeamSplit[])
-    return { map, total }
+    return { map, total: aggOverall(rows) }
   }
 
   // "Where they stand out" — for a single focused player, the situational
   // splits whose headline efficiency (Y/A · Y/C · Y/R) deviates most from their
   // overall average. Pure client computation over the data already loaded.
   const notable = (() => {
-    if (!single || mode !== 'players') return null
+    if (!single || mode !== 'players' || isDefense) return null
     const headlineKey = pCat === 'passing' ? 'ya' : pCat === 'rushing' ? 'ypc' : 'ypr'
     const unit = pCat === 'passing' ? 'att' : pCat === 'rushing' ? 'car' : 'tgt'
     const met = (metrics as Metric<PlayerSplit>[]).find(m => m.key === headlineKey)
@@ -624,7 +626,7 @@ export default function SplitsPage() {
           <>
             <div className="flex flex-wrap items-center gap-2 mb-4">
               {mode === 'players'
-                ? <Seg<PlayerCategory> value={pCat} options={(Object.keys(PLAYER_SPLIT_CONFIG) as PlayerCategory[]).map(c => ({ value: c, label: PLAYER_SPLIT_CONFIG[c].label }))} onChange={c => { setPCat(c); setSituation(null) }} />
+                ? <Seg<PCat> value={pCat} options={[...(Object.keys(PLAYER_SPLIT_CONFIG) as PlayerCategory[]).map(c => ({ value: c as PCat, label: PLAYER_SPLIT_CONFIG[c].label })), { value: 'defense' as PCat, label: 'Defense' }]} onChange={c => { setPCat(c); setSituation(null) }} />
                 : <Seg<TeamSide> value={tSide} options={(Object.keys(TEAM_SPLIT_CONFIG) as TeamSide[]).map(s => ({ value: s, label: TEAM_SPLIT_CONFIG[s].label }))} onChange={s => { setTSide(s); setSituation(null) }} />}
               <select value={season} onChange={e => setSeason(Number(e.target.value))} className={selectCls}>
                 {mode === 'players' && <option value={CAREER_SEASON}>Career</option>}

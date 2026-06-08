@@ -6,7 +6,7 @@
  * numeric accessor (for ranking + best-in-row shading) and a formatter (for
  * display). Also holds the value-label and career-aggregation helpers.
  */
-import type { PlayerSplit, TeamSplit, PlayerGame } from './api'
+import type { PlayerSplit, TeamSplit, PlayerGame, DefensiveSplit } from './api'
 
 // ── Value labels ─────────────────────────────────────────────────────────────
 
@@ -18,6 +18,7 @@ const VALUE_LABELS: Record<string, string> = {
   leading: 'Leading', tied: 'Tied', trailing: 'Trailing',
   shotgun: 'Shotgun', under_center: 'Under Center',
   red_zone: 'Red Zone', opp_territory: 'Opp Territory', own_territory: 'Own Territory',
+  vs_pass: 'vs Pass', vs_run: 'vs Run',
   home: 'Home', away: 'Away',
   dome: 'Dome', outdoors: 'Outdoors', grass: 'Grass', turf: 'Turf',
   no_huddle: 'No-Huddle', huddle: 'Huddle', pressured: 'Under Pressure', clean: 'Clean Pocket',
@@ -143,6 +144,69 @@ export const PLAYER_SPLIT_CONFIG: Record<PlayerCategory, { label: string; dims: 
     dims: [{ key: 'target_depth', label: 'Target Depth' }, { key: 'target_direction', label: 'Direction' }, { key: 'pressure', label: 'Pressure' }, { key: 'play_action', label: 'Play Action' }, { key: 'blitz', label: 'Blitz' }, ...COMMON_PLAYER_DIMS],
     metrics: RECEIVING_METRICS,
   },
+}
+
+// ── Defensive player metrics ─────────────────────────────────────────────────
+// Event counts (more is always better). No coverage data exists in nflfastR,
+// so these are tackles / pass-rush / takeaway production, not coverage.
+
+const DEFENSE_METRICS: Metric<DefensiveSplit>[] = [
+  { key: 'tackles', label: 'Tackles', group: 'Tackling',  value: r => r.tackles, fmt: v => v.toFixed(0), higherIsBetter: true },
+  { key: 'solo',    label: 'Solo',    group: 'Tackling',  value: r => r.solo, fmt: intStr, higherIsBetter: true },
+  { key: 'tfl',     label: 'TFL',     group: 'Tackling',  value: r => r.tfl, fmt: intStr, higherIsBetter: true },
+  { key: 'sacks',   label: 'Sacks',   group: 'Pass Rush', value: r => r.sacks, fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'qb_hits', label: 'QB Hits', group: 'Pass Rush', value: r => r.qb_hits, fmt: intStr, higherIsBetter: true },
+  { key: 'int',     label: 'INT',     group: 'Coverage',  value: r => r.interceptions, fmt: intStr, higherIsBetter: true },
+  { key: 'pbu',     label: 'PBU',     group: 'Coverage',  value: r => r.pass_breakups, fmt: intStr, higherIsBetter: true },
+  { key: 'ff',      label: 'FF',      group: 'Takeaways', value: r => r.forced_fumbles, fmt: intStr, higherIsBetter: true },
+]
+
+const DEFENSE_DIMS: Dim[] = [
+  { key: 'vs_play', label: 'vs Pass/Run' },
+  { key: 'down', label: 'Down' },
+  { key: 'game_script', label: 'Game Script' },
+  { key: 'quarter', label: 'Quarter' },
+  { key: 'field_zone', label: 'Field Zone' },
+  { key: 'home_away', label: 'Home/Away' },
+  { key: 'roof', label: 'Stadium' },
+  { key: 'surface', label: 'Surface' },
+  { key: 'no_huddle', label: 'Tempo' },
+  { key: 'game_state', label: 'Game State' },
+  { key: 'opponent', label: 'Opponent' },
+  { key: 'opp_division', label: 'Division' },
+]
+
+export const DEFENSE_SPLIT_CONFIG: { label: string; dims: Dim[]; metrics: Metric<DefensiveSplit>[] } = {
+  label: 'Defense', dims: DEFENSE_DIMS, metrics: DEFENSE_METRICS,
+}
+
+export const DEFENSE_SITUATIONS: Situation[] = [
+  { label: 'vs Pass', dim: 'vs_play', value: 'vs_pass' },
+  { label: 'vs Run', dim: 'vs_play', value: 'vs_run' },
+  { label: '3rd Down', dim: 'down', value: '3' },
+  { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
+  { label: 'Trailing', dim: 'game_script', value: 'trailing' },
+]
+
+/** Sum a defender's event rows (counting stats only). */
+export function aggregateDefenseSplitRows(rows: DefensiveSplit[]): DefensiveSplit | null {
+  if (rows.length === 0) return null
+  const sum = (f: (r: DefensiveSplit) => number | null | undefined) => rows.reduce((a, r) => a + (f(r) ?? 0), 0)
+  return {
+    season: rows[0].season, split_dim: rows[0].split_dim, split_value: rows[0].split_value, sort_order: rows[0].sort_order,
+    tackles: sum(r => r.tackles), solo: sum(r => r.solo), assists: sum(r => r.assists), tfl: sum(r => r.tfl),
+    sacks: sum(r => r.sacks), qb_hits: sum(r => r.qb_hits), interceptions: sum(r => r.interceptions),
+    pass_breakups: sum(r => r.pass_breakups), forced_fumbles: sum(r => r.forced_fumbles),
+  }
+}
+
+/** Group a dimension's defensive rows by split_value across seasons. */
+export function aggregateDefenseCareerByValue(rows: DefensiveSplit[]): DefensiveSplit[] {
+  const byValue = new Map<string, DefensiveSplit[]>()
+  for (const r of rows) { const g = byValue.get(r.split_value); if (g) g.push(r); else byValue.set(r.split_value, [r]) }
+  const out: DefensiveSplit[] = []
+  for (const g of byValue.values()) { const agg = aggregateDefenseSplitRows(g); if (agg) out.push(agg) }
+  return out
 }
 
 // ── Team metrics ─────────────────────────────────────────────────────────────

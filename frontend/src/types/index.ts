@@ -50,6 +50,7 @@ export type KickingStats     = Schemas['KickingStats']
 export type PlayerWpa        = Schemas['PlayerWpa']
 export type PlayerAdvStats   = Schemas['PlayerAdvStats']
 export type PlayerSplit      = Schemas['PlayerSplit']
+export type DefensiveSplit   = Schemas['DefensiveSplit']
 
 // Team analytics
 export type TeamAnalyticsRow      = Schemas['TeamAnalyticsRow']

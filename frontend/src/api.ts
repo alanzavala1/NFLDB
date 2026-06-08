@@ -17,7 +17,7 @@
 import type {
   CombineData, DepthChartEntry, DivisionStandings, DraftInfo, Game,
   GameDetail, GamePlayerStats, InjuryStatus, KickingStats, LeagueLeader, NgsStats,
-  PlayerAdvStats, PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, PlayerWpa,
+  PlayerAdvStats, PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, DefensiveSplit, PlayerWpa,
   RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus, SituationalStats,
   SnapTotals, StandingsRow, TeamAnalyticsResponse, TeamAnalyticsRow,
   TeamGame, TeamLeader, TeamProfile, TeamSplit, WinProbPlay, WpaLeader, WpaLeaders,
@@ -36,7 +36,7 @@ export const CURRENT_NFL_SEASON = ((): number => {
 export type {
   CombineData, DepthChartEntry, DivisionStandings, DraftInfo, Game,
   GameDetail, InjuryStatus, KickingStats, LeagueLeader, NgsStats, PlayerAdvStats,
-  PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, PlayerWpa,
+  PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, DefensiveSplit, PlayerWpa,
   RosterPlayer, SearchResult, SituationalStats, SnapTotals, TeamGame,
   TeamLeader, TeamProfile, TeamSplit, WinProbPlay, WpaLeader, WpaLeaders,
 }
@@ -72,5 +72,6 @@ export const api = {
   wpaLeaders:    (season: number)              => get<WpaLeaders>(`/wpa-leaders?season=${season}`),
   comparables:   (playerId: string)            => get<PlayerComparable[]>(`/players/${playerId}/comparables`),
   splits:        (playerId: string)            => get<PlayerSplit[]>(`/players/${playerId}/splits`),
+  defSplits:     (playerId: string)            => get<DefensiveSplit[]>(`/players/${playerId}/def-splits`),
   search:        (q: string)                   => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
 }
