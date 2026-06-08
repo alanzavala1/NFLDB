@@ -83,6 +83,29 @@ GAME_STATE_DIM = (
     "wp IS NOT NULL",
 )
 
+# ── FTN charting dims (joined from ftn_charting; 2022+ only) ──────────────────
+# Play-action vs straight dropback (passing / receiving).
+PLAY_ACTION_DIM = (
+    "play_action",
+    "CASE WHEN is_play_action = 1 THEN 'play_action' ELSE 'no_pa' END",
+    "CASE WHEN is_play_action = 1 THEN 1 ELSE 2 END",
+    "is_play_action IS NOT NULL",
+)
+# Pass rush count: 5+ rushers = blitz. Range-filtered to drop FTN outliers.
+BLITZ_DIM = (
+    "blitz",
+    "CASE WHEN n_pass_rushers >= 5 THEN 'blitz' ELSE 'standard_rush' END",
+    "CASE WHEN n_pass_rushers >= 5 THEN 2 ELSE 1 END",
+    "n_pass_rushers BETWEEN 1 AND 11",
+)
+# Defenders in the box (rushing): light (<=6) / neutral (7) / stacked (>=8).
+BOX_DIM = (
+    "box_count",
+    "CASE WHEN n_defense_box <= 6 THEN 'light_box' WHEN n_defense_box >= 8 THEN 'stacked_box' ELSE 'neutral_box' END",
+    "CASE WHEN n_defense_box <= 6 THEN 1 WHEN n_defense_box >= 8 THEN 3 ELSE 2 END",
+    "n_defense_box BETWEEN 5 AND 11",
+)
+
 
 def game_script_dim(sign: int = 1) -> tuple[str, str, str, str]:
     """Leading/tied/trailing from the entity's perspective. score_differential

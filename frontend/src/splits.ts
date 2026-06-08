@@ -22,6 +22,9 @@ const VALUE_LABELS: Record<string, string> = {
   dome: 'Dome', outdoors: 'Outdoors', grass: 'Grass', turf: 'Turf',
   no_huddle: 'No-Huddle', huddle: 'Huddle', pressured: 'Under Pressure', clean: 'Clean Pocket',
   competitive: 'Competitive', garbage: 'Garbage Time',
+  play_action: 'Play Action', no_pa: 'No Play Action',
+  blitz: 'vs Blitz (5+)', standard_rush: 'Standard Rush',
+  light_box: 'Light Box (≤6)', neutral_box: 'Neutral Box (7)', stacked_box: 'Stacked Box (8+)',
 }
 export function splitValueLabel(dim: string, value: string): string {
   if (dim === 'quarter') return value === 'OT' ? 'OT' : `Q${value}`
@@ -127,17 +130,17 @@ export type PlayerCategory = 'passing' | 'rushing' | 'receiving'
 export const PLAYER_SPLIT_CONFIG: Record<PlayerCategory, { label: string; dims: Dim[]; metrics: Metric<PlayerSplit>[] }> = {
   passing: {
     label: 'Passing',
-    dims: [{ key: 'pass_depth', label: 'Pass Depth' }, { key: 'pass_location', label: 'Direction' }, { key: 'pressure', label: 'Pressure' }, ...COMMON_PLAYER_DIMS],
+    dims: [{ key: 'pass_depth', label: 'Pass Depth' }, { key: 'pass_location', label: 'Direction' }, { key: 'pressure', label: 'Pressure' }, { key: 'play_action', label: 'Play Action' }, { key: 'blitz', label: 'Blitz' }, ...COMMON_PLAYER_DIMS],
     metrics: PASSING_METRICS,
   },
   rushing: {
     label: 'Rushing',
-    dims: [{ key: 'run_gap', label: 'Gap' }, { key: 'run_direction', label: 'Direction' }, ...COMMON_PLAYER_DIMS],
+    dims: [{ key: 'run_gap', label: 'Gap' }, { key: 'run_direction', label: 'Direction' }, { key: 'box_count', label: 'Box Count' }, ...COMMON_PLAYER_DIMS],
     metrics: RUSHING_METRICS,
   },
   receiving: {
     label: 'Receiving',
-    dims: [{ key: 'target_depth', label: 'Target Depth' }, { key: 'target_direction', label: 'Direction' }, { key: 'pressure', label: 'Pressure' }, ...COMMON_PLAYER_DIMS],
+    dims: [{ key: 'target_depth', label: 'Target Depth' }, { key: 'target_direction', label: 'Direction' }, { key: 'pressure', label: 'Pressure' }, { key: 'play_action', label: 'Play Action' }, { key: 'blitz', label: 'Blitz' }, ...COMMON_PLAYER_DIMS],
     metrics: RECEIVING_METRICS,
   },
 }
@@ -229,6 +232,8 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: '1st Down', dim: 'down', value: '1' },
     { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
     { label: 'Under Pressure', dim: 'pressure', value: 'pressured' },
+    { label: 'Play Action', dim: 'play_action', value: 'play_action' },
+    { label: 'vs Blitz', dim: 'blitz', value: 'blitz' },
     { label: 'Competitive', dim: 'game_state', value: 'competitive' },
     { label: 'Dome', dim: 'roof', value: 'dome' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
@@ -239,6 +244,8 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: '3rd Down', dim: 'down', value: '3' },
     { label: '1st Down', dim: 'down', value: '1' },
     { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
+    { label: 'Stacked Box', dim: 'box_count', value: 'stacked_box' },
+    { label: 'Light Box', dim: 'box_count', value: 'light_box' },
     { label: 'Competitive', dim: 'game_state', value: 'competitive' },
     { label: 'Off Guard', dim: 'run_gap', value: 'guard' },
     { label: 'Off End', dim: 'run_gap', value: 'end' },
@@ -251,6 +258,8 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: '3rd Down', dim: 'down', value: '3' },
     { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
     { label: 'Under Pressure', dim: 'pressure', value: 'pressured' },
+    { label: 'Play Action', dim: 'play_action', value: 'play_action' },
+    { label: 'vs Blitz', dim: 'blitz', value: 'blitz' },
     { label: 'Competitive', dim: 'game_state', value: 'competitive' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
     { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },

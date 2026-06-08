@@ -423,6 +423,32 @@ def load_advanced_stats(conn, seasons: list[int], log=print):
     except Exception as e:
         log(f"    skipped: {e}")
 
+    load_ftn(conn, seasons, log=log)
+
+
+def load_ftn(conn, seasons: list[int], log=print) -> None:
+    """FTN charting (per-play, 2022+): play-action, screen, RPO, motion, QB
+    out of pocket, pass-rusher / blitzer counts, defenders in box. Stored in
+    its own `ftn_charting` table keyed by (game_id, play_id) and LEFT JOINed
+    to plays in splits_builder. Older seasons simply have no FTN rows."""
+    ftn_years = [s for s in seasons if s >= 2022]
+    if not ftn_years:
+        return
+    log(f"  FTN charting ({ftn_years})...")
+    try:
+        df = nfl_data_py.import_ftn_data(ftn_years)
+    except Exception as e:
+        log(f"    skipped: {e}")
+        return
+    keep = ["season", "nflverse_game_id", "nflverse_play_id", "is_play_action",
+            "is_rpo", "is_screen_pass", "is_motion", "is_qb_out_of_pocket",
+            "n_blitzers", "n_pass_rushers", "n_defense_box"]
+    df = df[[c for c in keep if c in df.columns]].rename(
+        columns={"nflverse_game_id": "game_id", "nflverse_play_id": "play_id"})
+    df["play_id"] = df["play_id"].astype("float64")  # match plays.play_id (FLOAT)
+    _upsert_by_season(conn, "ftn_charting", df, ftn_years, log=log)
+    log(f"    ftn_charting: {len(df):,} rows for {ftn_years}")
+
 
 def _replace_table(conn, table: str, df: pd.DataFrame, log=print) -> None:
     """Full-replace a table. For historical sources (draft picks, combine,

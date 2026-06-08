@@ -99,33 +99,45 @@ def _opponent_dims() -> list[tuple[str, str, str, str]]:
 _OPPONENT_DIMS = _opponent_dims()
 
 
-def _category_dims(category: str) -> list[tuple[str, str, str, str]]:
+def _category_dims(category: str, has_ftn: bool = False) -> list[tuple[str, str, str, str]]:
     if category == "passing":
         lead = [("pass_depth", *core.DEPTH), ("pass_location", *core.PASS_DIR), core.PRESSURE_DIM]
+        if has_ftn:
+            lead += [core.PLAY_ACTION_DIM, core.BLITZ_DIM]
     elif category == "rushing":
         lead = [
             ("run_gap", "run_gap", "CASE run_gap WHEN 'guard' THEN 1 WHEN 'tackle' THEN 2 WHEN 'end' THEN 3 END", "run_gap IS NOT NULL"),
             ("run_direction", *core.RUN_DIR),
         ]
+        if has_ftn:
+            lead += [core.BOX_DIM]
     else:  # receiving
         lead = [("target_depth", *core.DEPTH), ("target_direction", *core.PASS_DIR), core.PRESSURE_DIM]
+        if has_ftn:
+            lead += [core.PLAY_ACTION_DIM, core.BLITZ_DIM]
     return lead + _COMMON_DIMS + _OPPONENT_DIMS
 
 
 # ── Per-category SQL ──────────────────────────────────────────────────────────
 
-def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
+def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) -> tuple[str, str]:
     """Return (base_select, metric_select) for a category. base_select feeds
-    the `base` CTE; metric_select is the aggregation projection in each block."""
+    the `base` CTE; metric_select is the aggregation projection in each block.
+    When has_ftn, the per-play FTN charting columns are joined in (2022+)."""
+    # FTN charting (play-action, pass-rush count, box count) lives in its own
+    # table joined by game_id + play_id; null for pre-2022 / unmatched plays.
+    ftn_cols = "is_play_action, n_pass_rushers, n_defense_box," if has_ftn else ""
+    ftn_join = ("LEFT JOIN ftn_charting f ON plays.game_id = f.game_id AND plays.play_id = f.play_id"
+                if has_ftn else "")
     if category == "passing":
         base = f"""
             passer_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
-            qb_hit, roof, surface, no_huddle, wp,
+            qb_hit, roof, surface, no_huddle, wp, {ftn_cols}
             complete_pass, passing_yards, pass_touchdown, interception,
             air_yards, yards_after_catch, epa, cpoe, {success_col}
-        FROM plays
+        FROM plays {ftn_join}
         WHERE {core.PASS_ATTEMPT} AND passer_player_id IS NOT NULL"""
         metrics = """
             COUNT(*)                          AS att,
@@ -144,9 +156,9 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             rusher_player_id AS player_id, defteam,
             down, run_gap, run_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
-            roof, surface, no_huddle, wp,
+            roof, surface, no_huddle, wp, {ftn_cols}
             rushing_yards, rush_touchdown, epa, {success_col}
-        FROM plays
+        FROM plays {ftn_join}
         WHERE rush_attempt = 1 AND rusher_player_id IS NOT NULL"""
         metrics = """
             COUNT(*)                       AS att,
@@ -165,10 +177,10 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             receiver_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
-            qb_hit, roof, surface, no_huddle, wp,
+            qb_hit, roof, surface, no_huddle, wp, {ftn_cols}
             complete_pass, receiving_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, {success_col}
-        FROM plays
+        FROM plays {ftn_join}
         WHERE {core.PASS_ATTEMPT} AND receiver_player_id IS NOT NULL"""
         metrics = """
             COUNT(*)                            AS att,
@@ -185,18 +197,26 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
     return base, metrics
 
 
-def _category_sql(category: str, season: int, available: set[str]) -> str:
+def _ftn_available(conn) -> bool:
+    """True if the FTN charting table exists (so the builder can join it)."""
+    try:
+        return any(r[0] == "ftn_charting" for r in conn.execute("SHOW TABLES").fetchall())
+    except Exception:
+        return False
+
+
+def _category_sql(category: str, season: int, available: set[str], has_ftn: bool = False) -> str:
     """Long-format splits SELECT for one category + season."""
     s = int(season)
     min_vol = _MIN_VOLUME[category]
 
-    base_select, metric_select = _base_and_metrics(category, core.success_col(available))
-    union = core.union_blocks(_category_dims(category), metric_select, "player_id")
+    base_select, metric_select = _base_and_metrics(category, core.success_col(available), has_ftn)
+    union = core.union_blocks(_category_dims(category, has_ftn), metric_select, "player_id")
 
     return f"""
     WITH base AS (
         SELECT {base_select}
-          AND season = {s} AND season_type = 'REG'
+          AND plays.season = {s} AND plays.season_type = 'REG'
           {core.two_pt_filter(available)}
     ),
     qualified AS (
@@ -221,11 +241,12 @@ def materialize(season: int) -> int:
         available = {r[0] for r in conn.execute("DESCRIBE plays").fetchall()}
     except Exception:
         available = set()
+    has_ftn = _ftn_available(conn)
 
     conn.execute("DELETE FROM player_splits WHERE season = ?", [s])
     cols = ", ".join(_COLUMNS)
     for category in ("passing", "rushing", "receiving"):
-        sql = _category_sql(category, s, available)
+        sql = _category_sql(category, s, available, has_ftn)
         try:
             conn.execute(f"""
                 INSERT INTO player_splits ({cols})
