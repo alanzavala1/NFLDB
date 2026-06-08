@@ -27,6 +27,35 @@ def get_connection() -> duckdb.DuckDBPyConnection:
     return _conn
 
 
+# Large tables hit by per-request point lookups that lack a usable index
+# (the materialized splits/comparables tables already have a PRIMARY KEY on
+# their lookup key, so they're not listed). Small/fast tables are left
+# unindexed on purpose — an index there is overhead with no payoff.
+_INDEXES = [
+    ("depth_charts", "gsis_id"),         # 1.4M rows — current-depth lookup per profile
+    ("player_game_stats", "player_id"),  # 434k — game log + most aggregations
+    ("snap_counts", "pfr_player_id"),    # 324k — snap totals per profile
+]
+
+
+def ensure_indexes() -> None:
+    """Idempotent point-lookup indexes for the hot read paths. DuckDB persists
+    indexes, so this only does real work the first time (or after a table that
+    was rebuilt via CREATE TABLE AS, e.g. player_game_stats, dropped its index)."""
+    conn = get_connection()
+    try:
+        tables = {r[0] for r in conn.execute("SHOW TABLES").fetchall()}
+    except Exception:
+        return
+    for table, col in _INDEXES:
+        if table not in tables:
+            continue
+        try:
+            conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_{col} ON {table}({col})")
+        except Exception as e:
+            print(f"index {table}.{col} skipped: {e}")
+
+
 def get_cursor() -> duckdb.DuckDBPyConnection:
     """A fresh cursor for read queries. Cursors are cheap and isolated."""
     return get_connection().cursor()

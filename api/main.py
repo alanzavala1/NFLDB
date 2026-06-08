@@ -1,11 +1,12 @@
 """FastAPI app entry point: wires CORS, lifespan, and includes all routers."""
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 from config import AUTO_LOAD_SEASONS, CURRENT_SEASON, FIRST_SEASON
-from database import get_connection, query_to_dict
+from database import ensure_indexes, get_connection, query_to_dict
 from ingest_queue import queue_season, start_worker
 from routers import leaders, meta, players, schedule, teams
 
@@ -37,6 +38,10 @@ async def lifespan(app: FastAPI):
     # Start the single background ingest worker
     start_worker()
 
+    # Point-lookup indexes on the large tables hit per request (idempotent;
+    # persisted by DuckDB so this is a no-op after the first build).
+    ensure_indexes()
+
     # Static seed data — populate on first boot if not already loaded
     _ensure_player_awards()
 
@@ -63,6 +68,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="NFL Platform", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def cache_control(request: Request, call_next):
+    """Let browsers/CDNs cache responses. Completed seasons are immutable, so
+    cache them hard; everything else gets a short window so live data stays
+    fresh. Endpoints that opt out (e.g. /seasons) set their own header first."""
+    response = await call_next(request)
+    if request.method == "GET" and response.status_code == 200:
+        season = request.query_params.get("season")
+        if season and season.isdigit() and int(season) < CURRENT_SEASON:
+            response.headers["Cache-Control"] = "public, max-age=604800"  # 1 week
+        else:
+            response.headers.setdefault("Cache-Control", "public, max-age=300")  # 5 min
+    return response
+
+
+# Compress JSON responses — these payloads gzip ~10-20x (a veteran's splits go
+# from ~570KB to ~46KB), the dominant transfer cost.
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(
     CORSMiddleware,

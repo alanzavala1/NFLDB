@@ -793,6 +793,10 @@ def run_ingest(seasons: list[int], log=print):
     log(f"  player_career_summary: {summary_n} players")
     log(f"  player_comparables:    {pairs_n} rows")
 
+    # Recreate point-lookup indexes (tables rebuilt via CREATE TABLE AS drop them).
+    import database
+    database.ensure_indexes()
+
     log("\nDone.")
 
 
