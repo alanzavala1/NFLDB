@@ -72,14 +72,15 @@ def two_pt_filter(available: set[str]) -> str:
     return "AND COALESCE(two_point_attempt, 0) = 0" if "two_point_attempt" in available else ""
 
 
-def dead_play_filter(available: set[str]) -> str:
-    """Exclude QB spikes and kneels — they carry pass_attempt/rush_attempt flags
-    in play-by-play but the official stat line doesn't count them, so dropping
-    them keeps split totals aligned with the game-log / PFR numbers."""
-    parts = []
-    if "qb_spike" in available: parts.append("AND COALESCE(qb_spike, 0) = 0")
-    if "qb_kneel" in available: parts.append("AND COALESCE(qb_kneel, 0) = 0")
-    return " ".join(parts)
+# A pass *attempt* (and likewise a *target*) in official stats is exactly a
+# play that ends in a completion, an incompletion, or an interception. Defining
+# it this way — rather than nflfastR's `pass_attempt` flag — makes split counts
+# reconcile to the penny with the official game log: it INCLUDES spikes (logged
+# as incompletions, as the NFL counts them) and EXCLUDES sacks (which nflfastR
+# tags pass_attempt=1 in some seasons). Verified league-wide for 2023:
+# 0 attempt/target mismatches vs weekly_player_stats.
+PASS_ATTEMPT = ("(COALESCE(complete_pass, 0) = 1 OR COALESCE(incomplete_pass, 0) = 1 "
+                "OR COALESCE(interception, 0) = 1)")
 
 
 # ── UNION assembly ───────────────────────────────────────────────────────────

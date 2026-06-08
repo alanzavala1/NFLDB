@@ -118,7 +118,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             complete_pass, passing_yards, pass_touchdown, interception,
             air_yards, yards_after_catch, epa, cpoe, {success_col}
         FROM plays
-        WHERE pass_attempt = 1 AND passer_player_id IS NOT NULL"""
+        WHERE {core.PASS_ATTEMPT} AND passer_player_id IS NOT NULL"""
         metrics = """
             COUNT(*)                          AS att,
             SUM(complete_pass)                AS cmp,
@@ -155,7 +155,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             complete_pass, receiving_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, {success_col}
         FROM plays
-        WHERE pass_attempt = 1 AND receiver_player_id IS NOT NULL"""
+        WHERE {core.PASS_ATTEMPT} AND receiver_player_id IS NOT NULL"""
         metrics = """
             COUNT(*)                            AS att,
             SUM(complete_pass)                  AS cmp,
@@ -182,7 +182,7 @@ def _category_sql(category: str, season: int, available: set[str]) -> str:
     WITH base AS (
         SELECT {base_select}
           AND season = {s} AND season_type = 'REG'
-          {core.two_pt_filter(available)} {core.dead_play_filter(available)}
+          {core.two_pt_filter(available)}
     ),
     qualified AS (
         SELECT player_id FROM base GROUP BY player_id HAVING COUNT(*) >= {min_vol}
