@@ -427,7 +427,9 @@ export default function SplitsPage() {
         .filter(x => (x.r.att ?? 0) > 0))
     : [], [playerProfiles, players, mode, pCat, season, isCareer])
   const games = playerGames[0] ?? []
-  const gameMetrics = useMemo(() => metrics.filter(m => m.key !== 'succ' && m.key !== 'cpoe'), [metrics])
+  // Game-log rows carry no first_downs/success/cpoe, so drop the metrics that
+  // would otherwise render a misleading 0%/blank in Season & Opponent sections.
+  const gameMetrics = useMemo(() => metrics.filter(m => m.key !== 'succ' && m.key !== 'cpoe' && m.key !== 'conv'), [metrics])
   const single = entityCount === 1
 
   // Opponent defensive ranks for the season.
