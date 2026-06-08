@@ -31,6 +31,20 @@ SHOTGUN_DIM = (
     "CASE WHEN shotgun = 1 THEN 1 ELSE 2 END",
     "TRUE",
 )
+# Field position from yardline_100 (distance to the opponent's goal line),
+# ordered own → opp → red zone so the table reads as a drive progressing.
+FIELD_ZONE_DIM = (
+    "field_zone",
+    "CASE WHEN yardline_100 <= 20 THEN 'red_zone' WHEN yardline_100 <= 50 THEN 'opp_territory' ELSE 'own_territory' END",
+    "CASE WHEN yardline_100 <= 20 THEN 3 WHEN yardline_100 <= 50 THEN 2 ELSE 1 END",
+    "yardline_100 IS NOT NULL",
+)
+HOME_AWAY_DIM = (
+    "home_away",
+    "CASE WHEN posteam_type = 'home' THEN 'home' ELSE 'away' END",
+    "CASE WHEN posteam_type = 'home' THEN 1 ELSE 2 END",
+    "posteam_type IS NOT NULL",
+)
 
 
 def game_script_dim(sign: int = 1) -> tuple[str, str, str, str]:

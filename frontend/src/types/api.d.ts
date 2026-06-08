@@ -1206,6 +1206,8 @@ export interface components {
             air_yards: number | null;
             /** Yac */
             yac: number | null;
+            /** First Downs */
+            first_downs: number | null;
             /** Epa */
             epa: number | null;
             /** Success Pct */

@@ -210,6 +210,7 @@ class PlayerSplit(BaseModel):
     interceptions: int | None
     air_yards: int | None
     yac: int | None
+    first_downs: int | None
     epa: float | None
     success_pct: float | None
     cpoe: float | None

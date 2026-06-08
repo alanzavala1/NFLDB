@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS player_splits (
     interceptions INTEGER,          -- passing only
     air_yards     INTEGER,          -- passing / receiving
     yac           INTEGER,          -- passing / receiving
+    first_downs   INTEGER,          -- plays that gained a first down / TD
     epa           DOUBLE,
     success_pct   DOUBLE,
     cpoe          DOUBLE,           -- passing only
@@ -53,7 +54,7 @@ CREATE TABLE IF NOT EXISTS player_splits (
 
 _COLUMNS = ("player_id", "season", "category", "split_dim", "split_value",
             "sort_order", "att", "cmp", "yards", "td", "interceptions",
-            "air_yards", "yac", "epa", "success_pct", "cpoe")
+            "air_yards", "yac", "first_downs", "epa", "success_pct", "cpoe")
 
 
 def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
@@ -63,13 +64,16 @@ def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
     existing = {r[1] for r in conn.execute("PRAGMA table_info(player_splits)").fetchall()}
     if "yac" not in existing:
         conn.execute("ALTER TABLE player_splits ADD COLUMN yac INTEGER")
+    if "first_downs" not in existing:
+        conn.execute("ALTER TABLE player_splits ADD COLUMN first_downs INTEGER")
 
 
 # ── Dimension definitions ────────────────────────────────────────────────────
 # Common dims + feature helpers live in splits_core; here we add the
 # category-specific lead dimensions (depth/direction/gap).
 
-_COMMON_DIMS = [core.DOWN_DIM, core.game_script_dim(1), core.QUARTER_DIM, core.SHOTGUN_DIM]
+_COMMON_DIMS = [core.DOWN_DIM, core.game_script_dim(1), core.QUARTER_DIM,
+                core.SHOTGUN_DIM, core.FIELD_ZONE_DIM, core.HOME_AWAY_DIM]
 
 
 def _opponent_dims() -> list[tuple[str, str, str, str]]:
@@ -115,6 +119,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
         base = f"""
             passer_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
+            yardline_100, posteam_type, first_down,
             complete_pass, passing_yards, pass_touchdown, interception,
             air_yards, yards_after_catch, epa, cpoe, {success_col}
         FROM plays
@@ -127,6 +132,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             SUM(interception)                 AS interceptions,
             SUM(COALESCE(air_yards, 0))       AS air_yards,
             SUM(COALESCE(yards_after_catch, 0)) AS yac,
+            SUM(COALESCE(first_down, 0))      AS first_downs,
             ROUND(AVG(epa), 4)                AS epa,
             ROUND(100.0 * AVG(success), 1)    AS success_pct,
             ROUND(AVG(cpoe), 2)               AS cpoe"""
@@ -134,6 +140,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
         base = f"""
             rusher_player_id AS player_id, defteam,
             down, run_gap, run_location, score_differential, qtr, shotgun,
+            yardline_100, posteam_type, first_down,
             rushing_yards, rush_touchdown, epa, {success_col}
         FROM plays
         WHERE rush_attempt = 1 AND rusher_player_id IS NOT NULL"""
@@ -145,6 +152,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             CAST(NULL AS BIGINT)           AS interceptions,
             CAST(NULL AS BIGINT)           AS air_yards,
             CAST(NULL AS BIGINT)           AS yac,
+            SUM(COALESCE(first_down, 0))   AS first_downs,
             ROUND(AVG(epa), 4)             AS epa,
             ROUND(100.0 * AVG(success), 1) AS success_pct,
             CAST(NULL AS DOUBLE)           AS cpoe"""
@@ -152,6 +160,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
         base = f"""
             receiver_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
+            yardline_100, posteam_type, first_down,
             complete_pass, receiving_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, {success_col}
         FROM plays
@@ -164,6 +173,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             CAST(NULL AS BIGINT)                AS interceptions,
             SUM(COALESCE(air_yards, 0))         AS air_yards,
             SUM(COALESCE(yards_after_catch, 0)) AS yac,
+            SUM(COALESCE(first_down, 0))        AS first_downs,
             ROUND(AVG(epa), 4)                  AS epa,
             ROUND(100.0 * AVG(success), 1)      AS success_pct,
             CAST(NULL AS DOUBLE)                AS cpoe"""
@@ -217,7 +227,7 @@ def materialize(season: int) -> int:
                 SELECT player_id, {s} AS season, '{category}' AS category,
                        split_dim, split_value, sort_order,
                        att, cmp, yards, td, interceptions, air_yards, yac,
-                       epa, success_pct, cpoe
+                       first_downs, epa, success_pct, cpoe
                 FROM ({sql})
             """)
         except Exception as e:
@@ -234,7 +244,7 @@ def read(player_id: str) -> list[dict]:
         return query_to_dict("""
             SELECT season, category, split_dim, split_value, sort_order,
                    att, cmp, yards, td, interceptions, air_yards, yac,
-                   epa, success_pct, cpoe
+                   first_downs, epa, success_pct, cpoe
             FROM player_splits
             WHERE player_id = ?
             ORDER BY season DESC, category, split_dim, sort_order

@@ -18,6 +18,7 @@ const VALUE_LABELS: Record<string, string> = {
   leading: 'Leading', tied: 'Tied', trailing: 'Trailing',
   shotgun: 'Shotgun', under_center: 'Under Center',
   red_zone: 'Red Zone', opp_territory: 'Opp Territory', own_territory: 'Own Territory',
+  home: 'Home', away: 'Away',
 }
 export function splitValueLabel(dim: string, value: string): string {
   if (dim === 'quarter') return value === 'OT' ? 'OT' : `Q${value}`
@@ -58,6 +59,8 @@ const COMMON_PLAYER_DIMS: Dim[] = [
   { key: 'game_script', label: 'Game Script' },
   { key: 'quarter', label: 'Quarter' },
   { key: 'shotgun', label: 'Formation' },
+  { key: 'field_zone', label: 'Field Zone' },
+  { key: 'home_away', label: 'Home/Away' },
   { key: 'opponent', label: 'Opponent' },
   { key: 'opp_division', label: 'Division' },
 ]
@@ -81,6 +84,8 @@ const PASSING_METRICS: Metric<PlayerSplit>[] = [
   { key: 'epa',  label: 'EPA/att', group: 'Advanced',   value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
   { key: 'succ', label: 'Success%',group: 'Advanced',   value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
   { key: 'cpoe', label: 'CPOE',    group: 'Advanced',   value: r => r.cpoe, fmt: v => sgn(v, 1), higherIsBetter: true },
+  { key: 'conv', label: 'Conv%',   group: 'Situational',value: r => pct(r.first_downs, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'tdpct',label: 'TD%',     group: 'Situational',value: r => pct(r.td, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
 ]
 
 const RUSHING_METRICS: Metric<PlayerSplit>[] = [
@@ -90,6 +95,8 @@ const RUSHING_METRICS: Metric<PlayerSplit>[] = [
   { key: 'ypc',  label: 'Y/C',     group: 'Efficiency', value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
   { key: 'epa',  label: 'EPA/att', group: 'Advanced',   value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
   { key: 'succ', label: 'Success%',group: 'Advanced',   value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'conv', label: 'Conv%',   group: 'Situational',value: r => pct(r.first_downs, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'tdpct',label: 'TD%',     group: 'Situational',value: r => pct(r.td, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
 ]
 
 const RECEIVING_METRICS: Metric<PlayerSplit>[] = [
@@ -104,6 +111,8 @@ const RECEIVING_METRICS: Metric<PlayerSplit>[] = [
   { key: 'yac',  label: 'YAC',     group: 'Efficiency', value: r => r.yac, fmt: intStr, higherIsBetter: true },
   { key: 'epa',  label: 'EPA/tgt', group: 'Advanced',   value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },
   { key: 'succ', label: 'Success%',group: 'Advanced',   value: r => r.success_pct, fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'conv', label: 'Conv%',   group: 'Situational',value: r => pct(r.first_downs, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
+  { key: 'tdpct',label: 'TD%',     group: 'Situational',value: r => pct(r.td, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
 ]
 
 export type PlayerCategory = 'passing' | 'rushing' | 'receiving'
@@ -168,6 +177,7 @@ export function aggregatePlayerSplitRows(rows: PlayerSplit[]): PlayerSplit | nul
     split_value: rows[0].split_value, sort_order: rows[0].sort_order,
     att, cmp: sum(r => r.cmp), yards: sum(r => r.yards), td: sum(r => r.td),
     interceptions: sum(r => r.interceptions), air_yards: sum(r => r.air_yards), yac: sum(r => r.yac),
+    first_downs: sum(r => r.first_downs),
     epa: wavg(r => r.epa), success_pct: wavg(r => r.success_pct), cpoe: wavg(r => r.cpoe),
   }
 }
@@ -210,6 +220,7 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: 'Short', dim: 'pass_depth', value: 'short' },
     { label: '3rd Down', dim: 'down', value: '3' },
     { label: '1st Down', dim: 'down', value: '1' },
+    { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
     { label: 'Leading', dim: 'game_script', value: 'leading' },
     { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },
@@ -217,6 +228,7 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
   rushing: [
     { label: '3rd Down', dim: 'down', value: '3' },
     { label: '1st Down', dim: 'down', value: '1' },
+    { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
     { label: 'Off Guard', dim: 'run_gap', value: 'guard' },
     { label: 'Off End', dim: 'run_gap', value: 'end' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
@@ -226,6 +238,7 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: 'Deep', dim: 'target_depth', value: 'deep' },
     { label: 'Short', dim: 'target_depth', value: 'short' },
     { label: '3rd Down', dim: 'down', value: '3' },
+    { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
     { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },
   ],
@@ -246,6 +259,7 @@ export function gameToSplitRow(g: PlayerGame, cat: PlayerCategory): PlayerSplit 
     season: g.season, category: cat, split_dim: 'game', split_value: g.game_id, sort_order: g.week,
     att: null as number | null, cmp: null as number | null, yards: null as number | null, td: null as number | null,
     interceptions: null as number | null, air_yards: null as number | null, yac: null as number | null,
+    first_downs: null as number | null,
     epa: null as number | null, success_pct: null as number | null, cpoe: null as number | null,
   }
   if (cat === 'passing') return { ...base, att: g.attempts, cmp: g.completions, yards: g.pass_yards, td: g.pass_tds, interceptions: g.interceptions_thrown, air_yards: g.air_yards, yac: g.yac, epa: g.attempts ? g.pass_epa / g.attempts : null }

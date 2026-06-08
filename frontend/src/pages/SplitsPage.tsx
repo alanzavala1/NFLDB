@@ -37,9 +37,9 @@ const colorOf = (i: number) => ENTITY_COLORS[i % ENTITY_COLORS.length]
 
 // Curated "key stats" per category/side — keeps the side-by-side narrow.
 const KEY_KEYS: Record<string, string[]> = {
-  passing: ['ya', 'td', 'int', 'epa', 'succ'],
-  rushing: ['ypc', 'td', 'epa', 'succ'],
-  receiving: ['ypr', 'td', 'epa', 'succ'],
+  passing: ['ya', 'td', 'int', 'conv', 'epa', 'succ'],
+  rushing: ['ypc', 'td', 'conv', 'epa', 'succ'],
+  receiving: ['ypr', 'td', 'conv', 'epa', 'succ'],
   offense: ['epa', 'succ', 'ypp', 'expl'],
   defense: ['epa', 'succ', 'ypp', 'expl'],
 }
