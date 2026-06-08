@@ -74,7 +74,8 @@ def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
 
 _COMMON_DIMS = [core.DOWN_DIM, core.game_script_dim(1), core.QUARTER_DIM,
                 core.SHOTGUN_DIM, core.FIELD_ZONE_DIM, core.HOME_AWAY_DIM,
-                core.ROOF_DIM, core.SURFACE_DIM, core.NO_HUDDLE_DIM]
+                core.ROOF_DIM, core.SURFACE_DIM, core.NO_HUDDLE_DIM,
+                core.GAME_STATE_DIM]
 
 
 def _opponent_dims() -> list[tuple[str, str, str, str]]:
@@ -121,7 +122,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             passer_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
-            qb_hit, roof, surface, no_huddle,
+            qb_hit, roof, surface, no_huddle, wp,
             complete_pass, passing_yards, pass_touchdown, interception,
             air_yards, yards_after_catch, epa, cpoe, {success_col}
         FROM plays
@@ -143,7 +144,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             rusher_player_id AS player_id, defteam,
             down, run_gap, run_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
-            roof, surface, no_huddle,
+            roof, surface, no_huddle, wp,
             rushing_yards, rush_touchdown, epa, {success_col}
         FROM plays
         WHERE rush_attempt = 1 AND rusher_player_id IS NOT NULL"""
@@ -164,7 +165,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             receiver_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
-            qb_hit, roof, surface, no_huddle,
+            qb_hit, roof, surface, no_huddle, wp,
             complete_pass, receiving_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, {success_col}
         FROM plays

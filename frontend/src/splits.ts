@@ -21,6 +21,7 @@ const VALUE_LABELS: Record<string, string> = {
   home: 'Home', away: 'Away',
   dome: 'Dome', outdoors: 'Outdoors', grass: 'Grass', turf: 'Turf',
   no_huddle: 'No-Huddle', huddle: 'Huddle', pressured: 'Under Pressure', clean: 'Clean Pocket',
+  competitive: 'Competitive', garbage: 'Garbage Time',
 }
 export function splitValueLabel(dim: string, value: string): string {
   if (dim === 'quarter') return value === 'OT' ? 'OT' : `Q${value}`
@@ -66,6 +67,7 @@ const COMMON_PLAYER_DIMS: Dim[] = [
   { key: 'roof', label: 'Stadium' },
   { key: 'surface', label: 'Surface' },
   { key: 'no_huddle', label: 'Tempo' },
+  { key: 'game_state', label: 'Game State' },
   { key: 'opponent', label: 'Opponent' },
   { key: 'opp_division', label: 'Division' },
 ]
@@ -227,6 +229,7 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: '1st Down', dim: 'down', value: '1' },
     { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
     { label: 'Under Pressure', dim: 'pressure', value: 'pressured' },
+    { label: 'Competitive', dim: 'game_state', value: 'competitive' },
     { label: 'Dome', dim: 'roof', value: 'dome' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
     { label: 'Leading', dim: 'game_script', value: 'leading' },
@@ -236,6 +239,7 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: '3rd Down', dim: 'down', value: '3' },
     { label: '1st Down', dim: 'down', value: '1' },
     { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
+    { label: 'Competitive', dim: 'game_state', value: 'competitive' },
     { label: 'Off Guard', dim: 'run_gap', value: 'guard' },
     { label: 'Off End', dim: 'run_gap', value: 'end' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
@@ -247,6 +251,7 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: '3rd Down', dim: 'down', value: '3' },
     { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
     { label: 'Under Pressure', dim: 'pressure', value: 'pressured' },
+    { label: 'Competitive', dim: 'game_state', value: 'competitive' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
     { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },
   ],

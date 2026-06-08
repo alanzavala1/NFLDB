@@ -73,6 +73,15 @@ PRESSURE_DIM = (
     "CASE WHEN qb_hit = 1 THEN 2 ELSE 1 END",
     "TRUE",
 )
+# Garbage-time filter via in-game win probability. "Competitive" = neither team
+# yet 95%+ to win; "Garbage Time" = the game is effectively decided. Selecting
+# the Competitive row gives a meaningful-snaps-only view (no blowout padding).
+GAME_STATE_DIM = (
+    "game_state",
+    "CASE WHEN wp BETWEEN 0.05 AND 0.95 THEN 'competitive' ELSE 'garbage' END",
+    "CASE WHEN wp BETWEEN 0.05 AND 0.95 THEN 1 ELSE 2 END",
+    "wp IS NOT NULL",
+)
 
 
 def game_script_dim(sign: int = 1) -> tuple[str, str, str, str]:
