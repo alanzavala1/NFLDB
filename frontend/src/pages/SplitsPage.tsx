@@ -543,6 +543,44 @@ export default function SplitsPage() {
     return { map, total }
   }
 
+  // "Where they stand out" — for a single focused player, the situational
+  // splits whose headline efficiency (Y/A · Y/C · Y/R) deviates most from their
+  // overall average. Pure client computation over the data already loaded.
+  const notable = (() => {
+    if (!single || mode !== 'players') return null
+    const headlineKey = pCat === 'passing' ? 'ya' : pCat === 'rushing' ? 'ypc' : 'ypr'
+    const unit = pCat === 'passing' ? 'att' : pCat === 'rushing' ? 'car' : 'tgt'
+    const met = (metrics as Metric<PlayerSplit>[]).find(m => m.key === headlineKey)
+    if (!met) return null
+    const overall = entitySection(0, OVERALL_DIM).total as PlayerSplit | null
+    const base = overall ? met.value(overall) : null
+    const overallAtt = volume(overall)
+    if (base == null || overallAtt <= 0) return null
+    const minVol = Math.max(12, overallAtt * 0.1)
+    type Cand = { kind: string; label: React.ReactNode; v: number; delta: number; vol: number }
+    const cands: Cand[] = []
+    for (const d of config.dims) {
+      if (d.key === 'opponent' || d.key === 'opp_division') continue
+      for (const [val, row] of entitySection(0, d.key).map) {
+        const v = met.value(row); const vol = volume(row)
+        if (v == null || vol < minVol) continue
+        cands.push({ kind: d.label, label: splitValueLabel(d.key, val), v, delta: v - base, vol })
+      }
+    }
+    // Best / worst opponent matchup (needs a few games to be meaningful).
+    const byOpp = new Map<string, typeof games>()
+    for (const x of games) (byOpp.get(x.g.opponent) ?? byOpp.set(x.g.opponent, []).get(x.g.opponent)!).push(x)
+    for (const [opp, grp] of byOpp) {
+      if (grp.length < 3) continue
+      const agg = aggregatePlayerSplitRows(grp.map(x => x.r))
+      const v = agg ? met.value(agg) : null; const vol = volume(agg)
+      if (v == null || vol < minVol) continue
+      cands.push({ kind: 'Opponent', v, delta: v - base, vol, label: <span className="inline-flex items-center gap-1"><img src={teamLogoUrl(opp)} className="w-4 h-4 object-contain" alt="" />vs {opp}</span> })
+    }
+    cands.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    return { met, base, unit, items: cands.slice(0, 6) }
+  })()
+
   function addEntity(r: SearchResult) {
     if (r.type === 'team') setTeams(t => t.includes(r.id) ? t : [...t, r.id].slice(0, 6))
     else setPlayers(p => p.some(x => x.id === r.id) ? p : [...p, { id: r.id, name: r.name, headshot: r.headshot_url, sub: [r.position, r.team].filter(Boolean).join(' · ') }].slice(0, 6))
@@ -603,6 +641,31 @@ export default function SplitsPage() {
                 ? <div className="py-8 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
                 : <StatTable firstCol={mode === 'players' ? 'Player' : 'Team'} rows={summaryRows} metrics={metrics} flip={flip} />}
             </div>
+
+            {/* Where they stand out — auto-surfaced standout splits (single player) */}
+            {notable && notable.items.length > 0 && (
+              <div className="mb-6">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Where {entityMeta[0].label} stands out</span>
+                  <span className="text-[11px] text-gray-600">biggest swings in {notable.met.label} vs {isCareer ? 'career' : season} avg of {notable.met.fmt(notable.base)}</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {notable.items.map((it, i) => {
+                    const good = notable.met.higherIsBetter ? it.delta > 0 : it.delta < 0
+                    return (
+                      <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5" style={{ boxShadow: `inset 0 2px 0 0 ${good ? 'rgba(16,185,129,0.7)' : 'rgba(244,63,94,0.7)'}` }}>
+                        <div className="text-xs font-semibold text-gray-200 truncate flex items-center gap-1">{it.label}</div>
+                        <div className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">{it.kind}</div>
+                        <div className="text-lg font-bold text-white tabular-nums leading-none">{notable.met.fmt(it.v)}</div>
+                        <div className={`text-[11px] font-semibold tabular-nums mt-1 ${good ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {it.delta >= 0 ? '+' : '−'}{notable.met.fmt(Math.abs(it.delta))}<span className="text-gray-600 font-normal"> · {it.vol} {notable.unit}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* All splits — single = traditional page; multiple = side-by-side */}
             <div className="flex flex-wrap items-center gap-2 mb-3">
