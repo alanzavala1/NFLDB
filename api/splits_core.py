@@ -45,6 +45,34 @@ HOME_AWAY_DIM = (
     "CASE WHEN posteam_type = 'home' THEN 1 ELSE 2 END",
     "posteam_type IS NOT NULL",
 )
+# Stadium environment. Retractable-closed counts as a dome; retractable-open
+# as outdoors.
+ROOF_DIM = (
+    "roof",
+    "CASE WHEN roof IN ('dome', 'closed') THEN 'dome' ELSE 'outdoors' END",
+    "CASE WHEN roof IN ('dome', 'closed') THEN 1 ELSE 2 END",
+    "roof IN ('dome', 'closed', 'outdoors', 'open')",
+)
+SURFACE_DIM = (
+    "surface",
+    "CASE WHEN surface = 'grass' THEN 'grass' ELSE 'turf' END",
+    "CASE WHEN surface = 'grass' THEN 1 ELSE 2 END",
+    "surface IS NOT NULL AND surface <> ''",
+)
+NO_HUDDLE_DIM = (
+    "no_huddle",
+    "CASE WHEN no_huddle = 1 THEN 'no_huddle' ELSE 'huddle' END",
+    "CASE WHEN no_huddle = 1 THEN 2 ELSE 1 END",
+    "no_huddle IS NOT NULL",
+)
+# Pressure proxy: nflfastR qb_hit (QB knocked down on the play). Reliable from
+# ~2006 on; older seasons show almost everything "clean". Passing/receiving only.
+PRESSURE_DIM = (
+    "pressure",
+    "CASE WHEN qb_hit = 1 THEN 'pressured' ELSE 'clean' END",
+    "CASE WHEN qb_hit = 1 THEN 2 ELSE 1 END",
+    "TRUE",
+)
 
 
 def game_script_dim(sign: int = 1) -> tuple[str, str, str, str]:

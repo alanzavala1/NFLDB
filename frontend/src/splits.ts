@@ -19,6 +19,8 @@ const VALUE_LABELS: Record<string, string> = {
   shotgun: 'Shotgun', under_center: 'Under Center',
   red_zone: 'Red Zone', opp_territory: 'Opp Territory', own_territory: 'Own Territory',
   home: 'Home', away: 'Away',
+  dome: 'Dome', outdoors: 'Outdoors', grass: 'Grass', turf: 'Turf',
+  no_huddle: 'No-Huddle', huddle: 'Huddle', pressured: 'Under Pressure', clean: 'Clean Pocket',
 }
 export function splitValueLabel(dim: string, value: string): string {
   if (dim === 'quarter') return value === 'OT' ? 'OT' : `Q${value}`
@@ -61,6 +63,9 @@ const COMMON_PLAYER_DIMS: Dim[] = [
   { key: 'shotgun', label: 'Formation' },
   { key: 'field_zone', label: 'Field Zone' },
   { key: 'home_away', label: 'Home/Away' },
+  { key: 'roof', label: 'Stadium' },
+  { key: 'surface', label: 'Surface' },
+  { key: 'no_huddle', label: 'Tempo' },
   { key: 'opponent', label: 'Opponent' },
   { key: 'opp_division', label: 'Division' },
 ]
@@ -120,7 +125,7 @@ export type PlayerCategory = 'passing' | 'rushing' | 'receiving'
 export const PLAYER_SPLIT_CONFIG: Record<PlayerCategory, { label: string; dims: Dim[]; metrics: Metric<PlayerSplit>[] }> = {
   passing: {
     label: 'Passing',
-    dims: [{ key: 'pass_depth', label: 'Pass Depth' }, { key: 'pass_location', label: 'Direction' }, ...COMMON_PLAYER_DIMS],
+    dims: [{ key: 'pass_depth', label: 'Pass Depth' }, { key: 'pass_location', label: 'Direction' }, { key: 'pressure', label: 'Pressure' }, ...COMMON_PLAYER_DIMS],
     metrics: PASSING_METRICS,
   },
   rushing: {
@@ -130,7 +135,7 @@ export const PLAYER_SPLIT_CONFIG: Record<PlayerCategory, { label: string; dims: 
   },
   receiving: {
     label: 'Receiving',
-    dims: [{ key: 'target_depth', label: 'Target Depth' }, { key: 'target_direction', label: 'Direction' }, ...COMMON_PLAYER_DIMS],
+    dims: [{ key: 'target_depth', label: 'Target Depth' }, { key: 'target_direction', label: 'Direction' }, { key: 'pressure', label: 'Pressure' }, ...COMMON_PLAYER_DIMS],
     metrics: RECEIVING_METRICS,
   },
 }
@@ -221,6 +226,8 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: '3rd Down', dim: 'down', value: '3' },
     { label: '1st Down', dim: 'down', value: '1' },
     { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
+    { label: 'Under Pressure', dim: 'pressure', value: 'pressured' },
+    { label: 'Dome', dim: 'roof', value: 'dome' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
     { label: 'Leading', dim: 'game_script', value: 'leading' },
     { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },
@@ -239,6 +246,7 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
     { label: 'Short', dim: 'target_depth', value: 'short' },
     { label: '3rd Down', dim: 'down', value: '3' },
     { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
+    { label: 'Under Pressure', dim: 'pressure', value: 'pressured' },
     { label: 'Trailing', dim: 'game_script', value: 'trailing' },
     { label: 'Shotgun', dim: 'shotgun', value: 'shotgun' },
   ],

@@ -73,7 +73,8 @@ def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
 # category-specific lead dimensions (depth/direction/gap).
 
 _COMMON_DIMS = [core.DOWN_DIM, core.game_script_dim(1), core.QUARTER_DIM,
-                core.SHOTGUN_DIM, core.FIELD_ZONE_DIM, core.HOME_AWAY_DIM]
+                core.SHOTGUN_DIM, core.FIELD_ZONE_DIM, core.HOME_AWAY_DIM,
+                core.ROOF_DIM, core.SURFACE_DIM, core.NO_HUDDLE_DIM]
 
 
 def _opponent_dims() -> list[tuple[str, str, str, str]]:
@@ -99,14 +100,14 @@ _OPPONENT_DIMS = _opponent_dims()
 
 def _category_dims(category: str) -> list[tuple[str, str, str, str]]:
     if category == "passing":
-        lead = [("pass_depth", *core.DEPTH), ("pass_location", *core.PASS_DIR)]
+        lead = [("pass_depth", *core.DEPTH), ("pass_location", *core.PASS_DIR), core.PRESSURE_DIM]
     elif category == "rushing":
         lead = [
             ("run_gap", "run_gap", "CASE run_gap WHEN 'guard' THEN 1 WHEN 'tackle' THEN 2 WHEN 'end' THEN 3 END", "run_gap IS NOT NULL"),
             ("run_direction", *core.RUN_DIR),
         ]
     else:  # receiving
-        lead = [("target_depth", *core.DEPTH), ("target_direction", *core.PASS_DIR)]
+        lead = [("target_depth", *core.DEPTH), ("target_direction", *core.PASS_DIR), core.PRESSURE_DIM]
     return lead + _COMMON_DIMS + _OPPONENT_DIMS
 
 
@@ -120,6 +121,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             passer_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
+            qb_hit, roof, surface, no_huddle,
             complete_pass, passing_yards, pass_touchdown, interception,
             air_yards, yards_after_catch, epa, cpoe, {success_col}
         FROM plays
@@ -141,6 +143,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             rusher_player_id AS player_id, defteam,
             down, run_gap, run_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
+            roof, surface, no_huddle,
             rushing_yards, rush_touchdown, epa, {success_col}
         FROM plays
         WHERE rush_attempt = 1 AND rusher_player_id IS NOT NULL"""
@@ -161,6 +164,7 @@ def _base_and_metrics(category: str, success_col: str) -> tuple[str, str]:
             receiver_player_id AS player_id, defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
+            qb_hit, roof, surface, no_huddle,
             complete_pass, receiving_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, {success_col}
         FROM plays
