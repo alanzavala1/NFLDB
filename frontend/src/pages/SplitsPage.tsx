@@ -43,6 +43,13 @@ const KEY_KEYS: Record<string, string[]> = {
   offense: ['epa', 'succ', 'ypp', 'expl'],
   defense: ['epa', 'succ', 'ypp', 'expl'],
 }
+// Game-based sections (Season / Opponent) read like a box score, so their
+// key columns lead with total yards and the headline rate (passer rating).
+const GAME_KEY_KEYS: Record<string, string[]> = {
+  passing: ['yds', 'td', 'int', 'rate', 'epa'],
+  rushing: ['yds', 'td', 'ypc', 'epa'],
+  receiving: ['rec', 'yds', 'td', 'ypr', 'epa'],
+}
 const selectCls = 'bg-gray-900 border border-gray-800 text-gray-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-gray-600'
 
 function Seg<T extends string | number>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
@@ -238,11 +245,12 @@ function Section({ title, children, open, onToggle }: { title: string; children:
   )
 }
 
-type EntitySecLite = { map: Map<string, Row>; total: Row | null; groups?: Map<string, { g: { game_id: string; week: number; location: string; opponent: string }; r: Row }[]> }
+type GameLite = { game_id: string; season: number; week: number; location: string; opponent: string }
+type EntitySecLite = { map: Map<string, Row>; total: Row | null; groups?: Map<string, { g: GameLite; r: Row }[]> }
 
 // Side-by-side: rows = split values, columns grouped by entity (each entity's
 // metrics). Sticky label column; best per metric across entities tinted.
-function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defRkFor, isSeason, expandedKeys, onToggleExpand, flip }: {
+function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defRkFor, expandable, expandShowSeason, expandedKeys, onToggleExpand, flip }: {
   label: string
   entities: EntityCard[]
   metrics: Metric<Row>[]
@@ -250,7 +258,8 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
   keyLabel: (k: string) => React.ReactNode
   sections: EntitySecLite[]
   defRkFor?: (k: string) => number | null | undefined
-  isSeason?: boolean
+  expandable?: boolean
+  expandShowSeason?: boolean
   expandedKeys: Set<string>
   onToggleExpand?: (k: string) => void
   flip: (hib: boolean | undefined) => boolean | undefined
@@ -286,7 +295,7 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
                 <tr className="hover:bg-gray-800/20">
                   <td className={`${sticky} py-2 pl-4 pr-3 whitespace-nowrap font-semibold text-white border-t border-gray-800/50`}>
                     <span className="inline-flex items-center gap-1.5">
-                      {isSeason && onToggleExpand && <button onClick={() => onToggleExpand(k)} className="text-gray-600 hover:text-white w-3">{expandedKeys.has(k) ? '▾' : '▸'}</button>}
+                      {expandable && onToggleExpand && <button onClick={() => onToggleExpand(k)} className="text-gray-600 hover:text-white w-3">{expandedKeys.has(k) ? '▾' : '▸'}</button>}
                       {keyLabel(k)}
                       {dr != null && <span className="text-amber-500/70 text-[10px] font-bold">#{dr}</span>}
                     </span>
@@ -299,20 +308,21 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
                     })
                   })}
                 </tr>
-                {isSeason && expandedKeys.has(k) && (() => {
-                  // Align games BY WEEK: one row per week, each entity's game that
-                  // week filling its own columns (with a link to the game page).
-                  const weekMaps = sections.map(s => {
-                    const mm = new Map<number, { g: { game_id: string; week: number; location: string; opponent: string }; r: Row }>()
-                    for (const x of (s.groups?.get(k) ?? [])) mm.set(x.g.week, x)
+                {expandable && expandedKeys.has(k) && (() => {
+                  // One row per game, aligned across entities by season+week so the
+                  // same game lines up; each entity's stats fill its own columns
+                  // (with a link to the game page). Season rows hide the year.
+                  const rowMaps = sections.map(s => {
+                    const mm = new Map<number, { g: GameLite; r: Row }>()
+                    for (const x of (s.groups?.get(k) ?? [])) mm.set(x.g.season * 100 + x.g.week, x)
                     return mm
                   })
-                  const weeks = [...new Set(weekMaps.flatMap(mm => [...mm.keys()]))].sort((a, b) => a - b)
-                  return weeks.map(w => (
-                    <tr key={`wk-${w}`} className="bg-gray-950/40">
-                      <td className={`${sticky} bg-gray-950 py-1.5 pl-9 pr-3 whitespace-nowrap text-xs text-gray-500 border-t border-gray-800/40`}>Wk {w}</td>
+                  const gks = [...new Set(rowMaps.flatMap(mm => [...mm.keys()]))].sort((a, b) => a - b)
+                  return gks.map(gk => (
+                    <tr key={`g-${gk}`} className="bg-gray-950/40">
+                      <td className={`${sticky} bg-gray-950 py-1.5 pl-9 pr-3 whitespace-nowrap text-xs text-gray-500 border-t border-gray-800/40`}>{expandShowSeason ? `${Math.floor(gk / 100)} Wk ${gk % 100}` : `Wk ${gk % 100}`}</td>
                       {sections.map((_, si) => {
-                        const x = weekMaps[si].get(w)
+                        const x = rowMaps[si].get(gk)
                         return metrics.map((m, mi) => {
                           const v = x ? m.value(x.r) : null
                           return (
@@ -439,12 +449,13 @@ export default function SplitsPage() {
       for (const k of keys) {
         const grp = groups.get(k)!
         const pkey = `${dim}:${k}`
+        const gp = <span className="text-gray-500 text-[11px] font-normal ml-1.5">· {grp.length} G</span>
         out.push({
           key: pkey, row: aggregatePlayerSplitRows(grp.map(x => x.r)),
           defRk: dim === 'opponent' && wantDef ? (defRank.get(k) ?? null) : undefined,
           label: dim === 'season'
-            ? <span className="font-bold">{k}</span>
-            : <span className="inline-flex items-center gap-1.5"><img src={teamLogoUrl(k)} className="w-5 h-5 object-contain" alt="" />{k}</span>,
+            ? <span className="font-bold">{k}{gp}</span>
+            : <span className="inline-flex items-center gap-1.5"><img src={teamLogoUrl(k)} className="w-5 h-5 object-contain" alt="" />{k}{gp}</span>,
         })
         if (expandedKeys.has(pkey)) {
           for (const { g, r } of [...grp].sort((a, b) => a.g.season - b.g.season || a.g.week - b.g.week)) {
@@ -581,7 +592,8 @@ export default function SplitsPage() {
                 }
                 // side-by-side
                 const base = gameBased ? gameMetrics : metrics
-                const km = keyStatsOnly ? base.filter(m => (KEY_KEYS[catOrSide] ?? []).includes(m.key)) : base
+                const keyList = gameBased ? GAME_KEY_KEYS[catOrSide] : KEY_KEYS[catOrSide]
+                const km = keyStatsOnly ? base.filter(m => (keyList ?? []).includes(m.key)) : base
                 const m = km.length ? km : base
                 const secs = entityMeta.map((_, i) => entitySection(i, d.key))
                 const agg = new Map<string, { ord: number; vol: number }>()
@@ -599,8 +611,8 @@ export default function SplitsPage() {
                       ? <div className="py-6 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
                       : <GroupedTable label={d.label} entities={entityMeta} metrics={m} keys={keys} keyLabel={keyLabel} sections={secs}
                           defRkFor={d.key === 'opponent' && wantDef ? (k => defRank.get(k)) : undefined}
-                          isSeason={d.key === 'season'} expandedKeys={expandedKeys}
-                          onToggleExpand={d.key === 'season' ? (k => setExpandedKeys(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })) : undefined}
+                          expandable={gameBased} expandShowSeason={d.key === 'opponent'} expandedKeys={expandedKeys}
+                          onToggleExpand={gameBased ? (k => setExpandedKeys(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })) : undefined}
                           flip={flip} />}
                   </Section>
                 )
