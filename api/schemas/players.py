@@ -216,6 +216,26 @@ class PlayerSplit(BaseModel):
     cpoe: float | None
 
 
+class DefensiveSplit(BaseModel):
+    """A defender's event line (tackles/sacks/TFL/QB hits/INT/PBU/FF)
+    conditioned on one situational dimension. Counts only — nflfastR has no
+    coverage data. Scrimmage plays only (special-teams tackles have no down).
+    Served by /players/{id}/def-splits."""
+    season: int
+    split_dim: str
+    split_value: str
+    sort_order: int | None
+    tackles: float | None
+    solo: int | None
+    assists: int | None
+    tfl: int | None
+    sacks: float | None
+    qb_hits: int | None
+    interceptions: int | None
+    pass_breakups: int | None
+    forced_fumbles: int | None
+
+
 class PlayerProfile(BaseModel):
     """Full /players/{id} payload."""
     player_id: str

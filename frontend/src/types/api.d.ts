@@ -174,6 +174,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/players/{player_id}/def-splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Player Def Splits
+         * @description A defender's event line conditioned on one situational dimension.
+         */
+        get: operations["get_player_def_splits_players__player_id__def_splits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teams/{team}": {
         parameters: {
             query?: never;
@@ -402,6 +422,41 @@ export interface components {
             cone: number | null;
             /** Shuttle */
             shuttle: number | null;
+        };
+        /**
+         * DefensiveSplit
+         * @description A defender's event line (tackles/sacks/TFL/QB hits/INT/PBU/FF)
+         *     conditioned on one situational dimension. Counts only — nflfastR has no
+         *     coverage data. Scrimmage plays only (special-teams tackles have no down).
+         *     Served by /players/{id}/def-splits.
+         */
+        DefensiveSplit: {
+            /** Season */
+            season: number;
+            /** Split Dim */
+            split_dim: string;
+            /** Split Value */
+            split_value: string;
+            /** Sort Order */
+            sort_order: number | null;
+            /** Tackles */
+            tackles: number | null;
+            /** Solo */
+            solo: number | null;
+            /** Assists */
+            assists: number | null;
+            /** Tfl */
+            tfl: number | null;
+            /** Sacks */
+            sacks: number | null;
+            /** Qb Hits */
+            qb_hits: number | null;
+            /** Interceptions */
+            interceptions: number | null;
+            /** Pass Breakups */
+            pass_breakups: number | null;
+            /** Forced Fumbles */
+            forced_fumbles: number | null;
         };
         /**
          * DepthChartEntry
@@ -2043,6 +2098,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlayerSplit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_player_def_splits_players__player_id__def_splits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DefensiveSplit"][];
                 };
             };
             /** @description Validation Error */

@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from database import query_to_dict
 from schemas.leaders import PlayerComparable
-from schemas.players import PlayerProfile, PlayerSplit
+from schemas.players import PlayerProfile, PlayerSplit, DefensiveSplit
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, STAT_COLS, safe_query
 
 router = APIRouter()
@@ -705,8 +705,15 @@ def get_player_comparables(player_id: str, n: int = Query(default=8, ge=1, le=20
 # materialized player_splits table; self-heals on a cold table.
 
 import splits_builder
+import def_splits_builder
 
 
 @router.get("/players/{player_id}/splits", response_model=list[PlayerSplit])
 def get_player_splits(player_id: str):
     return splits_builder.read_or_materialize(player_id)
+
+
+@router.get("/players/{player_id}/def-splits", response_model=list[DefensiveSplit])
+def get_player_def_splits(player_id: str):
+    """A defender's event line conditioned on one situational dimension."""
+    return def_splits_builder.read_or_materialize(player_id)

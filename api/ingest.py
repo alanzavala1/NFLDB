@@ -770,6 +770,13 @@ def run_ingest(seasons: list[int], log=print):
         n = splits_builder.materialize(season)
         log(f"  player_splits[{season}]: {n} rows")
 
+    # Materialize defensive player splits — event line by situation.
+    log("\nMaterializing defensive splits...")
+    import def_splits_builder
+    for season in seasons:
+        n = def_splits_builder.materialize(season)
+        log(f"  defense_splits[{season}]: {n} rows")
+
     # Materialize team splits — team offense/defense rate profile by situation.
     log("\nMaterializing team splits...")
     import team_splits_builder

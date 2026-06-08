@@ -406,6 +406,50 @@
         }
       }
     },
+    "/players/{player_id}/def-splits": {
+      "get": {
+        "summary": "Get Player Def Splits",
+        "description": "A defender's event line conditioned on one situational dimension.",
+        "operationId": "get_player_def_splits_players__player_id__def_splits_get",
+        "parameters": [
+          {
+            "name": "player_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Player Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DefensiveSplit"
+                  },
+                  "title": "Response Get Player Def Splits Players  Player Id  Def Splits Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/teams/{team}": {
       "get": {
         "summary": "Get Team",
@@ -1074,6 +1118,150 @@
         ],
         "title": "CombineData",
         "description": "One row per combine participant. Heights are recorded as '6-2' strings\nby the source; we leave them as strings for display rather than coercing."
+      },
+      "DefensiveSplit": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "split_dim": {
+            "type": "string",
+            "title": "Split Dim"
+          },
+          "split_value": {
+            "type": "string",
+            "title": "Split Value"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "tackles": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tackles"
+          },
+          "solo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solo"
+          },
+          "assists": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assists"
+          },
+          "tfl": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tfl"
+          },
+          "sacks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sacks"
+          },
+          "qb_hits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qb Hits"
+          },
+          "interceptions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interceptions"
+          },
+          "pass_breakups": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Breakups"
+          },
+          "forced_fumbles": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forced Fumbles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "split_dim",
+          "split_value",
+          "sort_order",
+          "tackles",
+          "solo",
+          "assists",
+          "tfl",
+          "sacks",
+          "qb_hits",
+          "interceptions",
+          "pass_breakups",
+          "forced_fumbles"
+        ],
+        "title": "DefensiveSplit",
+        "description": "A defender's event line (tackles/sacks/TFL/QB hits/INT/PBU/FF)\nconditioned on one situational dimension. Counts only \u2014 nflfastR has no\ncoverage data. Scrimmage plays only (special-teams tackles have no down).\nServed by /players/{id}/def-splits."
       },
       "DepthChartEntry": {
         "properties": {
