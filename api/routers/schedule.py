@@ -225,9 +225,10 @@ def get_game(game_id: str):
         SELECT posteam AS team,
             COUNT(*) FILTER (WHERE play_type IN ('pass', 'run'))            AS plays,
             CAST(SUM(COALESCE(first_down, 0)) AS INTEGER)                   AS first_downs,
-            CAST(COUNT(*) FILTER (WHERE down = 3) AS INTEGER)              AS third_att,
+            -- conversion attempts only (excludes punts / FGs that also have down=4)
+            CAST(COUNT(*) FILTER (WHERE COALESCE(third_down_converted, 0) = 1 OR COALESCE(third_down_failed, 0) = 1) AS INTEGER) AS third_att,
             CAST(SUM(COALESCE(third_down_converted, 0)) AS INTEGER)        AS third_conv,
-            CAST(COUNT(*) FILTER (WHERE down = 4) AS INTEGER)              AS fourth_att,
+            CAST(COUNT(*) FILTER (WHERE COALESCE(fourth_down_converted, 0) = 1 OR COALESCE(fourth_down_failed, 0) = 1) AS INTEGER) AS fourth_att,
             CAST(SUM(COALESCE(fourth_down_converted, 0)) AS INTEGER)       AS fourth_conv,
             CAST(SUM(COALESCE(interception, 0)) + SUM(COALESCE(fumble_lost, 0)) AS INTEGER) AS turnovers,
             ROUND(AVG(epa) FILTER (WHERE play_type IN ('pass', 'run')), 3)  AS epa_play,
@@ -259,7 +260,12 @@ def get_game(game_id: str):
     # use the post-PAT running score (total_*_score is cumulative after the play).
     sp_rows = safe_query(
         """
-        SELECT qtr, "time" AS clock, posteam AS team, "desc" AS desc,
+        SELECT qtr, "time" AS clock, "desc" AS desc,
+               -- the team that actually scored: td_team on a TD (handles pick-
+               -- sixes / fumble returns), the defense on a safety, else posteam
+               CASE WHEN COALESCE(touchdown, 0) = 1 THEN COALESCE(td_team, posteam)
+                    WHEN COALESCE(safety, 0) = 1   THEN defteam
+                    ELSE posteam END AS team,
                CAST(COALESCE(total_away_score, 0) AS INTEGER) AS away_score,
                CAST(COALESCE(total_home_score, 0) AS INTEGER) AS home_score,
                COALESCE(touchdown, 0)        AS is_td,

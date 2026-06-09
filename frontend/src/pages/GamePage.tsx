@@ -615,7 +615,10 @@ interface KeyPlayItem {
 // Scoring plays live in the Scoring Summary; this surfaces the OTHER pivotal
 // moments — turnovers, and big non-scoring win-probability swings (4th-down
 // stops, missed FGs, chunk plays).
-const BIG_SWING = 7  // |WP%| change to count a non-scoring play as "key"
+const BIG_SWING = 10  // |WP%| change to count a non-scoring play as "key"
+// Non-scrimmage plays (PATs, kicks, kneels) aren't "key plays" even if the
+// win-prob diff around them looks large.
+const NON_KEY = /extra point|field goal is good|kicks off|punts|two-point|kneels?\b|spiked/i
 
 function detectKeyPlays(plays: WinProbPlay[]): KeyPlayItem[] {
   const out: KeyPlayItem[] = []
@@ -628,7 +631,7 @@ function detectKeyPlays(plays: WinProbPlay[]): KeyPlayItem[] {
       out.push({ ...base, kind: 'int' })
     } else if (p.fumble_lost === 1) {
       out.push({ ...base, kind: 'fum' })
-    } else if (p.touchdown !== 1 && !/field goal is good/i.test(p.desc ?? '') && Math.abs(homeSwing) >= BIG_SWING) {
+    } else if (p.touchdown !== 1 && !NON_KEY.test(p.desc ?? '') && Math.abs(homeSwing) >= BIG_SWING) {
       out.push({ ...base, kind: 'big' })
     }
   }
