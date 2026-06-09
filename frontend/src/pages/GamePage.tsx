@@ -173,6 +173,10 @@ function BoxScore({ game }: { game: GameDetail }) {
   const A = teamTotals(game.away)
   const H = teamTotals(game.home)
   if (!A.passAtt && !A.rushCar && !H.passAtt && !H.rushCar) return null
+  const AS = game.team_stats?.find(t => t.team === game.away_team)
+  const HS = game.team_stats?.find(t => t.team === game.home_team)
+  const ypp = (yds: number, plays?: number) => plays ? (yds / plays).toFixed(1) : '—'
+  const epaFmt = (v: number | null | undefined) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}`
 
   function StatBar({ label, a, h, lo = false, neutral = false }: {
     label: string; a: string | number; h: string | number; lo?: boolean; neutral?: boolean
@@ -228,6 +232,21 @@ function BoxScore({ game }: { game: GameDetail }) {
 
       <div className="pb-3">
         <StatBar label="Total Yards"   a={A.totalYds} h={H.totalYds} />
+        {AS && HS && (
+          <>
+            <StatBar label="Total Plays"  a={AS.plays} h={HS.plays} neutral />
+            <StatBar label="Yards / Play" a={ypp(A.totalYds, AS.plays)} h={ypp(H.totalYds, HS.plays)} />
+            <StatBar label="First Downs"  a={AS.first_downs} h={HS.first_downs} />
+            <StatBar label="3rd Down"     a={`${AS.third_conv}/${AS.third_att}`} h={`${HS.third_conv}/${HS.third_att}`} neutral />
+            {(AS.fourth_att > 0 || HS.fourth_att > 0) &&
+              <StatBar label="4th Down"   a={`${AS.fourth_conv}/${AS.fourth_att}`} h={`${HS.fourth_conv}/${HS.fourth_att}`} neutral />}
+            <StatBar label="Turnovers"    a={AS.turnovers} h={HS.turnovers} lo />
+            <StatBar label="Penalties"    a={`${AS.penalties}-${AS.penalty_yards}`} h={`${HS.penalties}-${HS.penalty_yards}`} lo />
+            <SectionDivider label="Efficiency" />
+            <StatBar label="EPA / Play"    a={epaFmt(AS.epa_play)} h={epaFmt(HS.epa_play)} />
+            <StatBar label="Success Rate"  a={`${AS.success_pct ?? 0}%`} h={`${HS.success_pct ?? 0}%`} />
+          </>
+        )}
         <SectionDivider label="Passing" />
         <StatBar label="Comp / Att"    a={`${A.passCmp}/${A.passAtt}`} h={`${H.passCmp}/${H.passAtt}`} neutral />
         <StatBar label="Yards"         a={A.passYds}    h={H.passYds} />
@@ -545,6 +564,42 @@ function fmtRemaining(rem: number): string {
   return `Q${qtr} ${min}:${sec.toString().padStart(2, '0')}`
 }
 
+// ── Scoring summary ───────────────────────────────────────────────────────────
+
+const SCORE_KIND: Record<string, string> = {
+  TD: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30',
+  FG: 'text-amber-300 bg-amber-500/15 border-amber-500/30',
+  SAF: 'text-rose-300 bg-rose-500/15 border-rose-500/30',
+  SCORE: 'text-gray-300 bg-gray-500/15 border-gray-500/30',
+}
+const trimScoreDesc = (d: string | null) =>
+  (d ?? '').replace(/^\(\d+:\d+\)\s*/, '').replace(/^\((Shotgun|No Huddle)[^)]*\)\s*/, '')
+
+function ScoringSummary({ game }: { game: GameDetail }) {
+  const plays = game.scoring ?? []
+  if (!plays.length) return null
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
+      <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-800/40">
+        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Scoring Summary</span>
+      </div>
+      <div className="divide-y divide-gray-800/40">
+        {plays.map((s, i) => (
+          <div key={i} className="flex items-center gap-3 px-4 py-2">
+            <div className="shrink-0 w-14 text-[11px] text-gray-500 font-mono tabular-nums">Q{s.qtr} {s.clock}</div>
+            {s.team && <img src={teamLogoUrl(s.team)} className="w-5 h-5 object-contain shrink-0 opacity-80" alt="" />}
+            <span className={`shrink-0 inline-block text-[10px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${SCORE_KIND[s.kind] ?? SCORE_KIND.SCORE}`}>{s.kind}</span>
+            <p className="flex-1 text-xs text-gray-400 leading-snug line-clamp-1 min-w-0">{trimScoreDesc(s.desc)}</p>
+            <span className="shrink-0 text-sm font-bold text-white tabular-nums">
+              {s.away_score}<span className="text-gray-600">–</span>{s.home_score}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Key plays (scoring + turnovers) ───────────────────────────────────────────
 
 type KeyPlayKind = 'td' | 'fg' | 'int' | 'fum'
@@ -783,6 +838,7 @@ export default function GamePage() {
 
         <GameContext.Provider value={{ gameId: game.game_id, season: game.season, week: game.week, awayTeam: game.away_team, homeTeam: game.home_team, fromWeek }}>
           <Scoreboard game={game} />
+          <ScoringSummary game={game} />
           <WinProbabilityChart game={game} />
           <KeyPlays game={game} />
           <GameLeaders game={game} />

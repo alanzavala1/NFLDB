@@ -1974,6 +1974,20 @@
             },
             "type": "array",
             "title": "Win Prob"
+          },
+          "team_stats": {
+            "items": {
+              "$ref": "#/components/schemas/TeamGameStats"
+            },
+            "type": "array",
+            "title": "Team Stats"
+          },
+          "scoring": {
+            "items": {
+              "$ref": "#/components/schemas/ScoringPlay"
+            },
+            "type": "array",
+            "title": "Scoring"
           }
         },
         "type": "object",
@@ -2002,7 +2016,9 @@
           "away",
           "home",
           "quarter_scores",
-          "win_prob"
+          "win_prob",
+          "team_stats",
+          "scoring"
         ],
         "title": "GameDetail",
         "description": "Game detail returned by /games/{id}: game header + rosters + scoring + WP."
@@ -4242,6 +4258,70 @@
         "title": "ScheduleWeek",
         "description": "A week of games returned by /schedule."
       },
+      "ScoringPlay": {
+        "properties": {
+          "qtr": {
+            "type": "integer",
+            "title": "Qtr"
+          },
+          "clock": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          },
+          "away_score": {
+            "type": "integer",
+            "title": "Away Score"
+          },
+          "home_score": {
+            "type": "integer",
+            "title": "Home Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "qtr",
+          "clock",
+          "team",
+          "kind",
+          "desc",
+          "away_score",
+          "home_score"
+        ],
+        "title": "ScoringPlay"
+      },
       "SearchResult": {
         "properties": {
           "type": {
@@ -5506,6 +5586,89 @@
         ],
         "title": "TeamGame",
         "description": "A team's schedule row inside /teams/{team}. Records walked forward\nby attach_records() are required (always set on this endpoint)."
+      },
+      "TeamGameStats": {
+        "properties": {
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "plays": {
+            "type": "integer",
+            "title": "Plays"
+          },
+          "first_downs": {
+            "type": "integer",
+            "title": "First Downs"
+          },
+          "third_att": {
+            "type": "integer",
+            "title": "Third Att"
+          },
+          "third_conv": {
+            "type": "integer",
+            "title": "Third Conv"
+          },
+          "fourth_att": {
+            "type": "integer",
+            "title": "Fourth Att"
+          },
+          "fourth_conv": {
+            "type": "integer",
+            "title": "Fourth Conv"
+          },
+          "penalties": {
+            "type": "integer",
+            "title": "Penalties"
+          },
+          "penalty_yards": {
+            "type": "integer",
+            "title": "Penalty Yards"
+          },
+          "turnovers": {
+            "type": "integer",
+            "title": "Turnovers"
+          },
+          "epa_play": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epa Play"
+          },
+          "success_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team",
+          "plays",
+          "first_downs",
+          "third_att",
+          "third_conv",
+          "fourth_att",
+          "fourth_conv",
+          "penalties",
+          "penalty_yards",
+          "turnovers",
+          "epa_play",
+          "success_pct"
+        ],
+        "title": "TeamGameStats",
+        "description": "Team-level box-score line for one game, computed from play-by-play."
       },
       "TeamLeader": {
         "properties": {

@@ -20,6 +20,8 @@ export type GamePlayerStats  = Schemas['GamePlayerStats']
 export type GameDetail       = Schemas['GameDetail']
 export type QuarterScore     = Schemas['QuarterScore']
 export type WinProbPlay      = Schemas['WinProbPlay']
+export type TeamGameStats    = Schemas['TeamGameStats']
+export type ScoringPlay      = Schemas['ScoringPlay']
 
 // Search
 export type SearchResult     = Schemas['SearchResult']

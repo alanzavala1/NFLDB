@@ -630,6 +630,10 @@ export interface components {
             quarter_scores: components["schemas"]["QuarterScore"][];
             /** Win Prob */
             win_prob: components["schemas"]["WinProbPlay"][];
+            /** Team Stats */
+            team_stats: components["schemas"]["TeamGameStats"][];
+            /** Scoring */
+            scoring: components["schemas"]["ScoringPlay"][];
         };
         /**
          * GamePlayerStats
@@ -1317,6 +1321,23 @@ export interface components {
             /** Games */
             games: components["schemas"]["Game"][];
         };
+        /** ScoringPlay */
+        ScoringPlay: {
+            /** Qtr */
+            qtr: number;
+            /** Clock */
+            clock: string | null;
+            /** Team */
+            team: string | null;
+            /** Kind */
+            kind: string;
+            /** Desc */
+            desc: string | null;
+            /** Away Score */
+            away_score: number;
+            /** Home Score */
+            home_score: number;
+        };
         /**
          * SearchResult
          * @description A single search hit. `type` discriminates player vs team.
@@ -1613,6 +1634,36 @@ export interface components {
             away_record: string | null;
             /** Home Record */
             home_record: string | null;
+        };
+        /**
+         * TeamGameStats
+         * @description Team-level box-score line for one game, computed from play-by-play.
+         */
+        TeamGameStats: {
+            /** Team */
+            team: string;
+            /** Plays */
+            plays: number;
+            /** First Downs */
+            first_downs: number;
+            /** Third Att */
+            third_att: number;
+            /** Third Conv */
+            third_conv: number;
+            /** Fourth Att */
+            fourth_att: number;
+            /** Fourth Conv */
+            fourth_conv: number;
+            /** Penalties */
+            penalties: number;
+            /** Penalty Yards */
+            penalty_yards: number;
+            /** Turnovers */
+            turnovers: number;
+            /** Epa Play */
+            epa_play: number | null;
+            /** Success Pct */
+            success_pct: number | null;
         };
         /**
          * TeamLeader

@@ -20,7 +20,7 @@ import type {
   PlayerAdvStats, PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, DefensiveSplit, PlayerWpa,
   RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus, SituationalStats,
   SnapTotals, StandingsRow, TeamAnalyticsResponse, TeamAnalyticsRow,
-  TeamGame, TeamLeader, TeamProfile, TeamSplit, WinProbPlay, WpaLeader, WpaLeaders,
+  TeamGame, TeamLeader, TeamProfile, TeamSplit, TeamGameStats, ScoringPlay, WinProbPlay, WpaLeader, WpaLeaders,
 } from './types'
 
 const BASE = '/api'
@@ -38,7 +38,7 @@ export type {
   GameDetail, InjuryStatus, KickingStats, LeagueLeader, NgsStats, PlayerAdvStats,
   PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, DefensiveSplit, PlayerWpa,
   RosterPlayer, SearchResult, SituationalStats, SnapTotals, TeamGame,
-  TeamLeader, TeamProfile, TeamSplit, WinProbPlay, WpaLeader, WpaLeaders,
+  TeamLeader, TeamProfile, TeamSplit, TeamGameStats, ScoringPlay, WinProbPlay, WpaLeader, WpaLeaders,
 }
 
 export type SeasonEntry        = SeasonStatus

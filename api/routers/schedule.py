@@ -219,10 +219,78 @@ def get_game(game_id: str):
         [game_id],
     )
 
+    # Team box-score line from play-by-play (first downs, conversions, EPA, etc.)
+    ts_rows = safe_query(
+        """
+        SELECT posteam AS team,
+            COUNT(*) FILTER (WHERE play_type IN ('pass', 'run'))            AS plays,
+            CAST(SUM(COALESCE(first_down, 0)) AS INTEGER)                   AS first_downs,
+            CAST(COUNT(*) FILTER (WHERE down = 3) AS INTEGER)              AS third_att,
+            CAST(SUM(COALESCE(third_down_converted, 0)) AS INTEGER)        AS third_conv,
+            CAST(COUNT(*) FILTER (WHERE down = 4) AS INTEGER)              AS fourth_att,
+            CAST(SUM(COALESCE(fourth_down_converted, 0)) AS INTEGER)       AS fourth_conv,
+            CAST(SUM(COALESCE(interception, 0)) + SUM(COALESCE(fumble_lost, 0)) AS INTEGER) AS turnovers,
+            ROUND(AVG(epa) FILTER (WHERE play_type IN ('pass', 'run')), 3)  AS epa_play,
+            ROUND(100.0 * AVG(success) FILTER (WHERE play_type IN ('pass', 'run')), 1) AS success_pct
+        FROM plays
+        WHERE game_id = ? AND posteam IS NOT NULL
+        GROUP BY posteam
+        """,
+        [game_id],
+    )
+    pen_rows = safe_query(
+        """
+        SELECT penalty_team AS team, COUNT(*) AS penalties,
+               CAST(SUM(COALESCE(penalty_yards, 0)) AS INTEGER) AS penalty_yards
+        FROM plays
+        WHERE game_id = ? AND COALESCE(penalty, 0) = 1 AND penalty_team IS NOT NULL
+        GROUP BY penalty_team
+        """,
+        [game_id],
+    )
+    pen_by_team = {r["team"]: r for r in pen_rows}
+    team_stats = []
+    for r in ts_rows:
+        p = pen_by_team.get(r["team"], {})
+        team_stats.append({**r, "penalties": p.get("penalties", 0) or 0,
+                           "penalty_yards": p.get("penalty_yards", 0) or 0})
+
+    # Scoring summary: each scoring play (sp=1); fold the PAT into its TD and
+    # use the post-PAT running score (total_*_score is cumulative after the play).
+    sp_rows = safe_query(
+        """
+        SELECT qtr, "time" AS clock, posteam AS team, "desc" AS desc,
+               CAST(COALESCE(total_away_score, 0) AS INTEGER) AS away_score,
+               CAST(COALESCE(total_home_score, 0) AS INTEGER) AS home_score,
+               COALESCE(touchdown, 0)        AS is_td,
+               field_goal_result            AS fg,
+               COALESCE(safety, 0)           AS is_saf,
+               extra_point_result           AS xp,
+               two_point_conv_result        AS two_pt
+        FROM plays
+        WHERE game_id = ? AND COALESCE(sp, 0) = 1
+        ORDER BY game_seconds_remaining DESC, qtr
+        """,
+        [game_id],
+    )
+    scoring = []
+    for r in sp_rows:
+        is_pat = r["xp"] is not None or r["two_pt"] is not None
+        if is_pat and scoring:  # roll the extra point / 2pt into the preceding TD
+            scoring[-1]["away_score"] = r["away_score"]
+            scoring[-1]["home_score"] = r["home_score"]
+            continue
+        kind = "TD" if r["is_td"] else "FG" if r["fg"] == "made" else "SAF" if r["is_saf"] else "SCORE"
+        scoring.append({"qtr": int(r["qtr"]), "clock": r["clock"], "team": r["team"],
+                        "kind": kind, "desc": r["desc"],
+                        "away_score": r["away_score"], "home_score": r["home_score"]})
+
     return {
         **game,
         "away": [p for p in players if p["team"] == away_team],
         "home": [p for p in players if p["team"] == home_team],
         "quarter_scores": quarter_scores,
         "win_prob": win_prob,
+        "team_stats": team_stats,
+        "scoring": scoring,
     }

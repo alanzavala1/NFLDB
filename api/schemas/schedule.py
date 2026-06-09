@@ -121,12 +121,40 @@ class WinProbPlay(BaseModel):
     desc: str | None
 
 
+class TeamGameStats(BaseModel):
+    """Team-level box-score line for one game, computed from play-by-play."""
+    team: str
+    plays: int
+    first_downs: int
+    third_att: int
+    third_conv: int
+    fourth_att: int
+    fourth_conv: int
+    penalties: int
+    penalty_yards: int
+    turnovers: int
+    epa_play: float | None
+    success_pct: float | None
+
+
+class ScoringPlay(BaseModel):
+    qtr: int
+    clock: str | None       # game clock, e.g. "02:52"
+    team: str | None        # scoring team (posteam on the play)
+    kind: str               # 'TD' | 'FG' | 'SAF' | 'SCORE'
+    desc: str | None
+    away_score: int
+    home_score: int
+
+
 class GameDetail(Game):
     """Game detail returned by /games/{id}: game header + rosters + scoring + WP."""
     away: list[GamePlayerStats]
     home: list[GamePlayerStats]
     quarter_scores: list[QuarterScore]
     win_prob: list[WinProbPlay]
+    team_stats: list[TeamGameStats]
+    scoring: list[ScoringPlay]
 
 
 SearchResultType = Literal["player", "team"]
