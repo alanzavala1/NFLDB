@@ -9,6 +9,7 @@ pass rate, yards/play, explosive%) over scrimmage plays.
 import duckdb
 
 import splits_core as core
+from config import DIVISIONS
 from database import get_connection, query_to_dict
 
 
@@ -61,22 +62,52 @@ def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute(_TABLE_DDL)
 
 
+def _home_away_dim(side: str) -> tuple[str, str, str, str]:
+    # The team's own home/away. posteam_type is the OFFENSE's; a defense
+    # (defteam) is home when the offense is the away team, so flip it.
+    home_when = "posteam_type = 'home'" if side == "offense" else "posteam_type = 'away'"
+    return (
+        "home_away",
+        f"CASE WHEN {home_when} THEN 'home' ELSE 'away' END",
+        f"CASE WHEN {home_when} THEN 1 ELSE 2 END",
+        "posteam_type IS NOT NULL",
+    )
+
+
+def _opponent_dims() -> list[tuple[str, str, str, str]]:
+    """Opponent faced (the `opponent` alias from the base) and its division."""
+    order = ["AFC East", "AFC North", "AFC South", "AFC West",
+             "NFC East", "NFC North", "NFC South", "NFC West"]
+    div_when = " ".join(f"WHEN '{t}' THEN '{d}'" for t, d in DIVISIONS.items())
+    div_sort_when = " ".join(f"WHEN '{t}' THEN {order.index(d) + 1}" for t, d in DIVISIONS.items())
+    return [
+        ("opponent", "opponent", "CAST(NULL AS INTEGER)", "opponent IS NOT NULL"),
+        ("opp_division", f"CASE opponent {div_when} END", f"CASE opponent {div_sort_when} END", "opponent IS NOT NULL"),
+    ]
+
+
 def _side_dims(side: str) -> list[tuple[str, str, str, str]]:
-    # Defense flips game script: when posteam (the opposing offense) leads,
-    # this team's defense is trailing.
+    # Defense flips game script + home/away: when posteam (the opposing offense)
+    # leads or is home, this team's defense is trailing or away.
     sign = 1 if side == "offense" else -1
-    return [core.DOWN_DIM, core.QUARTER_DIM, core.game_script_dim(sign), _FIELD_ZONE_DIM]
+    return [
+        core.DOWN_DIM, core.QUARTER_DIM, core.game_script_dim(sign), _FIELD_ZONE_DIM,
+        _home_away_dim(side), core.ROOF_DIM, core.SURFACE_DIM, core.NO_HUDDLE_DIM,
+        core.GAME_STATE_DIM, *_opponent_dims(),
+    ]
 
 
 def _side_sql(side: str, season: int, available: set[str]) -> str:
     s = int(season)
     team_col = "posteam" if side == "offense" else "defteam"
+    opp_col = "defteam" if side == "offense" else "posteam"
     kneel = "AND COALESCE(qb_kneel, 0) = 0" if "qb_kneel" in available else ""
     spike = "AND COALESCE(qb_spike, 0) = 0" if "qb_spike" in available else ""
 
     base = f"""
-        {team_col} AS team,
+        {team_col} AS team, {opp_col} AS opponent,
         down, qtr, score_differential, yardline_100,
+        posteam_type, roof, surface, no_huddle, wp,
         epa, pass_attempt, rush_attempt, sack, yards_gained, {core.success_col(available)}
         FROM plays
         WHERE {team_col} IS NOT NULL

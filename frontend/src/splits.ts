@@ -227,6 +227,13 @@ const TEAM_DIMS: Dim[] = [
   { key: 'game_script', label: 'Game Script' },
   { key: 'field_zone', label: 'Field Zone' },
   { key: 'quarter', label: 'Quarter' },
+  { key: 'home_away', label: 'Home/Away' },
+  { key: 'roof', label: 'Stadium' },
+  { key: 'surface', label: 'Surface' },
+  { key: 'no_huddle', label: 'Tempo' },
+  { key: 'game_state', label: 'Game State' },
+  { key: 'opponent', label: 'Opponent' },
+  { key: 'opp_division', label: 'Division' },
 ]
 
 export type TeamSide = 'offense' | 'defense'
@@ -333,6 +340,8 @@ export const PLAYER_SITUATIONS: Record<PlayerCategory, Situation[]> = {
 export const TEAM_SITUATIONS: Situation[] = [
   { label: 'Red Zone', dim: 'field_zone', value: 'red_zone' },
   { label: '3rd Down', dim: 'down', value: '3' },
+  { label: 'Competitive', dim: 'game_state', value: 'competitive' },
+  { label: 'Dome', dim: 'roof', value: 'dome' },
   { label: 'Trailing', dim: 'game_script', value: 'trailing' },
   { label: 'Leading', dim: 'game_script', value: 'leading' },
 ]
