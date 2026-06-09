@@ -600,9 +600,9 @@ function ScoringSummary({ game }: { game: GameDetail }) {
   )
 }
 
-// ── Key plays (scoring + turnovers) ───────────────────────────────────────────
+// ── Key plays (turnovers + big non-scoring WP swings) ─────────────────────────
 
-type KeyPlayKind = 'td' | 'fg' | 'int' | 'fum'
+type KeyPlayKind = 'int' | 'fum' | 'big'
 interface KeyPlayItem {
   qtr: number
   rem: number
@@ -612,31 +612,33 @@ interface KeyPlayItem {
   wpSwing: number  // points of WP added for the offense
 }
 
+// Scoring plays live in the Scoring Summary; this surfaces the OTHER pivotal
+// moments — turnovers, and big non-scoring win-probability swings (4th-down
+// stops, missed FGs, chunk plays).
+const BIG_SWING = 7  // |WP%| change to count a non-scoring play as "key"
+
 function detectKeyPlays(plays: WinProbPlay[]): KeyPlayItem[] {
   const out: KeyPlayItem[] = []
   for (let i = 0; i < plays.length; i++) {
     const p = plays[i]
     const prevHomeWp = i > 0 ? plays[i - 1].home_wp : 0.5
     const homeSwing = (p.home_wp - prevHomeWp) * 100
-    if (p.touchdown === 1) {
-      out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'td', wpSwing: homeSwing })
-    } else if (/field goal is good/i.test(p.desc ?? '')) {
-      out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'fg', wpSwing: homeSwing })
-    }
+    const base = { qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, wpSwing: homeSwing }
     if (p.interception === 1) {
-      out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'int', wpSwing: homeSwing })
+      out.push({ ...base, kind: 'int' })
     } else if (p.fumble_lost === 1) {
-      out.push({ qtr: p.qtr, rem: p.game_seconds_remaining, team: p.posteam, desc: p.desc, kind: 'fum', wpSwing: homeSwing })
+      out.push({ ...base, kind: 'fum' })
+    } else if (p.touchdown !== 1 && !/field goal is good/i.test(p.desc ?? '') && Math.abs(homeSwing) >= BIG_SWING) {
+      out.push({ ...base, kind: 'big' })
     }
   }
   return out.sort((a, b) => b.rem - a.rem)
 }
 
 const KIND_META: Record<KeyPlayKind, { label: string; color: string; bg: string }> = {
-  td:  { label: 'TD',  color: 'text-emerald-300', bg: 'bg-emerald-500/15 border-emerald-500/30' },
-  fg:  { label: 'FG',  color: 'text-amber-300',   bg: 'bg-amber-500/15 border-amber-500/30' },
   int: { label: 'INT', color: 'text-rose-300',    bg: 'bg-rose-500/15 border-rose-500/30' },
   fum: { label: 'FUM', color: 'text-rose-300',    bg: 'bg-rose-500/15 border-rose-500/30' },
+  big: { label: 'KEY', color: 'text-sky-300',     bg: 'bg-sky-500/15 border-sky-500/30' },
 }
 
 function KeyPlays({ game }: { game: GameDetail }) {
