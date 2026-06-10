@@ -13,5 +13,10 @@ frontend/dist/
 .DS_Store
 *.env
 
+# Cloud credentials — never commit service-account keys
+key.json
+*-key.json
+gcp-*.json
+
 # Frontend build copied into the API image at build time
 api/static/

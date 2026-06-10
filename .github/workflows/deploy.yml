@@ -36,7 +36,7 @@ jobs:
       - name: Build image
         env:
           IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
-        run: docker build -t "$IMAGE" .
+        run: docker build --provenance=false -t "$IMAGE" .
 
       # Gate the release on data integrity: run the reconciliation tests against
       # the DB that's actually baked into the image we're about to ship.
