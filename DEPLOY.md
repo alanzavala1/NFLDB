@@ -58,13 +58,37 @@ gcloud artifacts repositories create nfldb --repository-format=docker --location
 gcloud storage buckets create gs://$PROJECT-nfldb-data
 gcloud storage cp api/data/nfl.duckdb gs://$PROJECT-nfldb-data/nfl.duckdb
 
-# a deploy service account
+# a deploy service account (no key — auth is keyless via WIF below)
 gcloud iam service-accounts create nfldb-deployer
 SA=nfldb-deployer@$PROJECT.iam.gserviceaccount.com
 for role in run.admin artifactregistry.writer storage.objectViewer iam.serviceAccountUser; do
   gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/$role
 done
-gcloud iam service-accounts keys create key.json --iam-account=$SA   # <- add to GitHub secret, then delete
+```
+
+**Keyless auth via Workload Identity Federation.** Rather than a downloadable
+SA key (which newer org policies block by default — `iam.disableServiceAccountKeyCreation`),
+GitHub Actions presents a short-lived OIDC token that GCP trusts. Replace
+`OWNER/REPO` with your GitHub repo (e.g. `alanzavala1/nfl-statistics`) and
+`$NUM` with your project *number* (`gcloud projects describe $PROJECT --format='value(projectNumber)'`):
+
+```bash
+gcloud services enable iamcredentials.googleapis.com
+gcloud iam workload-identity-pools create github --location=global --display-name="GitHub Actions"
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --location=global --workload-identity-pool=github --display-name="GitHub provider" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='OWNER/REPO'"
+
+# let ONLY this repo impersonate the deploy SA
+gcloud iam service-accounts add-iam-policy-binding $SA \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/$NUM/locations/global/workloadIdentityPools/github/attribute.repository/OWNER/REPO"
+
+# the provider resource name → goes in the GCP_WIF_PROVIDER secret
+gcloud iam workload-identity-pools providers describe github-provider \
+  --location=global --workload-identity-pool=github --format="value(name)"
 ```
 
 **Add these GitHub repository secrets** (Settings → Secrets and variables → Actions):
@@ -72,13 +96,13 @@ gcloud iam service-accounts keys create key.json --iam-account=$SA   # <- add to
 | Secret | Value |
 |---|---|
 | `GCP_PROJECT_ID` | your project id |
-| `GCP_SA_KEY` | the contents of `key.json` |
+| `GCP_WIF_PROVIDER` | the provider resource name printed by the last command |
+| `GCP_SA_EMAIL` | `nfldb-deployer@<project>.iam.gserviceaccount.com` |
 | `GCP_DB_BUCKET` | `<project>-nfldb-data` |
 
 Then run the **Deploy to Cloud Run** workflow (Actions tab → Run workflow).
 Flip the trigger in `deploy.yml` to `push: {branches: [main]}` for continuous
-deployment once you trust it. (Hardening: swap the SA key for Workload Identity
-Federation — keyless auth — when you want production-grade credentials.)
+deployment once you trust it.
 
 ---
 
