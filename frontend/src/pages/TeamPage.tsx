@@ -1038,6 +1038,10 @@ const TEAM_SPLIT_DIMS: { key: string; label: string }[] = [
   { key: 'game_state',  label: 'Game State' },
   { key: 'home_away',   label: 'Home/Away' },
   { key: 'roof',        label: 'Stadium' },
+  { key: 'surface',     label: 'Surface' },
+  { key: 'no_huddle',   label: 'Tempo' },
+  { key: 'opp_division', label: 'Division' },
+  { key: 'opponent',    label: 'Opponent' },
 ]
 
 const TEAM_SPLIT_VALUE_LABELS: Record<string, string> = {
@@ -1046,6 +1050,7 @@ const TEAM_SPLIT_VALUE_LABELS: Record<string, string> = {
   red_zone: 'Red Zone', opp_territory: 'Opp Territory', own_territory: 'Own Territory',
   competitive: 'Competitive', garbage: 'Garbage Time',
   home: 'Home', away: 'Away', dome: 'Dome', outdoors: 'Outdoors',
+  grass: 'Grass', turf: 'Turf', huddle: 'Huddle', no_huddle: 'No-Huddle',
 }
 function teamSplitValueLabel(dim: string, value: string): string {
   if (dim === 'quarter') return value === 'OT' ? 'OT' : `Q${value}`
@@ -1090,7 +1095,8 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
 
   const rows = splits
     .filter(s => s.side === side && s.split_dim === dim)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    // sort_order is NULL for opponent — fall back to volume (most-faced first)
+    .sort((a, b) => ((a.sort_order ?? 9999) - (b.sort_order ?? 9999)) || ((b.plays ?? 0) - (a.plays ?? 0)))
   const totalRow = aggregateTeamSplit(rows)
 
   // Heat is goodness-aware: for defense, lower EPA/success allowed is better,
