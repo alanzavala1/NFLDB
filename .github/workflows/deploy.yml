@@ -1,0 +1,64 @@
+name: Deploy to Cloud Run
+
+# Manual trigger so deploys (and any cost) are intentional. Flip to
+# `push: {branches: [main]}` for continuous deployment once you're confident.
+on:
+  workflow_dispatch:
+
+env:
+  REGION: us-central1
+  SERVICE: nfldb
+  REPO: nfldb            # Artifact Registry repository name
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+      # The 400MB DuckDB file lives in a GCS bucket (too big for git). Pull it
+      # so it gets baked into the image.
+      - name: Fetch database from GCS
+        run: gcloud storage cp gs://${{ secrets.GCP_DB_BUCKET }}/nfl.duckdb api/data/nfl.duckdb
+
+      - name: Build image
+        env:
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
+        run: docker build -t "$IMAGE" .
+
+      # Gate the release on data integrity: run the reconciliation tests against
+      # the DB that's actually baked into the image we're about to ship.
+      - name: Verify data integrity in the image
+        env:
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
+        run: docker run --rm "$IMAGE" python -m pytest tests/test_reconciliation.py -q
+
+      - name: Push image
+        env:
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
+        run: docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run
+        env:
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 1Gi --cpu 1 \
+            --max-instances 1 \
+            --port 8080
