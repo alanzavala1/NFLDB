@@ -1,32 +1,131 @@
-# NFL Platform
+# NFLDB — NFL Analytics & Situational Splits
 
-A personal NFL statistics platform. Browse schedules, game box scores, player career stats, team season breakdowns, standings, league leaders, and advanced analytics — all sourced from `nfl_data_py` and stored locally in DuckDB.
+A full-stack NFL analytics platform built on nflfastR play-by-play. The
+centerpiece is a **situational splits engine** that conditions any player's or
+team's full stat line on one dimension at a time — pass depth, pressure,
+play-action, game state, opponent, and 15+ more — for **offense *and* defense**.
+Every derived number is verified to reconcile with official NFL stats.
+
+**[Deployment guide →](./DEPLOY.md)** &nbsp;·&nbsp; one-container deploy to Cloud Run (free tier)
+
+![Splits Explorer](docs/img/splits.png)
+
+---
+
+## Why it's different
+
+Most public stats sites show you a stat line. This shows you the *story behind it*.
+
+- **A situational splits engine.** Compare players or teams head-to-head, then
+  break any one of them down across **18 dimensions at once** — down, pass
+  depth, pressure (clean vs hit), play-action, blitz, red zone, dome,
+  *competitive-snaps-only*, vs each opponent, and more — with an auto-surfaced
+  "where they stand out" panel. Works for offense and defense, players and teams.
+- **Accuracy verified to the play.** The play-by-play–derived splits reconcile
+  **exactly** with official weekly stats (0 mismatches on attempts / carries /
+  targets, league-wide), enforced by automated reconciliation tests that gate
+  every deploy.
+- **Engineered for speed.** gzip (payloads 10–20× smaller), HTTP caching,
+  point-lookup indexes, per-request cursors for lock-free concurrent reads, and
+  a pruned columnar store.
+
+| Game page — box score, scoring summary, win probability | Home — playoff bracket, storylines, leaders |
+|---|---|
+| ![Game page](docs/img/game.png) | ![Home](docs/img/home.png) |
+
+---
+
+## Engineering highlights
+
+These are the parts I'm most proud of — and the ones worth a closer look.
+
+### Data accuracy you can trust
+- Official `weekly_player_stats` is the source of truth for counting stats; the
+  situational splits are computed from raw play-by-play yet **reconcile to it
+  exactly**. Getting there meant matching the NFL's own definitions — e.g. a
+  pass attempt is a completion/incompletion/interception (not nflfastR's
+  `pass_attempt`, which counts sacks in some seasons), and carries *include* QB
+  kneels.
+- **EPA is standardized across every page.** I reverse-engineered nflfastR's
+  weekly `passing_epa` (it's `SUM(qb_epa)` over dropbacks) so "EPA/att" means
+  the identical number on the Splits, Leaders, and Player pages.
+- [`api/tests/test_reconciliation.py`](api/tests/test_reconciliation.py) enforces
+  all of this against the real database, and the **deploy is gated on it passing
+  inside the shipped image** — a release is blocked if the data doesn't reconcile.
+
+### Performance
+- Responses **gzip ~10–20×** (a veteran's splits payload: 570KB → 46KB) — the
+  dominant transfer cost.
+- **HTTP caching**: completed seasons are immutable → cached a week; live data → 5 min.
+- **ART point-lookup indexes** on the large per-request tables, and per-request
+  DuckDB cursors (MVCC-isolated) so concurrent reads never serialize on a lock.
+- **Pruned the play-by-play store from 396 → 169 columns**, cutting the database
+  **872MB → 400MB** with zero loss of functionality (every builder + query
+  re-verified against the slim schema).
+
+### The splits engine
+- **Long-format materialized tables** (`player_splits`, `defense_splits`,
+  `team_splits`): one row per `(entity, season, category, dimension, value)`, so
+  "overall" always reconciles with the sum of its splits — one source of truth.
+- **Single-dimension by design** — no combinatorial explosion of cross-products.
+- **FTN charting** (play-action, blitz, defenders-in-box) joined to the
+  play-by-play for 2022+; **defensive splits** built by unioning 20 per-defender
+  credit columns into an events stream.
+
+### Full-stack, typed end-to-end
+- FastAPI + Pydantic → **OpenAPI → `openapi-typescript` codegen** → a fully typed
+  React/TypeScript client. A schema change flows to the frontend types
+  automatically; no hand-written, drift-prone interfaces.
+
+---
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| Backend | Python, FastAPI, DuckDB |
-| Data | `nfl_data_py` (play-by-play, rosters, NGS, snap counts) |
+| Backend | Python, FastAPI, Pydantic, DuckDB |
+| Data | `nfl_data_py` / nflfastR (play-by-play, weekly stats, NGS, FTN charting, snaps, rosters) |
 | Frontend | React, TypeScript, Vite, Tailwind CSS, Recharts |
+| Tests / CI | pytest (incl. data-reconciliation invariants), GitHub Actions |
+| Deploy | Docker, Google Cloud Run |
 
-## Project Structure
+## Architecture
+
+```
+nfl_data_py ─► DuckDB (raw play-by-play, ~169 cols)
+                    │
+                    ├─► materialize ─► player_splits · defense_splits · team_splits
+                    │                  player_game_stats · team_season_analytics · comparables
+                    ▼
+              FastAPI  (gzip · Cache-Control · per-request cursors)   ── /api/*
+                    │
+              OpenAPI ─► openapi-typescript ─► typed React/TS client  ── /
+```
+
+One embedded DuckDB file, one process. Concurrency is handled *inside* the
+process (independent cursors per request); the DB is single-writer, so the app
+runs as a single worker — see the note under [Setup](#setup).
+
+## Project structure
 
 ```
 nfl-platform/
+├── Dockerfile, DEPLOY.md          # one-container deploy → Cloud Run
 ├── api/
-│   ├── main.py          # FastAPI server + season loading queue
-│   ├── ingest.py        # Data pipeline (play-by-play → player_game_stats)
-│   ├── database.py      # DuckDB singleton
-│   ├── data/nfl.duckdb  # Local database (~35MB/season)
-│   └── requirements.txt
-└── frontend/
-    └── src/
-        ├── pages/       # SchedulePage, GamePage, PlayerPage, TeamPage,
-        │                #   LeadersPage, StandingsPage
-        ├── components/  # Nav
-        ├── utils/       # Team logos, names
-        └── api.ts       # Typed API client
+│   ├── main.py                    # FastAPI app: /api routes + serves the SPA
+│   ├── ingest.py                  # data pipeline (pbp → materialized tables)
+│   ├── splits_core.py             # shared situational-dimension scaffolding
+│   ├── splits_builder.py          # player_splits (passing/rushing/receiving)
+│   ├── def_splits_builder.py      # defense_splits (event-based)
+│   ├── team_splits_builder.py     # team_splits (offense/defense rate profile)
+│   ├── routers/                   # schedule, players, teams, leaders, meta
+│   ├── tests/                     # endpoints, invariants, data-reconciliation
+│   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
+└── frontend/src/
+    ├── pages/SplitsPage.tsx       # the splits explorer
+    ├── pages/                     # Schedule, Game, Player, Team, Leaders, Standings
+    ├── splits.ts                  # split metrics / dimensions config
+    └── api.ts, types/             # typed client (codegen from OpenAPI)
 ```
 
 ## Setup
@@ -34,82 +133,50 @@ nfl-platform/
 **Backend**
 ```bash
 cd api
-python -m venv venv
-venv\Scripts\activate        # Windows
+python -m venv venv && venv\Scripts\activate     # Windows
 pip install -r requirements.txt
-uvicorn main:app --reload    # runs on :8000
+uvicorn main:app --reload                         # :8000 (API under /api)
 ```
 
 **Frontend**
 ```bash
 cd frontend
 npm install
-npm run dev                  # runs on :5173
+npm run dev                                        # :5173 (proxies /api → :8000)
 ```
 
-On first startup the API auto-queues the 5 most recent seasons to load. Loading a season takes a few minutes (downloads ~35MB of play-by-play data). Status is visible in the UI.
+On first boot the API auto-loads recent seasons (a few minutes each, downloads
+play-by-play). For a full historical build, run the ingest for the seasons you want.
 
-> **Run a single process.** The API stores data in an embedded DuckDB file, which allows only **one read-write process** at a time. Concurrency is handled *inside* the process (each request gets its own DuckDB cursor; reads run in parallel), so one worker comfortably serves many users. Do **not** run multiple workers (`uvicorn --workers N`, `gunicorn -w N`) or a second server instance against the same DB file — every worker but one will fail to open it. Likewise, stop the server before running offline scripts that write to the DB (e.g. `rematerialize_splits.py`). Scaling past one process would require serving from a read-only connection with ingest moved to a separate offline job.
+> **Run a single process.** DuckDB is an embedded, single-writer database, so the
+> API runs as one worker — concurrency is handled inside the process (each request
+> gets its own cursor; reads run in parallel). Don't run multiple workers
+> (`--workers N`, `gunicorn -w N`) or a second server against the same file.
 
-## Loading Data
-
-Seasons load automatically as you browse. You can also trigger a load manually:
+## Tests
 
 ```bash
-# Route through the running API (preferred — avoids DB lock)
-python api/ingest.py --seasons 2024
-
-# Or load multiple seasons
-python api/ingest.py --seasons 2022 2023 2024
+cd api && pytest
 ```
 
-## API Endpoints
+Covers endpoint behavior, data-quality **invariants**, and
+**data-reconciliation** against the real database (splits ⇄ official stats, EPA
+consistency, defensive-sack reconciliation). The reconciliation suite skips
+cleanly when the DB isn't present (CI) and runs against the baked DB at deploy time.
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/seasons` | All seasons with load status |
-| `POST` | `/seasons/{year}/load` | Queue a season for loading |
-| `GET` | `/seasons/{year}/progress` | SSE stream of ingest logs |
-| `GET` | `/schedule?season=` | Full schedule grouped by week |
-| `GET` | `/games/{game_id}` | Game detail with player stats, quarter scores, win probability |
-| `GET` | `/players/{player_id}` | Player profile + career game log + NGS + WPA |
-| `GET` | `/teams/{abbrev}?season=` | Team schedule + season leaders |
-| `GET` | `/leaders?season=` | League leaders (passing, rushing, receiving, defense) |
-| `GET` | `/wpa-leaders?season=` | Win Probability Added leaders by category |
-| `GET` | `/standings?season=` | Division standings with full records |
-| `GET` | `/search?q=` | Player and team search |
+## Deploy
 
-## Features
+The whole app ships as one container (frontend + API + database). See
+**[DEPLOY.md](./DEPLOY.md)** — fast local build, or the GitHub Actions → Cloud Run
+pipeline (free tier).
 
-**Schedule & Games**
-- Season schedule grouped by week with live record tracking
-- Game box scores with quarter-by-quarter scoring
-- Win probability chart — full-game arc from play-by-play `home_wp` data, with TD and turnover markers
+## Data notes
 
-**Players**
-- Career stats table with traditional, advanced (EPA), Next Gen Stats (CPOE, aDOT, separation, etc.), snap counts, and situational stats (red zone, 3rd down)
-- Win Probability Added (WPA) per season in the Advanced Stats section
-  - Passers: `air_wpa` (throw credit, including incompletions)
-  - Receivers: `yac_wpa` (yards-after-catch credit)
-  - Rushers: total `wpa` on rush plays
-- Game log per season (expandable)
-- Career splits by team
-
-**League Leaders**
-- Passing, Rushing, Receiving, Defense tabs — sortable, with traditional + advanced columns
-- WPA tab with Passing / Rushing / Receiving sub-tabs, showing top contributors by win probability added
-
-**Standings**
-- Full AFC/NFC division standings: W/L/T, PCT, PF, PA, home/away/division records, streak, games back
-
-**Teams**
-- Season schedule with entry records
-- Regular season and playoff stat leaders
-
-## Data Notes
-
-- **Coverage:** 1999–2025 regular season and playoffs
-- **NGS stats** (CPOE, TTT, aDOT, separation, etc.) available from 2016 onward
-- **Snap counts** available from ~2012 onward
-- **Win probability / WPA** sourced from nflverse play-by-play `home_wp`, `air_wpa`, `yac_wpa`, `wpa` columns
-- **Team attribution:** roster table is used as the authoritative team source; play-by-play `posteam`/`defteam` is a fallback only
+- **Coverage:** 1999–2025, regular season + playoffs.
+- **NGS** (CPOE, time-to-throw, separation) from 2016; **FTN charting**
+  (play-action, blitz, box count) from 2022; **snap counts** from ~2012.
+- **Known limitation:** a handful of *rushing/receiving yard totals* differ by
+  1–3 yards in the pbp-derived views — nflfastR credits lateral/multi-player
+  yardage differently than the official scorer. Counts are always exact; this is
+  bounded and tested. Defensive *coverage* data (completion % allowed) isn't in
+  nflfastR, so defensive splits are event-based (tackles / pressure / takeaways).
