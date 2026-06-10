@@ -365,9 +365,49 @@ def build_returner_stats(plays):
 # Raw data loading
 # ---------------------------------------------------------------------------
 
+# nflfastR play-by-play ships ~396 columns; the app uses ~169. Storing only
+# these keeps the DuckDB file ~half the size with no loss of functionality
+# (verified: every builder + runtime query runs against this subset). Anything
+# not present in a given season's download is simply skipped.
+PLAYS_KEEP_COLUMNS = [
+    'play_id', 'game_id', 'home_team', 'away_team', 'season_type', 'week',
+    'posteam', 'posteam_type', 'defteam', 'yardline_100', 'game_seconds_remaining', 'drive',
+    'sp', 'qtr', 'down', 'time', 'desc', 'play_type',
+    'yards_gained', 'shotgun', 'no_huddle', 'qb_kneel', 'qb_spike', 'pass_length',
+    'pass_location', 'air_yards', 'yards_after_catch', 'run_location', 'run_gap', 'field_goal_result',
+    'kick_distance', 'extra_point_result', 'two_point_conv_result', 'timeout', 'td_team', 'td_player_id',
+    'total_home_score', 'total_away_score', 'posteam_score', 'defteam_score', 'score_differential', 'epa',
+    'wp', 'home_wp', 'wpa', 'air_wpa', 'yac_wpa', 'punt_blocked',
+    'first_down_rush', 'first_down_pass', 'third_down_converted', 'third_down_failed', 'fourth_down_converted', 'fourth_down_failed',
+    'incomplete_pass', 'touchback', 'interception', 'punt_inside_twenty', 'safety', 'penalty',
+    'fumble_lost', 'qb_hit', 'rush_attempt', 'pass_attempt', 'sack', 'touchdown',
+    'pass_touchdown', 'rush_touchdown', 'return_touchdown', 'extra_point_attempt', 'two_point_attempt', 'field_goal_attempt',
+    'punt_attempt', 'fumble', 'complete_pass', 'passer_player_id', 'passer_player_name', 'passing_yards',
+    'receiver_player_id', 'receiver_player_name', 'receiving_yards', 'rusher_player_id', 'rusher_player_name', 'rushing_yards',
+    'interception_player_id', 'interception_player_name', 'punt_returner_player_id', 'punt_returner_player_name', 'punter_player_id', 'punter_player_name',
+    'kicker_player_name', 'kicker_player_id', 'tackle_for_loss_1_player_id', 'tackle_for_loss_1_player_name', 'tackle_for_loss_2_player_id', 'tackle_for_loss_2_player_name',
+    'qb_hit_1_player_id', 'qb_hit_1_player_name', 'qb_hit_2_player_id', 'qb_hit_2_player_name', 'forced_fumble_player_1_player_id', 'forced_fumble_player_1_player_name',
+    'forced_fumble_player_2_player_id', 'forced_fumble_player_2_player_name', 'solo_tackle_1_player_id', 'solo_tackle_2_player_id', 'solo_tackle_1_player_name', 'solo_tackle_2_player_name',
+    'assist_tackle_1_player_id', 'assist_tackle_1_player_name', 'assist_tackle_2_player_id', 'assist_tackle_2_player_name', 'assist_tackle_3_player_id', 'assist_tackle_3_player_name',
+    'assist_tackle_4_player_id', 'assist_tackle_4_player_name', 'pass_defense_1_player_id', 'pass_defense_1_player_name', 'pass_defense_2_player_id', 'pass_defense_2_player_name',
+    'fumble_recovery_1_team', 'fumble_recovery_1_player_id', 'fumble_recovery_1_player_name', 'fumble_recovery_2_team', 'fumble_recovery_2_player_id', 'fumble_recovery_2_player_name',
+    'sack_player_id', 'sack_player_name', 'half_sack_1_player_id', 'half_sack_1_player_name', 'half_sack_2_player_id', 'half_sack_2_player_name',
+    'return_yards', 'penalty_team', 'penalty_player_id', 'penalty_yards', 'penalty_type', 'season',
+    'cpoe', 'stadium', 'away_score', 'home_score', 'location', 'result',
+    'total', 'spread_line', 'total_line', 'div_game', 'roof', 'surface',
+    'temp', 'wind', 'success', 'passer', 'rusher', 'receiver',
+    'pass', 'rush', 'first_down', 'special', 'play', 'name',
+    'jersey_number', 'id', 'qb_epa', 'xpass', 'pass_oe', 'nflverse_game_id',
+    'route',
+]
+
+
 def load_and_store_raw(conn, seasons: list[int], log=print):
     log(f"Loading play-by-play for {seasons}...")
     plays = nfl_data_py.import_pbp_data(seasons)
+    keep = [c for c in PLAYS_KEEP_COLUMNS if c in plays.columns]
+    log(f"  keeping {len(keep)}/{len(plays.columns)} pbp columns")
+    plays = plays[keep]
     _upsert_by_season(conn, "plays", plays, seasons, log=log)
 
     log(f"Loading schedules...")
