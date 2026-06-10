@@ -1035,12 +1035,17 @@ const TEAM_SPLIT_DIMS: { key: string; label: string }[] = [
   { key: 'game_script', label: 'Game Script' },
   { key: 'field_zone',  label: 'Field Zone' },
   { key: 'quarter',     label: 'Quarter' },
+  { key: 'game_state',  label: 'Game State' },
+  { key: 'home_away',   label: 'Home/Away' },
+  { key: 'roof',        label: 'Stadium' },
 ]
 
 const TEAM_SPLIT_VALUE_LABELS: Record<string, string> = {
   '1': '1st Down', '2': '2nd Down', '3': '3rd Down', '4': '4th Down',
   leading: 'Leading', tied: 'Tied', trailing: 'Trailing',
   red_zone: 'Red Zone', opp_territory: 'Opp Territory', own_territory: 'Own Territory',
+  competitive: 'Competitive', garbage: 'Garbage Time',
+  home: 'Home', away: 'Away', dome: 'Dome', outdoors: 'Outdoors',
 }
 function teamSplitValueLabel(dim: string, value: string): string {
   if (dim === 'quarter') return value === 'OT' ? 'OT' : `Q${value}`
