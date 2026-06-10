@@ -1,8 +1,11 @@
-"""FastAPI app entry point: wires CORS, lifespan, and includes all routers."""
+"""FastAPI app entry point: wires CORS, lifespan, routers, and (in the
+production image) serves the built frontend so the whole app is one service."""
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from starlette.middleware.gzip import GZipMiddleware
 
 from config import AUTO_LOAD_SEASONS, CURRENT_SEASON, FIRST_SEASON
@@ -97,8 +100,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(meta.router)
-app.include_router(schedule.router)
-app.include_router(players.router)
-app.include_router(teams.router)
-app.include_router(leaders.router)
+# All API routes live under /api so the frontend (served at /) and the API can
+# share one origin in production. The Vite dev proxy forwards /api unchanged.
+for _r in (meta, schedule, players, teams, leaders):
+    app.include_router(_r.router, prefix="/api")
+
+
+@app.get("/api/health")
+def health():
+    """Liveness probe for the platform (Cloud Run / uptime checks)."""
+    return {"status": "ok"}
+
+
+# ── Serve the built frontend (production single-service deploy) ───────────────
+# In dev the frontend runs on Vite; the Docker image copies the build into
+# ./static and serves it here with SPA fallback to index.html for client routes.
+_STATIC = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(_STATIC):
+    @app.get("/{full_path:path}")
+    def spa(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = os.path.normpath(os.path.join(_STATIC, full_path))
+        if full_path and candidate.startswith(_STATIC) and os.path.isfile(candidate):
+            # content-hashed assets are immutable; the HTML shell is not
+            cache = "public, max-age=31536000, immutable" if "/assets/" in full_path else "no-cache"
+            return FileResponse(candidate, headers={"Cache-Control": cache})
+        return FileResponse(os.path.join(_STATIC, "index.html"), headers={"Cache-Control": "no-cache"})

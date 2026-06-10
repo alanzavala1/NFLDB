@@ -12,3 +12,6 @@ frontend/dist/
 # Misc
 .DS_Store
 *.env
+
+# Frontend build copied into the API image at build time
+api/static/

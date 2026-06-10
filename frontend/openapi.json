@@ -5,28 +5,27 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/health": {
+    "/api/health": {
       "get": {
         "summary": "Health",
-        "operationId": "health_health_get",
+        "description": "Liveness probe for the platform (Cloud Run / uptime checks).",
+        "operationId": "health_api_health_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
+                "schema": {}
               }
             }
           }
         }
       }
     },
-    "/seasons": {
+    "/api/seasons": {
       "get": {
         "summary": "Get Seasons",
-        "operationId": "get_seasons_seasons_get",
+        "operationId": "get_seasons_api_seasons_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -37,7 +36,7 @@
                     "$ref": "#/components/schemas/SeasonStatus"
                   },
                   "type": "array",
-                  "title": "Response Get Seasons Seasons Get"
+                  "title": "Response Get Seasons Api Seasons Get"
                 }
               }
             }
@@ -45,10 +44,10 @@
         }
       }
     },
-    "/seasons/{year}/load": {
+    "/api/seasons/{year}/load": {
       "post": {
         "summary": "Load Season",
-        "operationId": "load_season_seasons__year__load_post",
+        "operationId": "load_season_api_seasons__year__load_post",
         "parameters": [
           {
             "name": "year",
@@ -94,10 +93,10 @@
         }
       }
     },
-    "/seasons/{year}/progress": {
+    "/api/seasons/{year}/progress": {
       "get": {
         "summary": "Season Progress",
-        "operationId": "season_progress_seasons__year__progress_get",
+        "operationId": "season_progress_api_seasons__year__progress_get",
         "parameters": [
           {
             "name": "year",
@@ -131,10 +130,10 @@
         }
       }
     },
-    "/schedule": {
+    "/api/schedule": {
       "get": {
         "summary": "Get Schedule",
-        "operationId": "get_schedule_schedule_get",
+        "operationId": "get_schedule_api_schedule_get",
         "parameters": [
           {
             "name": "season",
@@ -157,7 +156,7 @@
                   "items": {
                     "$ref": "#/components/schemas/ScheduleWeek"
                   },
-                  "title": "Response Get Schedule Schedule Get"
+                  "title": "Response Get Schedule Api Schedule Get"
                 }
               }
             }
@@ -175,10 +174,10 @@
         }
       }
     },
-    "/games": {
+    "/api/games": {
       "get": {
         "summary": "Get Games",
-        "operationId": "get_games_games_get",
+        "operationId": "get_games_api_games_get",
         "parameters": [
           {
             "name": "week",
@@ -212,7 +211,7 @@
                   "items": {
                     "$ref": "#/components/schemas/Game"
                   },
-                  "title": "Response Get Games Games Get"
+                  "title": "Response Get Games Api Games Get"
                 }
               }
             }
@@ -230,10 +229,10 @@
         }
       }
     },
-    "/games/{game_id}": {
+    "/api/games/{game_id}": {
       "get": {
         "summary": "Get Game",
-        "operationId": "get_game_games__game_id__get",
+        "operationId": "get_game_api_games__game_id__get",
         "parameters": [
           {
             "name": "game_id",
@@ -269,10 +268,10 @@
         }
       }
     },
-    "/players/{player_id}": {
+    "/api/players/{player_id}": {
       "get": {
         "summary": "Get Player",
-        "operationId": "get_player_players__player_id__get",
+        "operationId": "get_player_api_players__player_id__get",
         "parameters": [
           {
             "name": "player_id",
@@ -308,10 +307,10 @@
         }
       }
     },
-    "/players/{player_id}/comparables": {
+    "/api/players/{player_id}/comparables": {
       "get": {
         "summary": "Get Player Comparables",
-        "operationId": "get_player_comparables_players__player_id__comparables_get",
+        "operationId": "get_player_comparables_api_players__player_id__comparables_get",
         "parameters": [
           {
             "name": "player_id",
@@ -345,7 +344,7 @@
                   "items": {
                     "$ref": "#/components/schemas/PlayerComparable"
                   },
-                  "title": "Response Get Player Comparables Players  Player Id  Comparables Get"
+                  "title": "Response Get Player Comparables Api Players  Player Id  Comparables Get"
                 }
               }
             }
@@ -363,10 +362,10 @@
         }
       }
     },
-    "/players/{player_id}/splits": {
+    "/api/players/{player_id}/splits": {
       "get": {
         "summary": "Get Player Splits",
-        "operationId": "get_player_splits_players__player_id__splits_get",
+        "operationId": "get_player_splits_api_players__player_id__splits_get",
         "parameters": [
           {
             "name": "player_id",
@@ -388,7 +387,7 @@
                   "items": {
                     "$ref": "#/components/schemas/PlayerSplit"
                   },
-                  "title": "Response Get Player Splits Players  Player Id  Splits Get"
+                  "title": "Response Get Player Splits Api Players  Player Id  Splits Get"
                 }
               }
             }
@@ -406,11 +405,11 @@
         }
       }
     },
-    "/players/{player_id}/def-splits": {
+    "/api/players/{player_id}/def-splits": {
       "get": {
         "summary": "Get Player Def Splits",
         "description": "A defender's event line conditioned on one situational dimension.",
-        "operationId": "get_player_def_splits_players__player_id__def_splits_get",
+        "operationId": "get_player_def_splits_api_players__player_id__def_splits_get",
         "parameters": [
           {
             "name": "player_id",
@@ -432,7 +431,7 @@
                   "items": {
                     "$ref": "#/components/schemas/DefensiveSplit"
                   },
-                  "title": "Response Get Player Def Splits Players  Player Id  Def Splits Get"
+                  "title": "Response Get Player Def Splits Api Players  Player Id  Def Splits Get"
                 }
               }
             }
@@ -450,10 +449,10 @@
         }
       }
     },
-    "/teams/{team}": {
+    "/api/teams/{team}": {
       "get": {
         "summary": "Get Team",
-        "operationId": "get_team_teams__team__get",
+        "operationId": "get_team_api_teams__team__get",
         "parameters": [
           {
             "name": "team",
@@ -499,10 +498,10 @@
         }
       }
     },
-    "/teams/{team}/roster": {
+    "/api/teams/{team}/roster": {
       "get": {
         "summary": "Get Team Roster",
-        "operationId": "get_team_roster_teams__team__roster_get",
+        "operationId": "get_team_roster_api_teams__team__roster_get",
         "parameters": [
           {
             "name": "team",
@@ -533,7 +532,7 @@
                   "items": {
                     "$ref": "#/components/schemas/RosterPlayer"
                   },
-                  "title": "Response Get Team Roster Teams  Team  Roster Get"
+                  "title": "Response Get Team Roster Api Teams  Team  Roster Get"
                 }
               }
             }
@@ -551,11 +550,11 @@
         }
       }
     },
-    "/teams/{team}/depth-chart": {
+    "/api/teams/{team}/depth-chart": {
       "get": {
         "summary": "Get Team Depth Chart",
         "description": "Most recent depth chart for the team. If `week` is omitted, returns\nthe latest week we have data for in the given season.",
-        "operationId": "get_team_depth_chart_teams__team__depth_chart_get",
+        "operationId": "get_team_depth_chart_api_teams__team__depth_chart_get",
         "parameters": [
           {
             "name": "team",
@@ -602,7 +601,7 @@
                   "items": {
                     "$ref": "#/components/schemas/DepthChartEntry"
                   },
-                  "title": "Response Get Team Depth Chart Teams  Team  Depth Chart Get"
+                  "title": "Response Get Team Depth Chart Api Teams  Team  Depth Chart Get"
                 }
               }
             }
@@ -620,11 +619,11 @@
         }
       }
     },
-    "/teams/{team}/splits": {
+    "/api/teams/{team}/splits": {
       "get": {
         "summary": "Get Team Splits",
         "description": "Team offense/defense rate profile conditioned on each situational\ndimension. Reads the materialized table; self-heals on a cold table.",
-        "operationId": "get_team_splits_teams__team__splits_get",
+        "operationId": "get_team_splits_api_teams__team__splits_get",
         "parameters": [
           {
             "name": "team",
@@ -655,7 +654,7 @@
                   "items": {
                     "$ref": "#/components/schemas/TeamSplit"
                   },
-                  "title": "Response Get Team Splits Teams  Team  Splits Get"
+                  "title": "Response Get Team Splits Api Teams  Team  Splits Get"
                 }
               }
             }
@@ -673,11 +672,11 @@
         }
       }
     },
-    "/teams/{team}/injuries": {
+    "/api/teams/{team}/injuries": {
       "get": {
         "summary": "Get Team Injuries",
         "description": "Most recent injury report for the team. If `week` is omitted, returns\nthe latest week we have data for in the given season.",
-        "operationId": "get_team_injuries_teams__team__injuries_get",
+        "operationId": "get_team_injuries_api_teams__team__injuries_get",
         "parameters": [
           {
             "name": "team",
@@ -724,7 +723,7 @@
                   "items": {
                     "$ref": "#/components/schemas/InjuryStatus"
                   },
-                  "title": "Response Get Team Injuries Teams  Team  Injuries Get"
+                  "title": "Response Get Team Injuries Api Teams  Team  Injuries Get"
                 }
               }
             }
@@ -742,11 +741,11 @@
         }
       }
     },
-    "/team-analytics": {
+    "/api/team-analytics": {
       "get": {
         "summary": "Get Team Analytics",
         "description": "Read precomputed team analytics from the materialized table.\n\nThe heavy aggregation (150-line CTE over plays + schedules) used to run\non every request. It now runs once during ingest and writes to the\n`team_season_analytics` table; this endpoint is a simple keyed SELECT.\n\nIf the row is missing (fresh DB, never-ingested season), the builder\nlazily materializes on first hit so the system self-heals.",
-        "operationId": "get_team_analytics_team_analytics_get",
+        "operationId": "get_team_analytics_api_team_analytics_get",
         "parameters": [
           {
             "name": "season",
@@ -782,10 +781,10 @@
         }
       }
     },
-    "/leaders": {
+    "/api/leaders": {
       "get": {
         "summary": "Get Leaders",
-        "operationId": "get_leaders_leaders_get",
+        "operationId": "get_leaders_api_leaders_get",
         "parameters": [
           {
             "name": "season",
@@ -807,7 +806,7 @@
                   "items": {
                     "$ref": "#/components/schemas/LeagueLeader"
                   },
-                  "title": "Response Get Leaders Leaders Get"
+                  "title": "Response Get Leaders Api Leaders Get"
                 }
               }
             }
@@ -825,10 +824,10 @@
         }
       }
     },
-    "/wpa-leaders": {
+    "/api/wpa-leaders": {
       "get": {
         "summary": "Get Wpa Leaders",
-        "operationId": "get_wpa_leaders_wpa_leaders_get",
+        "operationId": "get_wpa_leaders_api_wpa_leaders_get",
         "parameters": [
           {
             "name": "season",
@@ -864,10 +863,10 @@
         }
       }
     },
-    "/standings": {
+    "/api/standings": {
       "get": {
         "summary": "Get Standings",
-        "operationId": "get_standings_standings_get",
+        "operationId": "get_standings_api_standings_get",
         "parameters": [
           {
             "name": "season",
@@ -889,7 +888,7 @@
                   "items": {
                     "$ref": "#/components/schemas/DivisionStandings"
                   },
-                  "title": "Response Get Standings Standings Get"
+                  "title": "Response Get Standings Api Standings Get"
                 }
               }
             }
@@ -907,10 +906,10 @@
         }
       }
     },
-    "/search": {
+    "/api/search": {
       "get": {
         "summary": "Search",
-        "operationId": "search_search_get",
+        "operationId": "search_api_search_get",
         "parameters": [
           {
             "name": "q",
@@ -933,7 +932,7 @@
                   "items": {
                     "$ref": "#/components/schemas/SearchResult"
                   },
-                  "title": "Response Search Search Get"
+                  "title": "Response Search Api Search Get"
                 }
               }
             }

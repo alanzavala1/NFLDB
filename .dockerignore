@@ -1,0 +1,28 @@
+# Python
+**/__pycache__/
+**/*.pyc
+
+# Virtualenvs (the real one + the stray empty one at api/ root)
+api/venv/
+api/Scripts/
+api/Lib/
+api/Include/
+api/pyvenv.cfg
+
+# DuckDB transient + backups/exports (keep only api/data/nfl.duckdb)
+api/data/*.wal
+api/data/_export/
+api/data/*_old.duckdb
+api/data/*_compact.duckdb
+api/data/_idxtest.duckdb
+
+# Frontend deps + build (the image rebuilds dist in stage 1)
+frontend/node_modules/
+frontend/dist/
+
+# Repo cruft
+.git/
+.github/
+notes/
+*.log
+_qa_*.mjs
