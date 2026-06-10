@@ -566,7 +566,7 @@ export default function SplitsPage() {
     for (const d of config.dims) {
       if (d.key === 'opponent' || d.key === 'opp_division') continue
       for (const [val, row] of entitySection(0, d.key).map) {
-        const v = met.value(row); const vol = volume(row)
+        const v = met.value(row as PlayerSplit); const vol = volume(row)
         if (v == null || vol < minVol) continue
         cands.push({ kind: d.label, label: splitValueLabel(d.key, val), v, delta: v - base, vol })
       }
