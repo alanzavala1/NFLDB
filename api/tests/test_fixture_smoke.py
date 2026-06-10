@@ -12,13 +12,13 @@ def test_seeded_conn_has_roster(seeded_conn):
 
 
 def test_client_health_returns_ok(client):
-    r = client.get("/health")
+    r = client.get("/api/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
 
 
 def test_client_seasons_lists_test_season(client):
-    r = client.get("/seasons")
+    r = client.get("/api/seasons")
     assert r.status_code == 200
     seasons = r.json()
     # Test data has season=2024 loaded

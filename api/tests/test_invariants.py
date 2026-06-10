@@ -19,7 +19,7 @@ pytestmark = pytest.mark.invariant
 
 def test_standings_w_plus_l_plus_t_equals_games_played(client):
     """w + l + t must equal the number of completed games for every team."""
-    r = client.get("/standings?season=2024")
+    r = client.get("/api/standings?season=2024")
     standings = r.json()
 
     # Build expected games-played from the seed: each completed game contributes
@@ -39,7 +39,7 @@ def test_standings_w_plus_l_plus_t_equals_games_played(client):
 
 def test_standings_home_plus_away_records_sum_to_total(client):
     """home wins + away wins == total wins (and same for L, T)."""
-    r = client.get("/standings?season=2024")
+    r = client.get("/api/standings?season=2024")
     standings = r.json()
 
     def parse_record(rec: str) -> tuple[int, int, int]:
@@ -62,7 +62,7 @@ def test_standings_pf_pa_balance_across_league(client):
     other team's PA, and vice versa. Sums must balance. This catches the
     own_score/opp_score swap that produced +0 for everyone.
     """
-    r = client.get("/standings?season=2024")
+    r = client.get("/api/standings?season=2024")
     standings = r.json()
 
     total_pf = sum(t["pf"] for div in standings for t in div["teams"])
@@ -74,7 +74,7 @@ def test_standings_pf_pa_balance_across_league(client):
 
 def test_standings_pf_not_universally_zero(client):
     """Catches the literal bug we shipped: pf was 0 for every team."""
-    r = client.get("/standings?season=2024")
+    r = client.get("/api/standings?season=2024")
     standings = r.json()
     nonzero_pf = [t["pf"] for div in standings for t in div["teams"] if t["pf"] > 0]
     assert nonzero_pf, "every team has 0 points for — own/opp score bug regression"
@@ -82,7 +82,7 @@ def test_standings_pf_not_universally_zero(client):
 
 def test_standings_division_record_consistent(client):
     """A team's div wins cannot exceed its total wins."""
-    r = client.get("/standings?season=2024")
+    r = client.get("/api/standings?season=2024")
     standings = r.json()
 
     def parse(rec: str) -> tuple[int, int, int]:
@@ -99,7 +99,7 @@ def test_standings_division_record_consistent(client):
 
 def test_standings_division_first_team_is_leader(client):
     """Teams within a division are sorted by pct, then point differential."""
-    r = client.get("/standings?season=2024")
+    r = client.get("/api/standings?season=2024")
     standings = r.json()
     for div in standings:
         if len(div["teams"]) < 2:
@@ -126,7 +126,7 @@ def test_spread_line_convention_is_positive_home_favored(client):
     home dashboard will mislabel games (the original bug: "BUF +15.5 upset
     over Saints" when BUF was the favorite that won).
     """
-    r = client.get("/games?week=1&season=2024")
+    r = client.get("/api/games?week=1&season=2024")
     games = {f"{g['away_team']}@{g['home_team']}": g for g in r.json()}
 
     buf_mia = games["BUF@MIA"]
@@ -146,20 +146,20 @@ def test_spread_line_convention_is_positive_home_favored(client):
 # ── /leaders sanity invariants ───────────────────────────────────────────────
 
 def test_leaders_no_negative_passing_yards(client):
-    r = client.get("/leaders?season=2024")
+    r = client.get("/api/leaders?season=2024")
     for row in r.json():
         assert (row.get("pass_yards") or 0) >= 0, \
             f"{row['player_name']} has negative pass_yards"
 
 
 def test_leaders_games_played_at_least_one(client):
-    r = client.get("/leaders?season=2024")
+    r = client.get("/api/leaders?season=2024")
     for row in r.json():
         assert row["games_played"] >= 1
 
 
 def test_leaders_qb_completion_rate_under_100pct(client):
-    r = client.get("/leaders?season=2024")
+    r = client.get("/api/leaders?season=2024")
     for row in r.json():
         att = row.get("attempts") or 0
         cmp = row.get("completions") or 0
