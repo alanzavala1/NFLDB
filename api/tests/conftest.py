@@ -193,11 +193,18 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
 
 @pytest.fixture(scope="session")
 def seeded_conn() -> duckdb.DuckDBPyConnection:
-    """A fresh in-memory DuckDB with mini-league data. Shared across the session."""
+    """A fresh in-memory DuckDB with mini-league data. Shared across the session.
+
+    Closed explicitly at session teardown: if the DuckDB connection's C++
+    destructor instead runs during interpreter finalization (numpy/pandas
+    already torn down), it can segfault and fail the job with exit 139 even
+    though every test passed. Closing here keeps shutdown clean.
+    """
     conn = duckdb.connect(":memory:")
     _create_schema(conn)
     _seed(conn)
-    return conn
+    yield conn
+    conn.close()
 
 
 @pytest.fixture
