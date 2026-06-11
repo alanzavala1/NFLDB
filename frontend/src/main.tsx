@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- app entry point; fast-refresh component-export rules don't apply here */
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'

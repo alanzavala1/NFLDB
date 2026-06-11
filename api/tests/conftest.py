@@ -191,15 +191,35 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
 
 # ── Pytest fixtures ──────────────────────────────────────────────────────────
 
+# Work around a DuckDB segfault during interpreter finalization on Linux.
+# DuckDB's C-extension (and its Arrow/numpy interop) can crash while the Python
+# interpreter tears down at process exit — *after* every test has passed and
+# the summary has printed — failing CI with exit 139 (SIGSEGV). Closing
+# connections doesn't reliably prevent it; the crash is in module finalization,
+# not our objects. We capture pytest's real exit status, then in
+# pytest_unconfigure (which runs after the terminal summary is printed but
+# before interpreter teardown) exit immediately with that status via os._exit,
+# skipping the crash-prone C-extension teardown. Correct semantics are kept: a
+# genuine test failure still produces a non-zero exit.
+_real_exit_status = 0
+
+
+def pytest_sessionfinish(session, exitstatus):
+    global _real_exit_status
+    _real_exit_status = int(exitstatus)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config):
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_real_exit_status)
+
+
 @pytest.fixture(scope="session")
 def seeded_conn() -> duckdb.DuckDBPyConnection:
-    """A fresh in-memory DuckDB with mini-league data. Shared across the session.
-
-    Closed explicitly at session teardown: if the DuckDB connection's C++
-    destructor instead runs during interpreter finalization (numpy/pandas
-    already torn down), it can segfault and fail the job with exit 139 even
-    though every test passed. Closing here keeps shutdown clean.
-    """
+    """A fresh in-memory DuckDB with mini-league data. Shared across the session."""
     conn = duckdb.connect(":memory:")
     _create_schema(conn)
     _seed(conn)
