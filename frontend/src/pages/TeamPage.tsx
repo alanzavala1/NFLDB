@@ -1676,7 +1676,7 @@ export default function TeamPage() {
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-4 items-start">
+        <div className="flex flex-col lg:flex-row gap-4 lg:items-start">
           <SeasonSidebar
             profiles={profiles}
             selected={activeProfile.season}
@@ -1684,7 +1684,7 @@ export default function TeamPage() {
             seasonStatuses={seasonStatuses}
             onQueueSeason={handleQueueSeason}
           />
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 w-full">
             <SeasonDetail profile={activeProfile} />
           </div>
         </div>

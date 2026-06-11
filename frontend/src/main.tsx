@@ -5,14 +5,41 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 
 // Code-split each route so the homepage doesn't ship 1000+ lines of
-// PlayerPage / TeamPage code that the user may never visit.
-const SchedulePage  = lazy(() => import('./pages/SchedulePage'))
-const GamePage      = lazy(() => import('./pages/GamePage'))
-const TeamPage      = lazy(() => import('./pages/TeamPage'))
-const PlayerPage    = lazy(() => import('./pages/PlayerPage'))
-const LeadersPage   = lazy(() => import('./pages/LeadersPage'))
-const StandingsPage = lazy(() => import('./pages/StandingsPage'))
-const SplitsPage    = lazy(() => import('./pages/SplitsPage'))
+// PlayerPage / TeamPage code that the user may never visit. Each importer is
+// kept in `routeImporters` so we can *prefetch* the chunks during idle time
+// (below) — that turns first navigation to a page from "wait for a JS chunk"
+// into "instant", which is the main source of perceived nav slowness. The
+// chart pages (Game/Team/Player) also pull the large Recharts chunk, so
+// warming them up front is the biggest single win.
+const routeImporters = {
+  schedule:  () => import('./pages/SchedulePage'),
+  game:      () => import('./pages/GamePage'),
+  team:      () => import('./pages/TeamPage'),
+  player:    () => import('./pages/PlayerPage'),
+  leaders:   () => import('./pages/LeadersPage'),
+  standings: () => import('./pages/StandingsPage'),
+  splits:    () => import('./pages/SplitsPage'),
+}
+
+const SchedulePage  = lazy(routeImporters.schedule)
+const GamePage      = lazy(routeImporters.game)
+const TeamPage      = lazy(routeImporters.team)
+const PlayerPage    = lazy(routeImporters.player)
+const LeadersPage   = lazy(routeImporters.leaders)
+const StandingsPage = lazy(routeImporters.standings)
+const SplitsPage    = lazy(routeImporters.splits)
+
+// After the initial page is interactive, quietly warm the other route chunks
+// during idle time. requestIdleCallback yields to anything more important, so
+// this never competes with the visible page; it just means that by the time
+// the user clicks through, the code is already loaded. Failures are ignored
+// (a prefetch that loses a race is harmless — the lazy() will fetch on demand).
+function prefetchRoutes() {
+  const warm = () => { for (const load of Object.values(routeImporters)) load().catch(() => {}) }
+  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback
+  if (ric) ric(warm)
+  else setTimeout(warm, 1500)
+}
 
 // Past seasons are immutable, so cache them aggressively.
 // Current season can mutate but only on a weekly cadence, so 5 minutes
@@ -36,6 +63,8 @@ function RouteLoading() {
     </div>
   )
 }
+
+prefetchRoutes()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

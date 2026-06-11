@@ -114,7 +114,7 @@ export default function Nav({ crumbs, title }: NavProps) {
 
   return (
     <>
-      <nav className="px-6 py-4 flex items-center gap-3 border-b border-gray-800/50 bg-gray-950">
+      <nav className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-gray-800/50 bg-gray-950">
         <button
           onClick={() => navigate(`/?season=${CURRENT_NFL_SEASON}`)}
           className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-800 shrink-0"
