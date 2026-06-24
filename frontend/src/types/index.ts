@@ -65,3 +65,7 @@ export type CombineData     = Schemas['CombineData']
 export type InjuryStatus    = Schemas['InjuryStatus']
 export type DepthChartEntry = Schemas['DepthChartEntry']
 export type PlayerAward     = Schemas['PlayerAward']
+
+// Natural-language ask assistant
+export type AskResponse = Schemas['AskResponse']
+export type ToolCall    = Schemas['ToolCall']

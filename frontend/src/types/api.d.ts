@@ -4,15 +4,18 @@
  */
 
 export interface paths {
-    "/health": {
+    "/api/health": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Health */
-        get: operations["health_health_get"];
+        /**
+         * Health
+         * @description Liveness probe for the platform (Cloud Run / uptime checks).
+         */
+        get: operations["health_api_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,7 +24,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/seasons": {
+    "/api/seasons": {
         parameters: {
             query?: never;
             header?: never;
@@ -29,7 +32,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Seasons */
-        get: operations["get_seasons_seasons_get"];
+        get: operations["get_seasons_api_seasons_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38,7 +41,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/seasons/{year}/load": {
+    "/api/seasons/{year}/load": {
         parameters: {
             query?: never;
             header?: never;
@@ -48,14 +51,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Load Season */
-        post: operations["load_season_seasons__year__load_post"];
+        post: operations["load_season_api_seasons__year__load_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/seasons/{year}/progress": {
+    "/api/seasons/{year}/progress": {
         parameters: {
             query?: never;
             header?: never;
@@ -63,7 +66,7 @@ export interface paths {
             cookie?: never;
         };
         /** Season Progress */
-        get: operations["season_progress_seasons__year__progress_get"];
+        get: operations["season_progress_api_seasons__year__progress_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -72,7 +75,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/schedule": {
+    "/api/schedule": {
         parameters: {
             query?: never;
             header?: never;
@@ -80,7 +83,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Schedule */
-        get: operations["get_schedule_schedule_get"];
+        get: operations["get_schedule_api_schedule_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -89,7 +92,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/games": {
+    "/api/games": {
         parameters: {
             query?: never;
             header?: never;
@@ -97,7 +100,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Games */
-        get: operations["get_games_games_get"];
+        get: operations["get_games_api_games_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -106,7 +109,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/games/{game_id}": {
+    "/api/games/{game_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -114,7 +117,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Game */
-        get: operations["get_game_games__game_id__get"];
+        get: operations["get_game_api_games__game_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -123,7 +126,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/players/{player_id}": {
+    "/api/players/{player_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -131,7 +134,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Player */
-        get: operations["get_player_players__player_id__get"];
+        get: operations["get_player_api_players__player_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -140,7 +143,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/players/{player_id}/comparables": {
+    "/api/players/{player_id}/comparables": {
         parameters: {
             query?: never;
             header?: never;
@@ -148,7 +151,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Player Comparables */
-        get: operations["get_player_comparables_players__player_id__comparables_get"];
+        get: operations["get_player_comparables_api_players__player_id__comparables_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -157,7 +160,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/players/{player_id}/splits": {
+    "/api/players/{player_id}/splits": {
         parameters: {
             query?: never;
             header?: never;
@@ -165,7 +168,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Player Splits */
-        get: operations["get_player_splits_players__player_id__splits_get"];
+        get: operations["get_player_splits_api_players__player_id__splits_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -174,7 +177,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/players/{player_id}/def-splits": {
+    "/api/players/{player_id}/def-splits": {
         parameters: {
             query?: never;
             header?: never;
@@ -185,7 +188,7 @@ export interface paths {
          * Get Player Def Splits
          * @description A defender's event line conditioned on one situational dimension.
          */
-        get: operations["get_player_def_splits_players__player_id__def_splits_get"];
+        get: operations["get_player_def_splits_api_players__player_id__def_splits_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -194,7 +197,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/teams/{team}": {
+    "/api/teams/{team}": {
         parameters: {
             query?: never;
             header?: never;
@@ -202,7 +205,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Team */
-        get: operations["get_team_teams__team__get"];
+        get: operations["get_team_api_teams__team__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -211,7 +214,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/teams/{team}/roster": {
+    "/api/teams/{team}/roster": {
         parameters: {
             query?: never;
             header?: never;
@@ -219,7 +222,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Team Roster */
-        get: operations["get_team_roster_teams__team__roster_get"];
+        get: operations["get_team_roster_api_teams__team__roster_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -228,7 +231,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/teams/{team}/depth-chart": {
+    "/api/teams/{team}/depth-chart": {
         parameters: {
             query?: never;
             header?: never;
@@ -240,7 +243,7 @@ export interface paths {
          * @description Most recent depth chart for the team. If `week` is omitted, returns
          *     the latest week we have data for in the given season.
          */
-        get: operations["get_team_depth_chart_teams__team__depth_chart_get"];
+        get: operations["get_team_depth_chart_api_teams__team__depth_chart_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -249,7 +252,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/teams/{team}/splits": {
+    "/api/teams/{team}/splits": {
         parameters: {
             query?: never;
             header?: never;
@@ -261,7 +264,7 @@ export interface paths {
          * @description Team offense/defense rate profile conditioned on each situational
          *     dimension. Reads the materialized table; self-heals on a cold table.
          */
-        get: operations["get_team_splits_teams__team__splits_get"];
+        get: operations["get_team_splits_api_teams__team__splits_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -270,7 +273,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/teams/{team}/injuries": {
+    "/api/teams/{team}/injuries": {
         parameters: {
             query?: never;
             header?: never;
@@ -282,7 +285,7 @@ export interface paths {
          * @description Most recent injury report for the team. If `week` is omitted, returns
          *     the latest week we have data for in the given season.
          */
-        get: operations["get_team_injuries_teams__team__injuries_get"];
+        get: operations["get_team_injuries_api_teams__team__injuries_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -291,7 +294,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/team-analytics": {
+    "/api/team-analytics": {
         parameters: {
             query?: never;
             header?: never;
@@ -309,7 +312,7 @@ export interface paths {
          *     If the row is missing (fresh DB, never-ingested season), the builder
          *     lazily materializes on first hit so the system self-heals.
          */
-        get: operations["get_team_analytics_team_analytics_get"];
+        get: operations["get_team_analytics_api_team_analytics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -318,7 +321,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/leaders": {
+    "/api/leaders": {
         parameters: {
             query?: never;
             header?: never;
@@ -326,7 +329,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Leaders */
-        get: operations["get_leaders_leaders_get"];
+        get: operations["get_leaders_api_leaders_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -335,7 +338,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/wpa-leaders": {
+    "/api/wpa-leaders": {
         parameters: {
             query?: never;
             header?: never;
@@ -343,7 +346,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Wpa Leaders */
-        get: operations["get_wpa_leaders_wpa_leaders_get"];
+        get: operations["get_wpa_leaders_api_wpa_leaders_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -352,7 +355,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/standings": {
+    "/api/standings": {
         parameters: {
             query?: never;
             header?: never;
@@ -360,7 +363,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Standings */
-        get: operations["get_standings_standings_get"];
+        get: operations["get_standings_api_standings_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -369,7 +372,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/search": {
+    "/api/search": {
         parameters: {
             query?: never;
             header?: never;
@@ -377,9 +380,26 @@ export interface paths {
             cookie?: never;
         };
         /** Search */
-        get: operations["search_search_get"];
+        get: operations["search_api_search_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask */
+        post: operations["ask_api_ask_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -390,6 +410,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AskRequest */
+        AskRequest: {
+            /** Question */
+            question: string;
+        };
+        /** AskResponse */
+        AskResponse: {
+            /** Answer */
+            answer: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            }[];
+            /** Tools Used */
+            tools_used: components["schemas"]["ToolCall"][];
+        };
         /**
          * CombineData
          * @description One row per combine participant. Heights are recorded as '6-2' strings
@@ -1786,6 +1822,15 @@ export interface components {
             /** Rush Epa */
             rush_epa: number | null;
         };
+        /** ToolCall */
+        ToolCall: {
+            /** Tool */
+            tool: string;
+            /** Args */
+            args: {
+                [key: string]: unknown;
+            };
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1869,7 +1914,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    health_health_get: {
+    health_api_health_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1884,12 +1929,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HealthResponse"];
+                    "application/json": unknown;
                 };
             };
         };
     };
-    get_seasons_seasons_get: {
+    get_seasons_api_seasons_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1909,7 +1954,7 @@ export interface operations {
             };
         };
     };
-    load_season_seasons__year__load_post: {
+    load_season_api_seasons__year__load_post: {
         parameters: {
             query?: {
                 force?: boolean;
@@ -1942,7 +1987,7 @@ export interface operations {
             };
         };
     };
-    season_progress_seasons__year__progress_get: {
+    season_progress_api_seasons__year__progress_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1973,7 +2018,7 @@ export interface operations {
             };
         };
     };
-    get_schedule_schedule_get: {
+    get_schedule_api_schedule_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2004,7 +2049,7 @@ export interface operations {
             };
         };
     };
-    get_games_games_get: {
+    get_games_api_games_get: {
         parameters: {
             query: {
                 week: number;
@@ -2036,7 +2081,7 @@ export interface operations {
             };
         };
     };
-    get_game_games__game_id__get: {
+    get_game_api_games__game_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2067,7 +2112,7 @@ export interface operations {
             };
         };
     };
-    get_player_players__player_id__get: {
+    get_player_api_players__player_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2098,7 +2143,7 @@ export interface operations {
             };
         };
     };
-    get_player_comparables_players__player_id__comparables_get: {
+    get_player_comparables_api_players__player_id__comparables_get: {
         parameters: {
             query?: {
                 n?: number;
@@ -2131,7 +2176,7 @@ export interface operations {
             };
         };
     };
-    get_player_splits_players__player_id__splits_get: {
+    get_player_splits_api_players__player_id__splits_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2162,7 +2207,7 @@ export interface operations {
             };
         };
     };
-    get_player_def_splits_players__player_id__def_splits_get: {
+    get_player_def_splits_api_players__player_id__def_splits_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2193,7 +2238,7 @@ export interface operations {
             };
         };
     };
-    get_team_teams__team__get: {
+    get_team_api_teams__team__get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2226,7 +2271,7 @@ export interface operations {
             };
         };
     };
-    get_team_roster_teams__team__roster_get: {
+    get_team_roster_api_teams__team__roster_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2259,7 +2304,7 @@ export interface operations {
             };
         };
     };
-    get_team_depth_chart_teams__team__depth_chart_get: {
+    get_team_depth_chart_api_teams__team__depth_chart_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2293,7 +2338,7 @@ export interface operations {
             };
         };
     };
-    get_team_splits_teams__team__splits_get: {
+    get_team_splits_api_teams__team__splits_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2326,7 +2371,7 @@ export interface operations {
             };
         };
     };
-    get_team_injuries_teams__team__injuries_get: {
+    get_team_injuries_api_teams__team__injuries_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2360,7 +2405,7 @@ export interface operations {
             };
         };
     };
-    get_team_analytics_team_analytics_get: {
+    get_team_analytics_api_team_analytics_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2391,7 +2436,7 @@ export interface operations {
             };
         };
     };
-    get_leaders_leaders_get: {
+    get_leaders_api_leaders_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2422,7 +2467,7 @@ export interface operations {
             };
         };
     };
-    get_wpa_leaders_wpa_leaders_get: {
+    get_wpa_leaders_api_wpa_leaders_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2453,7 +2498,7 @@ export interface operations {
             };
         };
     };
-    get_standings_standings_get: {
+    get_standings_api_standings_get: {
         parameters: {
             query?: {
                 season?: number;
@@ -2484,7 +2529,7 @@ export interface operations {
             };
         };
     };
-    search_search_get: {
+    search_api_search_get: {
         parameters: {
             query: {
                 q: string;
@@ -2502,6 +2547,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_api_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskResponse"];
                 };
             };
             /** @description Validation Error */

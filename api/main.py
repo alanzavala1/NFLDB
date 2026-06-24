@@ -11,7 +11,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from config import AUTO_LOAD_SEASONS, CURRENT_SEASON, FIRST_SEASON
 from database import ensure_indexes, get_connection, query_to_dict
 from ingest_queue import queue_season, start_worker
-from routers import leaders, meta, players, schedule, teams
+from routers import assistant, leaders, meta, players, schedule, teams
 
 
 def _ensure_player_awards() -> None:
@@ -102,7 +102,7 @@ app.add_middleware(
 
 # All API routes live under /api so the frontend (served at /) and the API can
 # share one origin in production. The Vite dev proxy forwards /api unchanged.
-for _r in (meta, schedule, players, teams, leaders):
+for _r in (meta, schedule, players, teams, leaders, assistant):
     app.include_router(_r.router, prefix="/api")
 
 

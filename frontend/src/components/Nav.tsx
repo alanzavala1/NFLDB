@@ -137,6 +137,16 @@ export default function Nav({ crumbs, title }: NavProps) {
           })}
         </div>
         <button
+          onClick={() => navigate('/ask')}
+          className="shrink-0 flex items-center gap-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 transition-colors"
+          title="Ask the data in plain English"
+        >
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z" />
+          </svg>
+          Ask AI
+        </button>
+        <button
           onClick={() => setSearchOpen(true)}
           className={backBtnCls + ' flex items-center gap-1.5'}
         >

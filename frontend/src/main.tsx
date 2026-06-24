@@ -20,6 +20,7 @@ const routeImporters = {
   leaders:   () => import('./pages/LeadersPage'),
   standings: () => import('./pages/StandingsPage'),
   splits:    () => import('./pages/SplitsPage'),
+  ask:       () => import('./pages/AskPage'),
 }
 
 const SchedulePage  = lazy(routeImporters.schedule)
@@ -29,6 +30,7 @@ const PlayerPage    = lazy(routeImporters.player)
 const LeadersPage   = lazy(routeImporters.leaders)
 const StandingsPage = lazy(routeImporters.standings)
 const SplitsPage    = lazy(routeImporters.splits)
+const AskPage       = lazy(routeImporters.ask)
 
 // After the initial page is interactive, quietly warm the other route chunks
 // during idle time. requestIdleCallback yields to anything more important, so
@@ -80,6 +82,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/leaders"            element={<LeadersPage />} />
             <Route path="/standings"          element={<StandingsPage />} />
             <Route path="/splits"             element={<SplitsPage />} />
+            <Route path="/ask"                element={<AskPage />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

@@ -949,10 +949,91 @@
           }
         }
       }
+    },
+    "/api/ask": {
+      "post": {
+        "summary": "Ask",
+        "operationId": "ask_api_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AskRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "AskRequest"
+      },
+      "AskResponse": {
+        "properties": {
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "data": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "tools_used": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            },
+            "type": "array",
+            "title": "Tools Used"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer",
+          "data",
+          "tools_used"
+        ],
+        "title": "AskResponse"
+      },
       "CombineData": {
         "properties": {
           "draft_year": {
@@ -6038,6 +6119,25 @@
         ],
         "title": "TeamSplit",
         "description": "One row of a team's rate profile conditioned on a situational dimension.\nLong-format: (side, split_dim, split_value) + rate metrics. Served by\n/teams/{team}/splits, grouped client-side by side + dim."
+      },
+      "ToolCall": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "title": "Tool"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool",
+          "args"
+        ],
+        "title": "ToolCall"
       },
       "ValidationError": {
         "properties": {

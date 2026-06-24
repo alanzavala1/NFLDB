@@ -13,6 +13,9 @@ frontend/dist/
 .DS_Store
 *.env
 
+# Local working notes (personal context, design briefs) — not for the public repo
+notes/
+
 # Cloud credentials — never commit service-account keys
 key.json
 *-key.json
