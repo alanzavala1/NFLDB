@@ -67,6 +67,22 @@
               "default": false,
               "title": "Force"
             }
+          },
+          {
+            "name": "x-admin-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Admin-Token"
+            }
           }
         ],
         "responses": {
@@ -553,7 +569,7 @@
     "/api/teams/{team}/depth-chart": {
       "get": {
         "summary": "Get Team Depth Chart",
-        "description": "Most recent depth chart for the team. If `week` is omitted, returns\nthe latest week we have data for in the given season.",
+        "description": "The team's current depth chart. The vendor feed is a daily snapshot\nwith no per-week history (see DEPTH_CHART_SEL), so `week` is accepted\nfor API compatibility but ignored, and a request for a season other\nthan the snapshot's returns [] rather than passing off today's chart\nas historical.",
         "operationId": "get_team_depth_chart_api_teams__team__depth_chart_get",
         "parameters": [
           {
@@ -953,6 +969,7 @@
     "/api/ask": {
       "post": {
         "summary": "Ask",
+        "description": "Non-streaming answer (used by the eval and as a simple fallback).",
         "operationId": "ask_api_ask_post",
         "requestBody": {
           "content": {
@@ -972,6 +989,82 @@
                 "schema": {
                   "$ref": "#/components/schemas/AskResponse"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ask/stream": {
+      "post": {
+        "summary": "Ask Stream",
+        "description": "Server-Sent Events: streams the tool-call chain and the answer tokens as\nthe agent works. Validation + rate limit run before the stream opens; errors\nthat surface mid-stream (auth, upstream) arrive as an `error` event, since\nthe HTTP status is already committed once streaming starts.",
+        "operationId": "ask_stream_api_ask_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/gaps": {
+      "get": {
+        "summary": "Gaps",
+        "description": "Review the data gaps the assistant has logged \u2014 questions it couldn't\nfully answer because the platform is missing that stat/split/season.",
+        "operationId": "gaps_api_gaps_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -1350,7 +1443,14 @@
             "title": "Season"
           },
           "week": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Week"
           },
           "team": {
@@ -1449,7 +1549,7 @@
           "jersey_number"
         ],
         "title": "DepthChartEntry",
-        "description": "A weekly depth-chart slot. depth_team is \"1\"/\"2\"/\"3\", where \"1\" is\nthe starter at that depth_position."
+        "description": "A depth-chart slot. depth_team is \"1\"/\"2\"/\"3\", where \"1\" is the\nstarter at that depth_position. The vendor feed is a daily snapshot:\nseason is derived from the snapshot date and week is always null."
       },
       "DivisionStandings": {
         "properties": {

@@ -40,6 +40,30 @@ ROSTER_CTE = """\
     )"""
 
 
+# depth_charts is the new nflverse feed (ESPN-sourced): dt-stamped daily
+# snapshots with pos_grp/pos_abb/pos_rank — no season/week/formation columns.
+# This projection adapts it to the DepthChartEntry response shape the frontend
+# already consumes: season derived from the snapshot date (NFL-season rule),
+# pos_grp variants ('3WR 1TE', 'Base 4-3 D', ...) folded into the
+# Offense/Defense/Special Teams labels the UI groups by, pos_rank as the
+# "1" = starter string. The feed has no week or jersey number.
+DEPTH_CHART_SEL = """
+        CASE WHEN month(CAST(dt AS TIMESTAMP)) >= 9
+             THEN year(CAST(dt AS TIMESTAMP))
+             ELSE year(CAST(dt AS TIMESTAMP)) - 1 END AS season,
+        CAST(NULL AS INTEGER)     AS week,
+        team,
+        CASE WHEN pos_grp = 'Special Teams' THEN 'Special Teams'
+             WHEN pos_grp LIKE 'Base%'      THEN 'Defense'
+             ELSE 'Offense' END   AS formation,
+        pos_abb                   AS depth_position,
+        CAST(pos_rank AS VARCHAR) AS depth_team,
+        gsis_id,
+        player_name               AS full_name,
+        pos_abb                   AS position,
+        CAST(NULL AS VARCHAR)     AS jersey_number"""
+
+
 def team_sql(away: str, home: str) -> tuple[str, str]:
     """Team-correction CASE and ROW_NUMBER rank for a known game.
 

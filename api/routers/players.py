@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from database import query_to_dict
 from schemas.leaders import PlayerComparable
 from schemas.players import PlayerProfile, PlayerSplit, DefensiveSplit
-from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, STAT_COLS, safe_query
+from sql_helpers import DEPTH_CHART_SEL, PGS_STAT_SEL, ROSTER_CTE, STAT_COLS, safe_query
 
 router = APIRouter()
 
@@ -633,15 +633,16 @@ def _get_player_awards(player_id: str) -> list[dict]:
 
 
 def _get_current_depth(player_id: str) -> dict | None:
-    """Most recent depth-chart slot, formation-agnostic. UI surfaces it as
-    a badge (e.g. 'WR1' or 'LT')."""
-    rows = safe_query("""
-        SELECT season, week, club_code AS team, formation,
-               depth_position, depth_team,
-               gsis_id, full_name, position, jersey_number
+    """Current depth-chart slot from the latest vendor snapshot (the feed is
+    daily snapshots — see DEPTH_CHART_SEL — with no season/week history).
+    A player holding several slots (e.g. WR + kick returner) surfaces the
+    non-special-teams one, then the best rank. UI shows it as a badge
+    (e.g. 'Starting QB')."""
+    rows = safe_query(f"""
+        SELECT {DEPTH_CHART_SEL}
         FROM depth_charts
-        WHERE gsis_id = ?
-        ORDER BY season DESC, week DESC
+        WHERE gsis_id = ? AND dt = (SELECT MAX(dt) FROM depth_charts)
+        ORDER BY (pos_grp = 'Special Teams'), pos_rank
         LIMIT 1
     """, [player_id])
     return rows[0] if rows else None

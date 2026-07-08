@@ -67,10 +67,11 @@ class PlayerAward(BaseModel):
 
 
 class DepthChartEntry(BaseModel):
-    """A weekly depth-chart slot. depth_team is "1"/"2"/"3", where "1" is
-    the starter at that depth_position."""
+    """A depth-chart slot. depth_team is "1"/"2"/"3", where "1" is the
+    starter at that depth_position. The vendor feed is a daily snapshot:
+    season is derived from the snapshot date and week is always null."""
     season: int
-    week: int
+    week: int | None
     team: str
     formation: str | None           # "Offense" / "Defense" / "Special Teams"
     depth_position: str | None      # e.g. "QB", "RB1", "LT", "WR2", "LB1"

@@ -78,6 +78,21 @@ PGS = [
 ]
 
 
+# Depth chart snapshots (new nflverse format): a current snapshot (Nov 2024 →
+# NFL season 2024) plus one older snapshot that queries must ignore. Mahomes
+# holds two slots (QB starter + Holder) to exercise the non-ST preference.
+DEPTH = [
+    # dt, team, player_name, gsis_id, pos_grp, pos_name, pos_abb, pos_slot, pos_rank
+    ("2024-11-05T07:00:00Z", "KC", "Patrick Mahomes", "00-KC-QB1", "3WR 1TE",       "Quarterback",        "QB",  9, 1),
+    ("2024-11-05T07:00:00Z", "KC", "Backup Guy",      "00-KC-QB2", "3WR 1TE",       "Quarterback",        "QB",  9, 2),
+    ("2024-11-05T07:00:00Z", "KC", "Edge Dude",       "00-KC-DE1", "Base 4-3 D",    "Left Defensive End", "LDE", 1, 1),
+    ("2024-11-05T07:00:00Z", "KC", "Kicker Person",   "00-KC-K1",  "Special Teams", "Place Kicker",       "PK",  1, 1),
+    ("2024-11-05T07:00:00Z", "KC", "Patrick Mahomes", "00-KC-QB1", "Special Teams", "Holder",             "H",   4, 1),
+    # stale snapshot: must never surface (Mahomes was "QB2" the day before)
+    ("2024-11-04T07:00:00Z", "KC", "Patrick Mahomes", "00-KC-QB1", "3WR 1TE",       "Quarterback",        "QB",  9, 2),
+]
+
+
 # ── DB build helpers ─────────────────────────────────────────────────────────
 
 def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
@@ -136,6 +151,24 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
         )
     """)
 
+    # New-format nflverse depth charts: dt-stamped daily snapshots.
+    conn.execute("""
+        CREATE TABLE depth_charts (
+            dt          VARCHAR,
+            team        VARCHAR,
+            player_name VARCHAR,
+            espn_id     VARCHAR,
+            gsis_id     VARCHAR,
+            pos_grp_id  VARCHAR,
+            pos_grp     VARCHAR,
+            pos_id      VARCHAR,
+            pos_name    VARCHAR,
+            pos_abb     VARCHAR,
+            pos_slot    INTEGER,
+            pos_rank    INTEGER
+        )
+    """)
+
     # All STAT_COLS from sql_helpers, defined as DOUBLE so SUM() works cleanly.
     from sql_helpers import STAT_COLS  # noqa: E402
     stat_col_ddl = ", ".join(f"{c} DOUBLE DEFAULT 0" for c in STAT_COLS)
@@ -172,6 +205,15 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
                 height, weight, years_exp, entry_year
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [pid, SEASON, team, pos, jersey, name, height, weight, 4, 2020],
+        )
+
+    for dt, team, name, gsis, grp, pos_name, abb, slot, rank in DEPTH:
+        conn.execute(
+            """INSERT INTO depth_charts (
+                dt, team, player_name, gsis_id, pos_grp, pos_name,
+                pos_abb, pos_slot, pos_rank
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [dt, team, name, gsis, grp, pos_name, abb, slot, rank],
         )
 
     for row in PGS:

@@ -9,7 +9,7 @@ from routers.schedule import attach_records
 from schemas.analytics import TeamAnalyticsResponse, TeamSplit
 from schemas.supplemental import DepthChartEntry, InjuryStatus
 from schemas.teams import RosterPlayer, TeamProfile
-from sql_helpers import ROSTER_CTE, safe_query
+from sql_helpers import DEPTH_CHART_SEL, ROSTER_CTE, safe_query
 
 router = APIRouter()
 
@@ -132,36 +132,23 @@ def get_team_roster(team: str, season: int = Query(default=None)):
 
 @router.get("/teams/{team}/depth-chart", response_model=list[DepthChartEntry])
 def get_team_depth_chart(team: str, season: int = Query(default=None), week: int | None = Query(default=None)):
-    """Most recent depth chart for the team. If `week` is omitted, returns
-    the latest week we have data for in the given season."""
-    if season is None:
-        season = CURRENT_SEASON
-    params: list = [team, season]
-    week_clause = ""
-    if week is not None:
-        week_clause = " AND week = ?"
-        params.append(week)
+    """The team's current depth chart. The vendor feed is a daily snapshot
+    with no per-week history (see DEPTH_CHART_SEL), so `week` is accepted
+    for API compatibility but ignored, and a request for a season other
+    than the snapshot's returns [] rather than passing off today's chart
+    as historical."""
     rows = safe_query(f"""
-        WITH latest AS (
-            SELECT MAX(week) AS w FROM depth_charts
-            WHERE club_code = ? AND season = ?{week_clause}
-        )
-        SELECT
-            season, week, club_code AS team, formation,
-            depth_position, depth_team,
-            gsis_id, full_name, position, jersey_number
-        FROM depth_charts, latest
-        WHERE club_code = ? AND season = ? AND week = latest.w
+        SELECT {DEPTH_CHART_SEL}
+        FROM depth_charts
+        WHERE team = ? AND dt = (SELECT MAX(dt) FROM depth_charts)
         ORDER BY
-            CASE formation
-                WHEN 'Offense'        THEN 0
-                WHEN 'Defense'        THEN 1
-                WHEN 'Special Teams'  THEN 2
-                ELSE 3
-            END,
-            depth_position,
-            depth_team
-    """, params + [team, season])
+            CASE WHEN pos_grp = 'Special Teams' THEN 2
+                 WHEN pos_grp LIKE 'Base%'      THEN 1
+                 ELSE 0 END,
+            pos_slot, pos_rank
+    """, [team])
+    if rows and season is not None and rows[0]["season"] != season:
+        return []
     return rows
 
 

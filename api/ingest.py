@@ -546,8 +546,21 @@ def load_supplemental_data(conn, seasons: list[int], log=print) -> None:
     log("  Depth charts...")
     try:
         df = nfl_data_py.import_depth_charts(seasons)
-        if df is not None and not df.empty:
-            _upsert_by_season(conn, "depth_charts", df, seasons, log=log)
+        # The feed is now dt-stamped daily snapshots (ESPN-sourced) with no
+        # season column. Only the latest snapshot is ever served, so keep just
+        # that and full-replace: the old upsert path skipped its DELETE (no
+        # season column) and appended a snapshot per ingest — plus, for
+        # old-format frames, inserted rows that were NULL in every column the
+        # frames didn't share with the new table. Frames without dt (old
+        # seasons) are skipped rather than ingested as junk.
+        if df is not None and not df.empty and "dt" in df.columns:
+            df = df[df["dt"] == df["dt"].max()]
+            conn.register("depth_df", df)
+            conn.execute("DROP TABLE IF EXISTS depth_charts")
+            conn.execute("CREATE TABLE depth_charts AS SELECT * FROM depth_df")
+            log(f"    depth_charts: {len(df):,} rows (latest snapshot)")
+        else:
+            log("    skipped: empty or old-format frame (no dt column)")
     except Exception as e:
         log(f"    skipped: {e}")
 

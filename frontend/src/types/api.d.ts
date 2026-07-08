@@ -240,8 +240,11 @@ export interface paths {
         };
         /**
          * Get Team Depth Chart
-         * @description Most recent depth chart for the team. If `week` is omitted, returns
-         *     the latest week we have data for in the given season.
+         * @description The team's current depth chart. The vendor feed is a daily snapshot
+         *     with no per-week history (see DEPTH_CHART_SEL), so `week` is accepted
+         *     for API compatibility but ignored, and a request for a season other
+         *     than the snapshot's returns [] rather than passing off today's chart
+         *     as historical.
          */
         get: operations["get_team_depth_chart_api_teams__team__depth_chart_get"];
         put?: never;
@@ -398,8 +401,55 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ask */
+        /**
+         * Ask
+         * @description Non-streaming answer (used by the eval and as a simple fallback).
+         */
         post: operations["ask_api_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Stream
+         * @description Server-Sent Events: streams the tool-call chain and the answer tokens as
+         *     the agent works. Validation + rate limit run before the stream opens; errors
+         *     that surface mid-stream (auth, upstream) arrive as an `error` event, since
+         *     the HTTP status is already committed once streaming starts.
+         */
+        post: operations["ask_stream_api_ask_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gaps
+         * @description Review the data gaps the assistant has logged — questions it couldn't
+         *     fully answer because the platform is missing that stat/split/season.
+         */
+        get: operations["gaps_api_gaps_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -496,14 +546,15 @@ export interface components {
         };
         /**
          * DepthChartEntry
-         * @description A weekly depth-chart slot. depth_team is "1"/"2"/"3", where "1" is
-         *     the starter at that depth_position.
+         * @description A depth-chart slot. depth_team is "1"/"2"/"3", where "1" is the
+         *     starter at that depth_position. The vendor feed is a daily snapshot:
+         *     season is derived from the snapshot date and week is always null.
          */
         DepthChartEntry: {
             /** Season */
             season: number;
             /** Week */
-            week: number;
+            week: number | null;
             /** Team */
             team: string;
             /** Formation */
@@ -1959,7 +2010,9 @@ export interface operations {
             query?: {
                 force?: boolean;
             };
-            header?: never;
+            header?: {
+                "x-admin-token"?: string | null;
+            };
             path: {
                 year: number;
             };
@@ -2580,6 +2633,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_stream_api_ask_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gaps_api_gaps_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
