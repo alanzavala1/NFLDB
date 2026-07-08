@@ -148,7 +148,15 @@ def _get_situational_stats(player_id: str) -> dict:
                 cleaned[k] = int(v) if isinstance(v, float) and v.is_integer() else v
             result.setdefault(int(s), {}).update(cleaned)
 
-    # Longest completions / rushes / receptions
+    # All four situational cuts (longest / red zone / 3rd down / first downs)
+    # share the same base set — the player's REG plays — so compute them in a
+    # single scan of `plays` instead of four. The red-zone (yardline_100 <= 20)
+    # and 3rd-down (down = 3) predicates move from the WHERE into each aggregate.
+    # pid is bound once via the cross-joined `q` row.
+    #
+    # pass_touchdown / rush_touchdown, NOT touchdown: `touchdown` is true for ANY
+    # score on the play, so a red-zone pick-six or fumble return would otherwise
+    # count as an offensive TD.
     merge_rows(safe_query("""
         WITH pp AS (
             SELECT * FROM plays
@@ -156,65 +164,28 @@ def _get_situational_stats(player_id: str) -> dict:
               AND season_type = 'REG'
         )
         SELECT season,
-            MAX(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND complete_pass = 1 THEN passing_yards   END) AS lng_pass,
-            MAX(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1                       THEN rushing_yards   END) AS lng_rush,
-            MAX(CASE WHEN receiver_player_id = ? AND complete_pass = 1                      THEN receiving_yards END) AS lng_rec
-        FROM pp GROUP BY season
-    """, [pid, pid, pid, pid, pid, pid]))
-
-    # Red zone (inside opponent 20 = yardline_100 <= 20)
-    merge_rows(safe_query("""
-        WITH pp AS (
-            SELECT * FROM plays
-            WHERE (passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?)
-              AND yardline_100 <= 20
-              AND season_type = 'REG'
-        )
-        SELECT season,
-            COUNT(*)  FILTER (WHERE passer_player_id  = ? AND pass_attempt = 1)                        AS rz_pass_att,
-            SUM(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND complete_pass = 1 THEN 1 ELSE 0 END) AS rz_cmp,
-            -- pass_touchdown / rush_touchdown, NOT touchdown: `touchdown` is true
-            -- for ANY score on the play, so a red-zone pick-six or fumble
-            -- returned for a TD would count as an offensive TD here
-            SUM(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND pass_touchdown = 1 THEN 1 ELSE 0 END) AS rz_pass_tds,
-            COUNT(*)  FILTER (WHERE receiver_player_id = ? AND pass_attempt = 1)                       AS rz_targets,
-            SUM(CASE WHEN receiver_player_id = ? AND pass_attempt = 1 AND pass_touchdown = 1 THEN 1 ELSE 0 END) AS rz_rec_tds,
-            COUNT(*)  FILTER (WHERE rusher_player_id   = ? AND rush_attempt = 1)                       AS rz_carries,
-            SUM(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1 AND rush_touchdown = 1 THEN 1 ELSE 0 END) AS rz_rush_tds
-        FROM pp GROUP BY season
-    """, [pid, pid, pid, pid, pid, pid, pid, pid, pid, pid]))
-
-    # 3rd down
-    merge_rows(safe_query("""
-        WITH pp AS (
-            SELECT * FROM plays
-            WHERE (passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?)
-              AND down = 3
-              AND season_type = 'REG'
-        )
-        SELECT season,
-            COUNT(*)  FILTER (WHERE passer_player_id  = ? AND pass_attempt = 1)                                          AS third_pass_att,
-            SUM(COALESCE(CASE WHEN passer_player_id  = ? AND pass_attempt = 1  THEN first_down_pass END, 0))              AS third_pass_fd,
-            COUNT(*)  FILTER (WHERE receiver_player_id = ? AND pass_attempt = 1)                                          AS third_targets,
-            SUM(COALESCE(CASE WHEN receiver_player_id = ? AND complete_pass = 1 THEN first_down_pass END, 0))             AS third_rec_fd,
-            COUNT(*)  FILTER (WHERE rusher_player_id   = ? AND rush_attempt = 1)                                          AS third_carries,
-            SUM(COALESCE(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1  THEN first_down_rush END, 0))             AS third_rush_fd
-        FROM pp GROUP BY season
-    """, [pid, pid, pid, pid, pid, pid, pid, pid, pid]))
-
-    # First downs generated
-    merge_rows(safe_query("""
-        WITH pp AS (
-            SELECT * FROM plays
-            WHERE (passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?)
-              AND season_type = 'REG'
-        )
-        SELECT season,
-            SUM(COALESCE(CASE WHEN passer_player_id  = ? AND pass_attempt = 1  THEN first_down_pass END, 0)) AS fd_pass,
-            SUM(COALESCE(CASE WHEN receiver_player_id = ? AND complete_pass = 1 THEN first_down_pass END, 0)) AS fd_rec,
-            SUM(COALESCE(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1  THEN first_down_rush END, 0)) AS fd_rush
-        FROM pp GROUP BY season
-    """, [pid, pid, pid, pid, pid, pid]))
+            MAX(CASE WHEN passer_player_id  = q.pid AND pass_attempt = 1 AND complete_pass = 1 THEN passing_yards   END) AS lng_pass,
+            MAX(CASE WHEN rusher_player_id   = q.pid AND rush_attempt = 1                       THEN rushing_yards   END) AS lng_rush,
+            MAX(CASE WHEN receiver_player_id = q.pid AND complete_pass = 1                      THEN receiving_yards END) AS lng_rec,
+            COUNT(*) FILTER (WHERE passer_player_id = q.pid AND pass_attempt = 1 AND yardline_100 <= 20)                          AS rz_pass_att,
+            SUM(CASE WHEN passer_player_id  = q.pid AND pass_attempt = 1 AND complete_pass = 1  AND yardline_100 <= 20 THEN 1 ELSE 0 END) AS rz_cmp,
+            SUM(CASE WHEN passer_player_id  = q.pid AND pass_attempt = 1 AND pass_touchdown = 1 AND yardline_100 <= 20 THEN 1 ELSE 0 END) AS rz_pass_tds,
+            COUNT(*) FILTER (WHERE receiver_player_id = q.pid AND pass_attempt = 1 AND yardline_100 <= 20)                        AS rz_targets,
+            SUM(CASE WHEN receiver_player_id = q.pid AND pass_attempt = 1 AND pass_touchdown = 1 AND yardline_100 <= 20 THEN 1 ELSE 0 END) AS rz_rec_tds,
+            COUNT(*) FILTER (WHERE rusher_player_id = q.pid AND rush_attempt = 1 AND yardline_100 <= 20)                          AS rz_carries,
+            SUM(CASE WHEN rusher_player_id   = q.pid AND rush_attempt = 1 AND rush_touchdown = 1 AND yardline_100 <= 20 THEN 1 ELSE 0 END) AS rz_rush_tds,
+            COUNT(*) FILTER (WHERE passer_player_id = q.pid AND pass_attempt = 1 AND down = 3)                                    AS third_pass_att,
+            SUM(COALESCE(CASE WHEN passer_player_id  = q.pid AND pass_attempt = 1  AND down = 3 THEN first_down_pass END, 0))     AS third_pass_fd,
+            COUNT(*) FILTER (WHERE receiver_player_id = q.pid AND pass_attempt = 1 AND down = 3)                                  AS third_targets,
+            SUM(COALESCE(CASE WHEN receiver_player_id = q.pid AND complete_pass = 1 AND down = 3 THEN first_down_pass END, 0))    AS third_rec_fd,
+            COUNT(*) FILTER (WHERE rusher_player_id = q.pid AND rush_attempt = 1 AND down = 3)                                    AS third_carries,
+            SUM(COALESCE(CASE WHEN rusher_player_id   = q.pid AND rush_attempt = 1  AND down = 3 THEN first_down_rush END, 0))    AS third_rush_fd,
+            SUM(COALESCE(CASE WHEN passer_player_id  = q.pid AND pass_attempt = 1  THEN first_down_pass END, 0)) AS fd_pass,
+            SUM(COALESCE(CASE WHEN receiver_player_id = q.pid AND complete_pass = 1 THEN first_down_pass END, 0)) AS fd_rec,
+            SUM(COALESCE(CASE WHEN rusher_player_id   = q.pid AND rush_attempt = 1  THEN first_down_rush END, 0)) AS fd_rush
+        FROM pp CROSS JOIN (SELECT ? AS pid) q
+        GROUP BY season
+    """, [pid, pid, pid, pid]))
 
     return result
 
@@ -394,32 +365,26 @@ def _get_player_wpa(player_id: str) -> dict:
     result: dict[int, dict] = {}
     pid = player_id
 
+    # Pass/rec/rush WPA all read the same base set (the player's REG plays), so
+    # compute them in one scan instead of three. Each credit uses the split
+    # component that matches the role (air_wpa passing, yac_wpa receiving,
+    # wpa rushing); pid is bound once via the cross-joined `q` row.
     for row in safe_query("""
-        SELECT season, ROUND(SUM(COALESCE(air_wpa, 0)), 3) AS pass_wpa
-        FROM plays
-        WHERE passer_player_id = ? AND pass_attempt = 1 AND season_type = 'REG'
+        SELECT season,
+            ROUND(SUM(CASE WHEN passer_player_id   = q.pid AND pass_attempt  = 1 THEN COALESCE(air_wpa, 0) ELSE 0 END), 3) AS pass_wpa,
+            ROUND(SUM(CASE WHEN receiver_player_id = q.pid AND complete_pass = 1 THEN COALESCE(yac_wpa, 0) ELSE 0 END), 3) AS rec_wpa,
+            ROUND(SUM(CASE WHEN rusher_player_id   = q.pid AND rush_attempt  = 1 THEN COALESCE(wpa, 0)     ELSE 0 END), 3) AS rush_wpa
+        FROM plays CROSS JOIN (SELECT ? AS pid) q
+        WHERE (passer_player_id = ? OR receiver_player_id = ? OR rusher_player_id = ?)
+          AND season_type = 'REG'
         GROUP BY season
-    """, [pid]):
+    """, [pid, pid, pid, pid]):
         s = int(row["season"])
-        result.setdefault(s, {})["pass_wpa"] = row["pass_wpa"]
-
-    for row in safe_query("""
-        SELECT season, ROUND(SUM(COALESCE(yac_wpa, 0)), 3) AS rec_wpa
-        FROM plays
-        WHERE receiver_player_id = ? AND complete_pass = 1 AND season_type = 'REG'
-        GROUP BY season
-    """, [pid]):
-        s = int(row["season"])
-        result.setdefault(s, {})["rec_wpa"] = row["rec_wpa"]
-
-    for row in safe_query("""
-        SELECT season, ROUND(SUM(COALESCE(wpa, 0)), 3) AS rush_wpa
-        FROM plays
-        WHERE rusher_player_id = ? AND rush_attempt = 1 AND season_type = 'REG'
-        GROUP BY season
-    """, [pid]):
-        s = int(row["season"])
-        result.setdefault(s, {})["rush_wpa"] = row["rush_wpa"]
+        result.setdefault(s, {}).update({
+            "pass_wpa": row["pass_wpa"],
+            "rec_wpa":  row["rec_wpa"],
+            "rush_wpa": row["rush_wpa"],
+        })
 
     return result
 
