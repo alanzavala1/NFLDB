@@ -6,43 +6,26 @@ budget enforced inside llm.run_ask. The model can only reach verified tools —
 there is no arbitrary SQL path — so the existing data-accuracy guarantees hold.
 """
 import json
-import threading
-import time
 
 import anthropic
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from llm import read_gaps, run_ask, run_ask_stream
+from rate_limit import RateLimiter
 from schemas.assistant import AskRequest, AskResponse
 
 router = APIRouter()
 
-# ── Simple in-process per-IP rate limiter ─────────────────────────────────────
-# A single-worker DuckDB process means in-process state is authoritative; no
-# Redis needed. Fixed window: at most _MAX requests per _WINDOW seconds per IP.
-_WINDOW = 60.0
-_MAX = 8
-_hits: dict[str, list[float]] = {}
-_lock = threading.Lock()
-
-
-def _rate_limited(ip: str) -> bool:
-    now = time.time()
-    with _lock:
-        q = _hits.setdefault(ip, [])
-        q[:] = [t for t in q if t > now - _WINDOW]
-        if len(q) >= _MAX:
-            return True
-        q.append(now)
-        return False
+# Billed endpoint, so the per-IP window is tight.
+_limiter = RateLimiter(max_hits=8)
 
 
 def _guard(req: AskRequest, request: Request) -> str:
     """Shared per-IP rate limit + input validation. Returns the cleaned
     question, or raises an HTTPException."""
     ip = request.client.host if request.client else "unknown"
-    if _rate_limited(ip):
+    if _limiter.limited(ip):
         raise HTTPException(status_code=429, detail="Too many questions — give it a minute.")
     question = (req.question or "").strip()
     if not question:
@@ -98,7 +81,8 @@ def ask_stream(req: AskRequest, request: Request):
 
 
 @router.get("/gaps")
-def gaps(limit: int = 50):
+def gaps(response: Response, limit: int = 50):
     """Review the data gaps the assistant has logged — questions it couldn't
     fully answer because the platform is missing that stat/split/season."""
+    response.headers["Cache-Control"] = "no-store"  # review data, never cache
     return read_gaps(max(1, min(limit, 500)))

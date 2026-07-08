@@ -9,7 +9,7 @@ from routers.schedule import attach_records
 from schemas.analytics import TeamAnalyticsResponse, TeamSplit
 from schemas.supplemental import DepthChartEntry, InjuryStatus
 from schemas.teams import RosterPlayer, TeamProfile
-from sql_helpers import safe_query
+from sql_helpers import ROSTER_CTE, safe_query
 
 router = APIRouter()
 
@@ -47,7 +47,7 @@ _LEADER_COLS = """
 
 
 @router.get("/teams/{team}", response_model=TeamProfile)
-def get_team(team: str, season: int = Query(2025)):
+def get_team(team: str, season: int = Query(default=CURRENT_SEASON)):
     games = query_to_dict(
         """
         SELECT
@@ -67,36 +67,38 @@ def get_team(team: str, season: int = Query(2025)):
 
     leaders = query_to_dict(
         f"""
+        WITH {ROSTER_CTE}
         SELECT
             pgs.player_id,
-            pgs.player_name,
-            r.position,
-            r.headshot_url,
-            r.jersey_number,
+            arg_max(pgs.player_name, length(pgs.player_name)) AS player_name,
+            any_value(r.position)      AS position,
+            any_value(r.headshot_url)  AS headshot_url,
+            any_value(r.jersey_number) AS jersey_number,
             {_LEADER_COLS}
         FROM player_game_stats pgs
-        LEFT JOIN rosters r ON pgs.player_id = r.player_id AND r.season = pgs.season
+        LEFT JOIN roster r ON pgs.player_id = r.player_id AND r.season = pgs.season
         JOIN schedules sch ON pgs.game_id = sch.game_id AND sch.game_type = 'REG'
         WHERE pgs.season = ? AND pgs.team = ?
-        GROUP BY pgs.player_id, pgs.player_name, r.position, r.headshot_url, r.jersey_number
+        GROUP BY pgs.player_id
         """,
         [season, team],
     )
 
     playoff_leaders = query_to_dict(
         f"""
+        WITH {ROSTER_CTE}
         SELECT
             pgs.player_id,
-            pgs.player_name,
-            r.position,
-            r.headshot_url,
-            r.jersey_number,
+            arg_max(pgs.player_name, length(pgs.player_name)) AS player_name,
+            any_value(r.position)      AS position,
+            any_value(r.headshot_url)  AS headshot_url,
+            any_value(r.jersey_number) AS jersey_number,
             {_LEADER_COLS}
         FROM player_game_stats pgs
-        LEFT JOIN rosters r ON pgs.player_id = r.player_id AND r.season = pgs.season
+        LEFT JOIN roster r ON pgs.player_id = r.player_id AND r.season = pgs.season
         JOIN schedules sch ON pgs.game_id = sch.game_id AND sch.game_type != 'REG'
         WHERE pgs.season = ? AND pgs.team = ?
-        GROUP BY pgs.player_id, pgs.player_name, r.position, r.headshot_url, r.jersey_number
+        GROUP BY pgs.player_id
         """,
         [season, team],
     )

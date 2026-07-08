@@ -13,7 +13,7 @@ Design:
 """
 import duckdb
 
-from database import get_connection, query_to_dict
+from database import get_connection, query_to_dict, write_lock
 
 
 # ── Table schema ─────────────────────────────────────────────────────────────
@@ -323,11 +323,15 @@ def materialize(season: int) -> int:
     Returns the number of rows written. Safe to call repeatedly — DELETE
     + INSERT replaces any existing rows for the season.
     """
+    with write_lock:
+        return _materialize_locked(int(season))
+
+
+def _materialize_locked(s: int) -> int:
     conn = get_connection()
     ensure_table(conn)
 
-    sql = _analytics_sql(conn, season)
-    s = int(season)
+    sql = _analytics_sql(conn, s)
 
     conn.execute("DELETE FROM team_season_analytics WHERE season = ?", [s])
     try:
@@ -364,6 +368,14 @@ def read_or_materialize(season: int) -> list[dict]:
     rows = read(season)
     if rows:
         return rows
-    if materialize(season) > 0:
-        return read(season)
-    return []
+    if not write_lock.acquire(timeout=15):
+        return []
+    try:
+        rows = read(season)  # a concurrent request may have built it
+        if rows:
+            return rows
+        if materialize(season) > 0:
+            return read(season)
+        return []
+    finally:
+        write_lock.release()

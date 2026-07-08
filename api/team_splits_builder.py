@@ -10,7 +10,7 @@ import duckdb
 
 import splits_core as core
 from config import DIVISIONS
-from database import get_connection, query_to_dict
+from database import get_connection, query_to_dict, write_lock
 
 
 _TABLE_DDL = """
@@ -124,9 +124,13 @@ def _side_sql(side: str, season: int, available: set[str]) -> str:
 
 def materialize(season: int) -> int:
     """Compute offense + defense splits for every team in one season."""
+    with write_lock:
+        return _materialize_locked(int(season))
+
+
+def _materialize_locked(s: int) -> int:
     conn = get_connection()
     ensure_table(conn)
-    s = int(season)
     available = core.plays_columns(conn)
 
     conn.execute("DELETE FROM team_splits WHERE season = ?", [s])
@@ -164,10 +168,32 @@ def read(team: str, season: int) -> list[dict]:
         return []
 
 
+def _season_built(season: int) -> bool:
+    try:
+        return query_to_dict(
+            "SELECT 1 FROM team_splits WHERE season = ? LIMIT 1", [int(season)]
+        ) != []
+    except Exception:
+        return False
+
+
 def read_or_materialize(team: str, season: int) -> list[dict]:
     rows = read(team, season)
     if rows:
         return rows
-    if materialize(season) > 0:
-        return read(team, season)
-    return []
+    # A built season with no rows for this team means the team didn't exist
+    # that year (or a bogus abbreviation) — rebuilding wouldn't change that.
+    if _season_built(season):
+        return []
+    if not write_lock.acquire(timeout=15):
+        return []
+    try:
+        rows = read(team, season)
+        if rows:
+            return rows
+        if _season_built(season):
+            return []
+        materialize(season)
+    finally:
+        write_lock.release()
+    return read(team, season)

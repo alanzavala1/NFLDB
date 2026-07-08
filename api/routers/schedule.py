@@ -1,6 +1,7 @@
 """Schedule and game endpoints."""
 from fastapi import APIRouter, HTTPException, Query
 
+from config import CURRENT_SEASON
 from database import query_to_dict
 from schemas.schedule import Game, GameDetail, ScheduleWeek
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, safe_query, team_sql
@@ -46,7 +47,7 @@ def attach_records(games: list[dict]) -> list[dict]:
 
 
 @router.get("/schedule", response_model=list[ScheduleWeek])
-def get_schedule(season: int = Query(2025)):
+def get_schedule(season: int = Query(default=CURRENT_SEASON)):
     rows = query_to_dict(
         """
         SELECT
@@ -70,7 +71,7 @@ def get_schedule(season: int = Query(2025)):
 @router.get("/games", response_model=list[Game])
 def get_games(
     week: int = Query(..., ge=1, le=22),
-    season: int = Query(2025),
+    season: int = Query(default=CURRENT_SEASON),
 ):
     rows = query_to_dict(
         """
@@ -175,20 +176,22 @@ def get_game(game_id: str):
     # Quarter-by-quarter scores from play-by-play
     quarter_scores = []
     try:
+        # total_away_score / total_home_score are the running scores *after* each
+        # play, so MAX per quarter is the true end-of-quarter score. (posteam_score
+        # / defteam_score are pre-snap scores — a score on a quarter's final play
+        # would leak into the next quarter's delta.)
         q_rows = safe_query(
             """
             SELECT
                 qtr,
-                MAX(CASE WHEN posteam = ? THEN posteam_score
-                         WHEN defteam  = ? THEN defteam_score END) AS away_cumul,
-                MAX(CASE WHEN posteam = ? THEN posteam_score
-                         WHEN defteam  = ? THEN defteam_score END) AS home_cumul
+                MAX(total_away_score) AS away_cumul,
+                MAX(total_home_score) AS home_cumul
             FROM plays
             WHERE game_id = ?
             GROUP BY qtr
             ORDER BY qtr
             """,
-            [away_team, away_team, home_team, home_team, game_id],
+            [game_id],
         )
         away_prev = home_prev = 0
         for row in q_rows:

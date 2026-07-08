@@ -21,7 +21,7 @@ The endpoint becomes a single JOIN keyed by player_id.
 """
 import numpy as np
 
-from database import get_connection, query_to_dict
+from database import get_connection, query_to_dict, write_lock
 
 
 # Number of pre-computed neighbors per player. Endpoint LIMITs to <=20.
@@ -255,8 +255,15 @@ def _compute_neighbors(pool: list[dict], pg: str, top_n: int) -> list[tuple]:
 def materialize() -> tuple[int, int]:
     """Rebuild player_career_summary and player_comparables from scratch.
 
-    Returns (summary_rows, comparable_rows). Safe to re-run.
+    Returns (summary_rows, comparable_rows). Safe to re-run. Holds the write
+    lock for the whole rebuild — this one uses an explicit transaction, which
+    must never interleave with another writer on the shared connection.
     """
+    with write_lock:
+        return _materialize_locked()
+
+
+def _materialize_locked() -> tuple[int, int]:
     ensure_tables()
     conn = get_connection()
 
@@ -389,8 +396,26 @@ def read_or_materialize(player_id: str, n: int = 8) -> list[dict]:
     if rows:
         return rows
 
-    # Cold path: rebuild the whole thing. Only happens once per fresh DB.
-    summary_n, _ = materialize()
-    if summary_n == 0:
+    # A populated summary table with no rows for this player means they just
+    # don't have comparables (below the games floor / OTHER position group) —
+    # rebuilding wouldn't change that, so only build when the table is empty.
+    try:
+        populated = query_to_dict("SELECT 1 FROM player_career_summary LIMIT 1") != []
+    except Exception:
+        populated = False
+    if populated:
         return []
+
+    # Cold path: rebuild the whole thing. Only happens once per fresh DB.
+    if not write_lock.acquire(timeout=15):
+        return []
+    try:
+        rows = read(player_id, n)
+        if rows:
+            return rows
+        summary_n, _ = materialize()
+        if summary_n == 0:
+            return []
+    finally:
+        write_lock.release()
     return read(player_id, n)

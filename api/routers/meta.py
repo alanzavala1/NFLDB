@@ -1,15 +1,21 @@
 """Health check and season ingest endpoints."""
 import asyncio
+import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from config import CURRENT_SEASON, FIRST_SEASON
 from database import query_to_dict
 from ingest_queue import ingest_logs, queue_season, season_status
+from rate_limit import RateLimiter
 from schemas.meta import HealthResponse, LoadSeasonResponse, SeasonStatus
 
 router = APIRouter()
+
+# Ingest trigger: generous enough for a legitimate lazy-load burst (a whole
+# career of seasons queued at once from a cold DB) but caps enqueue-spam.
+_limiter = RateLimiter(max_hits=40)
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -18,7 +24,9 @@ def health():
 
 
 @router.get("/seasons", response_model=list[SeasonStatus])
-def get_seasons():
+def get_seasons(response: Response):
+    # Live load-status — caching it makes the season picker lie mid-ingest.
+    response.headers["Cache-Control"] = "no-store"
     try:
         loaded = {r["season"] for r in query_to_dict("SELECT DISTINCT season FROM schedules")}
     except Exception:
@@ -33,9 +41,23 @@ def get_seasons():
 
 
 @router.post("/seasons/{year}/load", response_model=LoadSeasonResponse)
-def load_season(year: int, force: bool = False):
+def load_season(
+    year: int,
+    force: bool = False,
+    request: Request = None,
+    x_admin_token: str | None = Header(default=None),
+):
     if year < FIRST_SEASON or year > CURRENT_SEASON:
         raise HTTPException(status_code=400, detail=f"Season must be between {FIRST_SEASON} and {CURRENT_SEASON}")
+    ip = request.client.host if request and request.client else "unknown"
+    if _limiter.limited(ip):
+        raise HTTPException(status_code=429, detail="Too many load requests — give it a minute.")
+    # force=true re-ingests an already-loaded season (expensive). Gate it behind
+    # a server-side admin token; the frontend only ever calls with force=false.
+    if force:
+        admin = os.environ.get("ADMIN_TOKEN")
+        if not admin or x_admin_token != admin:
+            raise HTTPException(status_code=403, detail="force reload requires a valid admin token")
     status = queue_season(year, force=force)
     return {"season": year, "status": status}
 

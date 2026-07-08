@@ -173,11 +173,14 @@ def _get_situational_stats(player_id: str) -> dict:
         SELECT season,
             COUNT(*)  FILTER (WHERE passer_player_id  = ? AND pass_attempt = 1)                        AS rz_pass_att,
             SUM(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND complete_pass = 1 THEN 1 ELSE 0 END) AS rz_cmp,
-            SUM(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND touchdown = 1     THEN 1 ELSE 0 END) AS rz_pass_tds,
+            -- pass_touchdown / rush_touchdown, NOT touchdown: `touchdown` is true
+            -- for ANY score on the play, so a red-zone pick-six or fumble
+            -- returned for a TD would count as an offensive TD here
+            SUM(CASE WHEN passer_player_id  = ? AND pass_attempt = 1 AND pass_touchdown = 1 THEN 1 ELSE 0 END) AS rz_pass_tds,
             COUNT(*)  FILTER (WHERE receiver_player_id = ? AND pass_attempt = 1)                       AS rz_targets,
-            SUM(CASE WHEN receiver_player_id = ? AND pass_attempt = 1 AND touchdown = 1    THEN 1 ELSE 0 END) AS rz_rec_tds,
+            SUM(CASE WHEN receiver_player_id = ? AND pass_attempt = 1 AND pass_touchdown = 1 THEN 1 ELSE 0 END) AS rz_rec_tds,
             COUNT(*)  FILTER (WHERE rusher_player_id   = ? AND rush_attempt = 1)                       AS rz_carries,
-            SUM(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1 AND touchdown = 1    THEN 1 ELSE 0 END) AS rz_rush_tds
+            SUM(CASE WHEN rusher_player_id   = ? AND rush_attempt = 1 AND rush_touchdown = 1 THEN 1 ELSE 0 END) AS rz_rush_tds
         FROM pp GROUP BY season
     """, [pid, pid, pid, pid, pid, pid, pid, pid, pid, pid]))
 
@@ -576,11 +579,16 @@ CASE
             [profile_team, profile_team, profile_team, player_id],
         )
 
-    season_totals = {col: sum(g[col] or 0 for g in games) for col in STAT_COLS}
+    # Regular-season only, to reconcile with the situational/kicking/etc. stats
+    # below (all REG-filtered) and with the ask-agent's get_player_overview.
+    # Playoff games stay in `games` for the log — the frontend badges them by
+    # game_type and shows a separate postseason section.
+    reg_games = [g for g in games if g.get("game_type") == "REG"]
+    season_totals = {col: sum(g[col] or 0 for g in reg_games) for col in STAT_COLS}
 
     return {
         **profile,
-        "games_played": len(games),
+        "games_played": len(reg_games),
         "season_totals": season_totals,
         "games": games,
         "ngs": _get_ngs(player_id),

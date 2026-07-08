@@ -1,5 +1,9 @@
 """Shared SQL fragments and query helpers."""
+import logging
+
 from database import query_to_dict
+
+logger = logging.getLogger(__name__)
 
 # All numeric stat columns on player_game_stats (excluding identity/team fields).
 # Single source of truth used in SQL selects and Python aggregations.
@@ -20,12 +24,19 @@ STAT_COLS = (
 # Prefixed for use inside CTEs where pgs alias is in scope.
 PGS_STAT_SEL = ", ".join(f"pgs.{c}" for c in STAT_COLS)
 
-# De-duped roster: one row per player+season.
+# De-duped roster: one row per player+season. For players who changed teams
+# mid-season (weekly roster snapshots), pick the latest week's row — i.e. the
+# team they finished the season on — with `team` as a final tiebreak so the
+# winner is deterministic (the old `ORDER BY season DESC` was a no-op: season
+# is a partition key, so the row was arbitrary).
 ROSTER_CTE = """\
     roster AS (
         SELECT player_id, season, team, position, jersey_number, headshot_url
         FROM rosters
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id, season ORDER BY season DESC) = 1
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY player_id, season
+            ORDER BY week DESC NULLS LAST, team
+        ) = 1
     )"""
 
 
@@ -56,4 +67,5 @@ def safe_query(sql: str, params: list = None) -> list[dict]:
     try:
         return query_to_dict(sql, params or [])
     except Exception:
+        logger.warning("safe_query failed, returning []", exc_info=True)
         return []

@@ -22,7 +22,7 @@ import duckdb
 
 import splits_core as core
 from config import DIVISIONS
-from database import get_connection, query_to_dict
+from database import get_connection, query_to_dict, write_lock
 
 # Per-category minimum volume in a season for a player to be included — keeps
 # trick plays and one-off backups out of the table.
@@ -238,10 +238,18 @@ def _category_sql(category: str, season: int, available: set[str], has_ftn: bool
 # ── Materialize + read API ───────────────────────────────────────────────────
 
 def materialize(season: int) -> int:
-    """Compute all-category splits for one season and persist. Returns rows written."""
+    """Compute all-category splits for one season and persist. Returns rows written.
+
+    Holds the write lock: called from the ingest worker (which already owns it)
+    and from lazy request-thread materialization (which must wait its turn).
+    """
+    with write_lock:
+        return _materialize_locked(int(season))
+
+
+def _materialize_locked(s: int) -> int:
     conn = get_connection()
     ensure_table(conn)
-    s = int(season)
 
     try:
         available = {r[0] for r in conn.execute("DESCRIBE plays").fetchall()}
@@ -286,20 +294,43 @@ def read(player_id: str) -> list[dict]:
 
 
 def read_or_materialize(player_id: str) -> list[dict]:
-    """Endpoint entry point: read; if the player has no rows, lazily build the
-    seasons they appear in, then re-read. Self-heals a cold table."""
+    """Endpoint entry point: read; if the player has no rows, lazily build any
+    of their seasons that were never materialized, then re-read.
+
+    Two guards keep this cheap and safe:
+      - Only seasons absent from player_splits are built. A season that's
+        already materialized but has no rows for this player means the player
+        didn't meet the volume floor — rebuilding wouldn't change that.
+      - Building takes the write lock (bounded wait, then give up and return
+        empty rather than hang the request behind a long ingest) and re-reads
+        after acquiring, since a concurrent request may have built the same
+        seasons while we waited.
+    """
     rows = read(player_id)
     if rows:
         return rows
     try:
-        seasons = [r["season"] for r in query_to_dict("""
+        seasons = {r["season"] for r in query_to_dict("""
             SELECT DISTINCT season FROM plays
             WHERE passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?
-        """, [player_id, player_id, player_id])]
+        """, [player_id, player_id, player_id])}
     except Exception:
-        seasons = []
+        seasons = set()
     if not seasons:
         return []
-    for s in seasons:
-        materialize(s)
+    if not write_lock.acquire(timeout=15):
+        return []
+    try:
+        rows = read(player_id)
+        if rows:
+            return rows
+        try:
+            built = {r["season"] for r in query_to_dict(
+                "SELECT DISTINCT season FROM player_splits")}
+        except Exception:
+            built = set()
+        for s in sorted(seasons - built, reverse=True):
+            materialize(s)
+    finally:
+        write_lock.release()
     return read(player_id)

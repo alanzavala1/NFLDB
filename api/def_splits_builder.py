@@ -17,7 +17,7 @@ import duckdb
 
 import splits_core as core
 from config import DIVISIONS
-from database import get_connection, query_to_dict
+from database import get_connection, query_to_dict, write_lock
 
 # Minimum credited events in a season to include a defender (keeps one-off
 # special-teamers and spot appearances out).
@@ -174,9 +174,13 @@ def _season_sql(season: int) -> str:
 # ── Materialize + read API ───────────────────────────────────────────────────
 
 def materialize(season: int) -> int:
+    with write_lock:
+        return _materialize_locked(int(season))
+
+
+def _materialize_locked(s: int) -> int:
     conn = get_connection()
     ensure_table(conn)
-    s = int(season)
     conn.execute("DELETE FROM defense_splits WHERE season = ?", [s])
     cols = ", ".join(_COLUMNS)
     try:
@@ -207,17 +211,34 @@ def read(player_id: str) -> list[dict]:
 
 
 def read_or_materialize(player_id: str) -> list[dict]:
+    """Read; on miss, build only the player's never-materialized seasons under
+    the write lock (see splits_builder.read_or_materialize for the rationale)."""
     rows = read(player_id)
     if rows:
         return rows
     try:
-        seasons = [r["season"] for r in query_to_dict(
+        seasons = {r["season"] for r in query_to_dict(
             "SELECT DISTINCT season FROM plays "
             "WHERE solo_tackle_1_player_id = ? OR assist_tackle_1_player_id = ? "
             "OR sack_player_id = ? OR interception_player_id = ?",
-            [player_id, player_id, player_id, player_id])]
+            [player_id, player_id, player_id, player_id])}
     except Exception:
-        seasons = []
-    for s in seasons:
-        materialize(s)
+        seasons = set()
+    if not seasons:
+        return []
+    if not write_lock.acquire(timeout=15):
+        return []
+    try:
+        rows = read(player_id)
+        if rows:
+            return rows
+        try:
+            built = {r["season"] for r in query_to_dict(
+                "SELECT DISTINCT season FROM defense_splits")}
+        except Exception:
+            built = set()
+        for s in sorted(seasons - built, reverse=True):
+            materialize(s)
+    finally:
+        write_lock.release()
     return read(player_id)

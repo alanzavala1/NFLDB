@@ -24,4 +24,8 @@ COPY --from=frontend /app/frontend/dist ./static
 # Cloud Run provides $PORT (8080); single worker (DuckDB is single-writer).
 ENV PORT=8080
 EXPOSE 8080
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# --proxy-headers + trust all forwarded IPs: on Cloud Run only Google's front
+# end can reach the container, and it sets X-Forwarded-For to the real client.
+# Without this, request.client.host is the proxy IP and per-IP rate limits
+# collapse every user into one bucket.
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips='*'"]

@@ -2,7 +2,7 @@
 import queue
 import threading
 
-from database import query_to_dict
+from database import query_to_dict, write_lock
 from ingest import run_ingest
 
 # Season state: "queued" | "loading" | "error" — absent means loaded or not yet touched
@@ -22,7 +22,11 @@ def _ingest_season(year: int) -> None:
         ingest_logs.setdefault(year, []).append(line)
 
     try:
-        run_ingest([year], log=log)
+        # Hold the write lock for the whole run: lazy materialization from
+        # request threads must never interleave with an in-flight ingest
+        # (same connection = shared transaction context).
+        with write_lock:
+            run_ingest([year], log=log)
         season_status.pop(year, None)          # remove → treated as "loaded"
         ingest_logs[year].append("__DONE__")
     except Exception as e:
@@ -60,6 +64,17 @@ def queue_season(year: int, force: bool = False) -> str:
     return "queued"
 
 
+_start_lock = threading.Lock()
+_started = False
+
+
 def start_worker() -> None:
-    """Start the background ingest worker. Idempotent — caller controls lifecycle."""
+    """Start the background ingest worker. Idempotent: a second call (test
+    re-entry, repeated lifespan) is a no-op — two consumers on the queue would
+    mean two writers."""
+    global _started
+    with _start_lock:
+        if _started:
+            return
+        _started = True
     threading.Thread(target=_load_worker, daemon=True).start()

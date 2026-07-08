@@ -6,14 +6,22 @@ that needs to run a query takes a fresh cursor from that Connection via
 isolates them), so concurrent reads don't serialize on a Python lock.
 
 The ingest pipeline uses the Connection directly via `get_connection()` to
-issue DDL/DML; it runs in a single background thread (see ingest_queue), so
-there is only ever one writer at a time.
+issue DDL/DML. Writes come from two places — the background ingest worker
+(see ingest_queue) and lazy materialization triggered by request threads
+(the *_builder modules) — so "one writer at a time" is enforced by
+`write_lock`, not by thread topology. Every write path must hold it.
 """
 import os
+import threading
 
 import duckdb
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "nfl.duckdb")
+
+# The single-writer guarantee. Reentrant so an ingest run (which holds the
+# lock for its whole duration) can call the builders' materialize() functions,
+# which also acquire it. Readers never take this lock.
+write_lock = threading.RLock()
 
 _conn: duckdb.DuckDBPyConnection | None = None
 

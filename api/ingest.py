@@ -846,6 +846,7 @@ def run_ingest(seasons: list[int], log=print):
 
 def main():
     import json
+    import os
     import urllib.request
     import urllib.error
 
@@ -858,10 +859,15 @@ def main():
 
     # If the API server is running, route through it to avoid the DB file lock.
     via_api = []
+    # force=true is admin-gated server-side; send the token if configured.
+    # Absent/invalid → server 403s → HTTPError (a URLError) → falls to direct ingest.
+    admin_token = os.environ.get("ADMIN_TOKEN")
+    headers = {"X-Admin-Token": admin_token} if admin_token else {}
     for season in args.seasons:
         try:
             req = urllib.request.Request(
-                f"{args.api}/seasons/{season}/load?force=true", method="POST"
+                f"{args.api}/seasons/{season}/load?force=true", method="POST",
+                headers=headers,
             )
             resp = urllib.request.urlopen(req, timeout=3)
             data = json.loads(resp.read())
