@@ -117,6 +117,7 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
         CREATE TABLE rosters (
             player_id      VARCHAR NOT NULL,
             season         INTEGER NOT NULL,
+            week           INTEGER,
             team           VARCHAR,
             position       VARCHAR,
             jersey_number  INTEGER,
@@ -239,9 +240,19 @@ def client(seeded_conn, monkeypatch) -> TestClient:
     import database
     import ingest_queue
     import main
+    import routers.meta
 
     monkeypatch.setattr(database, "_conn", seeded_conn)
-    monkeypatch.setattr(ingest_queue, "queue_season", lambda year, force=False: "loaded")
+    # queue_season is imported by name into main and routers.meta, so patching
+    # the ingest_queue module alone does NOT reach them — the lifespan's
+    # auto-load was hitting the real queue and ingesting actual seasons over
+    # the network into this in-memory DB mid-suite. Patch every reference,
+    # and stub the worker's run_ingest so nothing already queued can ingest.
+    stub = lambda year, force=False: "loaded"  # noqa: E731
+    monkeypatch.setattr(ingest_queue, "queue_season", stub)
+    monkeypatch.setattr(main, "queue_season", stub)
+    monkeypatch.setattr(routers.meta, "queue_season", stub)
+    monkeypatch.setattr(ingest_queue, "run_ingest", lambda years, log=print: None)
 
     # TestClient runs lifespan; with queue_season stubbed, no network calls happen.
     with TestClient(main.app) as c:
