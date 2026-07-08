@@ -23,6 +23,12 @@ COPY --from=frontend /app/frontend/dist ./static
 
 # Cloud Run provides $PORT (8080); single worker (DuckDB is single-writer).
 ENV PORT=8080
+# Keep DuckDB inside the container's memory/CPU limits (it sizes itself from
+# the HOST otherwise and gets the instance OOM-killed): cap query memory well
+# under the Cloud Run limit (leaving headroom for Python + the app) and match
+# the thread pool to the single vCPU.
+ENV DUCKDB_MEMORY_LIMIT=1200MB
+ENV DUCKDB_THREADS=1
 EXPOSE 8080
 # --proxy-headers + trust all forwarded IPs: on Cloud Run only Google's front
 # end can reach the container, and it sets X-Forwarded-For to the real client.

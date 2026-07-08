@@ -64,6 +64,6 @@ jobs:
             --region "$REGION" \
             --platform managed \
             --allow-unauthenticated \
-            --memory 1Gi --cpu 1 \
+            --memory 2Gi --cpu 1 \
             --max-instances 1 \
             --port 8080

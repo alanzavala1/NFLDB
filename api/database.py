@@ -32,6 +32,17 @@ def get_connection() -> duckdb.DuckDBPyConnection:
     if _conn is None:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         _conn = duckdb.connect(DB_PATH)
+        # In a container, DuckDB sizes its memory budget (80% of RAM) and
+        # thread pool (one per core) from the HOST, not the cgroup limits —
+        # on Cloud Run that meant queries happily allocated past the 1 GiB
+        # container cap and the instance was OOM-killed mid-request (503s +
+        # cold starts). The Dockerfile pins both; unset locally = defaults.
+        mem = os.environ.get("DUCKDB_MEMORY_LIMIT")
+        if mem:
+            _conn.execute(f"SET memory_limit = '{mem}'")
+        threads = os.environ.get("DUCKDB_THREADS")
+        if threads:
+            _conn.execute(f"SET threads = {int(threads)}")
     return _conn
 
 
