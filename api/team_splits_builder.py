@@ -9,7 +9,7 @@ pass rate, yards/play, explosive%) over scrimmage plays.
 import duckdb
 
 import splits_core as core
-from config import DIVISIONS
+from config import DIVISIONS, era_team_case
 from database import get_connection, query_to_dict, write_lock
 
 
@@ -104,8 +104,12 @@ def _side_sql(side: str, season: int, available: set[str]) -> str:
     kneel = "AND COALESCE(qb_kneel, 0) = 0" if "qb_kneel" in available else ""
     spike = "AND COALESCE(qb_spike, 0) = 0" if "qb_spike" in available else ""
 
+    # plays uses modern franchise abbreviations for all seasons; this table is
+    # read with the era abbreviation (team pages are keyed off schedules), so
+    # map team and opponent back before they become row keys.
     base = f"""
-        {team_col} AS team, {opp_col} AS opponent,
+        {era_team_case(team_col, "season")} AS team,
+        {era_team_case(opp_col, "season")} AS opponent,
         down, qtr, score_differential, yardline_100,
         posteam_type, roof, surface, no_huddle, wp,
         epa, pass_attempt, rush_attempt, sack, yards_gained, {core.success_col(available)}

@@ -34,6 +34,28 @@ TEAM_NAMES: dict[str, str] = {
     'STL': 'St. Louis Rams',       'JAC': 'Jacksonville Jaguars',
 }
 
+# nflverse play-by-play and weekly stats label every season with the
+# franchise's CURRENT abbreviation (a 2005 Raiders play says 'LV'), while
+# schedules and rosters keep the abbreviation the team actually used that
+# year. The platform is era-keyed — game ids, team pages, and rosters all say
+# 'OAK' for 2005 — so anything derived from plays/weekly must map back.
+# (modern, era, last season in the old city)
+RELOCATIONS: tuple[tuple[str, str, int], ...] = (
+    ('LV',  'OAK', 2019),
+    ('LAC', 'SD',  2016),
+    ('LA',  'STL', 2015),
+)
+
+
+def era_team_case(team_expr: str, season_expr: str) -> str:
+    """SQL CASE that maps a modern franchise abbreviation to the era one."""
+    whens = " ".join(
+        f"WHEN {team_expr} = '{modern}' AND {season_expr} <= {last} THEN '{era}'"
+        for modern, era, last in RELOCATIONS
+    )
+    return f"CASE {whens} ELSE {team_expr} END"
+
+
 DIVISIONS: dict[str, str] = {
     'BUF': 'AFC East',  'MIA': 'AFC East',  'NE':  'AFC East',  'NYJ': 'AFC East',
     'BAL': 'AFC North', 'CIN': 'AFC North', 'CLE': 'AFC North', 'PIT': 'AFC North',

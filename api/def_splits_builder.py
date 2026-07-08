@@ -16,7 +16,7 @@ offense faced (posteam).
 import duckdb
 
 import splits_core as core
-from config import DIVISIONS
+from config import DIVISIONS, era_team_case
 from database import get_connection, query_to_dict, write_lock
 
 # Minimum credited events in a season to include a defender (keeps one-off
@@ -148,7 +148,12 @@ _METRICS = """
 
 def _events_union(season: int) -> str:
     """One SELECT per defender slot, UNION ALL'd into the events stream."""
-    sit = ", ".join(_SIT_COLS)
+    # posteam is the opponent faced; map modern franchise abbreviations back
+    # to the era one so 2005 opponent splits say 'OAK', not 'LV'.
+    sit = ", ".join(
+        f"{era_team_case('posteam', 'season')} AS posteam" if c == "posteam" else c
+        for c in _SIT_COLS
+    )
     blocks = []
     for id_col, bucket, weight in _SLOTS:
         vec = ", ".join(f"{weight if b == bucket else 0} AS {b}" for b in _BUCKETS)

@@ -21,8 +21,13 @@ carries / targets; cmp = completions / receptions; NULL where N/A).
 import duckdb
 
 import splits_core as core
-from config import DIVISIONS
+from config import DIVISIONS, era_team_case
 from database import get_connection, query_to_dict, write_lock
+
+# plays labels every season with the modern franchise abbreviation; opponent
+# split values should show the era one ('vs OAK', not 'vs LV', in 2005).
+# plays-qualified because the passing base LEFT JOINs ftn_charting.
+_ERA_DEFTEAM = era_team_case("plays.defteam", "plays.season")
 
 # Per-category minimum volume in a season for a player to be included — keeps
 # trick plays and one-off backups out of the table.
@@ -136,7 +141,7 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
         # counting metrics stay attempt-only (att = comp/incomp/int) via FILTER;
         # sack/penalty rows contribute only their qb_epa to the EPA numerator.
         base = f"""
-            passer_player_id AS player_id, defteam,
+            passer_player_id AS player_id, {_ERA_DEFTEAM} AS defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
             qb_hit, roof, surface, no_huddle, wp, {ftn_cols}
@@ -159,7 +164,7 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
             ROUND(AVG(cpoe), 2)               AS cpoe"""
     elif category == "rushing":
         base = f"""
-            rusher_player_id AS player_id, defteam,
+            rusher_player_id AS player_id, {_ERA_DEFTEAM} AS defteam,
             down, run_gap, run_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
             roof, surface, no_huddle, wp, {ftn_cols}
@@ -180,7 +185,7 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
             CAST(NULL AS DOUBLE)           AS cpoe"""
     else:  # receiving
         base = f"""
-            receiver_player_id AS player_id, defteam,
+            receiver_player_id AS player_id, {_ERA_DEFTEAM} AS defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
             qb_hit, roof, surface, no_huddle, wp, {ftn_cols}

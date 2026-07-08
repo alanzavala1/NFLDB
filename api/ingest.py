@@ -8,6 +8,7 @@ import argparse
 import pandas as pd
 import nfl_data_py
 from collections import namedtuple
+from config import RELOCATIONS, era_team_case
 from database import get_connection
 
 
@@ -115,6 +116,21 @@ def extract_slot(plays, slot, available):
         "player_name": name,
         slot.stat:     slot.weight,
     })
+
+
+def normalize_relocated_teams(df: pd.DataFrame) -> pd.DataFrame:
+    """Map modern franchise abbreviations back to era ones (see config.RELOCATIONS).
+
+    Play-by-play and weekly sources say 'LV' even for a 2005 Raiders play;
+    schedules and rosters say 'OAK'. player_game_stats joins against both, so
+    its team column must use the era abbreviation.
+    """
+    if df.empty or "team" not in df.columns or "season" not in df.columns:
+        return df
+    for modern, era, last_era_season in RELOCATIONS:
+        mask = (df["team"] == modern) & (df["season"] <= last_era_season)
+        df.loc[mask, "team"] = era
+    return df
 
 
 def merge_all_stats(*stat_frames):
@@ -672,16 +688,20 @@ def build_offensive_stats_from_weekly(conn, seasons: list[int], log=print) -> pd
         return (f'COALESCE(w.{name}, {default}) AS {alias}' if name in cols
                 else f'CAST({default} AS DOUBLE) AS {alias}')
 
-    # game_id is present in modern nflverse weekly data; fall back to schedule join if absent
+    # game_id is present in modern nflverse weekly data; fall back to schedule join if absent.
+    # recent_team is the MODERN franchise abbreviation while schedules use the era one,
+    # so match on the era-mapped value — joining on recent_team directly silently dropped
+    # every pre-relocation OAK/SD/STL offensive row (the join found no game_id).
     if 'game_id' in cols:
         game_id_expr = 'w.game_id'
         join_clause  = ''
     else:
+        era_team     = era_team_case('w.recent_team', 'w.season')
         game_id_expr = 'sch.game_id'
-        join_clause  = """
+        join_clause  = f"""
             LEFT JOIN schedules sch
                 ON  sch.season = w.season AND sch.week = w.week
-                AND (sch.home_team = w.recent_team OR sch.away_team = w.recent_team)
+                AND (sch.home_team = {era_team} OR sch.away_team = {era_team})
         """
 
     name_col = 'player_display_name' if 'player_display_name' in cols else 'player_name'
@@ -732,13 +752,13 @@ def build_offensive_stats_from_weekly(conn, seasons: list[int], log=print) -> pd
 # Pipeline
 # ---------------------------------------------------------------------------
 
-def run_ingest(seasons: list[int], log=print):
-    """Full ingest pipeline for the given seasons. Safe to call from the API."""
-    conn = get_connection()
-    plays = load_and_store_raw(conn, seasons, log=log)
-    available = set(plays.columns)
+def build_player_game_stats(conn, plays: pd.DataFrame, seasons: list[int], log=print) -> None:
+    """Build player_game_stats for `seasons` from a plays frame + the weekly table.
 
-    # Build stats only for the seasons being ingested — never touch other seasons.
+    Factored out of run_ingest so a repair can rebuild seasons from plays
+    already in the DB without re-downloading play-by-play.
+    """
+    available = set(plays.columns)
     log(f"\nBuilding player_game_stats for {seasons}...")
 
     # Offensive stats: prefer official nflverse weekly data (same source as PFR).
@@ -761,6 +781,9 @@ def run_ingest(seasons: list[int], log=print):
 
     # Drop any rows with no game_id (orphaned rows from failed joins)
     player_game_stats = player_game_stats[player_game_stats["game_id"].notna()]
+
+    # pbp-derived frames carry modern franchise abbreviations; rewrite to era
+    player_game_stats = normalize_relocated_teams(player_game_stats)
 
     # Deduplicate on (game_id, player_id) — keep the row with the most total activity
     stat_cols = [c for c in player_game_stats.columns if c not in ("game_id", "player_id", "season", "week", "team", "player_name")]
@@ -787,6 +810,15 @@ def run_ingest(seasons: list[int], log=print):
 
     count = conn.execute("SELECT COUNT(*) FROM player_game_stats").fetchone()[0]
     log(f"  player_game_stats: {count:,} rows total")
+
+
+def run_ingest(seasons: list[int], log=print):
+    """Full ingest pipeline for the given seasons. Safe to call from the API."""
+    conn = get_connection()
+    plays = load_and_store_raw(conn, seasons, log=log)
+
+    # Build stats only for the seasons being ingested — never touch other seasons.
+    build_player_game_stats(conn, plays, seasons, log=log)
 
     log(f"\nLoading advanced stats for {seasons}...")
     load_advanced_stats(conn, seasons, log=log)

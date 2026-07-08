@@ -13,6 +13,7 @@ Design:
 """
 import duckdb
 
+from config import era_team_case
 from database import get_connection, query_to_dict, write_lock
 
 
@@ -107,10 +108,17 @@ def _analytics_sql(conn: duckdb.DuckDBPyConnection, season: int) -> str:
 
     s = int(season)
 
+    # team_record below is keyed from schedules (era abbreviations: 'OAK' in
+    # 2015) while plays uses modern ones ('LV' for every Raiders season), so
+    # every plays-derived CTE must emit the era-mapped team or the final
+    # LEFT JOIN ... USING (team) can never match for relocated franchises.
+    off_team = era_team_case("posteam", "season")
+    def_team = era_team_case("defteam", "season")
+
     return f"""
     WITH
     off_plays AS (
-        SELECT posteam AS team, game_id, drive, epa,
+        SELECT {off_team} AS team, game_id, drive, epa,
                pass_attempt, rush_attempt, sack, yards_gained,
                third_down_converted, third_down_failed
                {', success' if has_success else ''}
@@ -121,7 +129,7 @@ def _analytics_sql(conn: duckdb.DuckDBPyConnection, season: int) -> str:
           AND {play_filter}
     ),
     def_plays AS (
-        SELECT defteam AS team, game_id, epa,
+        SELECT {def_team} AS team, game_id, epa,
                pass_attempt, rush_attempt, sack, yards_gained,
                third_down_converted, third_down_failed
                {', success' if has_success else ''}
@@ -153,24 +161,24 @@ def _analytics_sql(conn: duckdb.DuckDBPyConnection, season: int) -> str:
         GROUP BY team
     ),
     off_drives AS (
-        SELECT posteam AS team, game_id, drive,
+        SELECT {off_team} AS team, game_id, drive,
                MAX(CASE WHEN COALESCE(yardline_100, 999) <= 20 THEN 1 ELSE 0 END) AS reached_rz,
                {off_td_expr} AS scored_td,
                SUM(CASE WHEN play_type IN ('pass', 'run') THEN 1 ELSE 0 END) AS scrimmage_plays
         FROM plays
         WHERE season = {s} AND season_type = 'REG'
           AND posteam IS NOT NULL AND drive IS NOT NULL
-        GROUP BY posteam, game_id, drive
+        GROUP BY team, game_id, drive
         HAVING SUM(CASE WHEN play_type IN ('pass', 'run') THEN 1 ELSE 0 END) >= 1
     ),
     def_drives AS (
-        SELECT defteam AS team, game_id, drive,
+        SELECT {def_team} AS team, game_id, drive,
                MAX(CASE WHEN COALESCE(yardline_100, 999) <= 20 THEN 1 ELSE 0 END) AS allowed_rz,
                {off_td_expr} AS allowed_td
         FROM plays
         WHERE season = {s} AND season_type = 'REG'
           AND defteam IS NOT NULL AND drive IS NOT NULL
-        GROUP BY defteam, game_id, drive
+        GROUP BY team, game_id, drive
         HAVING SUM(CASE WHEN play_type IN ('pass', 'run') THEN 1 ELSE 0 END) >= 1
     ),
     off_drive_agg AS (
@@ -188,22 +196,22 @@ def _analytics_sql(conn: duckdb.DuckDBPyConnection, season: int) -> str:
         FROM def_drives GROUP BY team
     ),
     off_turnovers AS (
-        SELECT posteam AS team,
+        SELECT {off_team} AS team,
                SUM(CASE WHEN COALESCE(interception, 0) = 1 OR COALESCE(fumble_lost, 0) = 1 THEN 1 ELSE 0 END) AS turnovers
         FROM plays
         WHERE season = {s} AND season_type = 'REG'
           AND posteam IS NOT NULL
           AND play_type IN ('pass', 'run')
-        GROUP BY posteam
+        GROUP BY team
     ),
     def_takeaways AS (
-        SELECT defteam AS team,
+        SELECT {def_team} AS team,
                SUM(CASE WHEN COALESCE(interception, 0) = 1 OR COALESCE(fumble_lost, 0) = 1 THEN 1 ELSE 0 END) AS takeaways
         FROM plays
         WHERE season = {s} AND season_type = 'REG'
           AND defteam IS NOT NULL
           AND play_type IN ('pass', 'run')
-        GROUP BY defteam
+        GROUP BY team
     ),
     off_agg AS (
         SELECT team,
