@@ -16,8 +16,15 @@ _OL_POSITIONS = {"C", "G", "T", "OT", "OG", "OL", "LS", "OC"}
 _SNAP_FIRST_POSITIONS = _OL_POSITIONS | {"K", "P"}
 
 
-def _get_ngs(player_id: str) -> dict:
-    """Aggregate NGS weekly data by season for a player."""
+def _get_ngs(player_id: str, cpoe_fallback: dict | None = None) -> dict:
+    """Aggregate NGS weekly data by season for a player.
+
+    `cpoe_fallback` is {season: cpoe} derived from play-by-play (see
+    _get_pbp_stats). NGS tracking starts at 2016 — without the fallback,
+    pre-2016 QBs (Favre, Romo, Brees through 2015, etc.) would have an empty
+    cell where every other QB has a value. The NGS value wins when present
+    (tracking-based, more authoritative); plays-derived only fills the gaps.
+    """
     result: dict[int, dict] = {}
 
     for row in safe_query("""
@@ -66,48 +73,30 @@ def _get_ngs(player_id: str) -> dict:
         s = row.pop("season")
         result.setdefault(s, {}).update({k: v for k, v in row.items() if v is not None})
 
-    # CPOE fallback from play-by-play. NGS tracking starts at 2016 — without
-    # this, pre-2016 QBs (Favre, Romo, Brees through 2015, etc.) would have
-    # an empty cell where every other QB has a value. nflfastR computes
-    # cpoe per play with a statistical model covering 2006+, so use it to
-    # fill seasons that NGS doesn't already provide.
-    #
-    # NGS value wins when present (tracking-based, more authoritative for
-    # the years it covers); plays-derived only fills the gaps.
-    for row in safe_query("""
-        SELECT season,
-               ROUND(AVG(cpoe), 1) AS cpoe
-        FROM plays
-        WHERE passer_player_id = ?
-          AND pass_attempt = 1
-          AND season_type = 'REG'
-          AND cpoe IS NOT NULL
-        GROUP BY season
-        HAVING COUNT(*) >= 100
-    """, [player_id]):
-        s = int(row["season"])
+    for s, cpoe in (cpoe_fallback or {}).items():
         d = result.setdefault(s, {})
-        if d.get("cpoe") is None and row["cpoe"] is not None:
-            d["cpoe"] = row["cpoe"]
+        if d.get("cpoe") is None:
+            d["cpoe"] = cpoe
 
     return result
 
 
-def _get_snap_totals(player_id: str) -> dict:
+def _pfr_identity(player_id: str) -> tuple[str | None, str | None]:
+    """(pfr_id, player_name) for the snap_counts lookups below. Resolved in
+    Python rather than a CTE: OR-ing the pfr and name paths into one WHERE
+    kept DuckDB from using the snap_counts.pfr_player_id index."""
     rows = safe_query("""
-        WITH player_info AS (
-            SELECT
-                MAX(pfr_id)         AS pfr_id,
-                MAX(player_name)    AS player_name
-            FROM rosters
-            WHERE player_id = ?
-        ),
-        player_seasons AS (
-            SELECT season, team
-            FROM rosters
-            WHERE player_id = ?
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id, season ORDER BY season DESC) = 1
-        )
+        SELECT MAX(pfr_id) AS pfr_id, MAX(player_name) AS player_name
+        FROM rosters WHERE player_id = ?
+    """, [player_id])
+    if not rows:
+        return None, None
+    return rows[0]["pfr_id"], rows[0]["player_name"]
+
+
+def _get_snap_totals(player_id: str) -> dict:
+    pfr_id, player_name = _pfr_identity(player_id)
+    select = """
         SELECT sc.season,
             SUM(sc.offense_snaps)               AS offense_snaps,
             SUM(sc.defense_snaps)               AS defense_snaps,
@@ -115,55 +104,83 @@ def _get_snap_totals(player_id: str) -> dict:
             ROUND(AVG(sc.offense_pct) * 100, 1) AS avg_offense_pct,
             ROUND(AVG(sc.defense_pct) * 100, 1) AS avg_defense_pct,
             ROUND(AVG(sc.st_pct) * 100, 1)      AS avg_st_pct
-        FROM snap_counts sc, player_info pi
-        WHERE (
-            (pi.pfr_id IS NOT NULL AND sc.pfr_player_id = pi.pfr_id)
-            OR
-            (pi.pfr_id IS NULL
-             AND LOWER(sc.player) = LOWER(pi.player_name)
-             AND EXISTS (
-                 SELECT 1 FROM player_seasons ps
-                 WHERE ps.season = sc.season AND ps.team = sc.team
-             ))
-        )
-        GROUP BY sc.season
-    """, [player_id, player_id])
+        FROM snap_counts sc
+    """
+    if pfr_id is not None:
+        rows = safe_query(select + """
+            WHERE sc.pfr_player_id = ?
+            GROUP BY sc.season
+        """, [pfr_id])
+    elif player_name is not None:
+        # No pfr id — match by name, constrained to season+team stints the
+        # player actually had so common names don't cross-match.
+        rows = safe_query(select + """
+            WHERE LOWER(sc.player) = LOWER(?)
+              AND EXISTS (
+                  SELECT 1 FROM rosters r
+                  WHERE r.player_id = ? AND r.season = sc.season AND r.team = sc.team
+              )
+            GROUP BY sc.season
+        """, [player_name, player_id])
+    else:
+        rows = []
     return {r["season"]: r for r in rows}
 
 
-def _get_situational_stats(player_id: str) -> dict:
-    """Per-season situational stats from play-by-play: red zone, 3rd down, longest plays, first downs."""
-    result: dict[int, dict] = {}
-    pid = player_id
+def _get_pbp_stats(player_id: str) -> dict:
+    """Every play-by-play-derived per-season stat family in TWO scans of plays.
 
-    def merge_rows(rows: list[dict]) -> None:
-        for row in rows:
-            s = row.pop("season", None)
-            if s is None:
-                continue
-            cleaned = {}
-            for k, v in row.items():
-                if v is None:
-                    continue
-                cleaned[k] = int(v) if isinstance(v, float) and v.is_integer() else v
-            result.setdefault(int(s), {}).update(cleaned)
+    plays is the biggest table (1.3M rows) and has no per-player index, so each
+    query against it is a full scan whose cost is dominated by the id columns
+    compared in the WHERE plus the columns fetched for matching rows. The
+    profile endpoint used to make nine of them (situational, WPA, kicking,
+    punting, CPOE fallback, fumbles, penalties, defensive TDs, stuff rate).
 
-    # All four situational cuts (longest / red zone / 3rd down / first downs)
-    # share the same base set — the player's REG plays — so compute them in a
-    # single scan of `plays` instead of four. The red-zone (yardline_100 <= 20)
-    # and 3rd-down (down = 3) predicates move from the WHERE into each aggregate.
-    # pid is bound once via the cross-joined `q` row.
-    #
-    # pass_touchdown / rush_touchdown, NOT touchdown: `touchdown` is true for ANY
-    # score on the play, so a red-zone pick-six or fumble return would otherwise
-    # count as an offensive TD.
-    merge_rows(safe_query("""
+    Two scans, split by match profile — measured faster than either nine
+    narrow scans or one wide OR (a single OR forces fetching every family's
+    columns for all matched rows, and a skill player matches thousands):
+    - trio scan: passer/rusher/receiver families (many matched rows,
+      touchdown/first-down/WPA/CPOE columns)
+    - special scan: kicker/punter/penalty/defensive-TD families (few matched
+      rows for most players, kicking/penalty columns)
+
+    Each family keeps a presence guard (its old query's WHERE as a COUNT) so a
+    season only receives that family's keys when the family actually had
+    activity — exact parity with the separate queries this replaces.
+
+    Notes carried over from the originals:
+    - pass_touchdown / rush_touchdown, NOT touchdown: `touchdown` is true for
+      ANY score on the play, so a red-zone pick-six would count as offensive.
+    - WPA uses the split component matching the role (air_wpa passing,
+      yac_wpa receiving, wpa rushing).
+    - def_tds restricts to interception/fumble plays (not just
+      return_touchdown = 1) to exclude punt/kick return TDs.
+    - CPOE fallback needs >= 100 qualifying attempts in a season (nflfastR's
+      model covers 2006+; NGS takes precedence — see _get_ngs).
+
+    Returns {"situational": ..., "wpa": ..., "kicking": ..., "adv": ...,
+    "cpoe": {season: cpoe}} — all keyed by season.
+    """
+    situational: dict[int, dict] = {}
+    wpa:         dict[int, dict] = {}
+    kicking:     dict[int, dict] = {}
+    adv:         dict[int, dict] = {}
+    cpoe:        dict[int, float] = {}
+
+    trio_rows = safe_query("""
         WITH pp AS (
-            SELECT * FROM plays
-            WHERE (passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?)
-              AND season_type = 'REG'
+            SELECT season, passer_player_id, rusher_player_id, receiver_player_id,
+                   pass_attempt, complete_pass, rush_attempt, sack, down, yardline_100,
+                   passing_yards, rushing_yards, receiving_yards,
+                   pass_touchdown, rush_touchdown, first_down_pass, first_down_rush,
+                   air_wpa, yac_wpa, wpa, cpoe, fumble_lost
+            FROM plays
+            WHERE season_type = 'REG'
+              AND (passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?)
         )
         SELECT season,
+            COUNT(*) FILTER (WHERE rusher_player_id = q.pid) AS rusher_n,
+            -- situational: longest / red zone / 3rd down / first downs
             MAX(CASE WHEN passer_player_id  = q.pid AND pass_attempt = 1 AND complete_pass = 1 THEN passing_yards   END) AS lng_pass,
             MAX(CASE WHEN rusher_player_id   = q.pid AND rush_attempt = 1                       THEN rushing_yards   END) AS lng_rush,
             MAX(CASE WHEN receiver_player_id = q.pid AND complete_pass = 1                      THEN receiving_yards END) AS lng_rec,
@@ -182,37 +199,139 @@ def _get_situational_stats(player_id: str) -> dict:
             SUM(COALESCE(CASE WHEN rusher_player_id   = q.pid AND rush_attempt = 1  AND down = 3 THEN first_down_rush END, 0))    AS third_rush_fd,
             SUM(COALESCE(CASE WHEN passer_player_id  = q.pid AND pass_attempt = 1  THEN first_down_pass END, 0)) AS fd_pass,
             SUM(COALESCE(CASE WHEN receiver_player_id = q.pid AND complete_pass = 1 THEN first_down_pass END, 0)) AS fd_rec,
-            SUM(COALESCE(CASE WHEN rusher_player_id   = q.pid AND rush_attempt = 1  THEN first_down_rush END, 0)) AS fd_rush
+            SUM(COALESCE(CASE WHEN rusher_player_id   = q.pid AND rush_attempt = 1  THEN first_down_rush END, 0)) AS fd_rush,
+            -- WPA (split credit by role)
+            ROUND(SUM(CASE WHEN passer_player_id   = q.pid AND pass_attempt  = 1 THEN COALESCE(air_wpa, 0) ELSE 0 END), 3) AS pass_wpa,
+            ROUND(SUM(CASE WHEN receiver_player_id = q.pid AND complete_pass = 1 THEN COALESCE(yac_wpa, 0) ELSE 0 END), 3) AS rec_wpa,
+            ROUND(SUM(CASE WHEN rusher_player_id   = q.pid AND rush_attempt  = 1 THEN COALESCE(wpa, 0)     ELSE 0 END), 3) AS rush_wpa,
+            -- CPOE fallback for pre-NGS seasons
+            ROUND(AVG(cpoe) FILTER (WHERE passer_player_id = q.pid AND pass_attempt = 1), 1) AS cpoe_fb,
+            COUNT(cpoe)     FILTER (WHERE passer_player_id = q.pid AND pass_attempt = 1)     AS cpoe_n,
+            -- fumbles lost / stuff rate
+            SUM(CASE
+                WHEN rusher_player_id   = q.pid AND rush_attempt  = 1 AND fumble_lost = 1 THEN 1
+                WHEN receiver_player_id = q.pid AND complete_pass = 1 AND fumble_lost = 1 THEN 1
+                WHEN passer_player_id   = q.pid AND sack          = 1 AND fumble_lost = 1 THEN 1
+                ELSE 0 END) AS fumbles_lost,
+            COUNT(*) FILTER (WHERE rusher_player_id = q.pid AND rush_attempt = 1 AND rushing_yards <= 0)                      AS stuffed,
+            COUNT(*) FILTER (WHERE rusher_player_id = q.pid AND rush_attempt = 1)                                             AS carries_total,
+            ROUND(100.0 * COUNT(*) FILTER (WHERE rusher_player_id = q.pid AND rush_attempt = 1 AND rushing_yards <= 0)
+                        / NULLIF(COUNT(*) FILTER (WHERE rusher_player_id = q.pid AND rush_attempt = 1), 0), 1)                AS stuff_rate
         FROM pp CROSS JOIN (SELECT ? AS pid) q
         GROUP BY season
-    """, [pid, pid, pid, pid]))
+    """, [player_id] * 4)
 
-    return result
-
-
-def _get_player_advanced_stats(player_id: str) -> dict:
-    """Per-season: fumbles lost, target share, air yards share, stuff rate."""
-    result: dict[int, dict] = {}
-    pid = player_id
-
-    # Fumbles lost — rusher fumbles on runs, receiver fumbles on catches, QB fumbles on sacks
-    for row in safe_query("""
+    special_rows = safe_query("""
+        WITH pp AS (
+            SELECT season, kicker_player_id, punter_player_id, penalty_player_id, td_player_id,
+                   penalty, penalty_type, penalty_yards,
+                   return_touchdown, interception, fumble,
+                   field_goal_attempt, field_goal_result, kick_distance,
+                   punt_attempt, touchback, punt_inside_twenty, punt_blocked, return_yards
+            FROM plays
+            WHERE season_type = 'REG'
+              AND (kicker_player_id = ? OR punter_player_id = ?
+                   OR penalty_player_id = ? OR td_player_id = ?)
+        )
         SELECT season,
-            SUM(CASE
-                WHEN rusher_player_id   = ? AND rush_attempt  = 1 AND fumble_lost = 1 THEN 1
-                WHEN receiver_player_id = ? AND complete_pass = 1 AND fumble_lost = 1 THEN 1
-                WHEN passer_player_id   = ? AND sack          = 1 AND fumble_lost = 1 THEN 1
-                ELSE 0 END) AS fumbles_lost
-        FROM plays
-        WHERE (rusher_player_id = ? OR receiver_player_id = ? OR passer_player_id = ?)
-          AND season_type = 'REG'
+            COUNT(*) FILTER (WHERE penalty = 1 AND penalty_player_id = q.pid)             AS penalties,
+            COUNT(*) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1)   AS fg_n,
+            COUNT(*) FILTER (WHERE punter_player_id = q.pid AND punt_attempt = 1)         AS punts,
+            -- penalties / defensive TDs
+            SUM(COALESCE(penalty_yards, 0)) FILTER (WHERE penalty = 1 AND penalty_player_id = q.pid)                          AS penalty_yards,
+            COUNT(*) FILTER (WHERE penalty = 1 AND penalty_player_id = q.pid AND penalty_type = 'False Start')                AS false_starts,
+            COUNT(*) FILTER (WHERE penalty = 1 AND penalty_player_id = q.pid AND penalty_type = 'Offensive Holding')          AS holding,
+            COUNT(*) FILTER (WHERE td_player_id = q.pid AND return_touchdown = 1 AND (interception = 1 OR fumble = 1))        AS def_tds,
+            -- kicker: field goals by distance bucket
+            MAX(kick_distance) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1 AND field_goal_result = 'made') AS fg_long,
+            COUNT(*) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1 AND kick_distance < 40)                                             AS fg_0_39_att,
+            COUNT(*) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1 AND kick_distance < 40 AND field_goal_result = 'made')              AS fg_0_39_made,
+            COUNT(*) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1 AND kick_distance BETWEEN 40 AND 49)                                AS fg_40_49_att,
+            COUNT(*) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1 AND kick_distance BETWEEN 40 AND 49 AND field_goal_result = 'made') AS fg_40_49_made,
+            COUNT(*) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1 AND kick_distance >= 50)                                            AS fg_50_att,
+            COUNT(*) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1 AND kick_distance >= 50 AND field_goal_result = 'made')             AS fg_50_made,
+            COUNT(*) FILTER (WHERE kicker_player_id = q.pid AND field_goal_attempt = 1 AND field_goal_result = 'blocked')                                  AS fg_blocked,
+            -- punter: net = gross - return - 20*touchbacks (computed below)
+            SUM(kick_distance)              FILTER (WHERE punter_player_id = q.pid AND punt_attempt = 1)                      AS gross_yards,
+            SUM(COALESCE(return_yards, 0))  FILTER (WHERE punter_player_id = q.pid AND punt_attempt = 1)                      AS return_yards,
+            COUNT(*) FILTER (WHERE punter_player_id = q.pid AND punt_attempt = 1 AND touchback = 1)                           AS punt_touchbacks,
+            COUNT(*) FILTER (WHERE punter_player_id = q.pid AND punt_attempt = 1 AND punt_inside_twenty = 1)                  AS punt_inside_20,
+            MAX(kick_distance)              FILTER (WHERE punter_player_id = q.pid AND punt_attempt = 1)                      AS punt_long,
+            COUNT(*) FILTER (WHERE punter_player_id = q.pid AND punt_attempt = 1 AND punt_blocked = 1)                        AS punt_blocked
+        FROM pp CROSS JOIN (SELECT ? AS pid) q
         GROUP BY season
-    """, [pid, pid, pid, pid, pid, pid]):
-        s = int(row["season"])
-        result.setdefault(s, {})["fumbles_lost"] = int(row["fumbles_lost"] or 0)
+    """, [player_id] * 5)
 
-    # Target share & air yards share — player's share of team targets/air yards
-    # in games the player actually appeared in (handles mid-season trades correctly)
+    _SITUATIONAL = ("lng_pass", "lng_rush", "lng_rec",
+                    "rz_pass_att", "rz_cmp", "rz_pass_tds", "rz_targets", "rz_rec_tds",
+                    "rz_carries", "rz_rush_tds",
+                    "third_pass_att", "third_pass_fd", "third_targets", "third_rec_fd",
+                    "third_carries", "third_rush_fd", "fd_pass", "fd_rec", "fd_rush")
+    _FG_KEYS = ("fg_long", "fg_0_39_att", "fg_0_39_made", "fg_40_49_att", "fg_40_49_made",
+                "fg_50_att", "fg_50_made", "fg_blocked")
+
+    for row in trio_rows:
+        s = int(row["season"])
+
+        d = {}
+        for k in _SITUATIONAL:
+            v = row[k]
+            if v is None:
+                continue
+            d[k] = int(v) if isinstance(v, float) and v.is_integer() else v
+        situational.setdefault(s, {}).update(d)
+
+        wpa[s] = {"pass_wpa": row["pass_wpa"], "rec_wpa": row["rec_wpa"], "rush_wpa": row["rush_wpa"]}
+        adv.setdefault(s, {})["fumbles_lost"] = int(row["fumbles_lost"] or 0)
+
+        if row["cpoe_n"] >= 100 and row["cpoe_fb"] is not None:
+            cpoe[s] = row["cpoe_fb"]
+
+        if row["rusher_n"]:
+            d = adv.setdefault(s, {})
+            d["stuffed"]       = int(row["stuffed"] or 0)
+            d["carries_total"] = int(row["carries_total"] or 0)
+            if row["stuff_rate"] is not None:
+                d["stuff_rate"] = float(row["stuff_rate"])
+
+    for row in special_rows:
+        s = int(row["season"])
+
+        if row["penalties"]:
+            d = adv.setdefault(s, {})
+            d["penalties"]     = int(row["penalties"])
+            d["penalty_yards"] = int(row["penalty_yards"] or 0)
+            d["false_starts"]  = int(row["false_starts"] or 0)
+            d["holding"]       = int(row["holding"] or 0)
+
+        if row["def_tds"]:
+            adv.setdefault(s, {})["def_tds"] = int(row["def_tds"])
+
+        if row["fg_n"]:
+            kicking.setdefault(s, {}).update(
+                {k: int(row[k]) for k in _FG_KEYS if row[k] is not None}
+            )
+
+        if row["punts"]:
+            gross = row["gross_yards"] or 0
+            ret = row["return_yards"] or 0
+            tb = row["punt_touchbacks"] or 0
+            d = kicking.setdefault(s, {})
+            d["punt_net_yards"]  = int(gross - ret - 20 * tb)
+            d["punt_inside_20"]  = int(row["punt_inside_20"] or 0)
+            d["punt_touchbacks"] = int(tb)
+            if row["punt_long"] is not None:
+                d["punt_long"] = int(row["punt_long"])
+            d["punt_blocked"] = int(row["punt_blocked"] or 0)
+
+    return {"situational": situational, "wpa": wpa, "kicking": kicking, "adv": adv, "cpoe": cpoe}
+
+
+def _get_target_shares(player_id: str) -> dict:
+    """Target share & air yards share — the player's share of team targets/air
+    yards in games they actually appeared in (handles mid-season trades
+    correctly). pgs-based, so it stays separate from the plays scan above."""
+    result: dict[int, dict] = {}
     for row in safe_query("""
         WITH player_games AS (
             SELECT pgs.game_id, pgs.season, pgs.team,
@@ -235,157 +354,21 @@ def _get_player_advanced_stats(player_id: str) -> dict:
             GROUP BY season
         )
         SELECT ps.season,
-               ROUND(100.0 * ps.player_tgt / NULLIF(tt.team_tgt, 0), 1) AS target_share,
-               ROUND(100.0 * ps.player_ay  / NULLIF(tt.team_ay,  0), 1) AS air_yards_share
+               ROUND(100.0 * ps.player_tgt / NULLIF(SUM(tt.team_tgt), 0), 1) AS target_share,
+               ROUND(100.0 * ps.player_ay  / NULLIF(SUM(tt.team_ay),  0), 1) AS air_yards_share
         FROM player_season ps
         JOIN team_totals tt ON ps.season = tt.season
-    """, [pid]):
+        -- SUM across stints: a traded player has one team_totals row per team,
+        -- and joining on season alone fanned that out to multiple result rows —
+        -- whichever arrived last won, nondeterministically (a share could even
+        -- exceed 100%). The share is his totals over the combined team totals
+        -- from games he appeared in.
+        GROUP BY ps.season, ps.player_tgt, ps.player_ay
+    """, [player_id]):
         s = int(row["season"])
         d = result.setdefault(s, {})
         if row["target_share"]    is not None: d["target_share"]    = float(row["target_share"])
         if row["air_yards_share"] is not None: d["air_yards_share"] = float(row["air_yards_share"])
-
-    # Penalties committed — most useful for OL, where the vendor data has no
-    # blocking box-score. False starts and offensive holding are the signature
-    # lineman infractions; total count + yards round it out. penalty_player_id
-    # is gsis-format so it joins directly on player_id.
-    for row in safe_query("""
-        SELECT season,
-            COUNT(*)                                                   AS penalties,
-            SUM(COALESCE(penalty_yards, 0))                            AS penalty_yards,
-            COUNT(*) FILTER (WHERE penalty_type = 'False Start')       AS false_starts,
-            COUNT(*) FILTER (WHERE penalty_type = 'Offensive Holding') AS holding
-        FROM plays
-        WHERE penalty = 1 AND penalty_player_id = ? AND season_type = 'REG'
-        GROUP BY season
-    """, [pid]):
-        s = int(row["season"])
-        d = result.setdefault(s, {})
-        d["penalties"]     = int(row["penalties"] or 0)
-        d["penalty_yards"] = int(row["penalty_yards"] or 0)
-        d["false_starts"]  = int(row["false_starts"] or 0)
-        d["holding"]       = int(row["holding"] or 0)
-
-    # Defensive touchdowns — INT or fumble returned for a score. Restricting to
-    # interception/fumble plays (not just return_touchdown=1) excludes punt and
-    # kickoff return TDs, isolating true pick-6 / scoop-and-score plays.
-    for row in safe_query("""
-        SELECT season, COUNT(*) AS def_tds
-        FROM plays
-        WHERE td_player_id = ? AND return_touchdown = 1
-          AND (interception = 1 OR fumble = 1)
-          AND season_type = 'REG'
-        GROUP BY season
-    """, [pid]):
-        s = int(row["season"])
-        if row["def_tds"]:
-            result.setdefault(s, {})["def_tds"] = int(row["def_tds"])
-
-    # Stuff rate — % of rush carries stopped at or behind the line of scrimmage
-    for row in safe_query("""
-        SELECT season,
-            COUNT(*) FILTER (WHERE rush_attempt = 1 AND rushing_yards <= 0) AS stuffed,
-            COUNT(*) FILTER (WHERE rush_attempt = 1)                         AS carries_total,
-            ROUND(100.0 * COUNT(*) FILTER (WHERE rush_attempt = 1 AND rushing_yards <= 0)
-                        / NULLIF(COUNT(*) FILTER (WHERE rush_attempt = 1), 0), 1) AS stuff_rate
-        FROM plays
-        WHERE rusher_player_id = ? AND season_type = 'REG'
-        GROUP BY season
-    """, [pid]):
-        s = int(row["season"])
-        d = result.setdefault(s, {})
-        d["stuffed"]        = int(row["stuffed"] or 0)
-        d["carries_total"]  = int(row["carries_total"] or 0)
-        if row["stuff_rate"] is not None: d["stuff_rate"] = float(row["stuff_rate"])
-
-    return result
-
-
-def _get_kicking_stats(player_id: str) -> dict:
-    """Per-season kicker and punter splits from play-by-play.
-
-    Kickers: field goals by distance bucket (<40 / 40-49 / 50+), longest made,
-    blocked. Punters: net yards, inside-20, touchbacks, longest, blocked.
-    Raw counts are returned; the frontend computes rates/averages and the
-    career row by summation. Covers 1999+ (the span of the plays table).
-    """
-    result: dict[int, dict] = {}
-
-    # Kicker — field goals by distance. field_goal_result is 'made'/'missed'/'blocked'.
-    for row in safe_query("""
-        SELECT season,
-            MAX(CASE WHEN field_goal_result = 'made' THEN kick_distance END)                          AS fg_long,
-            COUNT(*) FILTER (WHERE kick_distance < 40)                                                 AS fg_0_39_att,
-            COUNT(*) FILTER (WHERE kick_distance < 40 AND field_goal_result = 'made')                  AS fg_0_39_made,
-            COUNT(*) FILTER (WHERE kick_distance BETWEEN 40 AND 49)                                    AS fg_40_49_att,
-            COUNT(*) FILTER (WHERE kick_distance BETWEEN 40 AND 49 AND field_goal_result = 'made')     AS fg_40_49_made,
-            COUNT(*) FILTER (WHERE kick_distance >= 50)                                                AS fg_50_att,
-            COUNT(*) FILTER (WHERE kick_distance >= 50 AND field_goal_result = 'made')                 AS fg_50_made,
-            COUNT(*) FILTER (WHERE field_goal_result = 'blocked')                                      AS fg_blocked
-        FROM plays
-        WHERE kicker_player_id = ? AND field_goal_attempt = 1 AND season_type = 'REG'
-        GROUP BY season
-    """, [player_id]):
-        s = int(row.pop("season"))
-        result.setdefault(s, {}).update(
-            {k: int(v) for k, v in row.items() if v is not None}
-        )
-
-    # Punter — net yards, placement. Net = gross − return − 20·touchbacks.
-    for row in safe_query("""
-        SELECT season,
-            COUNT(*)                                          AS punts,
-            SUM(kick_distance)                                AS gross_yards,
-            SUM(COALESCE(return_yards, 0))                    AS return_yards,
-            COUNT(*) FILTER (WHERE touchback = 1)             AS punt_touchbacks,
-            COUNT(*) FILTER (WHERE punt_inside_twenty = 1)    AS punt_inside_20,
-            MAX(kick_distance)                                AS punt_long,
-            COUNT(*) FILTER (WHERE punt_blocked = 1)          AS punt_blocked
-        FROM plays
-        WHERE punter_player_id = ? AND punt_attempt = 1 AND season_type = 'REG'
-        GROUP BY season
-    """, [player_id]):
-        s = int(row.pop("season"))
-        gross = row["gross_yards"] or 0
-        ret = row["return_yards"] or 0
-        tb = row["punt_touchbacks"] or 0
-        d = result.setdefault(s, {})
-        d["punt_net_yards"]  = int(gross - ret - 20 * tb)
-        d["punt_inside_20"]  = int(row["punt_inside_20"] or 0)
-        d["punt_touchbacks"] = int(tb)
-        if row["punt_long"] is not None:
-            d["punt_long"] = int(row["punt_long"])
-        d["punt_blocked"] = int(row["punt_blocked"] or 0)
-
-    return result
-
-
-def _get_player_wpa(player_id: str) -> dict:
-    """Per-season WPA attribution from play-by-play using proper split credit."""
-    result: dict[int, dict] = {}
-    pid = player_id
-
-    # Pass/rec/rush WPA all read the same base set (the player's REG plays), so
-    # compute them in one scan instead of three. Each credit uses the split
-    # component that matches the role (air_wpa passing, yac_wpa receiving,
-    # wpa rushing); pid is bound once via the cross-joined `q` row.
-    for row in safe_query("""
-        SELECT season,
-            ROUND(SUM(CASE WHEN passer_player_id   = q.pid AND pass_attempt  = 1 THEN COALESCE(air_wpa, 0) ELSE 0 END), 3) AS pass_wpa,
-            ROUND(SUM(CASE WHEN receiver_player_id = q.pid AND complete_pass = 1 THEN COALESCE(yac_wpa, 0) ELSE 0 END), 3) AS rec_wpa,
-            ROUND(SUM(CASE WHEN rusher_player_id   = q.pid AND rush_attempt  = 1 THEN COALESCE(wpa, 0)     ELSE 0 END), 3) AS rush_wpa
-        FROM plays CROSS JOIN (SELECT ? AS pid) q
-        WHERE (passer_player_id = ? OR receiver_player_id = ? OR rusher_player_id = ?)
-          AND season_type = 'REG'
-        GROUP BY season
-    """, [pid, pid, pid, pid]):
-        s = int(row["season"])
-        result.setdefault(s, {}).update({
-            "pass_wpa": row["pass_wpa"],
-            "rec_wpa":  row["rec_wpa"],
-            "rush_wpa": row["rush_wpa"],
-        })
-
     return result
 
 
@@ -406,32 +389,31 @@ def _get_snap_first_games(player_id: str, with_stats: bool = False) -> list[dict
         pgs_join = ""
         pgs_param = []
 
+    # Same pfr-vs-name branching as _get_snap_totals (and same reason).
+    pfr_id, player_name = _pfr_identity(player_id)
+    if pfr_id is not None:
+        snaps_where = "sc.pfr_player_id = ?"
+        snaps_params = [pfr_id]
+    elif player_name is not None:
+        snaps_where = """LOWER(sc.player) = LOWER(?)
+              AND EXISTS (
+                  SELECT 1 FROM rosters r2
+                  WHERE r2.player_id = ? AND r2.season = sc.season AND r2.team = sc.team
+              )"""
+        snaps_params = [player_name, player_id]
+    else:
+        return []
+
     return query_to_dict(f"""
-        WITH player_info AS (
-            SELECT MAX(pfr_id) AS pfr_id, MAX(player_name) AS player_name
-            FROM rosters WHERE player_id = ?
-        ),
-        player_all_teams AS (
-            SELECT DISTINCT season, team FROM rosters WHERE player_id = ?
-        ),
-        player_roster AS (
+        WITH player_roster AS (
             SELECT season, team, position, jersey_number, headshot_url
             FROM rosters WHERE player_id = ?
             QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id, season ORDER BY season DESC) = 1
         ),
         player_snaps AS (
             SELECT sc.game_id, sc.season, sc.team
-            FROM snap_counts sc, player_info pi
-            WHERE (
-                (pi.pfr_id IS NOT NULL AND sc.pfr_player_id = pi.pfr_id)
-                OR
-                (pi.pfr_id IS NULL
-                 AND LOWER(sc.player) = LOWER(pi.player_name)
-                 AND EXISTS (
-                     SELECT 1 FROM player_all_teams pat
-                     WHERE pat.season = sc.season AND pat.team = sc.team
-                 ))
-            )
+            FROM snap_counts sc
+            WHERE {snaps_where}
         )
         SELECT
             s.game_id, ps.season, s.week, ps.team,
@@ -453,7 +435,7 @@ def _get_snap_first_games(player_id: str, with_stats: bool = False) -> list[dict
         {pgs_join}
         LEFT JOIN player_roster pr ON pr.season = ps.season
         ORDER BY ps.season, s.week
-    """, [player_id, player_id, player_id] + pgs_param)
+    """, [player_id] + snaps_params + pgs_param)
 
 
 @router.get("/players/{player_id}", response_model=PlayerProfile)
@@ -551,17 +533,24 @@ CASE
     reg_games = [g for g in games if g.get("game_type") == "REG"]
     season_totals = {col: sum(g[col] or 0 for g in reg_games) for col in STAT_COLS}
 
+    # One scan of plays covers situational / WPA / kicking / most adv stats /
+    # the CPOE fallback; target share is pgs-based and merges into adv.
+    pbp = _get_pbp_stats(player_id)
+    adv_stats = pbp["adv"]
+    for s, d in _get_target_shares(player_id).items():
+        adv_stats.setdefault(s, {}).update(d)
+
     return {
         **profile,
         "games_played": len(reg_games),
         "season_totals": season_totals,
         "games": games,
-        "ngs": _get_ngs(player_id),
+        "ngs": _get_ngs(player_id, pbp["cpoe"]),
         "snap_totals": _get_snap_totals(player_id),
-        "situational": _get_situational_stats(player_id),
-        "kicking": _get_kicking_stats(player_id),
-        "wpa": _get_player_wpa(player_id),
-        "adv_stats": _get_player_advanced_stats(player_id),
+        "situational": pbp["situational"],
+        "kicking": pbp["kicking"],
+        "wpa": pbp["wpa"],
+        "adv_stats": adv_stats,
         "draft":          _get_draft_info(player_id),
         "combine":        _get_combine_data(player_id),
         "current_injury": _get_current_injury(player_id),
