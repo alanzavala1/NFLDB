@@ -4,10 +4,10 @@ import { api } from '../api'
 import type { Game, LeagueLeader, SeasonEntry, WeekGroup } from '../api'
 import { teamLogoUrl } from '../utils/teams'
 import Nav from '../components/Nav'
-import { PlayoffBracket } from '../components/PlayoffBracket'
 import { PAST_AWARDS, SB_CHAMPS } from '../utils/awards'
 
 const GAME_TYPE_LABELS: Record<string, string> = { WC: 'Wild Card', DIV: 'Divisional', CON: 'Conference', SB: 'Super Bowl' }
+const GAME_TYPE_PRIORITY: Record<string, number> = { SB: 4, CON: 3, DIV: 2, WC: 1, REG: 0 }
 
 function IngestProgress({ season, onDone }: { season: number; onDone: () => void }) {
   const [lines, setLines] = useState<string[]>([])
@@ -76,6 +76,65 @@ function formatTimeShort(t: string | null) {
   return `${hour}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
+function formatDateShort(gameday: string | null) {
+  if (!gameday) return null
+  const [y, m, d] = gameday.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+function formatKickoff(game: Game) {
+  const date = formatDateShort(game.gameday)
+  const time = formatTimeShort(game.gametime)
+  if (date && time !== 'TBD') return `${date} at ${time} ET`
+  return date ?? time
+}
+
+function isFinished(game: Game) {
+  return game.away_score !== null && game.home_score !== null
+}
+
+function gameTypePriority(game: Game) {
+  return GAME_TYPE_PRIORITY[game.game_type] ?? 0
+}
+
+function kickoffKey(game: Game) {
+  return `${game.gameday ?? '9999-99-99'} ${game.gametime ?? '99:99'} ${game.game_id}`
+}
+
+function spreadCloseness(game: Game) {
+  if (game.spread_line === null) return 0
+  return Math.max(0, 21 - Math.abs(game.spread_line))
+}
+
+function pickFeaturedGame(games: Game[]): Game | null {
+  if (!games.length) return null
+  const hasUpcoming = games.some(g => !isFinished(g))
+  const pool = hasUpcoming ? games.filter(g => !isFinished(g)) : games
+  return [...pool].sort((a, b) => {
+    const typeDiff = gameTypePriority(b) - gameTypePriority(a)
+    if (typeDiff !== 0) return typeDiff
+
+    if (hasUpcoming) {
+      const primeDiff = Number(Boolean(primetimeBadge(b.gameday, b.gametime))) - Number(Boolean(primetimeBadge(a.gameday, a.gametime)))
+      if (primeDiff !== 0) return primeDiff
+      const divDiff = Number(b.div_game === 1) - Number(a.div_game === 1)
+      if (divDiff !== 0) return divDiff
+      const spreadDiff = spreadCloseness(b) - spreadCloseness(a)
+      if (spreadDiff !== 0) return spreadDiff
+      return kickoffKey(a).localeCompare(kickoffKey(b))
+    }
+
+    const marginA = Math.abs(a.away_score! - a.home_score!)
+    const marginB = Math.abs(b.away_score! - b.home_score!)
+    if (marginA !== marginB) return marginA - marginB
+    const otDiff = Number(b.overtime === 1) - Number(a.overtime === 1)
+    if (otDiff !== 0) return otDiff
+    const totalDiff = (b.away_score! + b.home_score!) - (a.away_score! + a.home_score!)
+    if (totalDiff !== 0) return totalDiff
+    return kickoffKey(b).localeCompare(kickoffKey(a))
+  })[0] ?? null
+}
+
 function Chip({ label, tone }: { label: string; tone: 'indigo' | 'amber' | 'rose' | 'emerald' | 'gray' }) {
   const tones = {
     indigo:  'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
@@ -95,9 +154,141 @@ function formatSpread(game: Game): string | null {
   return `${fav} -${Math.abs(game.spread_line)}`
 }
 
+function FeaturedTeam({
+  team,
+  record,
+  qb,
+  score,
+  won,
+  finished,
+  align = 'left',
+}: {
+  team: string
+  record?: string | null
+  qb?: string | null
+  score: number | null
+  won: boolean
+  finished: boolean
+  align?: 'left' | 'right'
+}) {
+  return (
+    <div className={`flex min-w-0 items-center gap-4 ${align === 'right' ? 'lg:flex-row-reverse lg:text-right' : ''}`}>
+      <img src={teamLogoUrl(team)} alt={team} className="h-16 w-16 shrink-0 object-contain sm:h-20 sm:w-20" />
+      <div className="min-w-0 flex-1">
+        <div className={`truncate text-4xl font-black leading-none tracking-tight sm:text-5xl ${finished && !won ? 'text-gray-500' : 'text-white'}`}>
+          {team}
+        </div>
+        <div className="mt-2 truncate text-xs font-medium uppercase tracking-widest text-gray-500">
+          {record || (!finished && qb) || 'NFL'}
+        </div>
+      </div>
+      {finished && (
+        <div className={`shrink-0 text-5xl font-black leading-none tabular-nums sm:text-6xl ${won ? 'text-white' : 'text-gray-600'}`}>
+          {score}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FeaturedGameHero({ game }: { game: Game }) {
+  const finished = isFinished(game)
+  const awayWon = finished && game.away_score! > game.home_score!
+  const homeWon = finished && game.home_score! > game.away_score!
+  const margin = finished ? Math.abs(game.away_score! - game.home_score!) : null
+  const total = finished ? game.away_score! + game.home_score! : null
+  const spread = formatSpread(game)
+  const ptBadge = primetimeBadge(game.gameday, game.gametime)
+  const isSuperBowl = game.game_type === 'SB'
+  const accent = isSuperBowl
+    ? 'border-yellow-500/40 bg-yellow-500/5 text-yellow-300'
+    : 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300'
+  const heroBorder = isSuperBowl
+    ? 'border-yellow-500/40 hover:border-yellow-400/70'
+    : 'border-gray-800 hover:border-indigo-600'
+  const status = finished ? (game.overtime === 1 ? 'Final / OT' : 'Final') : formatKickoff(game)
+  const detailItems = finished
+    ? [
+        { label: 'Margin', value: margin?.toString() ?? '-' },
+        { label: 'Total', value: total?.toString() ?? '-' },
+        { label: 'Date', value: formatDateShort(game.gameday) ?? 'TBD' },
+        { label: 'Venue', value: game.stadium ?? 'TBD' },
+      ]
+    : [
+        { label: 'Kickoff', value: formatKickoff(game) },
+        { label: 'Spread', value: spread ?? 'No line' },
+        { label: 'Total', value: game.total_line !== null ? `O/U ${game.total_line}` : 'No total' },
+        { label: 'Venue', value: game.stadium ?? 'TBD' },
+      ]
+
+  return (
+    <Link
+      to={`/games/${game.game_id}`}
+      state={{ fromWeek: game.week }}
+      className={`group mb-4 block overflow-hidden rounded-xl border bg-gray-900 transition-colors ${heroBorder}`}
+      aria-label={`View featured game ${game.away_team} at ${game.home_team}`}
+    >
+      <div className="px-4 py-4 sm:px-6 sm:py-5">
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <span className={`rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${accent}`}>
+            Featured
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            {weekLabel(game.week, game.game_type)}
+          </span>
+          {ptBadge && <Chip label={ptBadge} tone="indigo" />}
+          {game.div_game === 1 && <Chip label="DIV" tone="gray" />}
+          <span className="ml-auto text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            {status}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+          <FeaturedTeam
+            team={game.away_team}
+            record={game.away_record}
+            qb={game.away_qb_name}
+            score={game.away_score}
+            won={awayWon}
+            finished={finished}
+          />
+          <div className="flex items-center justify-center gap-3 text-center lg:block">
+            <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-600">
+              {finished ? 'Final' : 'At'}
+            </div>
+            {!finished && (
+              <div className="mt-0 text-sm font-black uppercase tracking-widest text-white lg:mt-2">
+                {formatTimeShort(game.gametime)}
+              </div>
+            )}
+          </div>
+          <FeaturedTeam
+            team={game.home_team}
+            record={game.home_record}
+            qb={game.home_qb_name}
+            score={game.home_score}
+            won={homeWon}
+            finished={finished}
+            align="right"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 border-t border-gray-800 bg-gray-950/35 sm:grid-cols-4">
+        {detailItems.map(item => (
+          <div key={item.label} className="min-w-0 border-b border-gray-800/70 px-4 py-3 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-600">{item.label}</div>
+            <div className="mt-1 break-words text-sm font-semibold text-gray-200">{item.value}</div>
+          </div>
+        ))}
+      </div>
+    </Link>
+  )
+}
+
 function GameCard({ game }: { game: Game }) {
   const navigate = useNavigate()
-  const finished = game.away_score !== null && game.home_score !== null
+  const finished = isFinished(game)
   const awayWon = finished && game.away_score! > game.home_score!
   const homeWon = finished && game.home_score! > game.away_score!
   const margin = finished ? Math.abs(game.away_score! - game.home_score!) : null
@@ -185,9 +376,10 @@ function GameCard({ game }: { game: Game }) {
   )
 }
 
-function WeekHighlights({ games }: { games: Game[] }) {
+function WeekHighlights({ games, omitGameId }: { games: Game[]; omitGameId?: string }) {
   const navigate = useNavigate()
   const finished = games.filter(g => g.away_score !== null && g.home_score !== null)
+  const spotlightPool = omitGameId ? finished.filter(g => g.game_id !== omitGameId) : finished
   const upcoming = games.length - finished.length
 
   const totalPts = finished.reduce((s, g) => s + (g.away_score ?? 0) + (g.home_score ?? 0), 0)
@@ -196,8 +388,8 @@ function WeekHighlights({ games }: { games: Game[] }) {
   const otGames = finished.filter(g => g.overtime === 1).length
   const divGames = games.filter(g => g.div_game === 1).length
 
-  const closest = finished.length
-    ? [...finished].sort((a, b) => {
+  const closest = spotlightPool.length
+    ? [...spotlightPool].sort((a, b) => {
         const ma = Math.abs(a.away_score! - a.home_score!)
         const mb = Math.abs(b.away_score! - b.home_score!)
         if (ma !== mb) return ma - mb
@@ -205,11 +397,11 @@ function WeekHighlights({ games }: { games: Game[] }) {
         return (b.away_score! + b.home_score!) - (a.away_score! + a.home_score!)
       })[0]
     : null
-  const highest = finished.length
-    ? [...finished].sort((a, b) =>
+  const highest = spotlightPool.length
+    ? [...spotlightPool].sort((a, b) =>
         (b.away_score! + b.home_score!) - (a.away_score! + a.home_score!))[0]
     : null
-  const upset = finished
+  const upset = spotlightPool
     .filter(g => g.spread_line !== null)
     .reduce<{ game: Game; mag: number; winner: string } | null>((best, g) => {
       const homeWon = g.home_score! > g.away_score!
@@ -320,18 +512,15 @@ function findCurrentWeek(schedule: WeekGroup[]): number | null {
   return firstUpcoming?.week ?? null
 }
 
-function CurrentWeekSection({ schedule, season }: { schedule: WeekGroup[]; season: number }) {
+function CurrentWeekSection({ group, season, featuredGame }: { group: WeekGroup; season: number; featuredGame: Game | null }) {
   const navigate = useNavigate()
-  const currentWeek = findCurrentWeek(schedule)
-  if (currentWeek == null) return null
-  const group = schedule.find(w => w.week === currentWeek)
-  if (!group) return null
 
-  const finished = group.games.filter(g => g.away_score !== null).length
+  const finished = group.games.filter(isFinished).length
   const total = group.games.length
   const status = finished === 0 ? 'Upcoming' : finished === total ? 'Final' : 'In Progress'
-  const previewGames = group.games.slice(0, 6)
-  const hidden = group.games.length - previewGames.length
+  const remainingGames = featuredGame ? group.games.filter(g => g.game_id !== featuredGame.game_id) : group.games
+  const previewGames = remainingGames.slice(0, 6)
+  const hidden = remainingGames.length - previewGames.length
 
   return (
     <section className="mb-10">
@@ -339,22 +528,25 @@ function CurrentWeekSection({ schedule, season }: { schedule: WeekGroup[]; seaso
         <div>
           <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">{status}</div>
           <h2 className="text-3xl font-black text-white tracking-tight leading-none mt-1">
-            {weekLabel(currentWeek, group.games[0]?.game_type)}
+            {weekLabel(group.week, group.games[0]?.game_type)}
           </h2>
         </div>
         <button
-          onClick={() => navigate(`/?season=${season}&week=${currentWeek}`)}
+          onClick={() => navigate(`/?season=${season}&week=${group.week}`)}
           className="text-xs text-indigo-400 hover:text-indigo-300 font-bold uppercase tracking-wider"
         >
           View all {total} →
         </button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {previewGames.map(g => <GameCard key={g.game_id} game={g} />)}
-      </div>
+      {featuredGame && <FeaturedGameHero game={featuredGame} />}
+      {previewGames.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {previewGames.map(g => <GameCard key={g.game_id} game={g} />)}
+        </div>
+      )}
       {hidden > 0 && (
         <button
-          onClick={() => navigate(`/?season=${season}&week=${currentWeek}`)}
+          onClick={() => navigate(`/?season=${season}&week=${group.week}`)}
           className="block w-full text-center text-xs text-gray-500 hover:text-gray-300 mt-3 py-1"
         >
           +{hidden} more this week
@@ -364,14 +556,14 @@ function CurrentWeekSection({ schedule, season }: { schedule: WeekGroup[]; seaso
   )
 }
 
-function WeekStoriesSection({ weekGames, seasonGames }: { weekGames: Game[]; seasonGames: Game[] }) {
+function WeekStoriesSection({ weekGames, seasonGames, omitGameId }: { weekGames: Game[]; seasonGames: Game[]; omitGameId?: string }) {
   const navigate = useNavigate()
   const weekFinished = weekGames.filter(g => g.away_score !== null && g.home_score !== null)
   const seasonFinished = seasonGames.filter(g => g.away_score !== null && g.home_score !== null)
   // If the current week has fewer than 3 finished games (e.g. just the Super Bowl),
   // pull storylines from the whole season so they're not all the same matchup.
   const useSeasonScope = weekFinished.length < 3
-  const finished = useSeasonScope ? seasonFinished : weekFinished
+  const finished = (useSeasonScope ? seasonFinished : weekFinished).filter(g => g.game_id !== omitGameId)
   if (finished.length === 0) return null
 
   const closest = [...finished].sort((a, b) => {
@@ -767,18 +959,18 @@ function LastSeasonRecap({ season }: { season: number }) {
 
 function HomeDashboard({ season, schedule }: { season: number; schedule: WeekGroup[] }) {
   const currentWeek = findCurrentWeek(schedule)
-  const currentWeekGames = currentWeek != null ? schedule.find(w => w.week === currentWeek)?.games ?? [] : []
+  const currentGroup = currentWeek != null ? schedule.find(w => w.week === currentWeek) ?? null : null
+  const currentWeekGames = currentGroup?.games ?? []
+  const featuredGame = pickFeaturedGame(currentWeekGames)
   const seasonGames = schedule.flatMap(w => w.games)
   const seasonFinished = seasonGames.filter(g => g.away_score !== null && g.home_score !== null).length
-  const hasPlayoffs = seasonGames.some(g => g.game_type === 'WC' || g.game_type === 'DIV' || g.game_type === 'CON' || g.game_type === 'SB')
   // Early in the season (no real storylines yet), show a recap of the previous season for context
   const showRecap = seasonFinished < 3
   return (
     <>
-      <CurrentWeekSection schedule={schedule} season={season} />
+      {currentGroup && <CurrentWeekSection group={currentGroup} season={season} featuredGame={featuredGame} />}
       {showRecap && <LastSeasonRecap season={season} />}
-      {hasPlayoffs && <PlayoffBracket season={season} />}
-      <WeekStoriesSection weekGames={currentWeekGames} seasonGames={seasonGames} />
+      <WeekStoriesSection weekGames={currentWeekGames} seasonGames={seasonGames} omitGameId={featuredGame?.game_id} />
       <TopLeadersStrip season={season} />
       <SeasonAtAGlance schedule={schedule} />
       <RecentResultsFeed schedule={schedule} />
@@ -872,9 +1064,9 @@ export default function SchedulePage() {
           <div className="mb-10 flex items-end justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-4xl font-black text-white tracking-tight leading-none">
-                {season ?? ''} Season
+                Scores
               </h1>
-              <p className="text-gray-500 text-sm mt-2 uppercase tracking-widest font-medium">Scores &amp; Schedule</p>
+              <p className="text-gray-500 text-sm mt-2 uppercase tracking-widest font-medium">{season ?? ''} NFL Season</p>
             </div>
             <div className="relative shrink-0">
               <select
@@ -922,8 +1114,10 @@ export default function SchedulePage() {
 
         {/* Week detail view */}
         {!isSeasonLoading && selectedWeek !== null && selectedGroup && (() => {
+          const featuredGame = pickFeaturedGame(selectedGroup.games)
+          const gridGames = featuredGame ? selectedGroup.games.filter(g => g.game_id !== featuredGame.game_id) : selectedGroup.games
           const byTime: Record<string, Game[]> = {}
-          for (const g of selectedGroup.games) {
+          for (const g of gridGames) {
             const slot = g.gametime ?? 'TBD'
             ;(byTime[slot] ??= []).push(g)
           }
@@ -936,21 +1130,24 @@ export default function SchedulePage() {
           }
           return (
             <div>
-              <WeekHighlights games={selectedGroup.games} />
-              <div className="space-y-6">
-                {Object.entries(byTime).map(([slot, games]) => (
-                  <div key={slot}>
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-sm font-semibold text-gray-400">{formatTime(slot)}</span>
-                      <div className="flex-1 h-px bg-gray-800" />
-                      <span className="text-xs text-gray-600">{games.length} game{games.length > 1 ? 's' : ''}</span>
+              {featuredGame && <FeaturedGameHero game={featuredGame} />}
+              <WeekHighlights games={selectedGroup.games} omitGameId={featuredGame?.game_id} />
+              {gridGames.length > 0 && (
+                <div className="space-y-6">
+                  {Object.entries(byTime).map(([slot, games]) => (
+                    <div key={slot}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-sm font-semibold text-gray-400">{formatTime(slot)}</span>
+                        <div className="flex-1 h-px bg-gray-800" />
+                        <span className="text-xs text-gray-600">{games.length} game{games.length > 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {games.map(g => <GameCard key={g.game_id} game={g} />)}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {games.map(g => <GameCard key={g.game_id} game={g} />)}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })()}
