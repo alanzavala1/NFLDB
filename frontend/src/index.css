@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@theme {
+  --color-surface-bg: #0e0d15;
+  --color-surface-card: #1b1a26;
+  --color-surface-raise: #262433;
+  --color-surface-line: #2e2b3e;
+  --color-ink: #f4f3f8;
+  --color-ink-mid: #a3a0b8;
+  --color-ink-dim: #6c6885;
+  --color-data-win: #34d399;
+  --color-data-loss: #f87171;
+  --color-gold: #f5c451;
+  --radius-card: 14px;
+}
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -11,8 +25,8 @@
 
 body {
   margin: 0;
-  background: #0f1117;
-  color: #e5e7eb;
-  font-family: system-ui, 'Segoe UI', sans-serif;
+  background: #0e0d15;
+  color: #f4f3f8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }

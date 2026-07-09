@@ -1,0 +1,400 @@
+<title>NFLDB — Surface Refactor Mockup</title>
+<style>
+  :root{
+    --bg:#0e0d15; --card:#1b1a26; --raise:#262433; --line:#2e2b3e;
+    --t1:#f4f3f8; --t2:#a3a0b8; --t3:#6c6885;
+    --acc:#818cf8; --acc-fill:#6366f1;
+    --win:#34d399; --loss:#f87171; --gold:#f5c451;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html{background:var(--bg)}
+  body{
+    margin:0; background:var(--bg); color:var(--t1);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .note{
+    text-align:center; font-size:11px; color:var(--t3); padding:8px 16px;
+    border-bottom:1px solid var(--line); letter-spacing:.04em;
+  }
+  /* ---------- top nav ---------- */
+  .nav{
+    position:sticky; top:0; z-index:40; height:56px;
+    display:flex; align-items:center; gap:28px; padding:0 28px;
+    background:rgba(14,13,21,.9); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .wordmark{font-weight:900; font-size:17px; letter-spacing:-.02em}
+  .wordmark em{font-style:normal; color:var(--acc)}
+  .nav a{color:var(--t2); text-decoration:none; font-weight:600; font-size:13.5px; padding:6px 10px; border-radius:8px}
+  .nav a.on{color:var(--t1); background:var(--raise)}
+  .nav a:hover{color:var(--t1)}
+  .search{
+    margin-left:auto; display:flex; align-items:center; gap:8px;
+    background:var(--card); border:1px solid var(--line); border-radius:10px;
+    color:var(--t3); font-size:13px; padding:7px 12px; width:230px; cursor:pointer;
+  }
+  .search kbd{margin-left:auto; font:10px/1 inherit; color:var(--t3); border:1px solid var(--line); border-radius:4px; padding:2px 5px}
+
+  /* ---------- page grid ---------- */
+  .page{
+    max-width:1460px; margin:0 auto; padding:20px 28px 64px;
+    display:grid; grid-template-columns:250px minmax(0,1fr) 330px; gap:20px;
+    align-items:start;
+  }
+  .rail{display:grid; gap:20px}
+  .feed{display:grid; gap:20px; min-width:0}
+
+  /* ---------- the one card grammar ---------- */
+  .card{background:var(--card); border-radius:var(--r); overflow:hidden}
+  .card-h{
+    display:flex; align-items:center; gap:10px; padding:13px 16px;
+    font-size:13px; font-weight:700; color:var(--t1);
+  }
+  .card-h .act{margin-left:auto; font-size:12px; font-weight:600; color:var(--acc); text-decoration:none; white-space:nowrap}
+  .card-h .act:hover{text-decoration:underline}
+  .row{
+    display:flex; align-items:center; gap:10px; padding:11px 16px;
+    border-top:1px solid var(--line); color:var(--t1); text-decoration:none;
+  }
+  .row:hover{background:var(--raise)}
+  .micro{font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--t3)}
+
+  /* team chip (stand-in for logos) */
+  .chip{
+    width:22px; height:22px; border-radius:50%; flex:none;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-size:8px; font-weight:800; color:#fff; letter-spacing:.02em;
+  }
+  .chip.dk{color:#111}
+
+  /* ---------- left rail: power rankings ---------- */
+  .teamrow{font-weight:600; font-size:13.5px; color:var(--t2)}
+  .teamrow:hover{color:var(--t1)}
+  .teamrow .rec{margin-left:auto; font-size:11px; color:var(--t3); font-variant-numeric:tabular-nums}
+  .pr{display:grid; grid-template-columns:16px 22px 1fr 36px 34px; gap:9px; align-items:center; font-variant-numeric:tabular-nums}
+  .pr .rk{text-align:right; font-size:12px; font-weight:700; color:var(--t3)}
+  .pr .nm{font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .pr .rec{font-size:11px; color:var(--t3); text-align:right}
+  .pr .mv{font-size:11px; font-weight:700; text-align:right}
+  .up{color:var(--win)} .dn{color:var(--loss)} .fl{color:var(--t3)}
+
+  /* ---------- week navigator ---------- */
+  .weeknav{display:flex; align-items:center; gap:10px; padding:12px 12px 8px}
+  .wk-arrow{
+    width:30px; height:30px; border-radius:50%; border:none; background:var(--raise);
+    color:var(--t2); font-size:14px; cursor:pointer; flex:none;
+  }
+  .wk-arrow:hover{color:var(--t1)}
+  .wk-label{flex:1; text-align:center; font-weight:700; font-size:14px}
+  .wk-label span{color:var(--t3); font-weight:500; font-size:12px; margin-left:8px}
+  .wkstrip{display:flex; gap:6px; padding:8px 12px 12px; overflow-x:auto; scrollbar-width:none}
+  .wkstrip::-webkit-scrollbar{display:none}
+  .wkpill{
+    border:none; border-radius:8px; padding:6px 11px; font-size:11.5px; font-weight:700;
+    background:var(--raise); color:var(--t2); cursor:pointer; flex:none; font-variant-numeric:tabular-nums;
+  }
+  .wkpill:hover{color:var(--t1)}
+  .wkpill.on{background:var(--acc-fill); color:#fff}
+
+  /* ---------- featured hero card ---------- */
+  .hero-band{
+    display:flex; align-items:center; gap:10px; padding:11px 16px;
+    background:linear-gradient(90deg, rgba(245,196,81,.16), rgba(245,196,81,.03) 60%);
+    border-bottom:1px solid var(--line);
+  }
+  .hero-band .micro{color:var(--gold)}
+  .hero-band .right{margin-left:auto; color:var(--t3)}
+  .hero-main{
+    display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px;
+    padding:26px 28px 22px;
+  }
+  .hero-team{display:flex; align-items:center; gap:14px; min-width:0}
+  .hero-team.rt{flex-direction:row-reverse; text-align:right}
+  .hero-chip{width:52px; height:52px; font-size:15px}
+  .hero-name{font-size:26px; font-weight:900; letter-spacing:-.02em; line-height:1}
+  .hero-sub{font-size:11px; color:var(--t3); margin-top:5px; font-variant-numeric:tabular-nums}
+  .dim .hero-name{color:var(--t3)}
+  .hero-score{
+    display:flex; align-items:baseline; gap:12px;
+    font-size:44px; font-weight:900; font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+  }
+  .hero-score .ls{color:var(--t3)}
+  .hero-facts{display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--line)}
+  .hero-facts>div{padding:12px 16px; border-left:1px solid var(--line); min-width:0}
+  .hero-facts>div:first-child{border-left:none}
+  .hero-facts b{display:block; font-size:13.5px; font-weight:600; margin-top:3px; color:var(--t1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+  /* ---------- game rows (detailed) ---------- */
+  .game{display:grid; grid-template-columns:40px 1fr auto 1fr 64px; align-items:center; gap:10px; padding:13px 16px}
+  .g-badge{
+    justify-self:start; font-size:9.5px; font-weight:800; letter-spacing:.08em;
+    padding:3px 7px; border-radius:5px; background:var(--raise); color:var(--t3);
+  }
+  .g-team{min-width:0; display:flex; align-items:center; gap:10px; justify-content:flex-end; text-align:right}
+  .g-team.home{justify-content:flex-start; flex-direction:row-reverse; text-align:left}
+  .g-team .tt{min-width:0}
+  .g-team .nm{font-weight:700; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .g-team .sub{font-size:10.5px; color:var(--t3); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums}
+  .g-team.dim .nm{color:var(--t3)}
+  .g-mid{text-align:center; min-width:64px}
+  .g-mid .big{font-weight:800; font-variant-numeric:tabular-nums; font-size:15px}
+  .g-mid .big .at{color:var(--t2); font-weight:700; font-size:13px}
+  .g-mid .under{font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--t3); margin-top:2px}
+  .g-meta{justify-self:end; text-align:right; font-size:10.5px; color:var(--t3); font-variant-numeric:tabular-nums; line-height:1.5; white-space:nowrap}
+  .g-meta .chev{color:var(--t3); font-size:13px}
+
+  /* ---------- division leader tables ---------- */
+  .st{display:grid; grid-template-columns:42px 1fr 40px 40px; gap:8px; align-items:center; font-variant-numeric:tabular-nums}
+  .st .div{font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--t3)}
+  .st .tm{display:flex; gap:8px; align-items:center; font-weight:600; font-size:13px; min-width:0}
+  .st .tm .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .st .n{text-align:right; font-size:12.5px; color:var(--t2)}
+  .st .n.w{color:var(--t1); font-weight:700}
+  .st-head{border-top:1px solid var(--line); padding:7px 16px; display:grid; grid-template-columns:42px 1fr 40px 40px; gap:8px}
+  .st-head span{text-align:right}
+  .conf-tag{width:20px; height:20px; border-radius:6px; flex:none; display:inline-flex; align-items:center; justify-content:center; font-size:8.5px; font-weight:800; color:#fff}
+
+  /* ---------- injuries ---------- */
+  .inj .who{min-width:0}
+  .inj .who b{display:block; font-size:13px; font-weight:600; line-height:1.2}
+  .inj .who span{font-size:11px; color:var(--t3)}
+  .status{
+    margin-left:auto; font-size:9.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
+    padding:3px 8px; border-radius:5px; white-space:nowrap;
+  }
+  .status.out{background:rgba(248,113,113,.13); color:var(--loss)}
+  .status.q{background:rgba(245,196,81,.12); color:var(--gold)}
+  .status.ir{background:var(--raise); color:var(--t3)}
+
+  /* ---------- leaders ---------- */
+  .ldr .who{min-width:0}
+  .ldr .who b{display:block; font-size:13px; font-weight:600; line-height:1.2}
+  .ldr .who span{font-size:11px; color:var(--t3)}
+  .ldr .val{margin-left:auto; text-align:right}
+  .ldr .val b{font-size:15px; font-weight:800; font-variant-numeric:tabular-nums}
+  .ldr .val span{display:block; font-size:9px; color:var(--t3); letter-spacing:.1em}
+  .face{width:30px; height:30px; border-radius:50%; background:var(--raise); flex:none;
+    display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:var(--t2)}
+
+  /* ---------- storylines (center, 3-up) ---------- */
+  .stories{display:grid; grid-template-columns:repeat(3,1fr)}
+  .story{
+    display:flex; align-items:flex-start; gap:10px; padding:14px 16px;
+    border-top:1px solid var(--line); border-left:1px solid var(--line);
+    color:var(--t1); text-decoration:none;
+  }
+  .story:first-child{border-left:none}
+  .story:hover{background:var(--raise)}
+  .story b{display:block; font-size:13px; font-weight:700}
+  .story span{font-size:11px; color:var(--t3)}
+  .story .tag{display:block; font-size:9.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; margin-bottom:3px}
+
+  /* responsive */
+  @media (max-width:1100px){
+    .page{grid-template-columns:minmax(0,1fr) 330px}
+    .rail.left{display:none}
+  }
+  @media (max-width:780px){
+    .page{grid-template-columns:1fr; padding:16px 12px 48px}
+    .hero-name{font-size:20px}
+    .hero-score{font-size:32px}
+    .hero-facts{grid-template-columns:repeat(2,1fr)}
+    .hero-facts>div:nth-child(3){border-left:none}
+    .hero-facts>div{border-top:1px solid var(--line); margin-top:-1px}
+    .stories{grid-template-columns:1fr}
+    .story{border-left:none}
+    .search{width:auto}
+    .nav{gap:14px; padding:0 14px; overflow-x:auto}
+    .g-meta{display:none}
+    .game{grid-template-columns:40px 1fr auto 1fr}
+  }
+</style>
+
+<div class="note">DESIGN MOCKUP · proposed NFLDB surface system · team-color chips stand in for real logos</div>
+
+<nav class="nav">
+  <div class="wordmark">NFL<em>DB</em></div>
+  <a class="on" href="#">Scores</a><a href="#">Standings</a><a href="#">Leaders</a><a href="#">Splits</a><a href="#">Ask</a>
+  <div class="search">⌕&nbsp; Search players, teams… <kbd>⌘K</kbd></div>
+</nav>
+
+<div class="page">
+
+  <!-- ============ LEFT RAIL ============ -->
+  <aside class="rail left">
+    <section class="card">
+      <div class="card-h">Season</div>
+      <a class="row teamrow" href="#"><span>2025</span><span class="rec">current ▾</span></a>
+    </section>
+
+    <section class="card">
+      <div class="card-h">Power rankings <a class="act" href="#">All 32 →</a></div>
+      <a class="row pr" href="#"><span class="rk">1</span><span class="chip" style="background:#69be28">SEA</span><span class="nm">Seahawks</span><span class="rec">14-3</span><span class="mv fl">—</span></a>
+      <a class="row pr" href="#"><span class="rk">2</span><span class="chip" style="background:#c8102e">NE</span><span class="nm">Patriots</span><span class="rec">14-3</span><span class="mv up">▲ 1</span></a>
+      <a class="row pr" href="#"><span class="rk">3</span><span class="chip" style="background:#fb4f14">DEN</span><span class="nm">Broncos</span><span class="rec">13-4</span><span class="mv dn">▼ 1</span></a>
+      <a class="row pr" href="#"><span class="rk">4</span><span class="chip" style="background:#c83803">CHI</span><span class="nm">Bears</span><span class="rec">12-5</span><span class="mv up">▲ 2</span></a>
+      <a class="row pr" href="#"><span class="rk">5</span><span class="chip" style="background:#3a6fd8">BUF</span><span class="nm">Bills</span><span class="rec">12-5</span><span class="mv fl">—</span></a>
+      <a class="row pr" href="#"><span class="rk">6</span><span class="chip" style="background:#a71930">HOU</span><span class="nm">Texans</span><span class="rec">11-6</span><span class="mv up">▲ 3</span></a>
+      <a class="row pr" href="#"><span class="rk">7</span><span class="chip" style="background:#3d7dd6">LA</span><span class="nm">Rams</span><span class="rec">11-6</span><span class="mv dn">▼ 2</span></a>
+      <a class="row pr" href="#"><span class="rk">8</span><span class="chip" style="background:#b3995d">SF</span><span class="nm">49ers</span><span class="rec">11-6</span><span class="mv dn">▼ 1</span></a>
+      <a class="row pr" href="#"><span class="rk">9</span><span class="chip" style="background:#0080c6">LAC</span><span class="nm">Chargers</span><span class="rec">11-6</span><span class="mv dn">▼ 1</span></a>
+      <a class="row pr" href="#"><span class="rk">10</span><span class="chip dk" style="background:#ffb612">PIT</span><span class="nm">Steelers</span><span class="rec">10-7</span><span class="mv up">▲ 1</span></a>
+      <div class="row" style="padding:8px 16px"><span class="micro" style="letter-spacing:.1em">EPA-based · updated weekly</span></div>
+    </section>
+  </aside>
+
+  <!-- ============ CENTER FEED ============ -->
+  <main class="feed">
+
+    <!-- week navigator with week strip -->
+    <section class="card">
+      <div class="weeknav">
+        <button class="wk-arrow">‹</button>
+        <div class="wk-label">Super Bowl <span>Feb 8 · Levi's Stadium</span></div>
+        <button class="wk-arrow">›</button>
+      </div>
+      <div class="wkstrip">
+        <button class="wkpill">W14</button><button class="wkpill">W15</button><button class="wkpill">W16</button>
+        <button class="wkpill">W17</button><button class="wkpill">W18</button><button class="wkpill">Wild Card</button>
+        <button class="wkpill">Divisional</button><button class="wkpill">Conference</button><button class="wkpill on">Super Bowl</button>
+      </div>
+    </section>
+
+    <!-- featured game: same card, gold band = championship -->
+    <a class="card" href="#" style="display:block; color:inherit; text-decoration:none">
+      <div class="hero-band">
+        <span class="micro">Super Bowl LX</span>
+        <span class="micro">Sun, Feb 8</span>
+        <span class="micro right">Final</span>
+      </div>
+      <div class="hero-main">
+        <div class="hero-team">
+          <span class="chip hero-chip" style="background:#69be28">SEA</span>
+          <div><div class="hero-name">Seahawks</div><div class="hero-sub">16-3 · NFC Champions · S. Darnold</div></div>
+        </div>
+        <div class="hero-score"><span>29</span><span style="color:var(--t3);font-size:20px;font-weight:600">–</span><span class="ls">13</span></div>
+        <div class="hero-team rt dim">
+          <span class="chip hero-chip" style="background:#c8102e">NE</span>
+          <div><div class="hero-name">Patriots</div><div class="hero-sub">17-3 · AFC Champions · D. Maye</div></div>
+        </div>
+      </div>
+      <div class="hero-facts">
+        <div><span class="micro">Margin</span><b>16</b></div>
+        <div><span class="micro">Total</span><b>42</b></div>
+        <div><span class="micro">Super Bowl MVP</span><b>J. Smith-Njigba</b></div>
+        <div><span class="micro">Venue</span><b>Levi's Stadium</b></div>
+      </div>
+    </a>
+
+    <!-- a completed slot -->
+    <section class="card">
+      <div class="card-h"><span class="micro" style="letter-spacing:.12em">Wild Card · Sat, Jan 10</span><span class="micro" style="margin-left:auto; letter-spacing:.1em">3 games</span></div>
+      <a class="row game" href="#">
+        <span class="g-badge">FT</span>
+        <span class="g-team dim"><span class="tt"><span class="nm">Chargers</span><span class="sub">11-6 · J. Herbert</span></span><span class="chip" style="background:#0080c6">LAC</span></span>
+        <span class="g-mid"><span class="big">3 – 16</span><span class="under">Final</span></span>
+        <span class="g-team home"><span class="tt"><span class="nm">Patriots</span><span class="sub">14-3 · D. Maye</span></span><span class="chip" style="background:#c8102e">NE</span></span>
+        <span class="g-meta"><span class="chev">›</span></span>
+      </a>
+      <a class="row game" href="#">
+        <span class="g-badge">FT</span>
+        <span class="g-team"><span class="tt"><span class="nm">Texans</span><span class="sub">11-6 · C.J. Stroud</span></span><span class="chip" style="background:#a71930">HOU</span></span>
+        <span class="g-mid"><span class="big">30 – 6</span><span class="under">Final</span></span>
+        <span class="g-team home dim"><span class="tt"><span class="nm">Steelers</span><span class="sub">10-7 · A. Rodgers</span></span><span class="chip dk" style="background:#ffb612">PIT</span></span>
+        <span class="g-meta"><span class="chev">›</span></span>
+      </a>
+      <a class="row game" href="#">
+        <span class="g-badge">FT</span>
+        <span class="g-team"><span class="tt"><span class="nm">Bills</span><span class="sub">12-5 · J. Allen</span></span><span class="chip" style="background:#3a6fd8">BUF</span></span>
+        <span class="g-mid"><span class="big">27 – 24</span><span class="under">Final · OT</span></span>
+        <span class="g-team home dim"><span class="tt"><span class="nm">Jaguars</span><span class="sub">10-7 · T. Lawrence</span></span><span class="chip" style="background:#006778">JAX</span></span>
+        <span class="g-meta"><span class="chev">›</span></span>
+      </a>
+    </section>
+
+    <!-- an upcoming slot -->
+    <section class="card">
+      <div class="card-h"><span class="micro" style="letter-spacing:.12em">Sunday · Sep 6 · 1:00 PM ET</span><span class="micro" style="margin-left:auto; letter-spacing:.1em">4 games</span></div>
+      <a class="row game" href="#">
+        <span class="g-badge">SUN</span>
+        <span class="g-team"><span class="tt"><span class="nm">Buccaneers</span><span class="sub">0-0 · B. Mayfield</span></span><span class="chip" style="background:#d50a0a">TB</span></span>
+        <span class="g-mid"><span class="big"><span class="at">1:00 PM</span></span><span class="under">Sep 6</span></span>
+        <span class="g-team home"><span class="tt"><span class="nm">Falcons</span><span class="sub">0-0 · M. Penix</span></span><span class="chip" style="background:#a71930">ATL</span></span>
+        <span class="g-meta">TB -1.5<br>O/U 47.5</span>
+      </a>
+      <a class="row game" href="#">
+        <span class="g-badge">SUN</span>
+        <span class="g-team"><span class="tt"><span class="nm">Bengals</span><span class="sub">0-0 · J. Burrow</span></span><span class="chip" style="background:#fb4f14">CIN</span></span>
+        <span class="g-mid"><span class="big"><span class="at">1:00 PM</span></span><span class="under">Sep 6</span></span>
+        <span class="g-team home"><span class="tt"><span class="nm">Browns</span><span class="sub">0-0 · J. Flacco</span></span><span class="chip" style="background:#ff3c00">CLE</span></span>
+        <span class="g-meta">CIN -5.5<br>O/U 47.5</span>
+      </a>
+      <a class="row game" href="#">
+        <span class="g-badge">SUN</span>
+        <span class="g-team"><span class="tt"><span class="nm">Dolphins</span><span class="sub">0-0 · T. Tagovailoa</span></span><span class="chip" style="background:#008e97">MIA</span></span>
+        <span class="g-mid"><span class="big"><span class="at">1:00 PM</span></span><span class="under">Sep 6</span></span>
+        <span class="g-team home"><span class="tt"><span class="nm">Colts</span><span class="sub">0-0 · D. Jones</span></span><span class="chip" style="background:#5c88da">IND</span></span>
+        <span class="g-meta">IND -1.5<br>O/U 47.5</span>
+      </a>
+      <a class="row game" href="#">
+        <span class="g-badge">SUN</span>
+        <span class="g-team"><span class="tt"><span class="nm">Panthers</span><span class="sub">0-0 · B. Young</span></span><span class="chip" style="background:#0085ca">CAR</span></span>
+        <span class="g-mid"><span class="big"><span class="at">1:00 PM</span></span><span class="under">Sep 6</span></span>
+        <span class="g-team home"><span class="tt"><span class="nm">Jaguars</span><span class="sub">0-0 · T. Lawrence</span></span><span class="chip" style="background:#006778">JAX</span></span>
+        <span class="g-meta">JAX -4.5<br>O/U 45.5</span>
+      </a>
+    </section>
+
+    <!-- storylines: one card, three cells -->
+    <section class="card">
+      <div class="card-h">Storylines <span class="micro" style="margin-left:auto; letter-spacing:.1em">2025 season</span></div>
+      <div class="stories">
+        <a class="story" href="#"><span class="chip dk" style="background:#ffb612">GB</span><span><span class="tag" style="color:var(--acc)">Thriller</span><b>GB 40 – 40 DAL</b><span>Week 4 · Tied · OT</span></span></a>
+        <a class="story" href="#"><span class="chip" style="background:#c83803">CHI</span><span><span class="tag" style="color:var(--win)">Shootout</span><b>89 combined points</b><span>Week 9 · CHI 47 – 42 CIN</span></span></a>
+        <a class="story" href="#"><span class="chip" style="background:#0085ca">CAR</span><span><span class="tag" style="color:var(--gold)">Upset</span><b>CAR beat GB (+12.5)</b><span>Week 9 · CAR 16 – 13 GB</span></span></a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ RIGHT RAIL ============ -->
+  <aside class="rail">
+
+    <section class="card">
+      <div class="card-h"><span class="conf-tag" style="background:#d94f4f">AFC</span> Division leaders <a class="act" href="#">Full standings →</a></div>
+      <div class="st-head micro"><span style="text-align:left"></span><span style="text-align:left">Team</span><span>W-L</span><span>Diff</span></div>
+      <a class="row st" href="#"><span class="div">East</span><span class="tm"><span class="chip" style="background:#c8102e">NE</span><span class="nm">Patriots</span></span><span class="n w">14-3</span><span class="n" style="color:var(--win)">+170</span></a>
+      <a class="row st" href="#"><span class="div">North</span><span class="tm"><span class="chip dk" style="background:#ffb612">PIT</span><span class="nm">Steelers</span></span><span class="n w">10-7</span><span class="n" style="color:var(--win)">+10</span></a>
+      <a class="row st" href="#"><span class="div">South</span><span class="tm"><span class="chip" style="background:#a71930">HOU</span><span class="nm">Texans</span></span><span class="n w">11-6</span><span class="n" style="color:var(--win)">+94</span></a>
+      <a class="row st" href="#"><span class="div">West</span><span class="tm"><span class="chip" style="background:#fb4f14">DEN</span><span class="nm">Broncos</span></span><span class="n w">13-4</span><span class="n" style="color:var(--win)">+128</span></a>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><span class="conf-tag" style="background:#4f74d9">NFC</span> Division leaders <a class="act" href="#">Full standings →</a></div>
+      <div class="st-head micro"><span style="text-align:left"></span><span style="text-align:left">Team</span><span>W-L</span><span>Diff</span></div>
+      <a class="row st" href="#"><span class="div">East</span><span class="tm"><span class="chip" style="background:#004c54">PHI</span><span class="nm">Eagles</span></span><span class="n w">10-7</span><span class="n" style="color:var(--win)">+31</span></a>
+      <a class="row st" href="#"><span class="div">North</span><span class="tm"><span class="chip" style="background:#c83803">CHI</span><span class="nm">Bears</span></span><span class="n w">12-5</span><span class="n" style="color:var(--win)">+102</span></a>
+      <a class="row st" href="#"><span class="div">South</span><span class="tm"><span class="chip" style="background:#0085ca">CAR</span><span class="nm">Panthers</span></span><span class="n w">10-7</span><span class="n" style="color:var(--win)">+24</span></a>
+      <a class="row st" href="#"><span class="div">West</span><span class="tm"><span class="chip" style="background:#69be28">SEA</span><span class="nm">Seahawks</span></span><span class="n w">14-3</span><span class="n" style="color:var(--win)">+156</span></a>
+    </section>
+
+    <section class="card">
+      <div class="card-h">Injury report <a class="act" href="#">All →</a></div>
+      <a class="row inj" href="#"><span class="chip" style="background:#7b4bc7">MIN</span><span class="who"><b>Justin Jefferson</b><span>WR · Hamstring</span></span><span class="status out">Out</span></a>
+      <a class="row inj" href="#"><span class="chip" style="background:#e31837">KC</span><span class="who"><b>Patrick Mahomes</b><span>QB · Ankle</span></span><span class="status q">Questionable</span></a>
+      <a class="row inj" href="#"><span class="chip" style="background:#869397">DAL</span><span class="who"><b>Micah Parsons</b><span>LB · Foot</span></span><span class="status ir">IR</span></a>
+      <a class="row inj" href="#"><span class="chip" style="background:#a71930">ATL</span><span class="who"><b>Bijan Robinson</b><span>RB · Knee</span></span><span class="status q">Questionable</span></a>
+    </section>
+
+    <section class="card">
+      <div class="card-h">League leaders <a class="act" href="#">All leaders →</a></div>
+      <a class="row ldr" href="#"><span class="face">MS</span><span class="who"><b>Matthew Stafford</b><span>LA · Passing</span></span><span class="val"><b>4,707</b><span>YDS</span></span></a>
+      <a class="row ldr" href="#"><span class="face">JC</span><span class="who"><b>James Cook</b><span>BUF · Rushing</span></span><span class="val"><b>1,621</b><span>YDS</span></span></a>
+      <a class="row ldr" href="#"><span class="face">JS</span><span class="who"><b>Jaxon Smith-Njigba</b><span>SEA · Receiving</span></span><span class="val"><b>1,793</b><span>YDS</span></span></a>
+      <a class="row ldr" href="#"><span class="face">JB</span><span class="who"><b>Jordyn Brooks</b><span>MIA · Defense</span></span><span class="val"><b>180</b><span>TKL</span></span></a>
+    </section>
+
+  </aside>
+</div>
