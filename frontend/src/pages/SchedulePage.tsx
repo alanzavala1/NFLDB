@@ -22,6 +22,7 @@ type Storyline = {
   title: string
   context: string
   game: Game
+  logoTeam: string
 }
 
 type LeaderCategory = {
@@ -255,6 +256,13 @@ function formatTotalLine(game: Game) {
   return game.total_line === null ? null : `O/U ${game.total_line}`
 }
 
+function formatKickoffFact(game: Game) {
+  const date = formatDateShort(game.gameday)
+  const time = formatTimeShort(game.gametime)
+  if (date && time !== 'TBD') return `${date} ${time} ET`
+  return date ?? `${time} ET`
+}
+
 function finalLabel(game: Game) {
   return game.overtime === 1 ? 'FINAL OT' : 'FINAL'
 }
@@ -264,6 +272,23 @@ function gameWinner(game: Game): string | null {
   if (game.away_score! > game.home_score!) return game.away_team
   if (game.home_score! > game.away_score!) return game.home_team
   return null
+}
+
+function scoreLine(game: Game) {
+  return `${game.away_team} ${game.away_score ?? '-'} – ${game.home_score ?? '-'} ${game.home_team}`
+}
+
+function spreadValue(value: number) {
+  return Number.isInteger(value) ? value.toFixed(0) : value.toString()
+}
+
+function upsetLine(game: Game) {
+  const winner = gameWinner(game)
+  if (!winner || game.spread_line === null) return null
+  const favorite = game.spread_line > 0 ? game.home_team : game.away_team
+  const underdog = favorite === game.home_team ? game.away_team : game.home_team
+  if (winner !== underdog) return null
+  return `${winner} were +${spreadValue(Math.abs(game.spread_line))}`
 }
 
 function divisionSort(division: string) {
@@ -294,57 +319,35 @@ function superBowlMvpFact(game: Game) {
   return mvp ? `${mvp.player}${mvp.team ? `, ${mvp.team}` : ''}` : null
 }
 
-function seasonStatusLabel(status: SeasonEntry['status'] | undefined) {
-  if (!status) return 'Loading'
-  return status.charAt(0).toUpperCase() + status.slice(1)
-}
-
 function SeasonCard({
   seasons,
   season,
-  status,
   onSeasonChange,
-  onLoad,
-  loadingSeason,
 }: {
   seasons: SeasonEntry[]
   season: number | null
-  status?: SeasonEntry['status']
   onSeasonChange: (season: number) => void
-  onLoad: () => void
-  loadingSeason: boolean
 }) {
   const sorted = [...seasons].sort((a, b) => b.season - a.season)
 
   return (
-    <Card
-      title="Season"
-      action={<span className="rounded-full bg-surface-raise px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim">{seasonStatusLabel(status)}</span>}
-    >
-      <div className="border-t border-surface-line p-4">
-        <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim" htmlFor="season-picker">
-          NFL season
-        </label>
+    <Card title="Season">
+      <div className="relative border-t border-surface-line px-4 py-[11px] transition-colors hover:bg-surface-raise">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-bold tabular-nums text-ink">{season ?? 'Season'}</span>
+          <span className="text-xs text-ink-dim">current ▾</span>
+        </div>
         <select
           id="season-picker"
+          aria-label="Season"
           value={season ?? ''}
           onChange={e => onSeasonChange(Number(e.target.value))}
-          className="w-full rounded-lg border border-surface-line bg-surface-raise px-3 py-2 text-sm font-semibold text-ink outline-none focus:border-indigo-400"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         >
           {sorted.map(entry => (
             <option key={entry.season} value={entry.season}>{entry.season}</option>
           ))}
         </select>
-        {status === 'available' && (
-          <button
-            type="button"
-            onClick={onLoad}
-            disabled={loadingSeason}
-            className="mt-3 w-full rounded-lg bg-indigo-500 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loadingSeason ? 'Loading...' : 'Load season'}
-          </button>
-        )}
       </div>
     </Card>
   )
@@ -513,10 +516,10 @@ function FeaturedGameHero({ game }: { game: Game }) {
         { label: 'Venue', value: game.stadium ?? 'TBD' },
       ]
     : [
+        { label: 'Kickoff', value: formatKickoffFact(game) },
         { label: 'Spread', value: spread ?? 'No line' },
-        { label: 'Total', value: totalLine ?? 'No total' },
-        { label: 'Away QB', value: game.away_qb_name ?? 'TBD' },
-        { label: 'Home QB', value: game.home_qb_name ?? 'TBD' },
+        { label: 'O/U', value: totalLine?.replace('O/U ', '') ?? 'No total' },
+        { label: 'Venue', value: game.stadium ?? 'TBD' },
       ]
 
   return (
@@ -543,14 +546,11 @@ function FeaturedGameHero({ game }: { game: Game }) {
         />
         <div className="text-center">
           {finished ? (
-            <>
-              <div className="text-[11px] font-black uppercase tracking-[0.14em] text-ink-dim">{finalLabel(game)}</div>
-              <div className="mt-1 text-xs text-ink-dim">{formatMonthDay(game.gameday)}</div>
-            </>
+            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-ink-dim">{finalLabel(game)}</div>
           ) : (
             <>
-              <div className="text-2xl font-black tabular-nums text-ink max-[780px]:text-lg">{formatTimeShort(game.gametime)}</div>
-              <div className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-ink-dim">{formatDateShort(game.gameday)} ET</div>
+              <div className="text-2xl font-black tabular-nums text-ink max-[780px]:text-lg">VS</div>
+              <div className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-ink-dim">Preview</div>
             </>
           )}
         </div>
@@ -568,7 +568,7 @@ function FeaturedGameHero({ game }: { game: Game }) {
         {facts.map(fact => (
           <div key={fact.label} className="min-w-0 border-r border-surface-line px-4 py-3 last:border-r-0 max-[780px]:even:border-r-0 max-[780px]:[&:nth-child(n+3)]:border-t">
             <div className={MICRO}>{fact.label}</div>
-            <div className="mt-1 truncate text-sm font-bold text-ink">{fact.value}</div>
+            <div className="mt-1 break-words text-sm font-bold leading-snug text-ink">{fact.value}</div>
           </div>
         ))}
       </div>
@@ -695,11 +695,13 @@ function buildStorylines(weekGames: Game[], seasonGames: Game[], omitGameId?: st
   })[0]
   if (closest) {
     const margin = Math.abs(closest.away_score! - closest.home_score!)
+    const result = margin === 0 ? 'Tied' : `${margin}-point game`
     stories.push({
       tag: 'Thriller',
-      title: `${teamNickname(closest.away_team)} at ${teamNickname(closest.home_team)}`,
-      context: `${margin}-point game, ${closest.away_score! + closest.home_score!} total`,
+      title: scoreLine(closest),
+      context: [`Week ${closest.week}`, result, closest.overtime === 1 ? 'OT' : null].filter(Boolean).join(' · '),
       game: closest,
+      logoTeam: gameWinner(closest) ?? closest.away_team,
     })
   }
 
@@ -709,9 +711,10 @@ function buildStorylines(weekGames: Game[], seasonGames: Game[], omitGameId?: st
   if (shootout) {
     stories.push({
       tag: 'Shootout',
-      title: `${teamNickname(shootout.away_team)} at ${teamNickname(shootout.home_team)}`,
-      context: `${shootout.away_score! + shootout.home_score!} combined points`,
+      title: scoreLine(shootout),
+      context: `Week ${shootout.week} · ${shootout.away_score! + shootout.home_score!} combined points`,
       game: shootout,
+      logoTeam: gameWinner(shootout) ?? shootout.away_team,
     })
   }
 
@@ -727,9 +730,10 @@ function buildStorylines(weekGames: Game[], seasonGames: Game[], omitGameId?: st
   if (upset) {
     stories.push({
       tag: 'Upset',
-      title: `${teamNickname(gameWinner(upset) ?? upset.away_team)} flipped the line`,
-      context: `${formatSpread(upset)} closed before kickoff`,
+      title: scoreLine(upset),
+      context: `Week ${upset.week} · ${upsetLine(upset) ?? 'Underdog won'}`,
       game: upset,
+      logoTeam: gameWinner(upset) ?? upset.away_team,
     })
   }
 
@@ -749,9 +753,8 @@ function StorylinesCard({ weekGames, seasonGames, omitGameId }: { weekGames: Gam
             to={`/games/${story.game.game_id}`}
             className={`border-t border-surface-line px-4 py-4 text-inherit no-underline transition-colors hover:bg-surface-raise ${index > 0 ? 'min-[781px]:border-l' : ''}`}
           >
-            <div className="mb-3 flex items-center gap-1.5">
-              <img src={teamLogoUrl(story.game.away_team)} className="h-6 w-6 object-contain" alt="" />
-              <img src={teamLogoUrl(story.game.home_team)} className="h-6 w-6 object-contain" alt="" />
+            <div className="mb-2 flex items-center gap-2">
+              <img src={teamLogoUrl(story.logoTeam)} className="h-6 w-6 object-contain" alt="" />
               <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-300">{story.tag}</span>
             </div>
             <div className="truncate text-sm font-black text-ink">{story.title}</div>
@@ -820,22 +823,45 @@ function ConferenceLeadersCard({
     .map(group => ({ division: group.division.replace(`${conference} `, ''), team: group.teams[0] }))
     .filter((entry): entry is { division: string; team: StandingsTeam } => Boolean(entry.team))
 
+  const tagClass = conference === 'AFC' ? 'bg-[#d94f4f]' : 'bg-[#4f74d9]'
+
   return (
-    <Card title={`${conference} leaders`} action={{ label: 'Standings', to: `/standings?season=${season}` }}>
-      {leaders.length ? leaders.map(entry => (
-        <CardRow key={`${conference}-${entry.division}`} to={`/teams/${entry.team.team}`} className="justify-between">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <img src={teamLogoUrl(entry.team.team)} className="h-8 w-8 shrink-0 object-contain" alt="" />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-ink">{entry.division}</div>
-              <div className="truncate text-xs text-ink-dim">{teamNickname(entry.team.team)} {formatRecord(entry.team)}</div>
-            </div>
+    <Card
+      title={
+        <span className="flex items-center gap-2">
+          <span className={`grid h-5 w-5 place-items-center rounded-md text-[8.5px] font-black text-white ${tagClass}`}>{conference}</span>
+          <span>Division leaders</span>
+        </span>
+      }
+      action={{ label: 'Full standings', to: `/standings?season=${season}` }}
+    >
+      {leaders.length ? (
+        <>
+          <div className={`${MICRO} grid grid-cols-[42px_minmax(0,1fr)_40px_44px] gap-2 border-t border-surface-line px-4 py-2`}>
+            <span />
+            <span>Team</span>
+            <span className="text-right">W-L</span>
+            <span className="text-right">Diff</span>
           </div>
-          <div className={`text-xs font-black tabular-nums ${pointDiff(entry.team) >= 0 ? 'text-data-win' : 'text-data-loss'}`}>
-            {formatPointDiff(entry.team)}
-          </div>
-        </CardRow>
-      )) : (
+          {leaders.map(entry => (
+            <CardRow
+              key={`${conference}-${entry.division}`}
+              to={`/teams/${entry.team.team}`}
+              className="!grid grid-cols-[42px_minmax(0,1fr)_40px_44px] gap-2"
+            >
+              <span className={MICRO}>{entry.division}</span>
+              <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-ink">
+                <img src={teamLogoUrl(entry.team.team)} className="h-6 w-6 shrink-0 object-contain" alt="" />
+                <span className="truncate">{teamNickname(entry.team.team)}</span>
+              </span>
+              <span className="text-right text-xs font-bold tabular-nums text-ink">{formatRecord(entry.team)}</span>
+              <span className={`text-right text-xs font-black tabular-nums ${pointDiff(entry.team) >= 0 ? 'text-data-win' : 'text-data-loss'}`}>
+                {formatPointDiff(entry.team)}
+              </span>
+            </CardRow>
+          ))}
+        </>
+      ) : (
         <CardRow className="text-sm text-ink-dim">{loading ? 'Standings loading...' : 'No leaders found'}</CardRow>
       )}
     </Card>
@@ -1053,10 +1079,7 @@ export default function SchedulePage() {
           <SeasonCard
             seasons={seasons}
             season={season}
-            status={seasonEntry?.status}
             onSeasonChange={setSeasonParam}
-            onLoad={requestSeasonLoad}
-            loadingSeason={loadingSeason}
           />
           <TeamsCard teams={allTeams} />
         </aside>
