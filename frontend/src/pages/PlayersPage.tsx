@@ -254,7 +254,7 @@ export default function PlayersPage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav title="Players" />
+      <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
 
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">

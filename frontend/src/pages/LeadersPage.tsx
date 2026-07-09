@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { LeagueLeader, SeasonEntry, WpaLeader, WpaLeaders } from '../api'
-import Nav, { backBtnCls } from '../components/Nav'
+import Nav from '../components/Nav'
 import { teamLogoUrl } from '../utils/teams'
 
 function passerRating(cmp: number, att: number, yds: number, td: number, int_: number): number | null {
@@ -749,7 +749,6 @@ type Mode = 'leaders' | 'positions'
 
 export default function LeadersPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const [seasons, setSeasons] = useState<SeasonEntry[]>([])
   const [leaders, setLeaders] = useState<LeagueLeader[]>([])
   const [loading, setLoading] = useState(true)
@@ -803,10 +802,8 @@ export default function LeadersPage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav title="League Leaders" />
+      <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <button onClick={() => navigate(-1)} className={`${backBtnCls} mb-6`}>← Back</button>
-
         <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
           <div>
             <h1 className="text-4xl font-black text-white tracking-tight leading-none">League Leaders</h1>

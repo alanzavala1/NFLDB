@@ -596,7 +596,7 @@ export default function SplitsPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      <Nav title="Splits Explorer" />
+      <Nav />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex items-start justify-between gap-3 mb-1">
           <h1 className="text-xl font-bold text-white">Splits Explorer</h1>

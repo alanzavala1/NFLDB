@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, Tooltip, Cell, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { api } from '../api'
 import type { TeamProfile, TeamGame, TeamLeader, SeasonEntry, RosterPlayer, TeamAnalyticsTeam, TeamSplit } from '../api'
 import { useTeamDepthChart, useTeamInjuries, useTeamSplits } from '../queries'
-import Nav, { backBtnCls } from '../components/Nav'
+import Nav from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
 const GAME_TYPE_LABELS: Record<string, string> = { WC: 'Wild Card', DIV: 'Divisional', CON: 'Conference', SB: 'Super Bowl' }
@@ -830,7 +830,7 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
         <button onClick={onClose}
           className="ml-auto shrink-0 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
         >
-          ← Back
+          Close
         </button>
       </div>
 
@@ -891,7 +891,7 @@ function RosterModal({ profile, roster, onClose }: { profile: TeamProfile; roste
         <span className="text-gray-700">/</span>
         <span className="text-gray-400 text-sm">{profile.season} Roster</span>
         <button onClick={onClose} className="ml-auto shrink-0 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors">
-          ← Back
+          Close
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-6 py-6 max-w-5xl mx-auto w-full">
@@ -1537,7 +1537,6 @@ const AUTO_SEASONS = 5  // fetch/queue this many recent seasons automatically
 
 export default function TeamPage() {
   const { teamAbbrev } = useParams<{ teamAbbrev: string }>()
-  const navigate = useNavigate()
   const [profiles, setProfiles] = useState<TeamProfile[]>([])
   const [selectedSeason, setSelectedSeason] = useState<number>(CURRENT_SEASON)
   const [initialLoading, setInitialLoading] = useState(true)
@@ -1660,10 +1659,8 @@ export default function TeamPage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav title={teamName(teamAbbrev)} />
+      <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <button onClick={() => navigate(-1)} className={`${backBtnCls} mb-6`}>← Back</button>
-
         <div className="flex items-center gap-5 mb-8">
           <img src={teamLogoUrl(teamAbbrev)} alt={teamAbbrev} className="w-20 h-20 object-contain shrink-0" />
           <div>

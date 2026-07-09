@@ -1,23 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { api, CURRENT_NFL_SEASON } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { api } from '../api'
 import type { SearchResult } from '../api'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
-export type Crumb = { label: React.ReactNode; to?: string; state?: unknown }
+// The one navigation bar, identical on every page: wordmark, sections, search.
+// Season pickers stay inside the pages they scope; player/team pages simply
+// have no highlighted section.
 
-type NavProps = {
-  crumbs?: Crumb[]
-  title?: React.ReactNode
-}
-
-function HomeIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7A1 1 0 003 11h1v6a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6h1a1 1 0 00.707-1.707l-7-7z" />
-    </svg>
-  )
-}
+const LINKS = [
+  { label: 'Scores',    to: '/',          isActive: (p: string) => p === '/' || p.startsWith('/games') },
+  { label: 'Standings', to: '/standings', isActive: (p: string) => p.startsWith('/standings') },
+  { label: 'Leaders',   to: '/leaders',   isActive: (p: string) => p.startsWith('/leaders') },
+  { label: 'Splits',    to: '/splits',    isActive: (p: string) => p.startsWith('/splits') },
+  { label: 'Ask',       to: '/ask',       isActive: (p: string) => p.startsWith('/ask') },
+]
 
 function SearchModal({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('')
@@ -106,59 +103,62 @@ function SearchModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function Nav({ crumbs, title }: NavProps) {
-  const navigate = useNavigate()
+export default function Nav() {
   const [searchOpen, setSearchOpen] = useState(false)
+  const { pathname } = useLocation()
 
-  const allCrumbs: Crumb[] = crumbs ?? (title ? [{ label: title }] : [])
+  // ⌘K / Ctrl+K (and "/" outside inputs) opens search from anywhere.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const inField = (e.target as HTMLElement)?.closest('input, textarea, select, [contenteditable]')
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      } else if (e.key === '/' && !inField) {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <>
-      <nav className="px-4 sm:px-6 py-4 flex items-center gap-3 border-b border-gray-800/50 bg-gray-950">
-        <button
-          onClick={() => navigate(`/?season=${CURRENT_NFL_SEASON}`)}
-          className="text-gray-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-800 shrink-0"
-          title="Home"
-        >
-          <HomeIcon />
-        </button>
-        <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-          {allCrumbs.map((crumb, i) => {
-            const isLast = i === allCrumbs.length - 1
-            return (
-              <React.Fragment key={i}>
-                <span className="text-gray-700 shrink-0">/</span>
-                {isLast || !crumb.to
-                  ? <span className="text-gray-300 text-sm font-medium truncate">{crumb.label}</span>
-                  : <Link to={crumb.to as string} state={crumb.state} className="text-gray-500 hover:text-white text-sm font-medium shrink-0 transition-colors">{crumb.label}</Link>
-                }
-              </React.Fragment>
-            )
-          })}
+      <nav className="sticky top-0 z-40 border-b border-gray-800/60 bg-gray-950/85 backdrop-blur">
+        <div className="flex h-14 items-center gap-1 px-4 sm:px-6">
+          <Link to="/" className="mr-3 shrink-0 text-lg font-black tracking-tight leading-none select-none">
+            <span className="text-white">NFL</span><span className="text-indigo-500">DB</span>
+          </Link>
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {LINKS.map(l => (
+              <Link
+                key={l.label}
+                to={l.to}
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  l.isActive(pathname)
+                    ? 'bg-gray-800/80 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/40'
+                }`}
+              >
+                {l.label}
+              </Link>
+            ))}
+          </div>
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="shrink-0 flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-sm text-gray-400 transition-colors hover:border-gray-700 hover:text-white"
+            title="Search players or teams (⌘K)"
+          >
+            <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span className="hidden sm:inline">Search</span>
+            <kbd className="hidden md:inline rounded border border-gray-700/80 bg-gray-800/80 px-1.5 py-px font-sans text-[10px] text-gray-500">⌘K</kbd>
+          </button>
         </div>
-        <button
-          onClick={() => navigate('/ask')}
-          className="shrink-0 flex items-center gap-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 transition-colors"
-          title="Ask the data in plain English"
-        >
-          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z" />
-          </svg>
-          Ask AI
-        </button>
-        <button
-          onClick={() => setSearchOpen(true)}
-          className={backBtnCls + ' flex items-center gap-1.5'}
-        >
-          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          Search
-        </button>
       </nav>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
     </>
   )
 }
-
-export const backBtnCls = 'text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors'

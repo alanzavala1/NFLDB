@@ -35,14 +35,14 @@ const MD: Components = {
   p: ({ node, ...p }) => { void node; return <p className="mb-3 leading-relaxed text-gray-200 last:mb-0" {...p} /> },
   strong: ({ node, ...p }) => { void node; return <strong className="font-semibold text-white" {...p} /> },
   em: ({ node, ...p }) => { void node; return <em className="text-gray-300" {...p} /> },
-  ul: ({ node, ...p }) => { void node; return <ul className="mb-3 ml-5 list-disc space-y-1.5 marker:text-emerald-500 last:mb-0" {...p} /> },
+  ul: ({ node, ...p }) => { void node; return <ul className="mb-3 ml-5 list-disc space-y-1.5 marker:text-indigo-400 last:mb-0" {...p} /> },
   ol: ({ node, ...p }) => { void node; return <ol className="mb-3 ml-5 list-decimal space-y-1.5 marker:text-gray-500 last:mb-0" {...p} /> },
   li: ({ node, ...p }) => { void node; return <li className="pl-1 leading-relaxed text-gray-200" {...p} /> },
   h1: ({ node, ...p }) => { void node; return <h3 className="mb-2 mt-4 text-base font-semibold text-white first:mt-0" {...p} /> },
   h2: ({ node, ...p }) => { void node; return <h3 className="mb-2 mt-4 text-base font-semibold text-white first:mt-0" {...p} /> },
   h3: ({ node, ...p }) => { void node; return <h4 className="mb-1.5 mt-3 text-sm font-semibold uppercase tracking-wide text-gray-400 first:mt-0" {...p} /> },
-  code: ({ node, ...p }) => { void node; return <code className="rounded bg-gray-800 px-1.5 py-0.5 text-[13px] text-emerald-300" {...p} /> },
-  a: ({ node, ...p }) => { void node; return <a className="text-emerald-400 underline hover:text-emerald-300" {...p} /> },
+  code: ({ node, ...p }) => { void node; return <code className="rounded bg-gray-800 px-1.5 py-0.5 text-[13px] text-indigo-300" {...p} /> },
+  a: ({ node, ...p }) => { void node; return <a className="text-indigo-400 underline hover:text-indigo-300" {...p} /> },
   table: ({ node, ...p }) => {
     void node
     return (
@@ -168,7 +168,7 @@ function LiveTools({ names }: { names: string[] }) {
           <span className="rounded-md bg-gray-800/70 px-2 py-0.5 text-gray-300">{TOOL_LABELS[n] ?? n}</span>
         </span>
       ))}
-      <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+      <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
     </div>
   )
 }
@@ -210,7 +210,7 @@ export default function AskPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      <Nav title="Ask" />
+      <Nav />
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <h1 className="text-2xl font-bold tracking-tight">Ask the data</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-400">
@@ -225,12 +225,12 @@ export default function AskPage() {
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="e.g. How did Josh Allen do under pressure in 2023?"
             maxLength={500}
-            className="flex-1 rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white placeholder-gray-600 transition-colors focus:border-emerald-600 focus:outline-none"
+            className="flex-1 rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white placeholder-gray-600 transition-colors focus:border-indigo-500 focus:outline-none"
           />
           <button
             type="submit"
             disabled={loading || !question.trim()}
-            className="rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Thinking…' : 'Ask'}
           </button>
@@ -268,7 +268,7 @@ export default function AskPage() {
               ) : (
                 loading && live.length === 0 && (
                   <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
                     Pulling the numbers…
                   </div>
                 )

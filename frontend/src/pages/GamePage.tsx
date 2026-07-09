@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api } from '../api'
 import type { GameDetail, PlayerStats, WinProbPlay } from '../api'
-import Nav, { backBtnCls } from '../components/Nav'
-import type { Crumb } from '../components/Nav'
+import Nav from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
 interface GameCtx { gameId: string; season: number; week: number; awayTeam: string; homeTeam: string; fromWeek?: number }
@@ -808,10 +807,8 @@ function WinProbabilityChart({ game }: { game: GameDetail }) {
 
 export default function GamePage() {
   const { gameId } = useParams<{ gameId: string }>()
-  const navigate = useNavigate()
   const location = useLocation()
   const fromWeek: number | undefined = (location.state as any)?.fromWeek
-  const fromPlayer: { playerId: string; playerName: string } | undefined = (location.state as any)?.fromPlayer
   const [game, setGame] = useState<GameDetail | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -823,24 +820,10 @@ export default function GamePage() {
   if (loading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
   if (!game) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Game not found.</p></div>
 
-  const crumbs: Crumb[] = []
-  if (fromPlayer) {
-    crumbs.push({
-      label: fromPlayer.playerName,
-      to: `/players/${fromPlayer.playerId}`,
-      state: (fromPlayer as any).fromGame ? { fromGame: (fromPlayer as any).fromGame } : undefined,
-    })
-  } else if (fromWeek !== undefined) {
-    crumbs.push({ label: weekLabel(fromWeek), to: `/?season=${game.season}&week=${fromWeek}` })
-  }
-  crumbs.push({ label: `${game.away_team} @ ${game.home_team}` })
-
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav crumbs={crumbs} />
+      <Nav />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <button onClick={() => navigate(-1)} className={`${backBtnCls} mb-6`}>← Back</button>
-
         <GameContext.Provider value={{ gameId: game.game_id, season: game.season, week: game.week, awayTeam: game.away_team, homeTeam: game.home_team, fromWeek }}>
           <Scoreboard game={game} />
           <ScoringSummary game={game} />

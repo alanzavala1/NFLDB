@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { DivisionStandings, SeasonEntry, StandingsTeam } from '../api'
-import Nav, { backBtnCls } from '../components/Nav'
+import Nav from '../components/Nav'
 import { teamLogoUrl } from '../utils/teams'
 import { PlayoffBracket, CONF_STYLE, type ConfKey } from '../components/PlayoffBracket'
 
@@ -98,7 +98,6 @@ function ConferenceSection({ conf, divisions }: { conf: ConfKey; divisions: Divi
 
 export default function StandingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const [seasons, setSeasons] = useState<SeasonEntry[]>([])
   const [standings, setStandings] = useState<DivisionStandings[]>([])
   const [loading, setLoading] = useState(true)
@@ -120,10 +119,8 @@ export default function StandingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav title="Standings" />
+      <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <button onClick={() => navigate(-1)} className={`${backBtnCls} mb-6`}>← Back</button>
-
         <div className="flex items-end justify-between mb-10 gap-4 flex-wrap">
           <div>
             <h1 className="text-4xl font-black text-white tracking-tight leading-none">Standings</h1>

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, KickingStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader, CombineData, DepthChartEntry, InjuryStatus } from '../api'
 import { useLeaders, usePlayer, usePlayerComparables, useSeasons } from '../queries'
-import Nav, { backBtnCls } from '../components/Nav'
-import type { Crumb } from '../components/Nav'
+import Nav from '../components/Nav'
 import { teamLogoUrl, teamName } from '../utils/teams'
 import { AWARD_LABEL, type AwardKey } from '../utils/awards'
 
@@ -1345,7 +1344,6 @@ function BackgroundCard({ player }: { player: PlayerProfile }) {
 // — page —
 export default function PlayerPage() {
   const { playerId } = useParams<{ playerId: string }>()
-  const navigate = useNavigate()
   const location = useLocation()
   const fromGame = (location.state as any)?.fromGame
   const qc = useQueryClient()
@@ -1453,28 +1451,10 @@ export default function PlayerPage() {
     ? Object.entries(seasonMap).some(([y, s]) => Number(y) >= player.entry_year! && (s === 'loading' || s === 'queued'))
     : false
 
-  const PLAYOFF_WEEKS: Record<number, string> = { 19: 'Wild Card', 20: 'Divisional', 21: 'Conference', 22: 'Super Bowl' }
-  const wkLabel = (w: number) => PLAYOFF_WEEKS[w] ?? `Week ${w}`
-
-  const crumbs: Crumb[] = []
-  if (fromGame) {
-    if (fromGame.fromWeek !== undefined) {
-      crumbs.push({ label: wkLabel(fromGame.fromWeek), to: `/?season=${fromGame.season}&week=${fromGame.fromWeek}` })
-    }
-    crumbs.push({
-      label: `${fromGame.awayTeam} @ ${fromGame.homeTeam}`,
-      to: `/games/${fromGame.gameId}`,
-      state: { fromWeek: fromGame.fromWeek },
-    })
-  }
-  crumbs.push({ label: player.player_name })
-
   return (
     <div className="min-h-screen bg-gray-950">
-      <Nav crumbs={crumbs} />
+      <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <button onClick={() => navigate(-1)} className={`${backBtnCls} mb-6`}>← Back</button>
-
         {/* Profile header */}
         <div className="flex items-start gap-6 mb-8 flex-wrap">
           {player.headshot_url
@@ -1553,7 +1533,7 @@ export default function PlayerPage() {
 
         {/* Sticky section nav */}
         {seasons.length > 0 && (
-          <div className="sticky top-0 z-20 -mx-4 px-4 py-2 bg-gray-950/95 backdrop-blur border-b border-gray-800/60 mb-6 flex gap-1">
+          <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-gray-950/95 backdrop-blur border-b border-gray-800/60 mb-6 flex gap-1">
             <button onClick={() => scrollTo(statsRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Stats</button>
             {hasAdvanced && <button onClick={() => scrollTo(advRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Advanced</button>}
             {playoffSeasons.length > 0 && <button onClick={() => scrollTo(postRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Postseason</button>}
