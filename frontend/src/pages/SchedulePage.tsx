@@ -10,6 +10,7 @@ import { teamLogoUrl, teamName } from '../utils/teams'
 const GAME_TYPE_LABELS: Record<string, string> = { WC: 'Wild Card', DIV: 'Divisional', CON: 'Conference', SB: 'Super Bowl' }
 const GAME_TYPE_PRIORITY: Record<string, number> = { SB: 4, CON: 3, DIV: 2, WC: 1, REG: 0 }
 const MICRO = 'text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim'
+const LINE_ATTRIBUTION = 'Lines via nflverse'
 
 type LoadState<T> = {
   season: number | null
@@ -256,11 +257,23 @@ function formatTotalLine(game: Game) {
   return game.total_line === null ? null : `O/U ${game.total_line}`
 }
 
+function formatTotalValue(game: Game) {
+  return game.total_line === null ? null : String(game.total_line)
+}
+
 function formatKickoffFact(game: Game) {
   const date = formatDateShort(game.gameday)
   const time = formatTimeShort(game.gametime)
   if (date && time !== 'TBD') return `${date} ${time} ET`
   return date ?? `${time} ET`
+}
+
+function LineChip({ value }: { value: string }) {
+  return (
+    <span className="inline-flex items-center rounded-md border border-surface-line bg-surface-raise px-2 py-0.5 font-bold tabular-nums text-ink">
+      {value}
+    </span>
+  )
 }
 
 function finalLabel(game: Game) {
@@ -462,7 +475,6 @@ function WeekNavigator({
 function HeroTeam({
   team,
   record,
-  qb,
   score,
   won,
   finished,
@@ -470,7 +482,6 @@ function HeroTeam({
 }: {
   team: string
   record?: string | null
-  qb?: string | null
   score: number | null
   won: boolean
   finished: boolean
@@ -484,7 +495,7 @@ function HeroTeam({
           {teamNickname(team)}
         </div>
         <div className="mt-1 truncate text-xs text-ink-dim max-[780px]:max-w-28">
-          {[recordText(record), qb].filter(Boolean).join(' - ')}
+          {recordText(record)}
         </div>
         {finished && (
           <div className={`mt-1 text-4xl font-black tabular-nums leading-none max-[780px]:text-3xl ${won ? 'text-ink' : 'text-ink-dim'}`}>
@@ -506,7 +517,7 @@ function FeaturedGameHero({ game }: { game: Game }) {
   const total = finished ? game.away_score! + game.home_score! : null
   const margin = finished ? Math.abs(game.away_score! - game.home_score!) : null
   const spread = formatSpread(game)
-  const totalLine = formatTotalLine(game)
+  const totalValue = formatTotalValue(game)
   const sbMvp = superBowlMvpFact(game)
   const facts = finished
     ? [
@@ -517,8 +528,8 @@ function FeaturedGameHero({ game }: { game: Game }) {
       ]
     : [
         { label: 'Kickoff', value: formatKickoffFact(game) },
-        { label: 'Spread', value: spread ?? 'No line' },
-        { label: 'O/U', value: totalLine?.replace('O/U ', '') ?? 'No total' },
+        { label: 'Spread', value: spread ?? 'No line', market: true },
+        { label: 'O/U', value: totalValue ?? 'No total', market: true },
         { label: 'Venue', value: game.stadium ?? 'TBD' },
       ]
 
@@ -538,7 +549,6 @@ function FeaturedGameHero({ game }: { game: Game }) {
         <HeroTeam
           team={game.away_team}
           record={game.away_record}
-          qb={game.away_qb_name}
           score={game.away_score}
           won={winner === game.away_team}
           finished={finished}
@@ -557,7 +567,6 @@ function FeaturedGameHero({ game }: { game: Game }) {
         <HeroTeam
           team={game.home_team}
           record={game.home_record}
-          qb={game.home_qb_name}
           score={game.home_score}
           won={winner === game.home_team}
           finished={finished}
@@ -566,12 +575,22 @@ function FeaturedGameHero({ game }: { game: Game }) {
       </div>
       <div className="grid grid-cols-4 border-t border-surface-line max-[780px]:grid-cols-2">
         {facts.map(fact => (
-          <div key={fact.label} className="min-w-0 border-r border-surface-line px-4 py-3 last:border-r-0 max-[780px]:even:border-r-0 max-[780px]:[&:nth-child(n+3)]:border-t">
+          <div
+            key={fact.label}
+            className="min-w-0 border-r border-surface-line px-4 py-3 last:border-r-0 max-[780px]:even:border-r-0 max-[780px]:[&:nth-child(n+3)]:border-t"
+          >
             <div className={MICRO}>{fact.label}</div>
-            <div className="mt-1 break-words text-sm font-bold leading-snug text-ink">{fact.value}</div>
+            <div className="mt-1 break-words text-sm font-bold leading-snug text-ink">
+              {fact.market ? <LineChip value={fact.value} /> : fact.value}
+            </div>
           </div>
         ))}
       </div>
+      {!finished && (
+        <div className="border-t border-surface-line px-4 py-2 text-right text-[10px] text-ink-dim">
+          {LINE_ATTRIBUTION}
+        </div>
+      )}
     </Card>
   )
 }
@@ -579,14 +598,12 @@ function FeaturedGameHero({ game }: { game: Game }) {
 function GameTeam({
   team,
   record,
-  qb,
   won,
   finished,
   align,
 }: {
   team: string
   record?: string | null
-  qb?: string | null
   won: boolean
   finished: boolean
   align: 'left' | 'right'
@@ -596,7 +613,7 @@ function GameTeam({
       <img src={teamLogoUrl(team)} className="h-8 w-8 shrink-0 object-contain max-[780px]:h-6 max-[780px]:w-6" alt="" />
       <div className="min-w-0">
         <div className={`truncate text-sm font-bold max-[780px]:text-[13px] ${finished && !won ? 'text-ink-dim' : 'text-ink'}`}>{teamNickname(team)}</div>
-        <div className="truncate text-xs text-ink-dim">{[recordText(record), qb].filter(Boolean).join(' - ')}</div>
+        <div className="truncate text-xs text-ink-dim">{recordText(record)}</div>
       </div>
     </div>
   )
@@ -628,6 +645,19 @@ function GameScoreBlock({ game }: { game: Game }) {
   )
 }
 
+function MarketLineMeta({ spread, total }: { spread: string | null; total: string | null }) {
+  if (!spread && !total) {
+    return <div className="justify-self-end text-right text-xs font-bold text-ink-dim max-[780px]:hidden">Line TBD</div>
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1 justify-self-end text-right text-[11px] leading-tight max-[780px]:hidden">
+      {spread && <LineChip value={spread} />}
+      {total && <LineChip value={total} />}
+    </div>
+  )
+}
+
 function GameRow({ game }: { game: Game }) {
   const finished = isFinished(game)
   const winner = gameWinner(game)
@@ -637,7 +667,7 @@ function GameRow({ game }: { game: Game }) {
   return (
     <CardRow
       to={`/games/${game.game_id}`}
-      className="grid grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)_64px] gap-3 py-[13px] max-[780px]:grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)] max-[780px]:gap-2"
+      className="grid grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)_96px] gap-3 py-[13px] max-[780px]:grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)] max-[780px]:gap-2"
     >
       <span className={`grid h-8 w-10 place-items-center rounded-lg text-[10px] font-black uppercase tracking-[0.12em] ${
         finished ? 'bg-surface-raise text-ink-mid' : 'bg-indigo-500/20 text-indigo-300'
@@ -647,7 +677,6 @@ function GameRow({ game }: { game: Game }) {
       <GameTeam
         team={game.away_team}
         record={game.away_record}
-        qb={game.away_qb_name}
         won={winner === game.away_team}
         finished={finished}
         align="left"
@@ -656,23 +685,26 @@ function GameRow({ game }: { game: Game }) {
       <GameTeam
         team={game.home_team}
         record={game.home_record}
-        qb={game.home_qb_name}
         won={winner === game.home_team}
         finished={finished}
         align="right"
       />
-      <div className="text-right text-xs font-bold text-ink-dim max-[780px]:hidden">
-        {finished ? 'View' : [spread, total].filter(Boolean).join(' / ') || 'Line TBD'}
-      </div>
+      {finished
+        ? <div className="justify-self-end text-right text-xs font-bold text-ink-dim max-[780px]:hidden">View</div>
+        : <MarketLineMeta spread={spread} total={total} />
+      }
     </CardRow>
   )
 }
 
 function KickoffSlotCard({ label, games }: { label: string; games: Game[] }) {
+  const hasUpcoming = games.some(game => !isFinished(game))
+  const countLabel = `${games.length} game${games.length === 1 ? '' : 's'}`
+
   return (
     <Card
       title={<span className={MICRO}>{label}</span>}
-      action={<span className="text-xs font-bold text-ink-dim">{games.length} game{games.length === 1 ? '' : 's'}</span>}
+      action={<span className="text-xs font-bold text-ink-dim">{hasUpcoming ? `${countLabel} · lines via nflverse` : countLabel}</span>}
     >
       {games.map(game => <GameRow key={game.game_id} game={game} />)}
     </Card>
