@@ -383,7 +383,17 @@ def _ratings_sql(conn: duckdb.DuckDBPyConnection) -> str:
         d.position_group,
         CASE
             WHEN e.percentile IS NULL THEN CAST(NULL AS DOUBLE)
-            ELSE ROUND(GREATEST(3.0, LEAST(10.0, 3.0 + 7.0 * e.percentile)), 1)
+            ELSE ROUND(GREATEST(3.0, LEAST(10.0,
+                CASE
+                    WHEN e.percentile <= 0.05 THEN 3.0 + (e.percentile / 0.05) * (4.5 - 3.0)
+                    WHEN e.percentile <= 0.25 THEN 4.5 + ((e.percentile - 0.05) / (0.25 - 0.05)) * (5.7 - 4.5)
+                    WHEN e.percentile <= 0.50 THEN 5.7 + ((e.percentile - 0.25) / (0.50 - 0.25)) * (6.5 - 5.7)
+                    WHEN e.percentile <= 0.75 THEN 6.5 + ((e.percentile - 0.50) / (0.75 - 0.50)) * (7.3 - 6.5)
+                    WHEN e.percentile <= 0.90 THEN 7.3 + ((e.percentile - 0.75) / (0.90 - 0.75)) * (8.0 - 7.3)
+                    WHEN e.percentile <= 0.98 THEN 8.0 + ((e.percentile - 0.90) / (0.98 - 0.90)) * (9.0 - 8.0)
+                    ELSE 9.0 + ((e.percentile - 0.98) / (1.00 - 0.98)) * (10.0 - 9.0)
+                END
+            )), 1)
         END AS rating,
         d.raw_score,
         d.plays_counted,

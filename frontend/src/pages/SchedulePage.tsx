@@ -377,11 +377,13 @@ function TeamsCard({ rankings, loading }: { rankings: PowerRankingRow[]; loading
       {topTeams.length ? topTeams.map(team => {
         const movement = movementMeta(team.movement)
         return (
-        <CardRow key={team.team} to={`/teams/${team.team}`} className="!grid grid-cols-[20px_28px_minmax(0,1fr)_38px_38px_48px] gap-2">
+        <CardRow key={team.team} to={`/teams/${team.team}`} className="!grid grid-cols-[20px_28px_minmax(0,1fr)_38px_48px] gap-2">
           <span className="text-right text-xs font-bold tabular-nums text-ink-dim">{team.rank}</span>
           <img src={teamLogoUrl(team.team)} className="h-7 w-7 shrink-0 object-contain" alt="" />
-          <span className="min-w-0 truncate text-sm font-bold text-ink">{teamNickname(team.team)}</span>
-          <span className="text-right text-[11px] font-bold tabular-nums text-ink-dim">{team.record}</span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-bold text-ink">{teamNickname(team.team)}</span>
+            <span className="block text-[11px] font-bold tabular-nums text-ink-dim">{team.record}</span>
+          </span>
           <span className={`text-right text-[11px] font-black tabular-nums ${movement.className}`}>{movement.text}</span>
           <span className={`text-right text-xs font-black tabular-nums ${(team.net_epa_play ?? 0) >= 0 ? 'text-data-win' : 'text-data-loss'}`}>
             {formatNetEpa(team.net_epa_play)}
