@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from config import CURRENT_SEASON
 from database import query_to_dict
+import game_ratings_builder
+from schemas.ratings import GamePlayerRating
 from schemas.schedule import Game, GameDetail, ScheduleWeek
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, safe_query, team_sql
 
@@ -303,3 +305,51 @@ def get_game(game_id: str):
         "team_stats": team_stats,
         "scoring": scoring,
     }
+
+
+@router.get("/games/{game_id}/ratings", response_model=list[GamePlayerRating])
+def get_game_ratings(game_id: str):
+    game = query_to_dict(
+        "SELECT game_id FROM schedules WHERE game_id = ?",
+        [game_id],
+    )
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+    rows = game_ratings_builder.read_or_materialize(game_id)
+    if not rows:
+        return []
+
+    return query_to_dict(
+        """
+        WITH roster AS (
+            SELECT player_id, season, position, player_name
+            FROM rosters
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY player_id, season
+                ORDER BY week DESC NULLS LAST, team
+            ) = 1
+        )
+        SELECT
+            r.player_id,
+            COALESCE(pgs.player_name, ros.player_name) AS player_name,
+            r.team,
+            ros.position,
+            r.position_group,
+            r.rating,
+            r.raw_score,
+            r.plays_counted,
+            r.epa_total,
+            r.turnovers,
+            r.def_events_score,
+            r.fg_points
+        FROM player_game_ratings r
+        LEFT JOIN player_game_stats pgs
+          ON pgs.game_id = r.game_id AND pgs.player_id = r.player_id
+        LEFT JOIN roster ros
+          ON ros.player_id = r.player_id AND ros.season = r.season
+        WHERE r.game_id = ?
+        ORDER BY r.rating DESC NULLS LAST, r.raw_score DESC NULLS LAST, player_name
+        """,
+        [game_id],
+    )

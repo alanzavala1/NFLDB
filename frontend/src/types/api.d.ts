@@ -126,6 +126,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/games/{game_id}/ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Game Ratings */
+        get: operations["get_game_ratings_api_games__game_id__ratings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/players/{player_id}": {
         parameters: {
             query?: never;
@@ -384,6 +401,23 @@ export interface paths {
         };
         /** Search */
         get: operations["search_api_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/power-rankings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Power Rankings */
+        get: operations["get_power_rankings_api_power_rankings_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -721,6 +755,33 @@ export interface components {
             team_stats: components["schemas"]["TeamGameStats"][];
             /** Scoring */
             scoring: components["schemas"]["ScoringPlay"][];
+        };
+        /** GamePlayerRating */
+        GamePlayerRating: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string | null;
+            /** Team */
+            team: string | null;
+            /** Position */
+            position: string | null;
+            /** Position Group */
+            position_group: string;
+            /** Rating */
+            rating: number | null;
+            /** Raw Score */
+            raw_score: number | null;
+            /** Plays Counted */
+            plays_counted: number | null;
+            /** Epa Total */
+            epa_total: number | null;
+            /** Turnovers */
+            turnovers: number | null;
+            /** Def Events Score */
+            def_events_score: number | null;
+            /** Fg Points */
+            fg_points: number | null;
         };
         /**
          * GamePlayerStats
@@ -1372,6 +1433,19 @@ export interface components {
             rec_wpa?: number | null;
             /** Rush Wpa */
             rush_wpa?: number | null;
+        };
+        /** PowerRankingRow */
+        PowerRankingRow: {
+            /** Rank */
+            rank: number;
+            /** Team */
+            team: string;
+            /** Record */
+            record: string;
+            /** Net Epa Play */
+            net_epa_play: number | null;
+            /** Movement */
+            movement: number | null;
         };
         /** QuarterScore */
         QuarterScore: {
@@ -2165,6 +2239,37 @@ export interface operations {
             };
         };
     };
+    get_game_ratings_api_games__game_id__ratings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GamePlayerRating"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_player_api_players__player_id__get: {
         parameters: {
             query?: never;
@@ -2600,6 +2705,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_power_rankings_api_power_rankings_get: {
+        parameters: {
+            query?: {
+                season?: number;
+                week?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PowerRankingRow"][];
                 };
             };
             /** @description Validation Error */

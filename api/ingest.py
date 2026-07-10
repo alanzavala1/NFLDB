@@ -847,6 +847,20 @@ def run_ingest(seasons: list[int], log=print):
         n = team_analytics_builder.materialize(season)
         log(f"  team_season_analytics[{season}]: {n} rows")
 
+    # Materialize weekly EPA power rankings for the ingested seasons.
+    log("\nMaterializing team power rankings...")
+    import power_rankings_builder
+    for season in seasons:
+        n = power_rankings_builder.materialize(season)
+        log(f"  team_power_rankings[{season}]: {n} rows")
+
+    # Materialize per-game player ratings. Ratings are percentile-calibrated
+    # across every loaded season, so this is a global rebuild.
+    log("\nMaterializing player game ratings...")
+    import game_ratings_builder
+    n = game_ratings_builder.materialize()
+    log(f"  player_game_ratings: {n} rows")
+
     # Materialize player splits — the player's stat line conditioned on each
     # situational dimension, precomputed per season.
     log("\nMaterializing player splits...")

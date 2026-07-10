@@ -8,7 +8,7 @@ def test_seeded_conn_has_schedules(seeded_conn):
 
 def test_seeded_conn_has_roster(seeded_conn):
     rows = seeded_conn.execute("SELECT COUNT(*) FROM rosters").fetchone()
-    assert rows[0] == 6
+    assert rows[0] == 9
 
 
 def test_client_health_returns_ok(client):

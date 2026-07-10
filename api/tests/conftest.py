@@ -50,6 +50,9 @@ ROSTER = [
     ("00-DEN-QB1",  "Bo Nix",            "QB",     "DEN", 10, 74, 217),
     ("00-BUF-WR1",  "Stefon Diggs",      "WR",     "BUF", 14, 72, 191),
     ("00-MIA-WR1",  "Tyreek Hill",       "WR",     "MIA", 10, 70, 191),
+    ("00-KC-DE1",   "Edge Dude",         "DE",     "KC",  95, 76, 260),
+    ("00-KC-S1",    "Quiet Safety",      "S",      "KC",  26, 72, 205),
+    ("00-KC-K1",    "Kicker Person",     "K",      "KC",   7, 72, 190),
 ]
 
 # (game_id, player_id, week, team, pass_yds, pass_tds, ints, cmp, att, rec_yds, rec_tds, rec, tgts)
@@ -75,6 +78,39 @@ PGS = [
     ("2024_03_BUF_DEN", "00-BUF-QB1", 3, "BUF", 330,  3, 0, 28, 39,   0,   0,  0,  0),
     ("2024_03_BUF_DEN", "00-DEN-QB1", 3, "DEN", 250,  2, 2, 22, 34,   0,   0,  0,  0),
     ("2024_03_BUF_DEN", "00-BUF-WR1", 3, "BUF",   0,  0, 0,  0,  0, 105,   1,  7,  9),
+]
+
+DEF_PGS = [
+    {
+        "game_id": "2024_01_DEN_KC",
+        "player_id": "00-KC-DE1",
+        "team": "KC",
+        "week": 1,
+        "solo_tackles": 3,
+        "assist_tackles": 2,
+        "tackles_for_loss": 1,
+        "qb_hits": 2,
+        "sacks": 2,
+        "def_interceptions": 1,
+        "pass_breakups": 1,
+        "forced_fumbles": 1,
+        "fumble_recoveries": 1,
+    },
+    {
+        "game_id": "2024_01_DEN_KC",
+        "player_id": "00-KC-S1",
+        "team": "KC",
+        "week": 1,
+        "solo_tackles": 0,
+        "assist_tackles": 0,
+        "tackles_for_loss": 0,
+        "qb_hits": 0,
+        "sacks": 0,
+        "def_interceptions": 0,
+        "pass_breakups": 0,
+        "forced_fumbles": 0,
+        "fumble_recoveries": 0,
+    },
 ]
 
 
@@ -184,6 +220,48 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
         )
     """)
 
+    conn.execute("""
+        CREATE TABLE plays (
+            play_id               DOUBLE,
+            game_id               VARCHAR,
+            season                INTEGER,
+            season_type           VARCHAR,
+            week                  INTEGER,
+            posteam               VARCHAR,
+            defteam               VARCHAR,
+            play_type             VARCHAR,
+            drive                 INTEGER,
+            yardline_100          DOUBLE,
+            yards_gained          DOUBLE,
+            epa                   DOUBLE,
+            qb_epa                DOUBLE,
+            success               DOUBLE,
+            pass_oe               DOUBLE,
+            pass_attempt          INTEGER,
+            rush_attempt          INTEGER,
+            sack                  INTEGER,
+            qb_kneel              INTEGER,
+            qb_spike              INTEGER,
+            two_point_attempt     INTEGER,
+            touchdown             INTEGER,
+            td_team               VARCHAR,
+            interception          INTEGER,
+            fumble_lost           INTEGER,
+            complete_pass         INTEGER,
+            passer_player_id      VARCHAR,
+            receiver_player_id    VARCHAR,
+            rusher_player_id      VARCHAR,
+            field_goal_attempt    INTEGER,
+            field_goal_result     VARCHAR,
+            kick_distance         DOUBLE,
+            extra_point_attempt   INTEGER,
+            extra_point_result    VARCHAR,
+            kicker_player_id      VARCHAR,
+            third_down_converted  INTEGER,
+            third_down_failed     INTEGER
+        )
+    """)
+
 
 def _seed(conn: duckdb.DuckDBPyConnection) -> None:
     for week, away, home, a_sc, h_sc, spread, div, gtype in GAMES:
@@ -230,6 +308,103 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
              pass_yds, pass_tds, ints, cmp, att,
              rec_yds, rec_tds, rec, tgts],
         )
+
+    for row in DEF_PGS:
+        player_name = next(r[1] for r in ROSTER if r[0] == row["player_id"])
+        conn.execute(
+            """INSERT INTO player_game_stats (
+                game_id, player_id, player_name, season, week, team,
+                solo_tackles, assist_tackles, tackles_for_loss, qb_hits,
+                sacks, def_interceptions, pass_breakups, forced_fumbles,
+                fumble_recoveries
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                row["game_id"], row["player_id"], player_name, SEASON, row["week"], row["team"],
+                row["solo_tackles"], row["assist_tackles"], row["tackles_for_loss"],
+                row["qb_hits"], row["sacks"], row["def_interceptions"],
+                row["pass_breakups"], row["forced_fumbles"], row["fumble_recoveries"],
+            ],
+        )
+
+    play_id = 1
+
+    def insert_play(
+        game_id: str,
+        week: int,
+        posteam: str,
+        defteam: str,
+        epa: float,
+        *,
+        passer: str | None = None,
+        receiver: str | None = None,
+        rusher: str | None = None,
+        sack: int = 0,
+        interception: int = 0,
+        fumble_lost: int = 0,
+        fg_result: str | None = None,
+        kick_distance: float | None = None,
+        xp_result: str | None = None,
+        kicker: str | None = None,
+    ) -> None:
+        nonlocal play_id
+        is_fg = 1 if fg_result is not None else 0
+        is_xp = 1 if xp_result is not None else 0
+        pass_attempt = 1 if passer is not None and not is_fg and not is_xp and rusher is None else 0
+        rush_attempt = 1 if rusher is not None else 0
+        play_type = "field_goal" if is_fg else "extra_point" if is_xp else "pass" if pass_attempt or sack else "run"
+        conn.execute(
+            """INSERT INTO plays (
+                play_id, game_id, season, season_type, week, posteam, defteam,
+                play_type, drive, yardline_100, yards_gained, epa, qb_epa,
+                success, pass_oe, pass_attempt, rush_attempt, sack, qb_kneel,
+                qb_spike, two_point_attempt, touchdown, td_team, interception,
+                fumble_lost, complete_pass, passer_player_id, receiver_player_id,
+                rusher_player_id, field_goal_attempt, field_goal_result,
+                kick_distance, extra_point_attempt, extra_point_result,
+                kicker_player_id, third_down_converted, third_down_failed
+            ) VALUES (?, ?, ?, 'REG', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)""",
+            [
+                play_id, game_id, SEASON, week, posteam, defteam, play_type,
+                play_id // 6 + 1, 50.0, 5.0 if epa > 0 else -1.0,
+                epa, epa, 1.0 if epa > 0 else 0.0, 0.0,
+                pass_attempt, rush_attempt, sack, interception, fumble_lost,
+                1 if pass_attempt and not interception else 0,
+                passer, receiver, rusher, is_fg, fg_result, kick_distance,
+                is_xp, xp_result, kicker,
+            ],
+        )
+        play_id += 1
+
+    # Week 1: Mahomes posts a great EPA game, Denver's QB has a disaster,
+    # and Diggs has two targets to exercise the WR involvement floor.
+    for _ in range(12):
+        insert_play("2024_01_DEN_KC", 1, "KC", "DEN", 1.0, passer="00-KC-QB1")
+    for i in range(12):
+        insert_play("2024_01_DEN_KC", 1, "DEN", "KC", -1.0, passer="00-DEN-QB1", interception=1 if i < 2 else 0)
+    for _ in range(2):
+        insert_play("2024_01_BUF_MIA", 1, "BUF", "MIA", 1.0, passer="00-BUF-QB1", receiver="00-BUF-WR1")
+    for _ in range(8):
+        insert_play("2024_01_BUF_MIA", 1, "BUF", "MIA", 0.2, passer="00-BUF-QB1")
+    for _ in range(10):
+        insert_play("2024_01_BUF_MIA", 1, "MIA", "BUF", 0.5, passer="00-MIA-QB1", receiver="00-MIA-WR1")
+    insert_play("2024_01_DEN_KC", 1, "KC", "DEN", 0.0, fg_result="made", kick_distance=45, kicker="00-KC-K1")
+    insert_play("2024_01_DEN_KC", 1, "KC", "DEN", 0.0, xp_result="good", kicker="00-KC-K1")
+
+    # Week 2 gives BUF enough EPA to climb relative to Week 1.
+    for _ in range(12):
+        insert_play("2024_02_KC_BUF", 2, "BUF", "KC", 2.0, passer="00-BUF-QB1")
+    for _ in range(12):
+        insert_play("2024_02_KC_BUF", 2, "KC", "BUF", -0.5, passer="00-KC-QB1")
+    for _ in range(10):
+        insert_play("2024_02_MIA_DEN", 2, "MIA", "DEN", 0.4, passer="00-MIA-QB1")
+    for _ in range(10):
+        insert_play("2024_02_MIA_DEN", 2, "DEN", "MIA", -0.2, passer="00-DEN-QB1")
+
+    # Week 3 keeps the season grid populated for endpoint/default-week tests.
+    for _ in range(10):
+        insert_play("2024_03_BUF_DEN", 3, "BUF", "DEN", 0.3, passer="00-BUF-QB1")
+    for _ in range(10):
+        insert_play("2024_03_BUF_DEN", 3, "DEN", "BUF", -0.1, passer="00-DEN-QB1")
 
 
 # ── Pytest fixtures ──────────────────────────────────────────────────────────

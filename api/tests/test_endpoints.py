@@ -63,8 +63,8 @@ def test_leaders_returns_qbs_and_wrs(client):
     r = client.get("/api/leaders?season=2024")
     assert r.status_code == 200
     rows = r.json()
-    # All 6 seeded players appear (they all have stats)
-    assert len(rows) == 6
+    # All seeded players with player_game_stats rows appear (QBs, WRs, DEF)
+    assert len(rows) == 8
     qbs = [r for r in rows if r["position"] == "QB"]
     assert len(qbs) == 4
 

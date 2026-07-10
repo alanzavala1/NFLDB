@@ -33,9 +33,12 @@ type LeaderCategory = {
   display: (leader: LeagueLeader) => string
 }
 
-type PowerBaseline = {
-  marginPerGame: number
-  pct: number
+type PowerRankingRow = {
+  rank: number
+  team: string
+  record: string
+  net_epa_play: number | null
+  movement: number | null
 }
 
 const LEADER_CATEGORIES: LeaderCategory[] = [
@@ -241,6 +244,17 @@ function formatRecord(row: StandingsTeam) {
   return `${row.w}-${row.l}${row.t ? `-${row.t}` : ''}`
 }
 
+function formatNetEpa(value: number | null | undefined) {
+  if (value == null) return '--'
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`
+}
+
+function movementMeta(movement: number | null | undefined) {
+  if (!movement) return { text: '—', className: 'text-ink-dim' }
+  if (movement > 0) return { text: `▲ ${movement}`, className: 'text-data-win' }
+  return { text: `▼ ${Math.abs(movement)}`, className: 'text-data-loss' }
+}
+
 function pointDiff(row: StandingsTeam) {
   return row.pf - row.pa
 }
@@ -248,34 +262,6 @@ function pointDiff(row: StandingsTeam) {
 function formatPointDiff(row: StandingsTeam) {
   const diff = pointDiff(row)
   return `${diff > 0 ? '+' : ''}${diff}`
-}
-
-function gamesPlayed(row: StandingsTeam) {
-  return Math.max(1, row.w + row.l + row.t)
-}
-
-function marginPerGame(row: StandingsTeam) {
-  return pointDiff(row) / gamesPlayed(row)
-}
-
-function powerBaseline(teams: StandingsTeam[]): PowerBaseline {
-  if (!teams.length) return { marginPerGame: 0, pct: 0.5 }
-  return {
-    marginPerGame: teams.reduce((sum, team) => sum + marginPerGame(team), 0) / teams.length,
-    pct: teams.reduce((sum, team) => sum + team.pct, 0) / teams.length,
-  }
-}
-
-function powerRating(row: StandingsTeam, baseline: PowerBaseline) {
-  const games = gamesPlayed(row)
-  const marginScore = pointDiff(row) / games - baseline.marginPerGame
-  const recordScore = (row.pct - baseline.pct) * 10
-  return marginScore + recordScore
-}
-
-function formatPowerRating(row: StandingsTeam, baseline: PowerBaseline) {
-  const rating = powerRating(row, baseline)
-  return `${rating > 0 ? '+' : ''}${rating.toFixed(1)}`
 }
 
 function formatSpread(game: Game) {
@@ -383,37 +369,31 @@ function SeasonCard({
   )
 }
 
-function TeamsCard({ teams }: { teams: StandingsTeam[] }) {
-  const baseline = powerBaseline(teams)
-  const topTeams = [...teams]
-    .sort((a, b) => powerRating(b, baseline) - powerRating(a, baseline) || b.pct - a.pct || pointDiff(b) - pointDiff(a))
-    .slice(0, 10)
+function TeamsCard({ rankings, loading }: { rankings: PowerRankingRow[]; loading: boolean }) {
+  const topTeams = rankings.slice(0, 10)
 
   return (
-    <Card title="Power rankings" action={<span className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim">Model</span>}>
-      {topTeams.length ? topTeams.map((team, index) => (
-        <CardRow key={team.team} to={`/teams/${team.team}`} className="justify-between">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="w-5 shrink-0 text-right text-xs font-bold tabular-nums text-ink-dim">{index + 1}</span>
-            <img src={teamLogoUrl(team.team)} className="h-7 w-7 shrink-0 object-contain" alt="" />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-ink">{teamNickname(team.team)}</div>
-              <div className="text-xs text-ink-dim">{formatRecord(team)}</div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className={`text-xs font-black tabular-nums ${powerRating(team, baseline) >= 0 ? 'text-data-win' : 'text-data-loss'}`}>
-              {formatPowerRating(team, baseline)}
-            </div>
-            <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-ink-dim">PWR</div>
-          </div>
+    <Card title="Power rankings" action={<span className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim">EPA</span>}>
+      {topTeams.length ? topTeams.map(team => {
+        const movement = movementMeta(team.movement)
+        return (
+        <CardRow key={team.team} to={`/teams/${team.team}`} className="!grid grid-cols-[20px_28px_minmax(0,1fr)_38px_38px_48px] gap-2">
+          <span className="text-right text-xs font-bold tabular-nums text-ink-dim">{team.rank}</span>
+          <img src={teamLogoUrl(team.team)} className="h-7 w-7 shrink-0 object-contain" alt="" />
+          <span className="min-w-0 truncate text-sm font-bold text-ink">{teamNickname(team.team)}</span>
+          <span className="text-right text-[11px] font-bold tabular-nums text-ink-dim">{team.record}</span>
+          <span className={`text-right text-[11px] font-black tabular-nums ${movement.className}`}>{movement.text}</span>
+          <span className={`text-right text-xs font-black tabular-nums ${(team.net_epa_play ?? 0) >= 0 ? 'text-data-win' : 'text-data-loss'}`}>
+            {formatNetEpa(team.net_epa_play)}
+          </span>
         </CardRow>
-      )) : (
-        <CardRow className="text-sm text-ink-dim">Standings loading...</CardRow>
+        )
+      }) : (
+        <CardRow className="text-sm text-ink-dim">{loading ? 'Power rankings loading...' : 'No rankings found'}</CardRow>
       )}
       {topTeams.length > 0 && (
         <div className="border-t border-surface-line px-4 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-dim">
-          Points vs league average · margin + record
+          Net EPA per play · updated weekly
         </div>
       )}
     </Card>
@@ -982,6 +962,7 @@ export default function SchedulePage() {
   const [scheduleState, setScheduleState] = useState<LoadState<WeekGroup[]>>({ season: null, data: [], error: false })
   const [standingsState, setStandingsState] = useState<LoadState<DivisionStandings[]>>({ season: null, data: [], error: false })
   const [leadersState, setLeadersState] = useState<LoadState<LeagueLeader[]>>({ season: null, data: [], error: false })
+  const [powerState, setPowerState] = useState<LoadState<PowerRankingRow[]>>({ season: null, data: [], error: false })
 
   const seasonFromUrl = parseNumberParam(searchParams.get('season'))
   const season = seasonFromUrl ?? defaultSeason(seasons)
@@ -992,10 +973,11 @@ export default function SchedulePage() {
   const schedule = season !== null && scheduleState.season === season ? scheduleState.data : []
   const standings = season !== null && standingsState.season === season ? standingsState.data : []
   const leaders = season !== null && leadersState.season === season ? leadersState.data : []
+  const powerRankings = season !== null && powerState.season === season ? powerState.data : []
   const scheduleLoading = season !== null && !isSeasonLoading && !isSeasonAvailable && scheduleState.season !== season
   const standingsLoading = season !== null && standingsState.season !== season
   const leadersLoading = season !== null && leadersState.season !== season
-  const allTeams = useMemo(() => standings.flatMap(group => group.teams), [standings])
+  const powerLoading = season !== null && powerState.season !== season
   const seasonGames = useMemo(() => schedule.flatMap(group => group.games), [schedule])
   const defaultWeek = useMemo(() => findCurrentWeek(schedule), [schedule])
   const activeGroup = schedule.find(group => group.week === (requestedWeek ?? defaultWeek))
@@ -1046,6 +1028,19 @@ export default function SchedulePage() {
     return () => { cancelled = true }
   }, [season, isSeasonLoading, isSeasonAvailable])
 
+  useEffect(() => {
+    if (season === null || isSeasonLoading || isSeasonAvailable) return
+    let cancelled = false
+    fetch(`/api/power-rankings?season=${season}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        return res.json() as Promise<PowerRankingRow[]>
+      })
+      .then(data => { if (!cancelled) setPowerState({ season, data, error: false }) })
+      .catch(() => { if (!cancelled) setPowerState({ season, data: [], error: true }) })
+    return () => { cancelled = true }
+  }, [season, isSeasonLoading, isSeasonAvailable])
+
   function setSeasonParam(nextSeason: number) {
     const next = new URLSearchParams(searchParams)
     next.set('season', String(nextSeason))
@@ -1069,6 +1064,13 @@ export default function SchedulePage() {
       api.schedule(season)
         .then(data => setScheduleState({ season, data, error: false }))
         .catch(() => setScheduleState({ season, data: [], error: true }))
+      fetch(`/api/power-rankings?season=${season}`)
+        .then(res => {
+          if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+          return res.json() as Promise<PowerRankingRow[]>
+        })
+        .then(data => setPowerState({ season, data, error: false }))
+        .catch(() => setPowerState({ season, data: [], error: true }))
     }
   }
 
@@ -1141,7 +1143,7 @@ export default function SchedulePage() {
             season={season}
             onSeasonChange={setSeasonParam}
           />
-          <TeamsCard teams={allTeams} />
+          <TeamsCard rankings={powerRankings} loading={powerLoading} />
         </aside>
 
         <section className="grid min-w-0 content-start gap-5">

@@ -284,6 +284,49 @@
         }
       }
     },
+    "/api/games/{game_id}/ratings": {
+      "get": {
+        "summary": "Get Game Ratings",
+        "operationId": "get_game_ratings_api_games__game_id__ratings_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GamePlayerRating"
+                  },
+                  "title": "Response Get Game Ratings Api Games  Game Id  Ratings Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/players/{player_id}": {
       "get": {
         "summary": "Get Player",
@@ -949,6 +992,68 @@
                     "$ref": "#/components/schemas/SearchResult"
                   },
                   "title": "Response Search Api Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/power-rankings": {
+      "get": {
+        "summary": "Get Power Rankings",
+        "operationId": "get_power_rankings_api_power_rankings_get",
+        "parameters": [
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 2025,
+              "title": "Season"
+            }
+          },
+          {
+            "name": "week",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 22,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Week"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PowerRankingRow"
+                  },
+                  "title": "Response Get Power Rankings Api Power Rankings Get"
                 }
               }
             }
@@ -2202,6 +2307,144 @@
         ],
         "title": "GameDetail",
         "description": "Game detail returned by /games/{id}: game header + rosters + scoring + WP."
+      },
+      "GamePlayerRating": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Name"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "position_group": {
+            "type": "string",
+            "title": "Position Group"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "raw_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Score"
+          },
+          "plays_counted": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plays Counted"
+          },
+          "epa_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epa Total"
+          },
+          "turnovers": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnovers"
+          },
+          "def_events_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Def Events Score"
+          },
+          "fg_points": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fg Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "player_name",
+          "team",
+          "position",
+          "position_group",
+          "rating",
+          "raw_score",
+          "plays_counted",
+          "epa_total",
+          "turnovers",
+          "def_events_score",
+          "fg_points"
+        ],
+        "title": "GamePlayerRating"
       },
       "GamePlayerStats": {
         "properties": {
@@ -4337,6 +4580,53 @@
         "type": "object",
         "title": "PlayerWpa",
         "description": "Per-season WPA attribution. Sparse by role (passer/rusher/receiver)."
+      },
+      "PowerRankingRow": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "record": {
+            "type": "string",
+            "title": "Record"
+          },
+          "net_epa_play": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Epa Play"
+          },
+          "movement": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movement"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "team",
+          "record",
+          "net_epa_play",
+          "movement"
+        ],
+        "title": "PowerRankingRow"
       },
       "QuarterScore": {
         "properties": {
