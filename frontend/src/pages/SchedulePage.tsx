@@ -10,7 +10,6 @@ import { teamLogoUrl, teamName } from '../utils/teams'
 const GAME_TYPE_LABELS: Record<string, string> = { WC: 'Wild Card', DIV: 'Divisional', CON: 'Conference', SB: 'Super Bowl' }
 const GAME_TYPE_PRIORITY: Record<string, number> = { SB: 4, CON: 3, DIV: 2, WC: 1, REG: 0 }
 const MICRO = 'text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim'
-const LINE_ATTRIBUTION = 'Lines via nflverse'
 
 type LoadState<T> = {
   season: number | null
@@ -32,6 +31,11 @@ type LeaderCategory = {
   filter: (leader: LeagueLeader) => boolean
   value: (leader: LeagueLeader) => number
   display: (leader: LeagueLeader) => string
+}
+
+type PowerBaseline = {
+  marginPerGame: number
+  pct: number
 }
 
 const LEADER_CATEGORIES: LeaderCategory[] = [
@@ -246,6 +250,34 @@ function formatPointDiff(row: StandingsTeam) {
   return `${diff > 0 ? '+' : ''}${diff}`
 }
 
+function gamesPlayed(row: StandingsTeam) {
+  return Math.max(1, row.w + row.l + row.t)
+}
+
+function marginPerGame(row: StandingsTeam) {
+  return pointDiff(row) / gamesPlayed(row)
+}
+
+function powerBaseline(teams: StandingsTeam[]): PowerBaseline {
+  if (!teams.length) return { marginPerGame: 0, pct: 0.5 }
+  return {
+    marginPerGame: teams.reduce((sum, team) => sum + marginPerGame(team), 0) / teams.length,
+    pct: teams.reduce((sum, team) => sum + team.pct, 0) / teams.length,
+  }
+}
+
+function powerRating(row: StandingsTeam, baseline: PowerBaseline) {
+  const games = gamesPlayed(row)
+  const marginScore = pointDiff(row) / games - baseline.marginPerGame
+  const recordScore = (row.pct - baseline.pct) * 10
+  return marginScore + recordScore
+}
+
+function formatPowerRating(row: StandingsTeam, baseline: PowerBaseline) {
+  const rating = powerRating(row, baseline)
+  return `${rating > 0 ? '+' : ''}${rating.toFixed(1)}`
+}
+
 function formatSpread(game: Game) {
   if (game.spread_line === null) return null
   if (game.spread_line === 0) return 'PICK'
@@ -266,14 +298,6 @@ function formatKickoffFact(game: Game) {
   const time = formatTimeShort(game.gametime)
   if (date && time !== 'TBD') return `${date} ${time} ET`
   return date ?? `${time} ET`
-}
-
-function LineChip({ value }: { value: string }) {
-  return (
-    <span className="inline-flex items-center rounded-md border border-surface-line bg-surface-raise px-2 py-0.5 font-bold tabular-nums text-ink">
-      {value}
-    </span>
-  )
 }
 
 function finalLabel(game: Game) {
@@ -325,13 +349,6 @@ function groupKickoffSlots(games: Game[]) {
   return [...slots.entries()].map(([key, slot]) => ({ key, ...slot })).sort((a, b) => a.sort.localeCompare(b.sort))
 }
 
-function superBowlMvpFact(game: Game) {
-  if (game.game_type !== 'SB') return null
-  const awards = PAST_AWARDS[game.season] as Array<{ award: string; player: string; team?: string }> | undefined
-  const mvp = awards?.find(award => award.award === 'SBMVP' || award.award === 'SB MVP')
-  return mvp ? `${mvp.player}${mvp.team ? `, ${mvp.team}` : ''}` : null
-}
-
 function SeasonCard({
   seasons,
   season,
@@ -367,12 +384,13 @@ function SeasonCard({
 }
 
 function TeamsCard({ teams }: { teams: StandingsTeam[] }) {
+  const baseline = powerBaseline(teams)
   const topTeams = [...teams]
-    .sort((a, b) => b.pct - a.pct || b.w - a.w || pointDiff(b) - pointDiff(a))
+    .sort((a, b) => powerRating(b, baseline) - powerRating(a, baseline) || b.pct - a.pct || pointDiff(b) - pointDiff(a))
     .slice(0, 10)
 
   return (
-    <Card title="Teams">
+    <Card title="Power rankings" action={<span className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim">Model</span>}>
       {topTeams.length ? topTeams.map((team, index) => (
         <CardRow key={team.team} to={`/teams/${team.team}`} className="justify-between">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -383,12 +401,20 @@ function TeamsCard({ teams }: { teams: StandingsTeam[] }) {
               <div className="text-xs text-ink-dim">{formatRecord(team)}</div>
             </div>
           </div>
-          <div className={`text-xs font-bold tabular-nums ${pointDiff(team) >= 0 ? 'text-data-win' : 'text-data-loss'}`}>
-            {formatPointDiff(team)}
+          <div className="text-right">
+            <div className={`text-xs font-black tabular-nums ${powerRating(team, baseline) >= 0 ? 'text-data-win' : 'text-data-loss'}`}>
+              {formatPowerRating(team, baseline)}
+            </div>
+            <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-ink-dim">PWR</div>
           </div>
         </CardRow>
       )) : (
         <CardRow className="text-sm text-ink-dim">Standings loading...</CardRow>
+      )}
+      {topTeams.length > 0 && (
+        <div className="border-t border-surface-line px-4 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-dim">
+          Points vs league average · margin + record
+        </div>
       )}
     </Card>
   )
@@ -518,18 +544,17 @@ function FeaturedGameHero({ game }: { game: Game }) {
   const margin = finished ? Math.abs(game.away_score! - game.home_score!) : null
   const spread = formatSpread(game)
   const totalValue = formatTotalValue(game)
-  const sbMvp = superBowlMvpFact(game)
   const facts = finished
     ? [
         { label: 'Margin', value: margin?.toString() ?? '-' },
         { label: 'Total', value: total?.toString() ?? '-' },
-        { label: sbMvp ? 'SB MVP' : 'Date', value: sbMvp ?? formatMonthDay(game.gameday) },
-        { label: 'Venue', value: game.stadium ?? 'TBD' },
+        { label: 'Closing spread', value: spread ?? 'No line' },
+        { label: 'Closing O/U', value: totalValue ?? 'No total' },
       ]
     : [
         { label: 'Kickoff', value: formatKickoffFact(game) },
-        { label: 'Spread', value: spread ?? 'No line', market: true },
-        { label: 'O/U', value: totalValue ?? 'No total', market: true },
+        { label: 'Spread', value: spread ?? 'No line' },
+        { label: 'O/U', value: totalValue ?? 'No total' },
         { label: 'Venue', value: game.stadium ?? 'TBD' },
       ]
 
@@ -581,14 +606,14 @@ function FeaturedGameHero({ game }: { game: Game }) {
           >
             <div className={MICRO}>{fact.label}</div>
             <div className="mt-1 break-words text-sm font-bold leading-snug text-ink">
-              {fact.market ? <LineChip value={fact.value} /> : fact.value}
+              {fact.value}
             </div>
           </div>
         ))}
       </div>
-      {!finished && (
+      {(spread || totalValue) && (
         <div className="border-t border-surface-line px-4 py-2 text-right text-[10px] text-ink-dim">
-          {LINE_ATTRIBUTION}
+          Lines via nflverse
         </div>
       )}
     </Card>
@@ -645,15 +670,18 @@ function GameScoreBlock({ game }: { game: Game }) {
   )
 }
 
-function MarketLineMeta({ spread, total }: { spread: string | null; total: string | null }) {
+function MarketLineMeta({ spread, total, label }: { spread: string | null; total: string | null; label: string }) {
   if (!spread && !total) {
     return <div className="justify-self-end text-right text-xs font-bold text-ink-dim max-[780px]:hidden">Line TBD</div>
   }
 
   return (
-    <div className="flex flex-col items-end gap-1 justify-self-end text-right text-[11px] leading-tight max-[780px]:hidden">
-      {spread && <LineChip value={spread} />}
-      {total && <LineChip value={total} />}
+    <div className="justify-self-end rounded-lg border border-surface-line bg-surface-raise/45 px-3 py-2 text-right max-[780px]:hidden">
+      <div className="mb-1 text-[9px] font-black uppercase tracking-[0.12em] text-ink-dim">{label}</div>
+      <div className="flex flex-col items-end gap-0.5">
+        {spread && <div className="text-xs font-bold tabular-nums text-ink">{spread}</div>}
+        {total && <div className="text-xs font-bold tabular-nums text-ink">{total}</div>}
+      </div>
     </div>
   )
 }
@@ -667,7 +695,7 @@ function GameRow({ game }: { game: Game }) {
   return (
     <CardRow
       to={`/games/${game.game_id}`}
-      className="grid grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)_96px] gap-3 py-[13px] max-[780px]:grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)] max-[780px]:gap-2"
+      className="grid grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)_116px] gap-3 py-[13px] max-[780px]:grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)] max-[780px]:gap-2"
     >
       <span className={`grid h-8 w-10 place-items-center rounded-lg text-[10px] font-black uppercase tracking-[0.12em] ${
         finished ? 'bg-surface-raise text-ink-mid' : 'bg-indigo-500/20 text-indigo-300'
@@ -689,22 +717,22 @@ function GameRow({ game }: { game: Game }) {
         finished={finished}
         align="right"
       />
-      {finished
-        ? <div className="justify-self-end text-right text-xs font-bold text-ink-dim max-[780px]:hidden">View</div>
-        : <MarketLineMeta spread={spread} total={total} />
+      {spread || total
+        ? <MarketLineMeta spread={spread} total={total} label={finished ? 'Closing' : 'Line'} />
+        : <div className="justify-self-end text-right text-xs font-bold text-ink-dim max-[780px]:hidden">{finished ? 'View' : 'Line TBD'}</div>
       }
     </CardRow>
   )
 }
 
 function KickoffSlotCard({ label, games }: { label: string; games: Game[] }) {
-  const hasUpcoming = games.some(game => !isFinished(game))
+  const hasLineData = games.some(game => game.spread_line !== null || game.total_line !== null)
   const countLabel = `${games.length} game${games.length === 1 ? '' : 's'}`
 
   return (
     <Card
       title={<span className={MICRO}>{label}</span>}
-      action={<span className="text-xs font-bold text-ink-dim">{hasUpcoming ? `${countLabel} · lines via nflverse` : countLabel}</span>}
+      action={<span className="text-xs font-bold text-ink-dim">{hasLineData ? `${countLabel} · lines via nflverse` : countLabel}</span>}
     >
       {games.map(game => <GameRow key={game.game_id} game={game} />)}
     </Card>
