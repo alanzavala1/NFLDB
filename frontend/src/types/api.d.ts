@@ -143,6 +143,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/games/{game_id}/lineup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Game Lineup */
+        get: operations["get_game_lineup_api_games__game_id__lineup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/games/{game_id}/players/{player_id}/chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Game Player Chart */
+        get: operations["get_game_player_chart_api_games__game_id__players__player_id__chart_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/players/{player_id}": {
         parameters: {
             query?: never;
@@ -756,6 +790,25 @@ export interface components {
             /** Scoring */
             scoring: components["schemas"]["ScoringPlay"][];
         };
+        /** GameLineup */
+        GameLineup: {
+            /** Game Id */
+            game_id: string;
+            /** Season */
+            season: number;
+            /** Week */
+            week: number;
+            /** Away Team */
+            away_team: string;
+            /** Home Team */
+            home_team: string;
+            /** Join Match Rate */
+            join_match_rate: number | null;
+            /** Scoring */
+            scoring: components["schemas"]["LineupScoringEvent"][];
+            /** Teams */
+            teams: components["schemas"]["LineupTeam"][];
+        };
         /** GamePlayerRating */
         GamePlayerRating: {
             /** Player Id */
@@ -1046,6 +1099,79 @@ export interface components {
             /** Punt Yards */
             punt_yards: number;
         };
+        /** LineupPlayer */
+        LineupPlayer: {
+            /** Player Id */
+            player_id: string | null;
+            /** Pfr Player Id */
+            pfr_player_id: string | null;
+            /** Player Name */
+            player_name: string;
+            /** Team */
+            team: string;
+            /** Position */
+            position: string | null;
+            /** Position Group */
+            position_group: string | null;
+            /** Jersey Number */
+            jersey_number: number | null;
+            /** Headshot Url */
+            headshot_url: string | null;
+            /** Rating */
+            rating: number | null;
+            /** Raw Score */
+            raw_score: number | null;
+            /** Snaps */
+            snaps: number;
+            /** Snap Pct */
+            snap_pct: number | null;
+            /**
+             * Scored Td
+             * @default false
+             */
+            scored_td: boolean;
+        };
+        /** LineupScoringEvent */
+        LineupScoringEvent: {
+            /** Team */
+            team: string | null;
+            /** Player Id */
+            player_id: string | null;
+            /** Player Name */
+            player_name: string | null;
+            /** Kind */
+            kind: string;
+            /** Qtr */
+            qtr: number | null;
+            /** Clock */
+            clock: string | null;
+            /** Distance */
+            distance: number | null;
+            /** Desc */
+            desc: string | null;
+        };
+        /** LineupTeam */
+        LineupTeam: {
+            /** Team */
+            team: string;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "away" | "home";
+            /** Avg Rating */
+            avg_rating: number | null;
+            /** Offense Personnel */
+            offense_personnel: string | null;
+            /** Defense Personnel */
+            defense_personnel: string | null;
+            /** Offense */
+            offense: components["schemas"]["LineupPlayer"][];
+            /** Defense */
+            defense: components["schemas"]["LineupPlayer"][];
+            /** Rotation */
+            rotation: components["schemas"]["LineupPlayer"][];
+        };
         /** LoadSeasonResponse */
         LoadSeasonResponse: {
             /** Season */
@@ -1152,6 +1278,54 @@ export interface components {
             team: string | null;
             /** Position */
             position: string | null;
+        };
+        /** PlayerChart */
+        PlayerChart: {
+            /** Game Id */
+            game_id: string;
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string | null;
+            /** Team */
+            team: string | null;
+            /** Position */
+            position: string | null;
+            /** Role */
+            role: string;
+            /** Rating */
+            rating: number | null;
+            /** Snap Pct */
+            snap_pct: number | null;
+            /** Stats */
+            stats: {
+                [key: string]: number | string | null;
+            };
+            /** Events */
+            events: components["schemas"]["PlayerChartEvent"][];
+        };
+        /** PlayerChartEvent */
+        PlayerChartEvent: {
+            /** Play Id */
+            play_id: number | null;
+            /** Qtr */
+            qtr: number | null;
+            /** Clock */
+            clock: string | null;
+            /** Role */
+            role: string;
+            /** Lane */
+            lane: string | null;
+            /** Air Yards */
+            air_yards: number | null;
+            /** Yards */
+            yards: number | null;
+            /** Epa */
+            epa: number | null;
+            /** Outcome */
+            outcome: string;
+            /** Desc */
+            desc: string | null;
         };
         /**
          * PlayerComparable
@@ -2257,6 +2431,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GamePlayerRating"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_game_lineup_api_games__game_id__lineup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GameLineup"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_game_player_chart_api_games__game_id__players__player_id__chart_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                game_id: string;
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerChart"];
                 };
             };
             /** @description Validation Error */

@@ -327,6 +327,93 @@
         }
       }
     },
+    "/api/games/{game_id}/lineup": {
+      "get": {
+        "summary": "Get Game Lineup",
+        "operationId": "get_game_lineup_api_games__game_id__lineup_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameLineup"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}/players/{player_id}/chart": {
+      "get": {
+        "summary": "Get Game Player Chart",
+        "operationId": "get_game_player_chart_api_games__game_id__players__player_id__chart_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "player_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Player Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerChart"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/players/{player_id}": {
       "get": {
         "summary": "Get Player",
@@ -2308,6 +2395,67 @@
         "title": "GameDetail",
         "description": "Game detail returned by /games/{id}: game header + rosters + scoring + WP."
       },
+      "GameLineup": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "away_team": {
+            "type": "string",
+            "title": "Away Team"
+          },
+          "home_team": {
+            "type": "string",
+            "title": "Home Team"
+          },
+          "join_match_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join Match Rate"
+          },
+          "scoring": {
+            "items": {
+              "$ref": "#/components/schemas/LineupScoringEvent"
+            },
+            "type": "array",
+            "title": "Scoring"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/LineupTeam"
+            },
+            "type": "array",
+            "title": "Teams"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "season",
+          "week",
+          "away_team",
+          "home_team",
+          "join_match_rate",
+          "scoring",
+          "teams"
+        ],
+        "title": "GameLineup"
+      },
       "GamePlayerRating": {
         "properties": {
           "player_id": {
@@ -3213,6 +3361,321 @@
         "title": "LeagueLeader",
         "description": "One row per player in /leaders. Stat fields are season totals from\nSUM() over player_game_stats, returned as DOUBLE.\n\nAll stat fields are required-and-non-null: the underlying columns have\nDEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable\nstats like RB pass_yards). Roster-joined fields (position/team) may be\nnull because the join is LEFT and roster data can be missing."
       },
+      "LineupPlayer": {
+        "properties": {
+          "player_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Id"
+          },
+          "pfr_player_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pfr Player Id"
+          },
+          "player_name": {
+            "type": "string",
+            "title": "Player Name"
+          },
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "position_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Group"
+          },
+          "jersey_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jersey Number"
+          },
+          "headshot_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headshot Url"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "raw_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Score"
+          },
+          "snaps": {
+            "type": "integer",
+            "title": "Snaps"
+          },
+          "snap_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snap Pct"
+          },
+          "scored_td": {
+            "type": "boolean",
+            "title": "Scored Td",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "pfr_player_id",
+          "player_name",
+          "team",
+          "position",
+          "position_group",
+          "jersey_number",
+          "headshot_url",
+          "rating",
+          "raw_score",
+          "snaps",
+          "snap_pct"
+        ],
+        "title": "LineupPlayer"
+      },
+      "LineupScoringEvent": {
+        "properties": {
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "player_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Id"
+          },
+          "player_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "qtr": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qtr"
+          },
+          "clock": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock"
+          },
+          "distance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team",
+          "player_id",
+          "player_name",
+          "kind",
+          "qtr",
+          "clock",
+          "distance",
+          "desc"
+        ],
+        "title": "LineupScoringEvent"
+      },
+      "LineupTeam": {
+        "properties": {
+          "team": {
+            "type": "string",
+            "title": "Team"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "away",
+              "home"
+            ],
+            "title": "Side"
+          },
+          "avg_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rating"
+          },
+          "offense_personnel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offense Personnel"
+          },
+          "defense_personnel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defense Personnel"
+          },
+          "offense": {
+            "items": {
+              "$ref": "#/components/schemas/LineupPlayer"
+            },
+            "type": "array",
+            "title": "Offense"
+          },
+          "defense": {
+            "items": {
+              "$ref": "#/components/schemas/LineupPlayer"
+            },
+            "type": "array",
+            "title": "Defense"
+          },
+          "rotation": {
+            "items": {
+              "$ref": "#/components/schemas/LineupPlayer"
+            },
+            "type": "array",
+            "title": "Rotation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "team",
+          "side",
+          "avg_rating",
+          "offense_personnel",
+          "defense_personnel",
+          "offense",
+          "defense",
+          "rotation"
+        ],
+        "title": "LineupTeam"
+      },
       "LoadSeasonResponse": {
         "properties": {
           "season": {
@@ -3624,6 +4087,232 @@
         ],
         "title": "PlayerAward",
         "description": "A single major award win for a player.\n\nSourced from the seeded `player_awards` table \u2014 major postseason\nvoting awards: MVP, OPOY, DPOY, OROY, DROY, CPOY. Joined back to\nrosters on (player_name, season) during ingest so each row carries\nthe player's gsis_id when available."
+      },
+      "PlayerChart": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "player_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Name"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "snap_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snap Pct"
+          },
+          "stats": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Stats"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerChartEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "player_id",
+          "player_name",
+          "team",
+          "position",
+          "role",
+          "rating",
+          "snap_pct",
+          "stats",
+          "events"
+        ],
+        "title": "PlayerChart"
+      },
+      "PlayerChartEvent": {
+        "properties": {
+          "play_id": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Play Id"
+          },
+          "qtr": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qtr"
+          },
+          "clock": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "lane": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lane"
+          },
+          "air_yards": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Yards"
+          },
+          "yards": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yards"
+          },
+          "epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epa"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "desc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc"
+          }
+        },
+        "type": "object",
+        "required": [
+          "play_id",
+          "qtr",
+          "clock",
+          "role",
+          "lane",
+          "air_yards",
+          "yards",
+          "epa",
+          "outcome",
+          "desc"
+        ],
+        "title": "PlayerChartEvent"
       },
       "PlayerComparable": {
         "properties": {

@@ -55,6 +55,25 @@ ROSTER = [
     ("00-KC-K1",    "Kicker Person",     "K",      "KC",   7, 72, 190),
 ]
 
+for _team in ("KC", "DEN"):
+    for _i, _pos in enumerate(["QB", "RB", "WR", "WR", "TE", "LT", "LG", "C", "RG", "RT", "FB"], start=1):
+        _pid = f"00-{_team}-OFF{_i}"
+        if _pos == "QB" and _team == "KC":
+            _pid = "00-KC-QB1"
+        elif _pos == "QB" and _team == "DEN":
+            _pid = "00-DEN-QB1"
+        elif _pid not in {r[0] for r in ROSTER}:
+            ROSTER.append((_pid, f"{_team} {_pos} Starter {_i}", _pos, _team, 10 + _i, 74, 220))
+    for _i, _pos in enumerate(["DE", "DT", "DT", "DE", "OLB", "MLB", "CB", "CB", "FS", "SS", "NB"], start=1):
+        _pid = f"00-{_team}-DEF{_i}"
+        if _team == "KC" and _i == 1:
+            _pid = "00-KC-DE1"
+        elif _pid not in {r[0] for r in ROSTER}:
+            ROSTER.append((_pid, f"{_team} {_pos} Starter {_i}", _pos, _team, 50 + _i, 74, 240))
+    for _i, _pos in enumerate(["WR", "RB", "TE", "CB"], start=1):
+        _pid = f"00-{_team}-ROT{_i}"
+        ROSTER.append((_pid, f"{_team} {_pos} Rotation {_i}", _pos, _team, 70 + _i, 73, 215))
+
 # (game_id, player_id, week, team, pass_yds, pass_tds, ints, cmp, att, rec_yds, rec_tds, rec, tgts)
 # Build per-finished-game stats. Each QB's stats reflect that game's score loosely.
 PGS = [
@@ -187,6 +206,27 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
         )
     """)
 
+    conn.execute("""
+        CREATE TABLE snap_counts (
+            game_id        VARCHAR,
+            pfr_game_id    VARCHAR,
+            season         INTEGER,
+            game_type      VARCHAR,
+            week           INTEGER,
+            player         VARCHAR,
+            pfr_player_id  VARCHAR,
+            position       VARCHAR,
+            team           VARCHAR,
+            opponent       VARCHAR,
+            offense_snaps  DOUBLE,
+            offense_pct    DOUBLE,
+            defense_snaps  DOUBLE,
+            defense_pct    DOUBLE,
+            st_snaps       DOUBLE,
+            st_pct         DOUBLE
+        )
+    """)
+
     # New-format nflverse depth charts: dt-stamped daily snapshots.
     conn.execute("""
         CREATE TABLE depth_charts (
@@ -232,6 +272,14 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
             play_type             VARCHAR,
             drive                 INTEGER,
             yardline_100          DOUBLE,
+            game_seconds_remaining DOUBLE,
+            qtr                   INTEGER,
+            "time"                VARCHAR,
+            "desc"                VARCHAR,
+            pass_location         VARCHAR,
+            air_yards             DOUBLE,
+            run_location          VARCHAR,
+            run_gap               VARCHAR,
             yards_gained          DOUBLE,
             epa                   DOUBLE,
             qb_epa                DOUBLE,
@@ -245,17 +293,25 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
             two_point_attempt     INTEGER,
             touchdown             INTEGER,
             td_team               VARCHAR,
+            td_player_id          VARCHAR,
             interception          INTEGER,
             fumble_lost           INTEGER,
             complete_pass         INTEGER,
             passer_player_id      VARCHAR,
+            passer_player_name    VARCHAR,
+            passing_yards         DOUBLE,
             receiver_player_id    VARCHAR,
+            receiver_player_name  VARCHAR,
+            receiving_yards       DOUBLE,
             rusher_player_id      VARCHAR,
+            rusher_player_name    VARCHAR,
+            rushing_yards         DOUBLE,
             field_goal_attempt    INTEGER,
             field_goal_result     VARCHAR,
             kick_distance         DOUBLE,
             extra_point_attempt   INTEGER,
             extra_point_result    VARCHAR,
+            kicker_player_name    VARCHAR,
             kicker_player_id      VARCHAR,
             third_down_converted  INTEGER,
             third_down_failed     INTEGER
@@ -280,9 +336,33 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute(
             """INSERT INTO rosters (
                 player_id, season, team, position, jersey_number, player_name,
-                height, weight, years_exp, entry_year
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            [pid, SEASON, team, pos, jersey, name, height, weight, 4, 2020],
+                height, weight, years_exp, entry_year, pfr_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [pid, SEASON, team, pos, jersey, name, height, weight, 4, 2020, pid.replace("00-", "PFR-")],
+        )
+
+    for pid, name, pos, team, *_ in ROSTER:
+        if team not in {"KC", "DEN"}:
+            continue
+        is_off = pos in {"QB", "RB", "FB", "WR", "TE", "LT", "LG", "C", "RG", "RT"}
+        is_def = pos in {"DE", "DT", "NT", "DL", "EDGE", "OLB", "ILB", "MLB", "LB", "CB", "DB", "FS", "SS", "S", "NB"}
+        is_rot = "Rotation" in name
+        conn.execute(
+            """INSERT INTO snap_counts (
+                game_id, pfr_game_id, season, game_type, week, player,
+                pfr_player_id, position, team, opponent,
+                offense_snaps, offense_pct, defense_snaps, defense_pct, st_snaps, st_pct
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                "2024_01_DEN_KC", "202409010kan", SEASON, "REG", 1, name,
+                pid.replace("00-", "PFR-"), pos, team, "DEN" if team == "KC" else "KC",
+                48 if is_off and not is_rot else 12 if is_rot and pos in {"WR", "RB", "TE"} else 0,
+                1.0 if is_off and not is_rot else 0.25 if is_rot and pos in {"WR", "RB", "TE"} else 0,
+                54 if is_def and not is_rot else 10 if is_rot and pos == "CB" else 0,
+                1.0 if is_def and not is_rot else 0.18 if is_rot and pos == "CB" else 0,
+                8 if pos in {"K", "CB", "WR"} else 0,
+                0.3 if pos in {"K", "CB", "WR"} else 0,
+            ],
         )
 
     for dt, team, name, gsis, grp, pos_name, abb, slot, rank in DEPTH:
@@ -345,48 +425,65 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
         kick_distance: float | None = None,
         xp_result: str | None = None,
         kicker: str | None = None,
+        touchdown: int = 0,
     ) -> None:
         nonlocal play_id
+        names = {r[0]: r[1] for r in ROSTER}
         is_fg = 1 if fg_result is not None else 0
         is_xp = 1 if xp_result is not None else 0
         pass_attempt = 1 if passer is not None and not is_fg and not is_xp and rusher is None else 0
         rush_attempt = 1 if rusher is not None else 0
         play_type = "field_goal" if is_fg else "extra_point" if is_xp else "pass" if pass_attempt or sack else "run"
+        yards = 5.0 if epa > 0 else -1.0
+        td_player = (receiver or rusher or passer) if touchdown else None
         conn.execute(
             """INSERT INTO plays (
                 play_id, game_id, season, season_type, week, posteam, defteam,
-                play_type, drive, yardline_100, yards_gained, epa, qb_epa,
+                play_type, drive, yardline_100, game_seconds_remaining, qtr,
+                "time", "desc", pass_location, air_yards, run_location, run_gap,
+                yards_gained, epa, qb_epa,
                 success, pass_oe, pass_attempt, rush_attempt, sack, qb_kneel,
-                qb_spike, two_point_attempt, touchdown, td_team, interception,
-                fumble_lost, complete_pass, passer_player_id, receiver_player_id,
-                rusher_player_id, field_goal_attempt, field_goal_result,
+                qb_spike, two_point_attempt, touchdown, td_team, td_player_id,
+                interception, fumble_lost, complete_pass,
+                passer_player_id, passer_player_name, passing_yards,
+                receiver_player_id, receiver_player_name, receiving_yards,
+                rusher_player_id, rusher_player_name, rushing_yards,
+                field_goal_attempt, field_goal_result,
                 kick_distance, extra_point_attempt, extra_point_result,
-                kicker_player_id, third_down_converted, third_down_failed
-            ) VALUES (?, ?, ?, 'REG', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)""",
+                kicker_player_name, kicker_player_id, third_down_converted, third_down_failed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
-                play_id, game_id, SEASON, week, posteam, defteam, play_type,
-                play_id // 6 + 1, 50.0, 5.0 if epa > 0 else -1.0,
+                play_id, game_id, SEASON, "REG", week, posteam, defteam, play_type,
+                play_id // 6 + 1, 50.0, 3600 - play_id * 20, ((play_id - 1) // 25) + 1,
+                "12:34", f"{posteam} test play {play_id}", "middle", 6.0 if pass_attempt else None, "middle", "guard",
+                yards,
                 epa, epa, 1.0 if epa > 0 else 0.0, 0.0,
-                pass_attempt, rush_attempt, sack, interception, fumble_lost,
+                pass_attempt, rush_attempt, sack, 0, 0, 0, touchdown, posteam if touchdown else None, td_player,
+                interception, fumble_lost,
                 1 if pass_attempt and not interception else 0,
-                passer, receiver, rusher, is_fg, fg_result, kick_distance,
-                is_xp, xp_result, kicker,
+                passer, names.get(passer), yards if passer else None,
+                receiver, names.get(receiver), yards if receiver else None,
+                rusher, names.get(rusher), yards if rusher else None,
+                is_fg, fg_result, kick_distance,
+                is_xp, xp_result, names.get(kicker), kicker,
+                0, 0,
             ],
         )
         play_id += 1
 
     # Week 1: Mahomes posts a great EPA game, Denver's QB has a disaster,
     # and Diggs has two targets to exercise the WR involvement floor.
-    for _ in range(12):
-        insert_play("2024_01_DEN_KC", 1, "KC", "DEN", 1.0, passer="00-KC-QB1")
+    for i in range(12):
+        insert_play("2024_01_DEN_KC", 1, "KC", "DEN", 1.0, passer="00-KC-QB1",
+                    receiver="00-KC-OFF3" if i == 0 else None, touchdown=1 if i == 0 else 0)
     for i in range(12):
         insert_play("2024_01_DEN_KC", 1, "DEN", "KC", -1.0, passer="00-DEN-QB1", interception=1 if i < 2 else 0)
     for _ in range(2):
         insert_play("2024_01_BUF_MIA", 1, "BUF", "MIA", 1.0, passer="00-BUF-QB1", receiver="00-BUF-WR1")
     for _ in range(8):
         insert_play("2024_01_BUF_MIA", 1, "BUF", "MIA", 0.2, passer="00-BUF-QB1")
-    for _ in range(10):
-        insert_play("2024_01_BUF_MIA", 1, "MIA", "BUF", 0.5, passer="00-MIA-QB1", receiver="00-MIA-WR1")
+    for i in range(10):
+        insert_play("2024_01_BUF_MIA", 1, "MIA", "BUF", 0.5, passer="00-MIA-QB1", receiver="00-MIA-WR1", touchdown=1 if i == 0 else 0)
     insert_play("2024_01_DEN_KC", 1, "KC", "DEN", 0.0, fg_result="made", kick_distance=45, kicker="00-KC-K1")
     insert_play("2024_01_DEN_KC", 1, "KC", "DEN", 0.0, xp_result="good", kicker="00-KC-K1")
 

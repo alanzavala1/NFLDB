@@ -21,6 +21,7 @@ import type {
   RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus, SituationalStats,
   SnapTotals, StandingsRow, TeamAnalyticsResponse, TeamAnalyticsRow,
   TeamGame, TeamLeader, TeamProfile, TeamSplit, TeamGameStats, ScoringPlay, WinProbPlay, WpaLeader, WpaLeaders,
+  GameLineup, LineupPlayer, LineupTeam, LineupScoringEvent, PlayerChart, PlayerChartEvent,
   AskResponse, ToolCall,
 } from './types'
 
@@ -40,6 +41,7 @@ export type {
   PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, DefensiveSplit, PlayerWpa,
   RosterPlayer, SearchResult, SituationalStats, SnapTotals, TeamGame,
   TeamLeader, TeamProfile, TeamSplit, TeamGameStats, ScoringPlay, WinProbPlay, WpaLeader, WpaLeaders,
+  GameLineup, LineupPlayer, LineupTeam, LineupScoringEvent, PlayerChart, PlayerChartEvent,
   AskResponse,
 }
 
@@ -60,6 +62,8 @@ export const api = {
   loadSeason:    (year: number)                => fetch(`${BASE}/seasons/${year}/load?force=false`, { method: 'POST' }).then(r => r.json()),
   schedule:      (season: number)              => get<ScheduleWeek[]>(`/schedule?season=${season}`),
   game:          (gameId: string)              => get<GameDetail>(`/games/${gameId}`),
+  gameLineup:    (gameId: string)              => get<GameLineup>(`/games/${gameId}/lineup`),
+  playerChart:   (gameId: string, playerId: string) => get<PlayerChart>(`/games/${gameId}/players/${playerId}/chart`),
   player:        (playerId: string)            => get<PlayerProfile>(`/players/${playerId}`),
   team:          (abbrev: string, season: number) => get<TeamProfile>(`/teams/${abbrev}?season=${season}`),
   teamRoster:    (team: string, season: number) => get<RosterPlayer[]>(`/teams/${team}/roster?season=${season}`),

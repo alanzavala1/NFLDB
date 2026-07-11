@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, R
 import { api } from '../api'
 import type { GameDetail, PlayerStats, WinProbPlay } from '../api'
 import Nav from '../components/Nav'
+import GameLineupView from '../components/GameLineupView'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
 interface GameCtx { gameId: string; season: number; week: number; awayTeam: string; homeTeam: string; fromWeek?: number }
@@ -15,6 +16,7 @@ function playerLink(playerId: string, ctx: GameCtx | null) {
 }
 
 const WEEK_LABELS: Record<number, string> = { 19: 'Wild Card', 20: 'Divisional', 21: 'Conference', 22: 'Super Bowl' }
+type GameTab = 'overview' | 'lineup' | 'stats' | 'plays'
 function weekLabel(w: number) { return WEEK_LABELS[w] ?? `Week ${w}` }
 function sv(n: number) { return n === 0 ? '—' : n % 1 === 0 ? String(n) : n.toFixed(1) }
 function ypa(y: number, a: number) { return a === 0 ? '—' : (y / a).toFixed(1) }
@@ -811,6 +813,7 @@ export default function GamePage() {
   const fromWeek: number | undefined = (location.state as any)?.fromWeek
   const [game, setGame] = useState<GameDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<GameTab>('overview')
 
   useEffect(() => {
     if (!gameId) return
@@ -823,15 +826,49 @@ export default function GamePage() {
   return (
     <div className="min-h-screen bg-gray-950">
       <Nav />
-      <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         <GameContext.Provider value={{ gameId: game.game_id, season: game.season, week: game.week, awayTeam: game.away_team, homeTeam: game.home_team, fromWeek }}>
           <Scoreboard game={game} />
-          <ScoringSummary game={game} />
-          <WinProbabilityChart game={game} />
-          <KeyPlays game={game} />
-          <GameLeaders game={game} />
-          <BoxScore game={game} />
-          {(game.away.length > 0 || game.home.length > 0) && <PlayerStats game={game} />}
+          <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-gray-800 bg-gray-900 p-1">
+            {([
+              ['overview', 'Overview'],
+              ['lineup', 'Lineup'],
+              ['stats', 'Stats'],
+              ['plays', 'Plays'],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`min-w-24 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${tab === key ? 'bg-indigo-500 text-white' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-200'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab === 'overview' && (
+            <>
+              <ScoringSummary game={game} />
+              <WinProbabilityChart game={game} />
+              <KeyPlays game={game} />
+              <GameLeaders game={game} />
+              <BoxScore game={game} />
+            </>
+          )}
+          {tab === 'lineup' && <GameLineupView game={game} />}
+          {tab === 'stats' && (
+            <>
+              <BoxScore game={game} />
+              {(game.away.length > 0 || game.home.length > 0) && <PlayerStats game={game} />}
+            </>
+          )}
+          {tab === 'plays' && (
+            <>
+              <ScoringSummary game={game} />
+              <WinProbabilityChart game={game} />
+              <KeyPlays game={game} />
+            </>
+          )}
         </GameContext.Provider>
 
       </div>

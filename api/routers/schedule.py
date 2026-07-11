@@ -1,14 +1,115 @@
 """Schedule and game endpoints."""
 from fastapi import APIRouter, HTTPException, Query
 
-from config import CURRENT_SEASON
+from config import CURRENT_SEASON, era_team_case
 from database import query_to_dict
 import game_ratings_builder
+from schemas.lineup import GameLineup, PlayerChart
 from schemas.ratings import GamePlayerRating
 from schemas.schedule import Game, GameDetail, ScheduleWeek
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, safe_query, team_sql
 
 router = APIRouter()
+
+
+OFFENSE_POS = {"QB", "RB", "FB", "WR", "TE", "HB"}
+DEFENSE_POS = {"DE", "DT", "NT", "DL", "EDGE", "OLB", "ILB", "MLB", "LB", "CB", "DB", "FS", "SS", "S"}
+
+
+def _position_group(position: str | None) -> str | None:
+    if not position:
+        return None
+    p = position.upper()
+    if p == "QB":
+        return "QB"
+    if p in {"RB", "FB", "HB"}:
+        return "RB"
+    if p == "WR":
+        return "WR"
+    if p == "TE":
+        return "TE"
+    if p in DEFENSE_POS:
+        return "DEF"
+    if p == "K":
+        return "K"
+    return None
+
+
+def _personnel_off(players: list[dict]) -> str | None:
+    if not players:
+        return None
+    wr = sum(1 for p in players if (p.get("position") or "").upper() == "WR")
+    te = sum(1 for p in players if (p.get("position") or "").upper() == "TE")
+    rb = sum(1 for p in players if (p.get("position") or "").upper() in {"RB", "FB", "HB"})
+    return f"{rb}{te} personnel" if rb or te or wr else "Offense"
+
+
+def _personnel_def(players: list[dict]) -> str | None:
+    if not players:
+        return None
+    dl = sum(1 for p in players if (p.get("position") or "").upper() in {"DE", "DT", "NT", "DL", "EDGE"})
+    lb = sum(1 for p in players if (p.get("position") or "").upper() in {"OLB", "ILB", "MLB", "LB"})
+    db = sum(1 for p in players if (p.get("position") or "").upper() in {"CB", "DB", "FS", "SS", "S", "NB"})
+    if db >= 6:
+        return "Dime"
+    if db == 5:
+        return "Nickel"
+    if dl and lb:
+        return f"{dl}-{lb}"
+    return "Defense"
+
+
+def _lineup_players(rows: list[dict], team: str, unit: str) -> list[dict]:
+    snap_col = "offense_snaps" if unit == "offense" else "defense_snaps"
+    pct_col = "offense_pct" if unit == "offense" else "defense_pct"
+    unit_rows = [r for r in rows if r["team"] == team and (r.get(snap_col) or 0) > 0]
+    unit_rows.sort(key=lambda r: (r.get(snap_col) or 0, r.get("rating") or -1, r.get("player_name") or ""), reverse=True)
+    players = []
+    for r in unit_rows[:11]:
+        players.append({
+            "player_id": r.get("player_id"),
+            "pfr_player_id": r.get("pfr_player_id"),
+            "player_name": r.get("player_name") or "Unknown",
+            "team": team,
+            "position": r.get("position"),
+            "position_group": r.get("position_group") or _position_group(r.get("position")),
+            "jersey_number": int(r["jersey_number"]) if r.get("jersey_number") is not None else None,
+            "headshot_url": r.get("headshot_url"),
+            "rating": r.get("rating"),
+            "raw_score": r.get("raw_score"),
+            "snaps": int(r.get(snap_col) or 0),
+            "snap_pct": r.get(pct_col),
+            "scored_td": bool(r.get("scored_td")),
+        })
+    return players
+
+
+def _rotation_players(rows: list[dict], team: str, starters: set[str | None]) -> list[dict]:
+    rot = []
+    for r in rows:
+        if r["team"] != team or r.get("player_id") in starters:
+            continue
+        snaps = max(r.get("offense_snaps") or 0, r.get("defense_snaps") or 0, r.get("st_snaps") or 0)
+        if snaps <= 0:
+            continue
+        pct = max(r.get("offense_pct") or 0, r.get("defense_pct") or 0, r.get("st_pct") or 0)
+        rot.append({
+            "player_id": r.get("player_id"),
+            "pfr_player_id": r.get("pfr_player_id"),
+            "player_name": r.get("player_name") or "Unknown",
+            "team": team,
+            "position": r.get("position"),
+            "position_group": r.get("position_group") or _position_group(r.get("position")),
+            "jersey_number": int(r["jersey_number"]) if r.get("jersey_number") is not None else None,
+            "headshot_url": r.get("headshot_url"),
+            "rating": r.get("rating"),
+            "raw_score": r.get("raw_score"),
+            "snaps": int(snaps),
+            "snap_pct": pct,
+            "scored_td": bool(r.get("scored_td")),
+        })
+    rot.sort(key=lambda r: (r["rating"] is not None, r["rating"] or -1, r["snaps"]), reverse=True)
+    return rot[:10]
 
 
 def attach_records(games: list[dict]) -> list[dict]:
@@ -353,3 +454,301 @@ def get_game_ratings(game_id: str):
         """,
         [game_id],
     )
+
+
+@router.get("/games/{game_id}/lineup", response_model=GameLineup)
+def get_game_lineup(game_id: str):
+    games = query_to_dict(
+        """
+        SELECT game_id, season, week, away_team, home_team
+        FROM schedules
+        WHERE game_id = ?
+        """,
+        [game_id],
+    )
+    if not games:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    game = games[0]
+
+    # Ensure the derived ratings table exists before joining it. This is a no-op
+    # once ratings have already been materialized by ingest.
+    game_ratings_builder.read_or_materialize(game_id)
+
+    team_expr = era_team_case("sc.team", "sc.season")
+    snap_rows = query_to_dict(
+        f"""
+        WITH game AS (
+            SELECT season, away_team, home_team
+            FROM schedules
+            WHERE game_id = ?
+        ),
+        joined AS (
+            SELECT
+                sc.game_id,
+                sc.pfr_player_id,
+                sc.player AS snap_player_name,
+                {team_expr} AS team,
+                sc.position AS snap_position,
+                sc.offense_snaps,
+                sc.offense_pct,
+                sc.defense_snaps,
+                sc.defense_pct,
+                sc.st_snaps,
+                sc.st_pct,
+                r.player_id,
+                r.player_name AS roster_player_name,
+                r.position AS roster_position,
+                r.jersey_number,
+                r.headshot_url,
+                ROW_NUMBER() OVER (
+                    PARTITION BY sc.game_id, sc.pfr_player_id, sc.player, {team_expr}
+                    ORDER BY
+                        CASE WHEN r.team = {team_expr} THEN 0
+                             WHEN r.team IN (game.away_team, game.home_team) THEN 1
+                             ELSE 2 END,
+                        r.week DESC NULLS LAST
+                ) AS rn
+            FROM snap_counts sc
+            JOIN game ON game.season = sc.season
+            LEFT JOIN rosters r
+              ON r.season = sc.season
+             AND r.pfr_id = sc.pfr_player_id
+            WHERE sc.game_id = ?
+              AND {team_expr} IN (game.away_team, game.home_team)
+        )
+        SELECT
+            j.pfr_player_id,
+            j.team,
+            j.player_id,
+            COALESCE(j.roster_player_name, j.snap_player_name) AS player_name,
+            COALESCE(j.roster_position, j.snap_position) AS position,
+            CAST(j.jersey_number AS INTEGER) AS jersey_number,
+            j.headshot_url,
+            j.offense_snaps,
+            j.offense_pct,
+            j.defense_snaps,
+            j.defense_pct,
+            j.st_snaps,
+            j.st_pct,
+            gr.position_group,
+            gr.rating,
+            gr.raw_score,
+            CASE WHEN td.player_id IS NOT NULL THEN 1 ELSE 0 END AS scored_td
+        FROM joined j
+        LEFT JOIN player_game_ratings gr
+          ON gr.game_id = ?
+         AND gr.player_id = j.player_id
+        LEFT JOIN (
+            SELECT DISTINCT td_player_id AS player_id
+            FROM plays
+            WHERE game_id = ?
+              AND COALESCE(touchdown, 0) = 1
+              AND td_player_id IS NOT NULL
+        ) td
+          ON td.player_id = j.player_id
+        WHERE j.rn = 1
+        ORDER BY j.team, j.offense_snaps DESC NULLS LAST, j.defense_snaps DESC NULLS LAST
+        """,
+        [game_id, game_id, game_id, game_id],
+    )
+
+    matched = sum(1 for r in snap_rows if r.get("pfr_player_id") and r.get("player_id"))
+    eligible = sum(1 for r in snap_rows if r.get("pfr_player_id"))
+    match_rate = round(matched / eligible, 4) if eligible else None
+
+    scoring = safe_query(
+        """
+        SELECT
+            CASE WHEN COALESCE(touchdown, 0) = 1 THEN COALESCE(td_team, posteam)
+                 ELSE posteam END AS team,
+            CASE WHEN COALESCE(touchdown, 0) = 1 THEN td_player_id
+                 ELSE kicker_player_id END AS player_id,
+            CASE WHEN COALESCE(touchdown, 0) = 1
+                    THEN COALESCE(receiver_player_name, rusher_player_name, passer_player_name)
+                 ELSE kicker_player_name END AS player_name,
+            CASE WHEN COALESCE(touchdown, 0) = 1 THEN 'TD'
+                 WHEN field_goal_result = 'made' THEN 'FG'
+                 ELSE 'SCORE' END AS kind,
+            CAST(qtr AS INTEGER) AS qtr,
+            "time" AS clock,
+            CAST(kick_distance AS INTEGER) AS distance,
+            "desc" AS desc
+        FROM plays
+        WHERE game_id = ?
+          AND (COALESCE(touchdown, 0) = 1 OR field_goal_result = 'made')
+        ORDER BY game_seconds_remaining DESC NULLS LAST, play_id
+        """,
+        [game_id],
+    )
+
+    teams = []
+    for side, team in (("away", game["away_team"]), ("home", game["home_team"])):
+        off = _lineup_players(snap_rows, team, "offense")
+        defense = _lineup_players(snap_rows, team, "defense")
+        starter_ids = {p["player_id"] for p in off + defense if p.get("player_id")}
+        ratings = [r["rating"] for r in snap_rows if r["team"] == team and r.get("rating") is not None]
+        teams.append({
+            "team": team,
+            "side": side,
+            "avg_rating": round(sum(ratings) / len(ratings), 1) if ratings else None,
+            "offense_personnel": _personnel_off(off),
+            "defense_personnel": _personnel_def(defense),
+            "offense": off,
+            "defense": defense,
+            "rotation": _rotation_players(snap_rows, team, starter_ids),
+        })
+
+    return {
+        **game,
+        "join_match_rate": match_rate,
+        "scoring": scoring,
+        "teams": teams,
+    }
+
+
+@router.get("/games/{game_id}/players/{player_id}/chart", response_model=PlayerChart)
+def get_game_player_chart(game_id: str, player_id: str):
+    game = query_to_dict(
+        "SELECT game_id, season, away_team, home_team FROM schedules WHERE game_id = ?",
+        [game_id],
+    )
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+    game = game[0]
+
+    game_ratings_builder.read_or_materialize(game_id)
+
+    profile = query_to_dict(
+        """
+        SELECT
+            COALESCE(pgs.player_name, r.player_name) AS player_name,
+            COALESCE(pgs.team, r.team) AS team,
+            r.position,
+            gr.rating,
+            pgs.attempts, pgs.completions, pgs.pass_yards, pgs.pass_tds,
+            pgs.interceptions_thrown, pgs.sacks_taken, pgs.pass_epa,
+            pgs.targets, pgs.receptions, pgs.rec_yards, pgs.rec_tds,
+            pgs.air_yards, pgs.yac, pgs.rec_epa,
+            pgs.carries, pgs.rush_yards, pgs.rush_tds, pgs.rush_epa,
+            pgs.solo_tackles, pgs.assist_tackles, pgs.tackles_for_loss,
+            pgs.sacks, pgs.qb_hits, pgs.def_interceptions, pgs.pass_breakups,
+            pgs.forced_fumbles, pgs.fumble_recoveries
+        FROM (
+            SELECT *
+            FROM rosters
+            WHERE player_id = ? AND season = ?
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY player_id, season
+                ORDER BY week DESC NULLS LAST, team
+            ) = 1
+        ) r
+        FULL OUTER JOIN player_game_stats pgs
+          ON pgs.player_id = r.player_id
+         AND pgs.game_id = ?
+        LEFT JOIN player_game_ratings gr
+          ON gr.player_id = COALESCE(pgs.player_id, r.player_id)
+         AND gr.game_id = ?
+        WHERE COALESCE(pgs.player_id, r.player_id) = ?
+        """,
+        [player_id, game["season"], game_id, game_id, player_id],
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Player {player_id} not found for game {game_id}")
+    p = profile[0]
+
+    counts = query_to_dict(
+        """
+        SELECT
+            COUNT(*) FILTER (WHERE passer_player_id = ?) AS pass_plays,
+            COUNT(*) FILTER (WHERE receiver_player_id = ?) AS target_plays,
+            COUNT(*) FILTER (WHERE rusher_player_id = ?) AS rush_plays
+        FROM plays
+        WHERE game_id = ?
+        """,
+        [player_id, player_id, player_id, game_id],
+    )[0]
+    role_counts = (("passer", counts["pass_plays"] or 0), ("receiver", counts["target_plays"] or 0), ("rusher", counts["rush_plays"] or 0))
+    role, role_count = max(role_counts, key=lambda item: item[1])
+    if role_count == 0:
+        position_group = _position_group(p.get("position"))
+        role = "defender" if position_group == "DEF" else "kicker" if position_group == "K" else "player"
+
+    events = query_to_dict(
+        """
+        SELECT
+            play_id,
+            CAST(qtr AS INTEGER) AS qtr,
+            "time" AS clock,
+            CASE WHEN passer_player_id = ? THEN 'passer'
+                 WHEN receiver_player_id = ? THEN 'receiver'
+                 ELSE 'rusher' END AS role,
+            CASE WHEN rusher_player_id = ?
+                    THEN TRIM(COALESCE(run_location, '') || ' ' || COALESCE(run_gap, ''))
+                 ELSE pass_location END AS lane,
+            air_yards,
+            CASE WHEN rusher_player_id = ? THEN rushing_yards
+                 WHEN receiver_player_id = ? THEN receiving_yards
+                 ELSE passing_yards END AS yards,
+            epa,
+            CASE WHEN COALESCE(touchdown, 0) = 1 THEN 'TD'
+                 WHEN COALESCE(interception, 0) = 1 THEN 'INT'
+                 WHEN COALESCE(fumble_lost, 0) = 1 THEN 'FUM'
+                 WHEN COALESCE(complete_pass, 0) = 1 THEN 'Complete'
+                 WHEN play_type = 'run' THEN 'Run'
+                 ELSE 'Incomplete' END AS outcome,
+            "desc" AS desc
+        FROM plays
+        WHERE game_id = ?
+          AND (passer_player_id = ? OR receiver_player_id = ? OR rusher_player_id = ?)
+        ORDER BY game_seconds_remaining DESC NULLS LAST, play_id
+        LIMIT 80
+        """,
+        [player_id, player_id, player_id, player_id, player_id, game_id, player_id, player_id, player_id],
+    )
+
+    snap_rows = safe_query(
+        """
+        SELECT
+            GREATEST(COALESCE(sc.offense_pct, 0), COALESCE(sc.defense_pct, 0), COALESCE(sc.st_pct, 0)) AS snap_pct
+        FROM rosters r
+        JOIN snap_counts sc
+          ON sc.season = r.season
+         AND sc.pfr_player_id = r.pfr_id
+        WHERE r.player_id = ?
+          AND sc.game_id = ?
+        ORDER BY CASE WHEN r.team = sc.team THEN 0 ELSE 1 END, r.week DESC NULLS LAST
+        LIMIT 1
+        """,
+        [player_id, game_id],
+    )
+    snap_pct = snap_rows[0]["snap_pct"] if snap_rows else None
+
+    stats = {
+        "attempts": p.get("attempts") or 0,
+        "completions": p.get("completions") or 0,
+        "pass_yards": p.get("pass_yards") or 0,
+        "pass_tds": p.get("pass_tds") or 0,
+        "interceptions_thrown": p.get("interceptions_thrown") or 0,
+        "targets": p.get("targets") or 0,
+        "receptions": p.get("receptions") or 0,
+        "rec_yards": p.get("rec_yards") or 0,
+        "rec_tds": p.get("rec_tds") or 0,
+        "carries": p.get("carries") or 0,
+        "rush_yards": p.get("rush_yards") or 0,
+        "rush_tds": p.get("rush_tds") or 0,
+        "sacks": p.get("sacks") or 0,
+        "tackles": (p.get("solo_tackles") or 0) + (p.get("assist_tackles") or 0),
+        "def_interceptions": p.get("def_interceptions") or 0,
+    }
+    return {
+        "game_id": game_id,
+        "player_id": player_id,
+        "player_name": p.get("player_name"),
+        "team": p.get("team"),
+        "position": p.get("position"),
+        "role": role,
+        "rating": p.get("rating"),
+        "snap_pct": snap_pct,
+        "stats": stats,
+        "events": events,
+    }

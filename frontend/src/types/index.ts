@@ -22,6 +22,12 @@ export type QuarterScore     = Schemas['QuarterScore']
 export type WinProbPlay      = Schemas['WinProbPlay']
 export type TeamGameStats    = Schemas['TeamGameStats']
 export type ScoringPlay      = Schemas['ScoringPlay']
+export type GameLineup       = Schemas['GameLineup']
+export type LineupPlayer     = Schemas['LineupPlayer']
+export type LineupTeam       = Schemas['LineupTeam']
+export type LineupScoringEvent = Schemas['LineupScoringEvent']
+export type PlayerChart      = Schemas['PlayerChart']
+export type PlayerChartEvent = Schemas['PlayerChartEvent']
 
 // Search
 export type SearchResult     = Schemas['SearchResult']

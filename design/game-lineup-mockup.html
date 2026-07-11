@@ -1,0 +1,537 @@
+<title>NFLDB — Game Field View Mockup</title>
+<style>
+  :root{
+    --bg:#0e0d15; --card:#1b1a26; --raise:#262433; --line:#2e2b3e;
+    --t1:#f4f3f8; --t2:#a3a0b8; --t3:#6c6885;
+    --acc:#818cf8; --acc-fill:#6366f1;
+    --win:#34d399; --loss:#f87171; --gold:#f5c451;
+    --rate-bad:#ef4444; --rate-mid:#34324a; --rate-good:#10b981;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html{background:var(--bg)}
+  body{margin:0; background:var(--bg); color:var(--t1);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .note{text-align:center; font-size:11px; color:var(--t3); padding:8px 16px;
+    border-bottom:1px solid var(--line); letter-spacing:.04em}
+  .nav{position:sticky; top:0; z-index:40; height:56px; display:flex; align-items:center; gap:28px;
+    padding:0 28px; background:rgba(14,13,21,.9); backdrop-filter:blur(10px); border-bottom:1px solid var(--line)}
+  .wordmark{font-weight:900; font-size:17px; letter-spacing:-.02em}
+  .wordmark em{font-style:normal; color:var(--acc)}
+  .nav a{color:var(--t2); text-decoration:none; font-weight:600; font-size:13.5px; padding:6px 10px; border-radius:8px}
+  .nav a.on{color:var(--t1); background:var(--raise)}
+  .search{margin-left:auto; display:flex; align-items:center; gap:8px; background:var(--card);
+    border:1px solid var(--line); border-radius:10px; color:var(--t3); font-size:13px; padding:7px 12px; width:210px}
+
+  .page{max-width:1200px; margin:0 auto; padding:20px 28px 64px;
+    display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:20px; align-items:start}
+  .feed{display:grid; gap:20px; min-width:0}
+  .rail{display:grid; gap:20px}
+
+  .card{background:var(--card); border-radius:var(--r); overflow:hidden}
+  .card-h{display:flex; align-items:center; gap:10px; padding:13px 16px; font-size:13px; font-weight:700}
+  .card-h .act{margin-left:auto; font-size:12px; font-weight:600; color:var(--acc); text-decoration:none}
+  .row{display:flex; align-items:center; gap:10px; padding:11px 16px; border-top:1px solid var(--line); color:var(--t1); text-decoration:none}
+  .row:hover{background:var(--raise)}
+  .micro{font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--t3)}
+  .chip{width:22px; height:22px; border-radius:50%; flex:none; display:inline-flex; align-items:center;
+    justify-content:center; font-size:8px; font-weight:800; color:#fff}
+  .glyph{width:14px; height:14px; flex:none; color:var(--t3)}
+
+  /* game header card */
+  .hero-band{display:flex; align-items:center; gap:10px; padding:11px 16px;
+    background:linear-gradient(90deg, rgba(245,196,81,.16), rgba(245,196,81,.03) 60%); border-bottom:1px solid var(--line)}
+  .hero-band .micro{color:var(--gold)}
+  .gh{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:14px; padding:18px 24px 8px}
+  .gh-team{display:flex; align-items:center; gap:12px; min-width:0}
+  .gh-team.rt{flex-direction:row-reverse; text-align:right}
+  .gh-name{font-size:19px; font-weight:900; letter-spacing:-.02em}
+  .gh-sub{font-size:10.5px; color:var(--t3); margin-top:2px}
+  .dim .gh-name{color:var(--t3)}
+  .gh-score{font-size:30px; font-weight:900; font-variant-numeric:tabular-nums; display:flex; gap:10px; align-items:baseline}
+  .gh-score .ls{color:var(--t3)}
+  .scorers{display:grid; grid-template-columns:1fr 44px 1fr; gap:6px 14px; padding:4px 24px 16px}
+  .sc-col{display:flex; flex-direction:column; gap:4px}
+  .sc-col.rt{align-items:flex-end}
+  .sc{display:flex; align-items:center; gap:7px; font-size:11px; color:var(--t2)}
+  .sc b{font-weight:600; color:var(--t2)}
+  .sc .t{color:var(--t3); font-variant-numeric:tabular-nums}
+  .tabs{display:flex; gap:2px; padding:0 12px; border-top:1px solid var(--line)}
+  .tab{padding:11px 14px; font-size:12.5px; font-weight:700; color:var(--t3); border-bottom:2px solid transparent; cursor:pointer}
+  .tab.on{color:var(--t1); border-bottom-color:var(--acc-fill)}
+
+  /* lineup card */
+  .lu-head{display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line)}
+  .lu-head .side{display:flex; align-items:center; gap:9px; min-width:0}
+  .lu-head .side.rt{margin-left:auto; flex-direction:row-reverse; text-align:right}
+  .lu-head .tn{font-size:13px; font-weight:800}
+  .lu-head .pers{font-size:10px; color:var(--t3); margin-top:1px}
+  .avg{min-width:34px; text-align:center; padding:3px 7px; border-radius:8px; font-size:12px; font-weight:800; font-variant-numeric:tabular-nums}
+  .lu-chips{display:flex; gap:8px; padding:12px 16px 0; align-items:center}
+  .upill{border:none; border-radius:999px; padding:6px 13px; font-size:11.5px; font-weight:700;
+    background:var(--raise); color:var(--t2); cursor:pointer}
+  .upill.on{background:var(--acc-fill); color:#fff}
+  .info-btn{margin-left:auto; width:24px; height:24px; border-radius:50%; border:1px solid var(--line);
+    background:none; color:var(--t3); font-size:12px; font-weight:700; cursor:pointer; position:relative}
+  .info-btn:hover{color:var(--t1); border-color:var(--t3)}
+  .pop{position:absolute; right:0; top:30px; width:270px; background:var(--raise); border:1px solid var(--line);
+    border-radius:10px; padding:12px 14px; font-size:11.5px; font-weight:500; color:var(--t2); text-align:left;
+    line-height:1.55; display:none; z-index:30; box-shadow:0 8px 28px rgba(0,0,0,.5)}
+  .pop.open{display:block}
+  .pop b{color:var(--t1)}
+  .pop .ramp{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap}
+  .lg{display:inline-flex; align-items:center; gap:5px; font-size:10px; color:var(--t2)}
+  .lg i{width:16px; height:11px; border-radius:4px; display:inline-block; font-style:normal}
+
+  /* the field */
+  .fieldwrap{padding:16px 16px 6px; display:flex; justify-content:center}
+  .fieldbox{position:relative; width:100%; max-width:500px}
+  .fieldbox svg.turf{display:block; width:100%; height:auto; border-radius:12px}
+  .player{position:absolute; width:74px; margin-left:-37px; margin-top:-16px; text-align:center; cursor:pointer; transition:transform .1s}
+  .player:hover{transform:scale(1.08); z-index:5}
+  .pav{position:relative; width:32px; height:32px; margin:0 auto; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; color:#fff;
+    box-shadow:0 1px 4px rgba(0,0,0,.55), 0 0 0 1.5px rgba(14,13,21,.55)}
+  .badge{position:absolute; top:-6px; right:-13px; min-width:24px; padding:1.5px 4px; border-radius:6px;
+    font-size:9px; font-weight:800; font-variant-numeric:tabular-nums; text-align:center;
+    box-shadow:0 0 0 1.5px rgba(14,13,21,.7)}
+  .b-bad{background:var(--rate-bad); color:#fff}
+  .b-mid{background:var(--rate-mid); color:var(--t1)}
+  .b-good{background:var(--rate-good); color:#04120c}
+  .td-pip{position:absolute; left:-13px; top:-5px; width:14px; height:14px; border-radius:50%;
+    background:rgba(14,13,21,.85); display:flex; align-items:center; justify-content:center}
+  .td-pip svg{width:9px; height:9px; color:var(--t1)}
+  .pname{margin-top:3px; font-size:9px; font-weight:600; color:rgba(255,255,255,.92); text-shadow:0 1px 3px rgba(0,0,0,.9);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .pname .no{color:rgba(255,255,255,.45); font-weight:700; margin-right:2px}
+  .player.ol .pav{width:26px; height:26px; font-size:8.5px; opacity:.85}
+  .field-cap{padding:8px 16px 14px; font-size:10px; color:var(--t3); display:flex; gap:6px; align-items:center; justify-content:center}
+  .field-cap svg{width:11px; height:11px}
+
+  /* coach + rotation */
+  .coach{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:11px 16px; border-top:1px solid var(--line); font-size:12px}
+  .coach .rt{text-align:right}
+  .coach b{font-weight:700}
+  .coach span{color:var(--t3); font-size:10px}
+  .rot-h{padding:11px 16px; border-top:1px solid var(--line); text-align:center}
+  .rot{display:grid; grid-template-columns:1fr 1fr}
+  .rot-col{border-top:1px solid var(--line)}
+  .rot-col:first-child{border-right:1px solid var(--line)}
+  .rrow{display:flex; align-items:center; gap:9px; padding:9px 14px; border-top:1px solid var(--line); font-size:12px}
+  .rrow:first-child{border-top:none}
+  .rrow .who{min-width:0}
+  .rrow .who b{display:block; font-weight:700; font-size:12px; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .rrow .who span{font-size:10px; color:var(--t3)}
+  .rrow .rbadge{margin-left:auto}
+  .rbadge{min-width:30px; text-align:center; padding:2px 6px; border-radius:7px; font-size:11px; font-weight:800; font-variant-numeric:tabular-nums; flex:none}
+
+  /* rail cards */
+  .thumb{position:relative; margin:0 16px 14px; height:120px; border-radius:10px; overflow:hidden; cursor:pointer;
+    background:linear-gradient(135deg,#173a2a, #0f2c3f 60%, #251a3f)}
+  .thumb .play{position:absolute; inset:0; display:flex; align-items:center; justify-content:center}
+  .thumb .play i{width:44px; height:44px; border-radius:50%; background:rgba(244,243,248,.92); display:flex;
+    align-items:center; justify-content:center; font-size:15px; color:#0e0d15; font-style:normal}
+  .thumb:hover .play i{background:#fff}
+  .thumb .tl{position:absolute; left:10px; bottom:8px; font-size:11px; font-weight:700; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.8)}
+  .vrow{display:flex; align-items:center; gap:11px; padding:10px 16px; border-top:1px solid var(--line)}
+  .vrow .lab{font-size:11px; color:var(--t3); font-weight:600}
+  .vrow .val{margin-left:auto; font-size:12.5px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums}
+  .vrow .val small{display:block; font-size:10px; color:var(--t3); font-weight:600}
+  .attwrap{padding:0 16px 12px 43px}
+  .attbar{height:4px; border-radius:3px; background:var(--raise); overflow:hidden}
+  .attbar i{display:block; height:100%; background:var(--win)}
+  .attpct{font-size:9.5px; color:var(--t3); margin-top:4px; text-align:right}
+  .pg{display:grid; grid-template-columns:40px 1fr auto; gap:8px; align-items:center}
+  .pg .lbl{font-size:9px; font-weight:800; letter-spacing:.08em; color:var(--t3); text-transform:uppercase}
+  .pg .m{display:flex; flex-direction:column; gap:3px; min-width:0}
+  .pg .tline{display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600}
+  .pg .tline .scr{margin-left:auto; font-weight:800; font-variant-numeric:tabular-nums}
+  .pg .tline.dim, .pg .tline.dim .scr{color:var(--t3)}
+  .pg .ft{font-size:9.5px; color:var(--t3); font-weight:700}
+  .row.cur{background:var(--raise)}
+
+  @media (max-width:980px){
+    .page{grid-template-columns:1fr}
+    .rot{grid-template-columns:1fr}
+    .rot-col:first-child{border-right:none}
+  }
+</style>
+
+<!-- shared inline glyphs -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="g-fb"><ellipse cx="8" cy="8" rx="7" ry="4.6" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-32 8 8)"/><path d="M5.6 9.9 L10.4 6.1 M7 9.4 l1 1.2 M9 7.8 l1 1.2 M6 8.4 l1 1.2" stroke="currentColor" stroke-width="1.1" fill="none" transform="rotate(0)"/></g>
+    <g id="g-gp"><path d="M8 14 V7 M3 7 V2 M13 7 V2 M3 7 H13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+    <g id="g-pin"><path d="M8 14 C8 14 3 9.5 3 6.2 A5 5 0 0 1 13 6.2 C13 9.5 8 14 8 14 Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="6.2" r="1.7" fill="currentColor"/></g>
+    <g id="g-cap"><path d="M2 13 a6 6 0 0 1 12 0" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="5.4" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/></g>
+    <g id="g-tix"><path d="M2 6 V4.8 A1 1 0 0 1 3 3.8 H13 A1 1 0 0 1 14 4.8 V6 a2 2 0 0 0 0 4 V11.2 A1 1 0 0 1 13 12.2 H3 A1 1 0 0 1 2 11.2 V10 a2 2 0 0 0 0-4 Z" fill="none" stroke="currentColor" stroke-width="1.5"/></g>
+    <g id="g-grass"><path d="M3 13 C3 9 2.4 7 2 5 C4 7 4.6 9 4.8 11 M8 13 C8 8 7.6 5.6 7 3 C9.2 5.8 9.4 9 9.2 12 M13 13 C13 10 13.4 7.8 14 6 C12.2 7.8 11.6 10 11.6 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></g>
+    <g id="g-temp"><path d="M6.6 9.7 V3.4 a1.9 1.9 0 0 1 3.8 0 V9.7 a3.4 3.4 0 1 1 -3.8 0 Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8.5" cy="11.8" r="1.4" fill="currentColor"/></g>
+    <g id="g-line"><path d="M2 12 L7 7 L10 10 L14 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></g>
+  </defs>
+</svg>
+
+<div class="note">DESIGN MOCKUP · game page "Lineup" tab · initials stand in for headshots · click players, the ⓘ, and Offense/Defense</div>
+
+<nav class="nav">
+  <div class="wordmark">NFL<em>DB</em></div>
+  <a class="on" href="#">Scores</a><a href="#">Standings</a><a href="#">Leaders</a><a href="#">Splits</a><a href="#">Ask</a>
+  <div class="search">⌕&nbsp; Search players, teams…</div>
+</nav>
+
+<div class="page">
+  <main class="feed">
+
+    <!-- game header -->
+    <section class="card">
+      <div class="hero-band"><span class="micro">Super Bowl LX</span><span class="micro">Sun, Feb 8 · Levi's Stadium</span><span class="micro" style="margin-left:auto">Final</span></div>
+      <div class="gh">
+        <div class="gh-team"><span class="chip" style="width:40px;height:40px;font-size:12px;background:#69be28">SEA</span>
+          <div><div class="gh-name">Seahawks</div><div class="gh-sub">16-3 · NFC Champions</div></div></div>
+        <div class="gh-score"><span>29</span><span style="font-size:15px;color:var(--t3)">–</span><span class="ls">13</span></div>
+        <div class="gh-team rt dim"><span class="chip" style="width:40px;height:40px;font-size:12px;background:#c8102e">NE</span>
+          <div><div class="gh-name">Patriots</div><div class="gh-sub">17-3 · AFC Champions</div></div></div>
+      </div>
+      <div class="scorers">
+        <div class="sc-col">
+          <span class="sc"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-fb"/></svg><b>Smith-Njigba</b><span class="t">Q2 7:44</span></span>
+          <span class="sc"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-fb"/></svg><b>Walker III</b><span class="t">Q3 11:02</span></span>
+          <span class="sc"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-fb"/></svg><b>Charbonnet</b><span class="t">Q4 9:18</span></span>
+          <span class="sc"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-gp"/></svg><b>Myers</b><span class="t">44, 38, 51</span></span>
+        </div>
+        <div></div>
+        <div class="sc-col rt">
+          <span class="sc"><b>Henry</b><span class="t">Q4 3:55</span><svg class="glyph" viewBox="0 0 16 16"><use href="#g-fb"/></svg></span>
+          <span class="sc"><b>Borregales</b><span class="t">29, 47</span><svg class="glyph" viewBox="0 0 16 16"><use href="#g-gp"/></svg></span>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab">Overview</div><div class="tab on">Lineup</div><div class="tab">Stats</div><div class="tab">Plays</div>
+      </div>
+    </section>
+
+    <!-- lineup card -->
+    <section class="card">
+      <div class="lu-head">
+        <div class="side">
+          <span class="avg b-good">7.4</span>
+          <span class="chip" style="background:#69be28">SEA</span>
+          <div><div class="tn">Seahawks</div><div class="pers" id="persL">11 personnel</div></div>
+        </div>
+        <div class="side rt">
+          <span class="avg b-mid">5.9</span>
+          <span class="chip" style="background:#c8102e">NE</span>
+          <div><div class="tn">Patriots</div><div class="pers" id="persR">11 personnel</div></div>
+        </div>
+      </div>
+      <div class="lu-chips">
+        <button class="upill on" id="btnOff" onclick="setUnit('off')">Offense</button>
+        <button class="upill" id="btnDef" onclick="setUnit('def')">Defense</button>
+        <button class="info-btn" onclick="this.querySelector('.pop').classList.toggle('open'); event.stopPropagation()">i
+          <span class="pop" onclick="event.stopPropagation()">
+            <b>Game ratings</b> — every skill player, defender and kicker gets a 3.0–10.0 grade
+            per game, computed from play-by-play <b>EPA</b> and defensive event stats, calibrated
+            against 27 seasons. 6.5 is league average; 9.0+ is a top-2% performance. Linemen are
+            unrated. Starters and snap counts from official participation data.
+            <span class="ramp">
+              <span class="lg"><i style="background:var(--rate-bad)"></i>&lt;5.0</span>
+              <span class="lg"><i style="background:var(--rate-mid)"></i>5.0–6.9</span>
+              <span class="lg"><i style="background:var(--rate-good)"></i>7.0+</span>
+              <span class="lg"><i style="background:var(--rate-good); text-align:center; font-size:8px; color:#04120c; font-weight:900; line-height:11px">✦</i>8.5+</span>
+            </span>
+          </span>
+        </button>
+      </div>
+
+      <div class="fieldwrap">
+        <div class="fieldbox" id="fieldbox">
+          <svg class="turf" viewBox="0 0 500 860" aria-hidden="true">
+            <!-- turf ground -->
+            <rect x="0" y="0" width="500" height="860" fill="#122a1d"/>
+            <rect x="0" y="0" width="500" height="860" fill="url(#vign)"/>
+            <defs>
+              <radialGradient id="vign" cx="50%" cy="50%" r="75%">
+                <stop offset="0%" stop-color="#16311f"/><stop offset="100%" stop-color="#0f2318"/>
+              </radialGradient>
+              <pattern id="ezstripe" width="14" height="14" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+                <rect width="14" height="14" fill="none"/><rect width="7" height="14" fill="rgba(255,255,255,.045)"/>
+              </pattern>
+            </defs>
+            <!-- mow stripes -->
+            <g fill="rgba(255,255,255,.022)">
+              <rect x="0" y="140" width="500" height="72"/><rect x="0" y="284" width="500" height="72"/>
+              <rect x="0" y="428" width="500" height="72"/><rect x="0" y="572" width="500" height="72"/>
+            </g>
+            <!-- end zones -->
+            <rect x="0" y="0" width="500" height="70" fill="#c8102e" opacity=".16"/>
+            <rect x="0" y="0" width="500" height="70" fill="url(#ezstripe)"/>
+            <rect x="0" y="790" width="500" height="70" fill="#69be28" opacity=".14"/>
+            <rect x="0" y="790" width="500" height="70" fill="url(#ezstripe)"/>
+            <text x="250" y="45" text-anchor="middle" font-size="26" font-weight="900" letter-spacing="14" fill="rgba(255,255,255,.28)" font-family="inherit">PATRIOTS</text>
+            <text x="250" y="835" text-anchor="middle" font-size="26" font-weight="900" letter-spacing="14" fill="rgba(255,255,255,.26)" font-family="inherit">SEAHAWKS</text>
+            <!-- goal lines + yard lines every 10 (72px) -->
+            <g stroke="rgba(255,255,255,.30)" stroke-width="2.5">
+              <line x1="0" y1="70" x2="500" y2="70"/><line x1="0" y1="790" x2="500" y2="790"/>
+            </g>
+            <g stroke="rgba(255,255,255,.13)" stroke-width="1.4">
+              <line x1="0" y1="142" x2="500" y2="142"/><line x1="0" y1="214" x2="500" y2="214"/>
+              <line x1="0" y1="286" x2="500" y2="286"/><line x1="0" y1="358" x2="500" y2="358"/>
+              <line x1="0" y1="502" x2="500" y2="502"/><line x1="0" y1="574" x2="500" y2="574"/>
+              <line x1="0" y1="646" x2="500" y2="646"/><line x1="0" y1="718" x2="500" y2="718"/>
+            </g>
+            <line x1="0" y1="430" x2="500" y2="430" stroke="rgba(255,255,255,.28)" stroke-width="2.2"/>
+            <!-- hash marks -->
+            <g stroke="rgba(255,255,255,.10)" stroke-width="1.2">
+              <g id="hashL"></g>
+            </g>
+            <!-- yard numbers -->
+            <g fill="rgba(255,255,255,.20)" font-size="15" font-weight="800" font-family="inherit">
+              <text x="14" y="147">1 0</text><text x="14" y="219">2 0</text><text x="14" y="291">3 0</text><text x="14" y="363">4 0</text>
+              <text x="14" y="435">5 0</text>
+              <text x="14" y="507">4 0</text><text x="14" y="579">3 0</text><text x="14" y="651">2 0</text><text x="14" y="723">1 0</text>
+            </g>
+            <g fill="rgba(255,255,255,.20)" font-size="15" font-weight="800" font-family="inherit" text-anchor="end">
+              <text x="486" y="147">1 0</text><text x="486" y="219">2 0</text><text x="486" y="291">3 0</text><text x="486" y="363">4 0</text>
+              <text x="486" y="435">5 0</text>
+              <text x="486" y="507">4 0</text><text x="486" y="579">3 0</text><text x="486" y="651">2 0</text><text x="486" y="723">1 0</text>
+            </g>
+          </svg>
+          <!-- players injected here -->
+        </div>
+      </div>
+      <div class="field-cap">
+        <svg class="glyph" viewBox="0 0 16 16"><use href="#g-fb"/></svg> touchdown ·
+        placement shows typical formation, not pre-snap tracking
+      </div>
+
+      <div class="coach">
+        <div><b>Mike Macdonald</b><br><span>Head coach</span></div>
+        <div class="micro" style="letter-spacing:.2em">Coaches</div>
+        <div class="rt"><b>Mike Vrabel</b><br><span>Head coach</span></div>
+      </div>
+
+      <div class="rot-h micro" style="letter-spacing:.2em">Rotation</div>
+      <div class="rot">
+        <div class="rot-col">
+          <div class="rrow"><span class="chip" style="background:#69be28">ZC</span><span class="who"><b>Zach Charbonnet</b><span>RB · 34% snaps</span></span><span class="rbadge b-good">7.0</span></div>
+          <div class="rrow"><span class="chip" style="background:#69be28">MV</span><span class="who"><b>Valdes-Scantling</b><span>WR · 41% snaps</span></span><span class="rbadge b-mid">5.8</span></div>
+          <div class="rrow"><span class="chip" style="background:#69be28">NF</span><span class="who"><b>Noah Fant</b><span>TE · 38% snaps</span></span><span class="rbadge b-mid">6.2</span></div>
+          <div class="rrow"><span class="chip" style="background:#69be28">DJ</span><span class="who"><b>Dre'Mont Jones</b><span>DE · 52% snaps</span></span><span class="rbadge b-good">7.3</span></div>
+          <div class="rrow"><span class="chip" style="background:#69be28">JM</span><span class="who"><b>Jason Myers</b><span>K · 3/3 FG</span></span><span class="rbadge b-good">8.1</span></div>
+        </div>
+        <div class="rot-col">
+          <div class="rrow"><span class="chip" style="background:#c8102e">RS</span><span class="who"><b>Rhamondre Stevenson</b><span>RB · 39% snaps</span></span><span class="rbadge b-mid">5.5</span></div>
+          <div class="rrow"><span class="chip" style="background:#c8102e">JP</span><span class="who"><b>Ja'Lynn Polk</b><span>WR · 44% snaps</span></span><span class="rbadge b-bad">4.6</span></div>
+          <div class="rrow"><span class="chip" style="background:#c8102e">AH</span><span class="who"><b>Austin Hooper</b><span>TE · 31% snaps</span></span><span class="rbadge b-mid">5.9</span></div>
+          <div class="rrow"><span class="chip" style="background:#c8102e">KW</span><span class="who"><b>Keion White</b><span>DE · 57% snaps</span></span><span class="rbadge b-mid">6.4</span></div>
+          <div class="rrow"><span class="chip" style="background:#c8102e">AB</span><span class="who"><b>Andres Borregales</b><span>K · 2/3 FG</span></span><span class="rbadge b-mid">5.3</span></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <aside class="rail">
+
+    <section class="card">
+      <div class="card-h">Highlights <span class="micro" style="margin-left:auto; letter-spacing:.08em">YouTube ↗</span></div>
+      <div class="thumb"><span class="play"><i>▶</i></span><span class="tl">Super Bowl LX Game Highlights</span></div>
+    </section>
+
+    <section class="card venue">
+      <div class="card-h">
+        <svg class="glyph" viewBox="0 0 16 16" style="color:var(--acc)"><use href="#g-pin"/></svg>
+        <div>Levi's Stadium<div style="font-size:10px; color:var(--t3); font-weight:600; margin-top:1px">Santa Clara, California</div></div>
+      </div>
+      <div class="vrow"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-cap"/></svg><span class="lab">Capacity</span><span class="val">68,500</span></div>
+      <div class="vrow" style="border-bottom:none; padding-bottom:6px"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-tix"/></svg><span class="lab">Attendance</span><span class="val">71,280</span></div>
+      <div class="attwrap"><div class="attbar"><i style="width:100%"></i></div><div class="attpct">104% — expanded seating</div></div>
+      <div class="vrow"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-grass"/></svg><span class="lab">Surface</span><span class="val">Grass</span></div>
+      <div class="vrow"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-temp"/></svg><span class="lab">Weather</span><span class="val">61°F<small>wind 6 mph · clear</small></span></div>
+      <div class="vrow"><svg class="glyph" viewBox="0 0 16 16"><use href="#g-line"/></svg><span class="lab">Closing line</span><span class="val">SEA -4.5<small>O/U 45.5 · via nflverse</small></span></div>
+    </section>
+
+    <section class="card">
+      <div class="card-h">2025 Postseason <a class="act" href="#">Full bracket →</a></div>
+      <div class="row pg" style="display:grid">
+        <span class="lbl">Conf</span>
+        <span class="m"><span class="tline dim"><span class="chip" style="background:#fb4f14">DEN</span>Broncos<span class="scr">7</span></span>
+        <span class="tline"><span class="chip" style="background:#c8102e">NE</span>Patriots<span class="scr">10</span></span></span>
+        <span class="ft">FT</span>
+      </div>
+      <div class="row pg" style="display:grid">
+        <span class="lbl">Conf</span>
+        <span class="m"><span class="tline dim"><span class="chip" style="background:#3d7dd6">LA</span>Rams<span class="scr">27</span></span>
+        <span class="tline"><span class="chip" style="background:#69be28">SEA</span>Seahawks<span class="scr">31</span></span></span>
+        <span class="ft">FT</span>
+      </div>
+      <div class="row pg cur" style="display:grid">
+        <span class="lbl" style="color:var(--gold)">SB</span>
+        <span class="m"><span class="tline"><span class="chip" style="background:#69be28">SEA</span>Seahawks<span class="scr">29</span></span>
+        <span class="tline dim"><span class="chip" style="background:#c8102e">NE</span>Patriots<span class="scr">13</span></span></span>
+        <span class="ft">FT</span>
+      </div>
+    </section>
+
+  </aside>
+</div>
+
+<!-- player popup -->
+<div id="overlay" onclick="if(event.target===this)closePopup()" style="position:fixed; inset:0; background:rgba(8,7,13,.7); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; z-index:60; padding:16px">
+  <div style="width:100%; max-width:640px; max-height:92vh; overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:var(--r)">
+    <div style="display:flex; align-items:center; gap:14px; padding:16px">
+      <div style="width:52px; height:52px; border-radius:50%; background:#69be28; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800; color:#fff; flex:none">JS</div>
+      <div><div style="font-size:18px; font-weight:900">Jaxon Smith-Njigba</div><div style="font-size:11px; color:var(--t3); margin-top:2px">WR · Seahawks · Super Bowl LX · 96% of snaps</div></div>
+      <span class="rbadge b-good" style="margin-left:auto; font-size:17px; padding:6px 12px; border-radius:10px">9.8&hairsp;✦</span>
+      <button onclick="closePopup()" style="margin-left:8px; border:none; background:var(--raise); color:var(--t2); width:30px; height:30px; border-radius:50%; font-size:13px; cursor:pointer">✕</button>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 240px; border-top:1px solid var(--line)">
+      <div style="border-right:1px solid var(--line)">
+        <div class="rrow"><span style="color:var(--t2)">Targets</span><b style="margin-left:auto">11</b></div>
+        <div class="rrow"><span style="color:var(--t2)">Receptions</span><b style="margin-left:auto">9</b></div>
+        <div class="rrow"><span style="color:var(--t2)">Receiving yards</span><b style="margin-left:auto">132</b></div>
+        <div class="rrow"><span style="color:var(--t2)">Touchdowns</span><b style="margin-left:auto">1</b></div>
+        <div class="rrow"><span style="color:var(--t2)">Yards after catch</span><b style="margin-left:auto">41</b></div>
+        <div class="rrow"><span style="color:var(--t2)">Longest reception</span><b style="margin-left:auto">38</b></div>
+        <div class="rrow"><span style="color:var(--t2)">EPA on targets</span><b style="margin-left:auto; color:var(--win)">+6.4</b></div>
+        <div class="rrow"><span style="color:var(--t2)">First downs</span><b style="margin-left:auto">7</b></div>
+      </div>
+      <div style="padding:14px">
+        <div class="micro" style="margin-bottom:8px; letter-spacing:.1em">Target map</div>
+        <div style="position:relative; width:100%; height:250px; border-radius:10px; border:1px solid rgba(244,243,248,.08);
+          background:repeating-linear-gradient(180deg, transparent 0 49px, rgba(244,243,248,.1) 49px 50px), linear-gradient(180deg, #10231a, #122a1d)">
+          <div style="position:absolute; left:0; right:0; bottom:24px; height:2px; background:rgba(244,243,248,.3)"></div>
+          <div style="position:absolute; right:6px; bottom:8px; font-size:8px; font-weight:800; letter-spacing:.15em; color:rgba(244,243,248,.4)">LOS</div>
+          <div style="position:absolute; left:22%; bottom:52px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:var(--rate-good); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:30%; bottom:78px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:var(--rate-good); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:50%; bottom:60px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:var(--rate-good); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:73%; bottom:46px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:var(--rate-good); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:64%; bottom:96px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:var(--rate-good); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:47%; bottom:120px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:var(--rate-good); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:80%; bottom:130px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:transparent; border:2.5px solid var(--t2); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:26%; bottom:150px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:transparent; border:2.5px solid var(--t2); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:56%; bottom:165px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:var(--rate-good); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:38%; bottom:88px; width:11px; height:11px; margin:-5.5px; border-radius:50%; background:var(--rate-good); box-shadow:0 0 0 2px rgba(14,13,21,.6)"></div>
+          <div style="position:absolute; left:52%; bottom:205px; width:15px; height:15px; margin:-7.5px; border-radius:50%; background:var(--rate-good); display:flex; align-items:center; justify-content:center; font-size:8px; color:#04120c; font-weight:900; box-shadow:0 0 0 2px rgba(14,13,21,.6)">✦</div>
+        </div>
+        <div style="display:flex; gap:12px; margin-top:10px; flex-wrap:wrap">
+          <span class="lg"><i style="background:var(--rate-good); width:10px; height:10px; border-radius:50%"></i>Catch</span>
+          <span class="lg"><i style="border:2px solid var(--t2); width:10px; height:10px; border-radius:50%"></i>Incomplete</span>
+          <span class="lg"><i style="background:var(--rate-good); width:10px; height:10px; border-radius:50%; font-size:7px; color:#04120c; font-weight:900; text-align:center; line-height:10px">✦</i>TD</span>
+          <span class="lg"><i style="background:var(--rate-bad); width:10px; height:10px; border-radius:50%"></i>INT</span>
+        </div>
+      </div>
+    </div>
+    <div style="padding:10px 16px; border-top:1px solid var(--line); font-size:10px; color:var(--t3)">
+      Charted from nflverse play-by-play — lane = pass direction, depth = air yards. RBs get a carry-by-gap chart; QBs the full passing map.
+    </div>
+  </div>
+</div>
+
+<script>
+  // hash marks
+  (function(){
+    const g = document.getElementById('hashL');
+    let d = '';
+    for(let y=84; y<790; y+=14.4){
+      d += `M178 ${y.toFixed(1)} h8 M314 ${y.toFixed(1)} h8 `;
+    }
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d', d); g.appendChild(p);
+  })();
+
+  const teams = { SEA:'#69be28', NE:'#c8102e' };
+  // y in % of field height. NE occupies the top half (mirrored), SEA the bottom.
+  // Bottom-half template (y measured downfield from midline at 50%).
+  const sea_off = [
+    {n:'Smith-Njigba', no:11, x:8,  y:57, r:9.8, td:1},
+    {n:'Horton',       no:16, x:22, y:59, r:6.4},
+    {n:'Kupp',         no:10, x:92, y:57, r:7.2},
+    {n:'Barner',       no:88, x:83, y:60.5, r:6.6},
+    {n:'Cross',        no:67, x:30, y:62.5, r:null, ol:1},
+    {n:'Tomlinson',    no:75, x:40, y:66,   r:null, ol:1},
+    {n:'Oluwatimi',    no:55, x:50, y:62.5, r:null, ol:1},
+    {n:'Bradford',     no:68, x:60, y:66,   r:null, ol:1},
+    {n:'Lucas',        no:72, x:70, y:62.5, r:null, ol:1},
+    {n:'Darnold',      no:14, x:50, y:75, r:8.7},
+    {n:'Walker III',   no:9,  x:50, y:85, r:7.1, td:1},
+  ];
+  const ne_off = [
+    {n:'Diggs',     no:8,  x:8,  y:57, r:6.8},
+    {n:'Douglas',   no:81, x:22, y:59, r:6.0},
+    {n:'Boutte',    no:80, x:92, y:57, r:4.8},
+    {n:'Henry',     no:85, x:83, y:60.5, r:6.9, td:1},
+    {n:'Wallace',   no:77, x:30, y:62.5, r:null, ol:1},
+    {n:'Strange',   no:69, x:40, y:66,   r:null, ol:1},
+    {n:'Bradbury',  no:65, x:50, y:62.5, r:null, ol:1},
+    {n:'Onwenu',    no:71, x:60, y:66,   r:null, ol:1},
+    {n:'Moses',     no:76, x:70, y:62.5, r:null, ol:1},
+    {n:'Maye',      no:10, x:50, y:75, r:5.4},
+    {n:'Henderson', no:32, x:50, y:85, r:6.2},
+  ];
+  const sea_def = [
+    {n:'Hall',       no:94, x:30, y:56, r:6.6},
+    {n:'Williams',   no:92, x:43, y:56, r:8.2},
+    {n:'Murphy',     no:91, x:57, y:56, r:6.9},
+    {n:'Mafe',       no:53, x:70, y:56, r:7.4},
+    {n:'Witherspoon',no:21, x:8,  y:59, r:8.4},
+    {n:'Woolen',     no:27, x:92, y:59, r:6.3},
+    {n:'Emmanwori',  no:3,  x:19, y:64, r:6.5},
+    {n:'Jones IV',   no:13, x:40, y:68, r:7.7},
+    {n:'Knight',     no:20, x:60, y:68, r:6.8},
+    {n:'Love',       no:12, x:35, y:80, r:7.0},
+    {n:'Bryant',     no:8,  x:65, y:80, r:6.7},
+  ];
+  const ne_def = [
+    {n:'Uche',    no:55, x:30, y:56, r:5.6},
+    {n:'Barmore', no:90, x:43, y:56, r:6.8},
+    {n:'White',   no:99, x:57, y:56, r:6.1},
+    {n:'Landry',  no:5,  x:70, y:56, r:7.0},
+    {n:'Gonzalez',no:0,  x:8,  y:59, r:7.9},
+    {n:'Davis',   no:22, x:92, y:59, r:5.2},
+    {n:'Hawkins', no:21, x:19, y:64, r:4.7},
+    {n:'Tavai',   no:48, x:40, y:68, r:6.3},
+    {n:'Spillane',no:41, x:60, y:68, r:6.5},
+    {n:'Woodson', no:31, x:35, y:80, r:6.0},
+    {n:'Dugger',  no:23, x:65, y:80, r:5.8},
+  ];
+  const fb = '<svg viewBox="0 0 16 16"><use href="#g-fb"/></svg>';
+  function badgeClass(r){ return r < 5 ? 'b-bad' : r < 7 ? 'b-mid' : 'b-good'; }
+  function place(box, p, team, mirror){
+    const el = document.createElement('div');
+    el.className = 'player' + (p.ol ? ' ol' : '');
+    el.style.left = p.x+'%';
+    el.style.top = (mirror ? 100 - p.y : p.y)+'%';
+    el.onclick = openPopup;
+    el.title = p.n;
+    const star = p.r >= 8.5 ? '&hairsp;✦' : '';
+    const label = `<div class="pname"><span class="no">${p.no}</span>${p.n}</div>`;
+    el.innerHTML = `<div class="pav" style="background:${teams[team]}">
+        ${p.n.replace(/[^A-Z]/g,'').slice(0,2) || p.n.slice(0,2).toUpperCase()}
+        ${p.td?`<span class="td-pip">${fb}</span>`:''}
+        ${p.r!=null?`<span class="badge ${badgeClass(p.r)}">${p.r.toFixed(1)}${star}</span>`:''}
+      </div>${label}`;
+    box.appendChild(el);
+  }
+  function render(unit){
+    const box = document.getElementById('fieldbox');
+    box.querySelectorAll('.player').forEach(e=>e.remove());
+    const B = unit==='off' ? sea_off : sea_def;
+    const T = unit==='off' ? ne_off : ne_def;
+    for(const p of B) place(box, p, 'SEA', false);
+    for(const p of T) place(box, p, 'NE', true);
+    document.getElementById('persL').textContent = unit==='off' ? '11 personnel' : 'Nickel';
+    document.getElementById('persR').textContent = unit==='off' ? '11 personnel' : 'Nickel';
+  }
+  function setUnit(u){
+    document.getElementById('btnOff').classList.toggle('on', u==='off');
+    document.getElementById('btnDef').classList.toggle('on', u==='def');
+    render(u);
+  }
+  function openPopup(e){ if(e) e.preventDefault(); document.getElementById('overlay').style.display='flex'; }
+  function closePopup(){ document.getElementById('overlay').style.display='none'; }
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePopup(); });
+  document.addEventListener('click', ()=>document.querySelectorAll('.pop.open').forEach(p=>p.classList.remove('open')));
+  render('off');
+</script>
