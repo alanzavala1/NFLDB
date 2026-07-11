@@ -721,6 +721,10 @@ export interface components {
             overtime: number | null;
             /** Div Game */
             div_game: number | null;
+            /** Away Coach */
+            away_coach?: string | null;
+            /** Home Coach */
+            home_coach?: string | null;
             /** Away Record */
             away_record?: string | null;
             /** Home Record */
@@ -773,6 +777,10 @@ export interface components {
             overtime: number | null;
             /** Div Game */
             div_game: number | null;
+            /** Away Coach */
+            away_coach?: string | null;
+            /** Home Coach */
+            home_coach?: string | null;
             /** Away Record */
             away_record?: string | null;
             /** Home Record */
@@ -802,6 +810,10 @@ export interface components {
             away_team: string;
             /** Home Team */
             home_team: string;
+            /** Away Coach */
+            away_coach?: string | null;
+            /** Home Coach */
+            home_coach?: string | null;
             /** Join Match Rate */
             join_match_rate: number | null;
             /** Scoring */

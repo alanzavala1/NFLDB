@@ -11,6 +11,7 @@ import duckdb
 
 from config import era_team_case
 from database import get_connection, query_to_dict, write_lock
+from sql_helpers import STAT_COLS
 
 
 _TABLE_DDL = """
@@ -122,7 +123,7 @@ def _defense_source_sql(pgs_cols: set[str], weekly_cols: set[str]) -> str:
             CAST({raw_expr} AS DOUBLE) AS def_events_score,
             CAST(NULL AS DOUBLE) AS fg_points,
             5 AS family_priority
-        FROM player_game_stats pgs
+        FROM pgs_game pgs
         LEFT JOIN roster r ON r.player_id = pgs.player_id AND r.season = pgs.season
         WHERE COALESCE(r.roster_group, 'DEF') = 'DEF'
            OR ({raw_expr}) > 0
@@ -195,10 +196,27 @@ def _ratings_sql(conn: duckdb.DuckDBPyConnection) -> str:
     off_team = era_team_case("posteam", "season")
 
     defense_sql = _defense_source_sql(pgs_cols, weekly_cols)
+    pgs_stat_sums = ",\n            ".join(
+        f"SUM(COALESCE({c}, 0)) AS {c}" for c in STAT_COLS if c in pgs_cols
+    )
+    pgs_game_cte = f"""
+    pgs_game AS (
+        SELECT
+            player_id,
+            game_id,
+            ANY_VALUE(player_name) AS player_name,
+            CAST(ANY_VALUE(season) AS INTEGER) AS season,
+            CAST(ANY_VALUE(week) AS INTEGER) AS week,
+            ANY_VALUE(team) AS team{"," if pgs_stat_sums else ""}
+            {pgs_stat_sums}
+        FROM player_game_stats
+        GROUP BY player_id, game_id
+    ),""" if pgs_cols else ""
 
     return f"""
     WITH
     {_roster_cte()},
+    {pgs_game_cte}
     qb AS (
         SELECT
             passer_player_id AS player_id,

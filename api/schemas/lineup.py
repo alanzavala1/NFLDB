@@ -48,6 +48,8 @@ class GameLineup(BaseModel):
     week: int
     away_team: str
     home_team: str
+    away_coach: str | None = None
+    home_coach: str | None = None
     join_match_rate: float | None
     scoring: list[LineupScoringEvent]
     teams: list[LineupTeam]

@@ -2056,6 +2056,28 @@
             ],
             "title": "Div Game"
           },
+          "away_coach": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Coach"
+          },
+          "home_coach": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Coach"
+          },
           "away_record": {
             "anyOf": [
               {
@@ -2297,6 +2319,28 @@
             ],
             "title": "Div Game"
           },
+          "away_coach": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Coach"
+          },
+          "home_coach": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Coach"
+          },
           "away_record": {
             "anyOf": [
               {
@@ -2416,6 +2460,28 @@
           "home_team": {
             "type": "string",
             "title": "Home Team"
+          },
+          "away_coach": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Coach"
+          },
+          "home_coach": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Coach"
           },
           "join_match_rate": {
             "anyOf": [

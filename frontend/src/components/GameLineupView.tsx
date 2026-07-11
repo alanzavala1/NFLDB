@@ -45,7 +45,61 @@ function ratingClass(r: number | null | undefined) {
 }
 
 function pct(v: number | null | undefined) {
-  return v == null ? '—' : `${Math.round(v * 100)}%`
+  return v == null ? '-' : `${Math.round(v * 100)}%`
+}
+
+function roman(n: number) {
+  const vals: [number, string][] = [[100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]
+  let out = ''
+  for (const [value, sym] of vals) {
+    while (n >= value) {
+      out += sym
+      n -= value
+    }
+  }
+  return out
+}
+
+function gameLabel(game: GameDetail) {
+  if (game.game_type === 'SB') return `Super Bowl ${roman(game.season - 1965)}`
+  if (game.game_type === 'CONF') return 'Conference'
+  if (game.game_type === 'DIV') return 'Divisional'
+  if (game.game_type === 'WC') return 'Wild Card'
+  return `Week ${game.week}`
+}
+
+function roundTitle(game: GameDetail) {
+  return game.game_type === 'REG' ? `${game.season} Week ${game.week}` : `${game.season} Postseason`
+}
+
+function roundLabel(gameType: string) {
+  return ({ WC: 'WC', DIV: 'DIV', CONF: 'CONF', SB: 'SB', REG: 'WK' } as Record<string, string>)[gameType] ?? gameType
+}
+
+function spreadLabel(game: GameDetail) {
+  const spread = game.spread_line
+  if (spread == null) return '-'
+  if (spread === 0) return 'Pick'
+  const favorite = spread < 0 ? game.away_team : game.home_team
+  return `${favorite} -${Math.abs(spread)}`
+}
+
+const STAT_LABELS: Record<string, string> = {
+  attempts: 'Attempts',
+  completions: 'Completions',
+  pass_yards: 'Passing yards',
+  pass_tds: 'Passing TD',
+  interceptions_thrown: 'Interceptions',
+  targets: 'Targets',
+  receptions: 'Receptions',
+  rec_yards: 'Receiving yards',
+  rec_tds: 'Receiving TD',
+  carries: 'Carries',
+  rush_yards: 'Rushing yards',
+  rush_tds: 'Rushing TD',
+  sacks: 'Sacks',
+  tackles: 'Tackles',
+  def_interceptions: 'Interceptions',
 }
 
 function isOL(p: LineupPlayer) {
@@ -64,6 +118,15 @@ function posKey(p: LineupPlayer) {
   if (['FS', 'SS', 'S'].includes(pos)) return 's'
   if (isOL(p)) return 'ol'
   return 'lb'
+}
+
+function fallbackRole(position: string | null | undefined) {
+  const pos = (position ?? '').toUpperCase()
+  if (['DT', 'DE', 'DL', 'NT', 'EDGE', 'CB', 'DB', 'NB', 'LB', 'ILB', 'OLB', 'MLB', 'FS', 'SS', 'S'].includes(pos)) return 'defender'
+  if (pos === 'QB') return 'passer'
+  if (['WR', 'TE'].includes(pos)) return 'receiver'
+  if (['RB', 'FB', 'HB'].includes(pos)) return 'rusher'
+  return 'player'
 }
 
 function placePlayers(players: LineupPlayer[], unit: Unit): Placed[] {
@@ -168,10 +231,10 @@ function Rail({ game, lineup, sameRound }: { game: GameDetail; lineup: GameLineu
       <div className="card-h"><span className="glyph">⌖</span><div>{game.stadium ?? 'Venue'}<div style={{ fontSize: 10, color: 'var(--t3)', fontWeight: 600, marginTop: 1 }}>via nflverse</div></div></div>
       {game.surface && <div className="vrow"><span className="glyph">≋</span><span className="lab">Surface</span><span className="val">{game.surface}</span></div>}
       {game.roof && <div className="vrow"><span className="glyph">⌂</span><span className="lab">Roof</span><span className="val">{game.roof}</span></div>}
-      {(game.temp != null || game.wind != null) && <div className="vrow"><span className="glyph">◌</span><span className="lab">Weather</span><span className="val">{game.temp != null ? `${game.temp}°F` : '—'}<small>{game.wind != null ? `wind ${game.wind} mph` : ''}</small></span></div>}
-      {(game.spread_line != null || game.total_line != null) && <div className="vrow"><span className="glyph">⌁</span><span className="lab">Closing line</span><span className="val">{game.spread_line != null ? `${game.home_team} ${game.spread_line > 0 ? '-' : '+'}${Math.abs(game.spread_line)}` : '—'}<small>{game.total_line != null ? `O/U ${game.total_line} · via nflverse` : 'via nflverse'}</small></span></div>}
+      {(game.temp != null || game.wind != null) && <div className="vrow"><span className="glyph">◌</span><span className="lab">Weather</span><span className="val">{game.temp != null ? `${game.temp}°F` : '-'}<small>{game.wind != null ? `wind ${game.wind} mph` : ''}</small></span></div>}
+      {(game.spread_line != null || game.total_line != null) && <div className="vrow"><span className="glyph">⌁</span><span className="lab">Closing line</span><span className="val">{spreadLabel(game)}<small>{game.total_line != null ? `O/U ${game.total_line} · via nflverse` : 'via nflverse'}</small></span></div>}
     </section>
-    <section className="card"><div className="card-h">{game.season} Week {game.week}</div>{sameRound.slice(0, 5).map(g => <div className={`row pg ${g.game_id === game.game_id ? 'cur' : ''}`} key={g.game_id} style={{ display: 'grid' }}><span className="lbl">{g.game_type}</span><span className="m"><span className={`tline ${(g.away_score ?? 0) < (g.home_score ?? 0) ? 'dim' : ''}`}><span className="chip" style={{ background: TEAM_COLORS[g.away_team] ?? '#6366f1' }}>{g.away_team}</span>{teamName(g.away_team).split(' ').at(-1)}<span className="scr">{g.away_score ?? '—'}</span></span><span className={`tline ${(g.home_score ?? 0) < (g.away_score ?? 0) ? 'dim' : ''}`}><span className="chip" style={{ background: TEAM_COLORS[g.home_team] ?? '#6366f1' }}>{g.home_team}</span>{teamName(g.home_team).split(' ').at(-1)}<span className="scr">{g.home_score ?? '—'}</span></span></span><span className="ft">FT</span></div>)}</section>
+    <section className="card"><div className="card-h">{roundTitle(game)}</div>{sameRound.slice(0, 5).map(g => <div className={`row pg ${g.game_id === game.game_id ? 'cur' : ''}`} key={g.game_id} style={{ display: 'grid' }}><span className="lbl">{roundLabel(g.game_type)}</span><span className="m"><span className={`tline ${(g.away_score ?? 0) < (g.home_score ?? 0) ? 'dim' : ''}`}><span className="chip" style={{ background: TEAM_COLORS[g.away_team] ?? '#6366f1' }}>{g.away_team}</span>{teamName(g.away_team).split(' ').at(-1)}<span className="scr">{g.away_score ?? '-'}</span></span><span className={`tline ${(g.home_score ?? 0) < (g.away_score ?? 0) ? 'dim' : ''}`}><span className="chip" style={{ background: TEAM_COLORS[g.home_team] ?? '#6366f1' }}>{g.home_team}</span>{teamName(g.home_team).split(' ').at(-1)}<span className="scr">{g.home_score ?? '-'}</span></span></span><span className="ft">FT</span></div>)}</section>
   </aside>
 }
 
@@ -184,15 +247,15 @@ function Popup({ game, player, onClose }: { game: GameDetail; player: LineupPlay
     return () => { cancelled = true }
   }, [game.game_id, player?.player_id])
   if (!player) return null
-  const role = chart?.role ?? 'player'
+  const role = chart?.role ?? fallbackRole(player.position)
   const title = role === 'defender' ? 'Defense' : role === 'rusher' ? 'Rushing' : role === 'receiver' ? 'Receiving' : role === 'passer' ? 'Passing' : 'Game'
   const stats = Object.entries(chart?.stats ?? {}).filter(([, v]) => Number(v) > 0 && (role !== 'defender' || ['sacks', 'tackles', 'def_interceptions'].some(k => k === 'def_interceptions' ? k in chart!.stats : true))).slice(0, 8)
   const events = chart?.events ?? []
   const showMap = role === 'passer' || role === 'receiver'
   const showRush = role === 'rusher'
   return <div className="lineup-overlay" onClick={onClose}><div className="lineup-modal" onClick={e => e.stopPropagation()}>
-    <div className="modal-head"><div className="modal-avatar" style={{ background: TEAM_COLORS[player.team] ?? '#6366f1' }}>{player.headshot_url ? <img src={player.headshot_url} alt="" /> : initials(player.player_name)}</div><div><div className="modal-name">{player.player_name}</div><div className="modal-sub">{player.position} · {player.team} · {game.game_type} {game.week} · {pct(player.snap_pct)} of snaps</div></div>{player.rating != null && <span className={`rbadge ${ratingClass(player.rating)} modal-rating`}>{player.rating.toFixed(1)}{player.rating >= 8.5 ? ' ✦' : ''}</span>}<button className="modal-close" onClick={onClose}>✕</button></div>
-    <div className={`modal-grid ${role === 'defender' ? 'single' : ''}`}><div><div className="micro popup-title">{title}</div>{stats.map(([k, v]) => <div className="rrow" key={k}><span>{k.replaceAll('_', ' ')}</span><b style={{ marginLeft: 'auto' }}>{String(v)}</b></div>)}</div>{showMap && <div className="target-map"><div className="micro">Target map</div><div className="map-box"><div className="los">LOS</div>{events.slice(0, 40).map((e, i) => <span key={i} className={`dot ${e.outcome === 'Incomplete' ? 'miss' : e.outcome === 'INT' ? 'bad' : 'good'}`} style={{ left: `${e.lane === 'left' ? 25 : e.lane === 'right' ? 75 : 50}%`, bottom: `${24 + Math.min(205, Math.max(0, Number(e.air_yards ?? e.yards ?? 0) * 6))}px` }}>{e.outcome === 'TD' ? '✦' : ''}</span>)}</div><div className="legend"><span>● Catch</span><span>○ Incomplete</span><span>✦ TD</span></div></div>}{showRush && <div className="target-map"><div className="micro">Carry by gap</div><div className="gap-box">{events.slice(0, 30).map((e, i) => <span key={i} className={Number(e.yards ?? 0) >= 0 ? 'good' : 'bad'}>{e.lane || 'run'} · {e.yards ?? 0}</span>)}</div></div>}</div>
+    <div className="modal-head"><div className="modal-avatar" style={{ background: TEAM_COLORS[player.team] ?? '#6366f1' }}>{player.headshot_url ? <img src={player.headshot_url} alt="" /> : initials(player.player_name)}</div><div><div className="modal-name">{player.player_name}</div><div className="modal-sub">{player.position} · {player.team} · {gameLabel(game)} · {pct(player.snap_pct)} of snaps</div></div>{player.rating != null && <span className={`rbadge ${ratingClass(player.rating)} modal-rating`}>{player.rating.toFixed(1)}{player.rating >= 8.5 ? ' ✦' : ''}</span>}<button className="modal-close" onClick={onClose}>✕</button></div>
+    <div className={`modal-grid ${role === 'defender' ? 'single' : ''}`}><div><div className="micro popup-title">{title}</div>{stats.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? k.replaceAll('_', ' ')}</span><b style={{ marginLeft: 'auto' }}>{String(v)}</b></div>)}</div>{showMap && <div className="target-map"><div className="micro">Target map</div><div className="map-box"><div className="los">LOS</div>{events.slice(0, 40).map((e, i) => <span key={i} className={`dot ${e.outcome === 'Incomplete' ? 'miss' : e.outcome === 'INT' ? 'bad' : 'good'}`} style={{ left: `${e.lane === 'left' ? 25 : e.lane === 'right' ? 75 : 50}%`, bottom: `${24 + Math.min(205, Math.max(0, Number(e.air_yards ?? e.yards ?? 0) * 6))}px` }}>{e.outcome === 'TD' ? '✦' : ''}</span>)}</div><div className="legend"><span>● Catch</span><span>○ Incomplete</span><span>✦ TD</span></div></div>}{showRush && <div className="target-map"><div className="micro">Carry by gap</div><div className="gap-box">{events.slice(0, 30).map((e, i) => <span key={i} className={Number(e.yards ?? 0) >= 0 ? 'good' : 'bad'}>{e.lane || 'run'} · {e.yards ?? 0}</span>)}</div></div>}</div>
     <div className="modal-foot">Charted from nflverse play-by-play — lane = pass direction, depth = air yards. RBs get a carry-by-gap chart; QBs the full passing map.</div>
   </div></div>
 }
@@ -215,7 +278,7 @@ export default function GameLineupView({ game }: { game: GameDetail }) {
   const awayPlayers = placePlayers(unit === 'offense' ? away.offense : away.defense, unit)
   const homePlayers = placePlayers(unit === 'offense' ? home.offense : home.defense, unit)
 
-  return <><style>{LINEUP_CSS}</style><ScorersBlock lineup={lineup} /><div className="lineup-page"><main className="feed"><section className="lineup-card card"><div className="lu-head"><div className="side"><span className={`avg ${ratingClass(away.avg_rating)}`}>{away.avg_rating ?? '—'}</span><span className="chip" style={{ background: TEAM_COLORS[away.team] ?? '#6366f1' }}>{away.team}</span><div><div className="tn">{teamName(away.team).split(' ').at(-1)}</div><div className="pers">{unit === 'offense' ? away.offense_personnel : away.defense_personnel}</div></div></div><div className="side rt"><span className={`avg ${ratingClass(home.avg_rating)}`}>{home.avg_rating ?? '—'}</span><span className="chip" style={{ background: TEAM_COLORS[home.team] ?? '#6366f1' }}>{home.team}</span><div><div className="tn">{teamName(home.team).split(' ').at(-1)}</div><div className="pers">{unit === 'offense' ? home.offense_personnel : home.defense_personnel}</div></div></div></div><div className="lu-chips"><button className={`upill ${unit === 'offense' ? 'on' : ''}`} onClick={() => setUnit('offense')}>Offense</button><button className={`upill ${unit === 'defense' ? 'on' : ''}`} onClick={() => setUnit('defense')}>Defense</button><button className="info-btn" onClick={(e) => { e.stopPropagation(); setInfoOpen(v => !v) }}>i<span className={`pop ${infoOpen ? 'open' : ''}`}><b>Game ratings</b> — every skill player, defender and kicker gets a 3.0–10.0 grade per game, computed from play-by-play <b>EPA</b> and defensive event stats, calibrated against 27 seasons. 6.5 is league average; 9.0+ is a top-2% performance. Linemen are unrated. Starters and snap counts from official participation data.<span className="ramp"><span className="lg"><i style={{ background: 'var(--rate-bad)' }} />&lt;5.0</span><span className="lg"><i style={{ background: 'var(--rate-mid)' }} />5.0–6.9</span><span className="lg"><i style={{ background: 'var(--rate-good)' }} />7.0+</span><span className="lg"><i style={{ background: 'var(--rate-good)' }} />✦ 8.5+</span></span></span></button></div><div className="fieldwrap"><div className="fieldbox"><FieldSvg awayTeam={away.team} homeTeam={home.team} />{awayPlayers.map(p => <PlayerNode key={`a-${p.player_id ?? p.pfr_player_id}`} player={p} mirror onSelect={setSelected} />)}{homePlayers.map(p => <PlayerNode key={`h-${p.player_id ?? p.pfr_player_id}`} player={p} mirror={false} onSelect={setSelected} />)}</div></div><div className="field-cap"><span className="glyph">◒</span> touchdown · placement shows typical formation, not pre-snap tracking</div><div className="coach"><div><b>{away.team}</b><br /><span>Coach unavailable</span></div><span className="micro">Coaches</span><div className="rt"><b>{home.team}</b><br /><span>Coach unavailable</span></div></div><div className="rot-h micro">Rotation</div><div className="rot"><RotationList team={away} /><RotationList team={home} /></div></section></main><Rail game={game} lineup={lineup} sameRound={sameRound} /></div><Popup key={selected?.player_id ?? selected?.pfr_player_id ?? 'none'} game={game} player={selected} onClose={() => setSelected(null)} /></>
+  return <><style>{LINEUP_CSS}</style><ScorersBlock lineup={lineup} /><div className="lineup-page"><main className="feed"><section className="lineup-card card"><div className="lu-head"><div className="side"><span className={`avg ${ratingClass(away.avg_rating)}`}>{away.avg_rating ?? '-'}</span><span className="chip" style={{ background: TEAM_COLORS[away.team] ?? '#6366f1' }}>{away.team}</span><div><div className="tn">{teamName(away.team).split(' ').at(-1)}</div><div className="pers">{unit === 'offense' ? away.offense_personnel : away.defense_personnel}</div></div></div><div className="side rt"><span className={`avg ${ratingClass(home.avg_rating)}`}>{home.avg_rating ?? '-'}</span><span className="chip" style={{ background: TEAM_COLORS[home.team] ?? '#6366f1' }}>{home.team}</span><div><div className="tn">{teamName(home.team).split(' ').at(-1)}</div><div className="pers">{unit === 'offense' ? home.offense_personnel : home.defense_personnel}</div></div></div></div><div className="lu-chips"><button className={`upill ${unit === 'offense' ? 'on' : ''}`} onClick={() => setUnit('offense')}>Offense</button><button className={`upill ${unit === 'defense' ? 'on' : ''}`} onClick={() => setUnit('defense')}>Defense</button><button className="info-btn" onClick={(e) => { e.stopPropagation(); setInfoOpen(v => !v) }}>i<span className={`pop ${infoOpen ? 'open' : ''}`}><b>Game ratings</b> — every skill player, defender and kicker gets a 3.0–10.0 grade per game, computed from play-by-play <b>EPA</b> and defensive event stats, calibrated against 27 seasons. 6.5 is league average; 9.0+ is a top-2% performance. Linemen are unrated. Starters and snap counts from official participation data.<span className="ramp"><span className="lg"><i style={{ background: 'var(--rate-bad)' }} />&lt;5.0</span><span className="lg"><i style={{ background: 'var(--rate-mid)' }} />5.0–6.9</span><span className="lg"><i style={{ background: 'var(--rate-good)' }} />7.0+</span><span className="lg"><i style={{ background: 'var(--rate-good)' }} />✦ 8.5+</span></span></span></button></div><div className="fieldwrap"><div className="fieldbox"><FieldSvg awayTeam={away.team} homeTeam={home.team} />{awayPlayers.map(p => <PlayerNode key={`a-${p.player_id ?? p.pfr_player_id}`} player={p} mirror onSelect={setSelected} />)}{homePlayers.map(p => <PlayerNode key={`h-${p.player_id ?? p.pfr_player_id}`} player={p} mirror={false} onSelect={setSelected} />)}</div></div><div className="field-cap"><span className="glyph">◒</span> touchdown · placement shows typical formation, not pre-snap tracking</div><div className="coach"><div><b>{lineup.away_coach ?? "Coach unavailable"}</b><br /><span>{away.team}</span></div><span className="micro">Coaches</span><div className="rt"><b>{lineup.home_coach ?? "Coach unavailable"}</b><br /><span>{home.team}</span></div></div><div className="rot-h micro">Rotation</div><div className="rot"><RotationList team={away} /><RotationList team={home} /></div></section></main><Rail game={game} lineup={lineup} sameRound={sameRound} /></div><Popup key={selected?.player_id ?? selected?.pfr_player_id ?? 'none'} game={game} player={selected} onClose={() => setSelected(null)} /></>
 }
 
 const LINEUP_CSS = `

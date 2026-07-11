@@ -117,6 +117,21 @@ DEF_PGS = [
     },
     {
         "game_id": "2024_01_DEN_KC",
+        "player_id": "00-KC-DE1",
+        "team": "KC",
+        "week": 1,
+        "solo_tackles": 1,
+        "assist_tackles": 0,
+        "tackles_for_loss": 1,
+        "qb_hits": 1,
+        "sacks": 1,
+        "def_interceptions": 0,
+        "pass_breakups": 0,
+        "forced_fumbles": 0,
+        "fumble_recoveries": 0,
+    },
+    {
+        "game_id": "2024_01_DEN_KC",
         "player_id": "00-KC-S1",
         "team": "KC",
         "week": 1,
@@ -178,6 +193,8 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
             temp          INTEGER,
             wind          INTEGER,
             stadium       VARCHAR,
+            away_coach    VARCHAR,
+            home_coach    VARCHAR,
             overtime      INTEGER,
             div_game      INTEGER
         )
@@ -338,10 +355,11 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
             """INSERT INTO schedules (
                 game_id, season, game_type, week, gameday, gametime,
                 away_team, home_team, away_score, home_score,
-                spread_line, total_line, div_game, overtime
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                spread_line, total_line, div_game, overtime, away_coach, home_coach
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [game_id, SEASON, gtype, week, f"2024-09-{week*7:02d}", "13:00",
-             away, home, a_sc, h_sc, spread, 45.0, div, 0],
+             away, home, a_sc, h_sc, spread, 45.0, div, 0,
+             f"{away} Coach", f"{home} Coach"],
         )
 
     for pid, name, pos, team, jersey, height, weight in ROSTER:

@@ -7,13 +7,28 @@ import game_ratings_builder
 from schemas.lineup import GameLineup, PlayerChart
 from schemas.ratings import GamePlayerRating
 from schemas.schedule import Game, GameDetail, ScheduleWeek
-from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, safe_query, team_sql
+from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, STAT_COLS, safe_query, team_sql
 
 router = APIRouter()
 
 
 OFFENSE_POS = {"QB", "RB", "FB", "WR", "TE", "HB"}
 DEFENSE_POS = {"DE", "DT", "NT", "DL", "EDGE", "OLB", "ILB", "MLB", "LB", "CB", "DB", "FS", "SS", "S"}
+PGS_GAME_CTE = f"""
+        pgs_game AS (
+            SELECT
+                player_id,
+                game_id,
+                ANY_VALUE(player_name) AS player_name,
+                CAST(ANY_VALUE(season) AS INTEGER) AS season,
+                CAST(ANY_VALUE(week) AS INTEGER) AS week,
+                ANY_VALUE(team) AS team,
+                {", ".join(f"SUM(COALESCE({c}, 0)) AS {c}" for c in STAT_COLS)}
+            FROM player_game_stats
+            WHERE game_id = ?
+            GROUP BY player_id, game_id
+        )
+"""
 
 
 def _position_group(position: str | None) -> str | None:
@@ -157,7 +172,8 @@ def get_schedule(season: int = Query(default=CURRENT_SEASON)):
             game_id, season, game_type, week, gameday, gametime,
             away_team, home_team, away_score, home_score,
             away_qb_name, home_qb_name, spread_line, total_line,
-            roof, surface, temp, wind, stadium, overtime, div_game
+            roof, surface, temp, wind, stadium, overtime, div_game,
+            away_coach, home_coach
         FROM schedules
         WHERE season = ?
         ORDER BY week, gametime
@@ -199,7 +215,9 @@ def get_games(
             wind,
             stadium,
             overtime,
-            div_game
+            div_game,
+            away_coach,
+            home_coach
         FROM schedules
         WHERE week = ? AND season = ?
         ORDER BY gametime
@@ -220,7 +238,8 @@ def get_game(game_id: str):
             away_team, home_team, away_score, home_score,
             away_qb_name, home_qb_name,
             spread_line, total_line, overtime, div_game,
-            roof, surface, temp, wind, stadium
+            roof, surface, temp, wind, stadium,
+            away_coach, home_coach
         FROM schedules
         WHERE game_id = ?
         """,
@@ -422,8 +441,9 @@ def get_game_ratings(game_id: str):
         return []
 
     return query_to_dict(
-        """
-        WITH roster AS (
+        f"""
+        WITH {PGS_GAME_CTE},
+        roster AS (
             SELECT player_id, season, position, player_name
             FROM rosters
             QUALIFY ROW_NUMBER() OVER (
@@ -445,14 +465,14 @@ def get_game_ratings(game_id: str):
             r.def_events_score,
             r.fg_points
         FROM player_game_ratings r
-        LEFT JOIN player_game_stats pgs
+        LEFT JOIN pgs_game pgs
           ON pgs.game_id = r.game_id AND pgs.player_id = r.player_id
         LEFT JOIN roster ros
           ON ros.player_id = r.player_id AND ros.season = r.season
         WHERE r.game_id = ?
         ORDER BY r.rating DESC NULLS LAST, r.raw_score DESC NULLS LAST, player_name
         """,
-        [game_id],
+        [game_id, game_id],
     )
 
 
@@ -460,7 +480,7 @@ def get_game_ratings(game_id: str):
 def get_game_lineup(game_id: str):
     games = query_to_dict(
         """
-        SELECT game_id, season, week, away_team, home_team
+        SELECT game_id, season, week, away_team, home_team, away_coach, home_coach
         FROM schedules
         WHERE game_id = ?
         """,
@@ -733,7 +753,8 @@ def get_game_player_chart(game_id: str, player_id: str):
     game_ratings_builder.read_or_materialize(game_id)
 
     profile = query_to_dict(
-        """
+        f"""
+        WITH {PGS_GAME_CTE}
         SELECT
             COALESCE(pgs.player_name, r.player_name) AS player_name,
             COALESCE(pgs.team, r.team) AS team,
@@ -756,15 +777,14 @@ def get_game_player_chart(game_id: str, player_id: str):
                 ORDER BY week DESC NULLS LAST, team
             ) = 1
         ) r
-        FULL OUTER JOIN player_game_stats pgs
+        FULL OUTER JOIN pgs_game pgs
           ON pgs.player_id = r.player_id
-         AND pgs.game_id = ?
         LEFT JOIN player_game_ratings gr
           ON gr.player_id = COALESCE(pgs.player_id, r.player_id)
          AND gr.game_id = ?
         WHERE COALESCE(pgs.player_id, r.player_id) = ?
         """,
-        [player_id, game["season"], game_id, game_id, player_id],
+        [game_id, player_id, game["season"], game_id, player_id],
     )
     if not profile:
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found for game {game_id}")
@@ -804,12 +824,20 @@ def get_game_player_chart(game_id: str, player_id: str):
                  WHEN receiver_player_id = ? THEN receiving_yards
                  ELSE passing_yards END AS yards,
             epa,
-            CASE WHEN COALESCE(touchdown, 0) = 1 THEN 'TD'
-                 WHEN COALESCE(interception, 0) = 1 THEN 'INT'
-                 WHEN COALESCE(fumble_lost, 0) = 1 THEN 'FUM'
-                 WHEN COALESCE(complete_pass, 0) = 1 THEN 'Complete'
-                 WHEN play_type = 'run' THEN 'Run'
-                 ELSE 'Incomplete' END AS outcome,
+            CASE
+                 WHEN receiver_player_id = ? AND COALESCE(touchdown, 0) = 1 THEN 'TD'
+                 WHEN receiver_player_id = ? AND COALESCE(interception, 0) = 1 THEN 'INT'
+                 WHEN receiver_player_id = ? AND COALESCE(complete_pass, 0) = 1 THEN 'Complete'
+                 WHEN receiver_player_id = ? THEN 'Incomplete'
+                 WHEN passer_player_id = ? AND COALESCE(touchdown, 0) = 1 THEN 'TD'
+                 WHEN passer_player_id = ? AND COALESCE(interception, 0) = 1 THEN 'INT'
+                 WHEN passer_player_id = ? AND COALESCE(fumble_lost, 0) = 1 THEN 'FUM'
+                 WHEN passer_player_id = ? AND COALESCE(complete_pass, 0) = 1 THEN 'Complete'
+                 WHEN passer_player_id = ? THEN 'Incomplete'
+                 WHEN rusher_player_id = ? AND COALESCE(touchdown, 0) = 1 THEN 'TD'
+                 WHEN rusher_player_id = ? AND COALESCE(fumble_lost, 0) = 1 THEN 'FUM'
+                 WHEN rusher_player_id = ? THEN 'Run'
+                 ELSE 'Play' END AS outcome,
             "desc" AS desc
         FROM plays
         WHERE game_id = ?
@@ -817,7 +845,12 @@ def get_game_player_chart(game_id: str, player_id: str):
         ORDER BY game_seconds_remaining DESC NULLS LAST, play_id
         LIMIT 80
         """,
-        [player_id, player_id, player_id, player_id, player_id, game_id, player_id, player_id, player_id],
+        [
+            player_id, player_id, player_id, player_id, player_id,
+            player_id, player_id, player_id, player_id, player_id,
+            player_id, player_id, player_id, player_id, player_id,
+            player_id, player_id, game_id, player_id, player_id, player_id,
+        ],
     )
 
     snap_rows = safe_query(

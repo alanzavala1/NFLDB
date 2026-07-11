@@ -33,6 +33,8 @@ class Game(BaseModel):
     stadium: str | None
     overtime: int | None
     div_game: int | None
+    away_coach: str | None = None
+    home_coach: str | None = None
     # attach_records populates these on /schedule and /games/{id}; absent on /games
     away_record: str | None = None
     home_record: str | None = None

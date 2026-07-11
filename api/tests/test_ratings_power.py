@@ -31,7 +31,7 @@ def test_player_game_ratings_builder_math(client, seeded_conn):
     edge = rows[("00-KC-DE1", "2024_01_DEN_KC")]
     assert edge[2] == "DEF"
     assert edge[3] is not None
-    assert edge[6] == pytest.approx(12.3)
+    assert edge[6] == pytest.approx(15.4)
 
     quiet = rows[("00-KC-S1", "2024_01_DEN_KC")]
     assert quiet[2] == "DEF"
