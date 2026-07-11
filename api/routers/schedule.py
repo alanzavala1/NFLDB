@@ -482,39 +482,154 @@ def get_game_lineup(game_id: str):
             FROM schedules
             WHERE game_id = ?
         ),
-        joined AS (
+        snap_base AS (
             SELECT
-                sc.game_id,
-                sc.pfr_player_id,
-                sc.player AS snap_player_name,
-                {team_expr} AS team,
-                sc.position AS snap_position,
-                sc.offense_snaps,
-                sc.offense_pct,
-                sc.defense_snaps,
-                sc.defense_pct,
-                sc.st_snaps,
-                sc.st_pct,
-                r.player_id,
-                r.player_name AS roster_player_name,
-                r.position AS roster_position,
-                r.jersey_number,
-                r.headshot_url,
-                ROW_NUMBER() OVER (
-                    PARTITION BY sc.game_id, sc.pfr_player_id, sc.player, {team_expr}
-                    ORDER BY
-                        CASE WHEN r.team = {team_expr} THEN 0
-                             WHEN r.team IN (game.away_team, game.home_team) THEN 1
-                             ELSE 2 END,
-                        r.week DESC NULLS LAST
-                ) AS rn
+                sc.*,
+                {team_expr} AS era_team,
+                LOWER(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(sc.player, '\\\\b(jr|sr|ii|iii|iv|v)\\\\b', '', 'gi'), '[^a-zA-Z0-9 ]', '', 'g'))) AS snap_name_key,
+                CASE
+                    WHEN UPPER(sc.position) IN ('G','T','C','OL','LT','LG','RG','RT') THEN 'OL'
+                    WHEN UPPER(sc.position) IN ('DT','DE','DL','NT','EDGE') THEN 'DL'
+                    WHEN UPPER(sc.position) IN ('CB','DB','FS','SS','S','NB') THEN 'DB'
+                    WHEN UPPER(sc.position) IN ('LB','ILB','OLB','MLB') THEN 'LB'
+                    WHEN UPPER(sc.position) IN ('RB','FB','HB') THEN 'RB'
+                    ELSE UPPER(sc.position)
+                END AS snap_pos_key
             FROM snap_counts sc
             JOIN game ON game.season = sc.season
-            LEFT JOIN rosters r
-              ON r.season = sc.season
-             AND r.pfr_id = sc.pfr_player_id
             WHERE sc.game_id = ?
               AND {team_expr} IN (game.away_team, game.home_team)
+        ),
+        roster_season AS (
+            SELECT
+                r.*,
+                LOWER(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(r.player_name, '\\\\b(jr|sr|ii|iii|iv|v)\\\\b', '', 'gi'), '[^a-zA-Z0-9 ]', '', 'g'))) AS roster_name_key,
+                LOWER(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(COALESCE(r.football_name, r.player_name), '\\\\b(jr|sr|ii|iii|iv|v)\\\\b', '', 'gi'), '[^a-zA-Z0-9 ]', '', 'g'))) AS football_name_key,
+                CASE
+                    WHEN UPPER(r.position) IN ('G','T','C','OL','LT','LG','RG','RT') THEN 'OL'
+                    WHEN UPPER(r.position) IN ('DT','DE','DL','NT','EDGE') THEN 'DL'
+                    WHEN UPPER(r.position) IN ('CB','DB','FS','SS','S','NB') THEN 'DB'
+                    WHEN UPPER(r.position) IN ('LB','ILB','OLB','MLB') THEN 'LB'
+                    WHEN UPPER(r.position) IN ('RB','FB','HB') THEN 'RB'
+                    ELSE UPPER(r.position)
+                END AS roster_pos_key
+            FROM rosters r
+            JOIN game ON game.season = r.season
+        ),
+        pfr_match AS (
+            SELECT *
+            FROM (
+                SELECT
+                    sb.pfr_player_id,
+                    sb.player AS snap_player,
+                    sb.era_team,
+                    r.player_id,
+                    r.player_name,
+                    r.position,
+                    CAST(r.jersey_number AS INTEGER) AS jersey_number,
+                    r.headshot_url,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY sb.game_id, sb.pfr_player_id, sb.player, sb.era_team
+                        ORDER BY
+                            CASE WHEN r.team = sb.era_team THEN 0
+                                 WHEN r.team IN ((SELECT away_team FROM game), (SELECT home_team FROM game)) THEN 1
+                                 ELSE 2 END,
+                            r.week DESC NULLS LAST
+                    ) AS rn
+                FROM snap_base sb
+                JOIN roster_season r
+                  ON r.pfr_id = sb.pfr_player_id
+            )
+            WHERE rn = 1
+        ),
+        id_map_match AS (
+            SELECT *
+            FROM (
+                SELECT
+                    sb.pfr_player_id,
+                    sb.player AS snap_player,
+                    sb.era_team,
+                    COALESCE(r.player_id, im.gsis_id) AS player_id,
+                    COALESCE(r.player_name, im.name) AS player_name,
+                    COALESCE(r.position, im.position) AS position,
+                    CAST(r.jersey_number AS INTEGER) AS jersey_number,
+                    r.headshot_url,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY sb.game_id, sb.pfr_player_id, sb.player, sb.era_team
+                        ORDER BY
+                            CASE WHEN r.team = sb.era_team THEN 0
+                                 WHEN im.team = sb.era_team THEN 1
+                                 ELSE 2 END,
+                            im.db_season DESC NULLS LAST,
+                            r.week DESC NULLS LAST
+                    ) AS rn
+                FROM snap_base sb
+                JOIN id_map im
+                  ON im.pfr_id = sb.pfr_player_id
+                 AND im.gsis_id IS NOT NULL
+                LEFT JOIN roster_season r
+                  ON r.player_id = im.gsis_id
+            )
+            WHERE rn = 1
+        ),
+        name_match AS (
+            SELECT *
+            FROM (
+                SELECT
+                    sb.pfr_player_id,
+                    sb.player AS snap_player,
+                    sb.era_team,
+                    r.player_id,
+                    r.player_name,
+                    r.position,
+                    CAST(r.jersey_number AS INTEGER) AS jersey_number,
+                    r.headshot_url,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY sb.game_id, sb.pfr_player_id, sb.player, sb.era_team
+                        ORDER BY
+                            CASE WHEN r.team = sb.era_team THEN 0
+                                 WHEN r.team IN ((SELECT away_team FROM game), (SELECT home_team FROM game)) THEN 1
+                                 ELSE 2 END,
+                            r.week DESC NULLS LAST
+                    ) AS rn
+                FROM snap_base sb
+                JOIN roster_season r
+                  ON sb.snap_pos_key = r.roster_pos_key
+                 AND sb.snap_name_key IN (r.roster_name_key, r.football_name_key)
+            )
+            WHERE rn = 1
+        ),
+        joined AS (
+            SELECT
+                sb.game_id,
+                sb.pfr_player_id,
+                sb.player AS snap_player_name,
+                sb.era_team AS team,
+                sb.position AS snap_position,
+                sb.offense_snaps,
+                sb.offense_pct,
+                sb.defense_snaps,
+                sb.defense_pct,
+                sb.st_snaps,
+                sb.st_pct,
+                COALESCE(pm.player_id, imm.player_id, nm.player_id) AS player_id,
+                COALESCE(pm.player_name, imm.player_name, nm.player_name) AS roster_player_name,
+                COALESCE(pm.position, imm.position, nm.position) AS roster_position,
+                COALESCE(pm.jersey_number, imm.jersey_number, nm.jersey_number) AS jersey_number,
+                COALESCE(pm.headshot_url, imm.headshot_url, nm.headshot_url) AS headshot_url
+            FROM snap_base sb
+            LEFT JOIN pfr_match pm
+              ON pm.pfr_player_id = sb.pfr_player_id
+             AND pm.snap_player = sb.player
+             AND pm.era_team = sb.era_team
+            LEFT JOIN id_map_match imm
+              ON imm.pfr_player_id = sb.pfr_player_id
+             AND imm.snap_player = sb.player
+             AND imm.era_team = sb.era_team
+            LEFT JOIN name_match nm
+              ON nm.pfr_player_id = sb.pfr_player_id
+             AND nm.snap_player = sb.player
+             AND nm.era_team = sb.era_team
         )
         SELECT
             j.pfr_player_id,
@@ -546,7 +661,6 @@ def get_game_lineup(game_id: str):
               AND td_player_id IS NOT NULL
         ) td
           ON td.player_id = j.player_id
-        WHERE j.rn = 1
         ORDER BY j.team, j.offense_snaps DESC NULLS LAST, j.defense_snaps DESC NULLS LAST
         """,
         [game_id, game_id, game_id, game_id],

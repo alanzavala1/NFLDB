@@ -202,6 +202,7 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
             rookie_year    INTEGER,
             draft_club     VARCHAR,
             draft_number   INTEGER,
+            football_name  VARCHAR,
             pfr_id         VARCHAR
         )
     """)
@@ -224,6 +225,17 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
             defense_pct    DOUBLE,
             st_snaps       DOUBLE,
             st_pct         DOUBLE
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE id_map (
+            pfr_id    VARCHAR,
+            gsis_id   VARCHAR,
+            name      VARCHAR,
+            position  VARCHAR,
+            team      VARCHAR,
+            db_season INTEGER
         )
     """)
 

@@ -28,3 +28,29 @@ def test_game_player_chart_endpoint_returns_role_stats_and_events(client):
     assert data["events"]
     assert data["events"][0]["role"] == "receiver"
     assert data["events"][0]["outcome"] == "TD"
+
+
+def test_lineup_and_chart_ratings_match_materialized_row(client, seeded_conn):
+    import game_ratings_builder
+
+    game_ratings_builder.materialize()
+    expected = seeded_conn.execute(
+        """
+        SELECT rating
+        FROM player_game_ratings
+        WHERE game_id = '2024_01_DEN_KC' AND player_id = '00-KC-DE1'
+        """
+    ).fetchone()[0]
+
+    lineup = client.get("/api/games/2024_01_DEN_KC/lineup").json()
+    edge = next(
+        p
+        for team in lineup["teams"]
+        for p in team["defense"] + team["rotation"]
+        if p["player_id"] == "00-KC-DE1"
+    )
+    chart = client.get("/api/games/2024_01_DEN_KC/players/00-KC-DE1/chart").json()
+
+    assert edge["rating"] == expected
+    assert chart["rating"] == expected
+    assert chart["role"] == "defender"
