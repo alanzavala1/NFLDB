@@ -1173,6 +1173,12 @@ export interface components {
             side: "away" | "home";
             /** Avg Rating */
             avg_rating: number | null;
+            /** Offense Avg */
+            offense_avg?: number | null;
+            /** Defense Avg */
+            defense_avg?: number | null;
+            /** Ol Grade */
+            ol_grade?: number | null;
             /** Offense Personnel */
             offense_personnel: string | null;
             /** Defense Personnel */

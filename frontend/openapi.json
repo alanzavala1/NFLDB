@@ -3685,6 +3685,39 @@
             ],
             "title": "Avg Rating"
           },
+          "offense_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offense Avg"
+          },
+          "defense_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defense Avg"
+          },
+          "ol_grade": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ol Grade"
+          },
           "offense_personnel": {
             "anyOf": [
               {

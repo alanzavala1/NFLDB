@@ -24,6 +24,9 @@ class LineupTeam(BaseModel):
     team: str
     side: Literal["away", "home"]
     avg_rating: float | None
+    offense_avg: float | None = None
+    defense_avg: float | None = None
+    ol_grade: float | None = None
     offense_personnel: str | None
     defense_personnel: str | None
     offense: list[LineupPlayer]

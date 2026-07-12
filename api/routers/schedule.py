@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from config import CURRENT_SEASON, era_team_case
 from database import query_to_dict
 import game_ratings_builder
+import ol_grades_builder
 from schemas.lineup import GameLineup, PlayerChart
 from schemas.ratings import GamePlayerRating
 from schemas.schedule import Game, GameDetail, ScheduleWeek
@@ -727,16 +728,26 @@ def get_game_lineup(game_id: str):
         [game_id, game_id],
     )
 
+    ol_grades = ol_grades_builder.read_or_materialize(game_id)
+
+    def _avg(players: list[dict]) -> float | None:
+        vals = [p["rating"] for p in players if p.get("rating") is not None]
+        return round(sum(vals) / len(vals), 1) if vals else None
+
     teams = []
     for side, team in (("away", game["away_team"]), ("home", game["home_team"])):
         off = _lineup_players(snap_rows, team, "offense")
         defense = _lineup_players(snap_rows, team, "defense")
         starter_ids = {p["player_id"] for p in off + defense if p.get("player_id")}
         ratings = [r["rating"] for r in snap_rows if r["team"] == team and r.get("rating") is not None]
+        ol_row = ol_grades.get(team) or {}
         teams.append({
             "team": team,
             "side": side,
             "avg_rating": round(sum(ratings) / len(ratings), 1) if ratings else None,
+            "offense_avg": _avg(off),
+            "defense_avg": _avg(defense),
+            "ol_grade": ol_row.get("grade"),
             "offense_personnel": _personnel_off(off),
             "defense_personnel": _personnel_def(defense),
             "offense": off,

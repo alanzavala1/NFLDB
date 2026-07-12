@@ -861,6 +861,12 @@ def run_ingest(seasons: list[int], log=print):
     n = game_ratings_builder.materialize()
     log(f"  player_game_ratings: {n} rows")
 
+    # Materialize O-line unit grades — same global percentile calibration.
+    log("\nMaterializing offensive line unit grades...")
+    import ol_grades_builder
+    n = ol_grades_builder.materialize()
+    log(f"  team_game_ol_grades: {n} rows")
+
     # Materialize player splits — the player's stat line conditioned on each
     # situational dimension, precomputed per season.
     log("\nMaterializing player splits...")
