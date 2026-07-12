@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api'
-import type { GameDetail, GameLineup, LineupPlayer, LineupScoringEvent, LineupTeam, PlayerChart, WeekGroup } from '../api'
+import type { GameDetail, GameLineup, LineupPlayer, LineupScoringEvent, LineupTeam, PlayerChart } from '../api'
 import { teamName, teamPrimaryColor } from '../utils/teams'
 
 type Unit = 'offense' | 'defense'
@@ -76,10 +76,6 @@ function roundTitle(game: GameDetail) {
 
 function roundLabel(gameType: string) {
   return ({ WC: 'WC', DIV: 'DIV', CONF: 'CONF', CON: 'CONF', SB: 'SB', REG: 'WK' } as Record<string, string>)[gameType] ?? gameType
-}
-
-function roundOrder(gameType: string) {
-  return ({ WC: 1, DIV: 2, CONF: 3, CON: 3, SB: 4, REG: 0 } as Record<string, number>)[gameType] ?? 9
 }
 
 function spreadLabel(game: GameDetail) {
@@ -217,7 +213,7 @@ function scoringByTeam(scoring: LineupScoringEvent[], team: string) {
   return { tds, fgs: [...fgs.values()] }
 }
 
-function ScorersBlock({ lineup }: { lineup: GameLineup }) {
+export function GameScorers({ lineup }: { lineup: GameLineup }) {
   const away = scoringByTeam(lineup.scoring, lineup.away_team)
   const home = scoringByTeam(lineup.scoring, lineup.home_team)
   const col = (data: ReturnType<typeof scoringByTeam>, right = false) => (
@@ -254,7 +250,7 @@ function statColor(key: string, value: unknown) {
   return Number(value) >= 0 ? 'var(--win)' : 'var(--rate-bad)'
 }
 
-function Rail({ game, lineup, sameRound }: { game: GameDetail; lineup: GameLineup; sameRound: GameDetail[] }) {
+export function GameRail({ game, lineup, sameRound }: { game: GameDetail; lineup: GameLineup; sameRound: GameDetail[] }) {
   const yt = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${lineup.away_team} vs ${lineup.home_team} ${lineup.season} week ${lineup.week} highlights`)}`
   return <aside className="rail">
     <section className="card"><div className="card-h">Highlights <a className="micro act" href={yt} target="_blank" rel="noreferrer">YouTube ↗</a></div><a className="thumb" href={yt} target="_blank" rel="noreferrer"><span className="play"><i>▶</i></span><span className="tl">{lineup.away_team} vs {lineup.home_team} Game Highlights</span></a></section>
@@ -298,38 +294,20 @@ function Popup({ game, player, onClose }: { game: GameDetail; player: LineupPlay
   </div></div>
 }
 
-export default function GameLineupView({ game }: { game: GameDetail }) {
-  const [lineup, setLineup] = useState<GameLineup | null>(null)
+export default function GameLineupView({ game, lineup }: { game: GameDetail; lineup: GameLineup | null }) {
   const [unit, setUnit] = useState<Unit>('offense')
   const [infoOpen, setInfoOpen] = useState(false)
   const [selected, setSelected] = useState<LineupPlayer | null>(null)
-  const [weeks, setWeeks] = useState<WeekGroup[]>([])
-
-  useEffect(() => { api.gameLineup(game.game_id).then(setLineup) }, [game.game_id])
-  useEffect(() => { api.schedule(game.season).then(setWeeks).catch(() => setWeeks([])) }, [game.season])
 
   const away = useMemo(() => lineup?.teams.find(t => t.team === game.away_team), [lineup, game.away_team])
   const home = useMemo(() => lineup?.teams.find(t => t.team === game.home_team), [lineup, game.home_team])
-  const sameRound = useMemo(() => {
-    const allGames = weeks.flatMap(w => w.games) as unknown as GameDetail[]
-    if (game.game_type === 'REG') return allGames.filter(g => g.week === game.week)
-    const teams = new Set([game.away_team, game.home_team])
-    return allGames
-      .filter(g => g.game_type !== 'REG')
-      .filter(g => g.away_score != null && g.home_score != null)
-      .filter(g => teams.has(g.away_team) || teams.has(g.home_team) || g.game_id === game.game_id)
-      .sort((a, b) => roundOrder(a.game_type) - roundOrder(b.game_type) || a.week - b.week || a.game_id.localeCompare(b.game_id))
-  }, [weeks, game])
-
   if (!lineup || !away || !home) return <div className="lineup-card card loading">Loading lineup…</div>
   const awayPlayers = placePlayers(unit === 'offense' ? away.offense : away.defense, unit)
   const homePlayers = placePlayers(unit === 'offense' ? home.offense : home.defense, unit)
 
   return <>
     <style>{LINEUP_CSS}</style>
-    <ScorersBlock lineup={lineup} />
-    <div className="lineup-page">
-      <main className="feed">
+    <div className="feed">
         <section className="lineup-card card">
           <div className="lu-head">
             <div className="side">
@@ -354,14 +332,12 @@ export default function GameLineupView({ game }: { game: GameDetail }) {
           <div className="rot-h micro">Rotation</div>
           <div className="rot"><RotationList team={away} /><RotationList team={home} /></div>
         </section>
-      </main>
-      <Rail game={game} lineup={lineup} sameRound={sameRound} />
     </div>
     <Popup key={selected?.player_id ?? selected?.pfr_player_id ?? 'none'} game={game} player={selected} onClose={() => setSelected(null)} />
   </>
 }
 
-const LINEUP_CSS = `
+export const LINEUP_CSS = `
 :root{--rate-bad:#ef4444;--rate-mid:#34324a;--rate-good:#10b981;--line:#2e2b3e;--card:#1b1a26;--raise:#262433;--t1:#f4f3f8;--t2:#a3a0b8;--t3:#6c6885;--acc:#818cf8;--acc-fill:#6366f1;--r:14px;--win:#34d399}
 .lineup-page{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}.feed{min-width:0}.rail{display:grid;gap:20px}.card{background:var(--card);border-radius:var(--r);overflow:hidden}.lineup-card{border:0}.lineup-scorers{margin:-4px 0 14px;background:var(--card);border-radius:var(--r);border-top:1px solid var(--line)}.scorers{display:grid;grid-template-columns:1fr 44px 1fr;gap:6px 14px;padding:12px 24px}.sc-col{display:flex;flex-direction:column;gap:4px}.sc-col.rt{align-items:flex-end}.sc{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--t2)}.sc b{font-weight:600;color:var(--t2)}.sc .t{color:var(--t3);font-variant-numeric:tabular-nums}.glyph{width:14px;height:14px;flex:none;color:var(--t3)}.chip{width:22px;height:22px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff}.lu-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}.lu-head .side{display:flex;align-items:center;gap:9px;min-width:0}.lu-head .side.rt{margin-left:auto;flex-direction:row-reverse;text-align:right}.lu-head .tn{font-size:13px;font-weight:800}.lu-head .pers{font-size:10px;color:var(--t3);margin-top:1px}.avg{min-width:34px;text-align:center;padding:3px 7px;border-radius:8px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}.lu-chips{display:flex;gap:8px;padding:12px 16px 0;align-items:center}.upill{border:none;border-radius:999px;padding:6px 13px;font-size:11.5px;font-weight:700;background:var(--raise);color:var(--t2);cursor:pointer}.upill.on{background:var(--acc-fill);color:#fff}.info-btn{margin-left:auto;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--t3);font-size:12px;font-weight:700;cursor:pointer;position:relative}.pop{position:absolute;right:0;top:30px;width:270px;background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:11.5px;font-weight:500;color:var(--t2);text-align:left;line-height:1.55;display:none;z-index:30;box-shadow:0 8px 28px rgba(0,0,0,.5)}.pop.open{display:block}.pop b{color:var(--t1)}.pop .ramp{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.lg{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--t2)}.lg i{width:16px;height:11px;border-radius:4px;display:inline-block;font-style:normal}.fieldwrap{padding:16px 16px 6px;display:flex;justify-content:center}.fieldbox{position:relative;width:100%;max-width:500px}.fieldbox svg.turf{display:block;width:100%;height:auto;border-radius:12px}.player{position:absolute;width:74px;margin-left:-37px;margin-top:-16px;text-align:center;cursor:pointer;transition:transform .1s;background:none;border:0;padding:0}.player:hover{transform:scale(1.08);z-index:5}.pav{position:relative;width:32px;height:32px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.55),0 0 0 1.5px rgba(14,13,21,.55);overflow:visible}.pav img{width:100%;height:100%;border-radius:50%;object-fit:cover;object-position:top}.badge{position:absolute;top:-6px;right:-13px;min-width:24px;padding:1.5px 4px;border-radius:6px;font-size:9px;font-weight:800;font-variant-numeric:tabular-nums;text-align:center;box-shadow:0 0 0 1.5px rgba(14,13,21,.7)}.b-bad{background:var(--rate-bad);color:#fff}.b-mid{background:var(--rate-mid);color:var(--t1)}.b-good{background:var(--rate-good);color:#04120c}.td-pip{position:absolute;left:-13px;top:-5px;width:14px;height:14px;border-radius:50%;background:rgba(14,13,21,.85);display:flex;align-items:center;justify-content:center;font-size:9px}.pname{display:block;margin-top:3px;font-size:9px;font-weight:600;color:rgba(255,255,255,.92);text-shadow:0 1px 3px rgba(0,0,0,.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pname .no{color:rgba(255,255,255,.45);font-weight:700;margin-right:2px}.player.ol .pav{width:26px;height:26px;font-size:8.5px;opacity:.85}.field-cap{padding:8px 16px 14px;font-size:10px;color:var(--t3);display:flex;gap:6px;align-items:center;justify-content:center}.coach{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:11px 16px;border-top:1px solid var(--line);font-size:12px}.coach .rt{text-align:right}.coach b{font-weight:700}.coach span{color:var(--t3);font-size:10px}.micro{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--t3)}.rot-h{padding:11px 16px;border-top:1px solid var(--line);text-align:center}.rot{display:grid;grid-template-columns:1fr 1fr}.rot-col{border-top:1px solid var(--line)}.rot-col:first-child{border-right:1px solid var(--line)}.rrow{display:flex;align-items:center;gap:9px;padding:9px 14px;border-top:1px solid var(--line);font-size:12px}.rrow:first-child{border-top:none}.rrow .who{min-width:0}.rrow .who b{display:block;font-weight:700;font-size:12px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rrow .who span{font-size:10px;color:var(--t3)}.rrow .rbadge{margin-left:auto}.rbadge{min-width:30px;text-align:center;padding:2px 6px;border-radius:7px;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;flex:none}.card-h{display:flex;align-items:center;gap:10px;padding:13px 16px;font-size:13px;font-weight:700}.card-h .act{margin-left:auto;font-size:12px;font-weight:600;color:var(--acc);text-decoration:none}.row{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--line);color:var(--t1);text-decoration:none}.row.cur{background:var(--raise)}.thumb{position:relative;display:block;margin:0 16px 14px;height:120px;border-radius:10px;overflow:hidden;cursor:pointer;background:linear-gradient(135deg,#173a2a,#0f2c3f 60%,#251a3f)}.thumb .play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}.thumb .play i{width:44px;height:44px;border-radius:50%;background:rgba(244,243,248,.92);display:flex;align-items:center;justify-content:center;font-size:15px;color:#0e0d15;font-style:normal}.thumb .tl{position:absolute;left:10px;bottom:8px;font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}.vrow{display:flex;align-items:center;gap:11px;padding:10px 16px;border-top:1px solid var(--line)}.vrow .lab{font-size:11px;color:var(--t3);font-weight:600}.vrow .val{margin-left:auto;font-size:12.5px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}.vrow .val small{display:block;font-size:10px;color:var(--t3);font-weight:600}.pg{display:grid;grid-template-columns:40px 1fr auto;gap:8px;align-items:center}.pg .lbl{font-size:9px;font-weight:800;letter-spacing:.08em;color:var(--t3);text-transform:uppercase}.pg .m{display:flex;flex-direction:column;gap:3px;min-width:0}.pg .tline{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600}.pg .tline .scr{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums}.pg .tline.dim,.pg .tline.dim .scr{color:var(--t3)}.pg .ft{font-size:9.5px;color:var(--t3);font-weight:700}.lineup-overlay{position:fixed;inset:0;background:rgba(8,7,13,.7);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}.lineup-modal{width:100%;max-width:640px;max-height:92vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--r)}.modal-head{display:flex;align-items:center;gap:14px;padding:16px}.modal-avatar{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex:none;overflow:hidden}.modal-avatar img{width:100%;height:100%;object-fit:cover;object-position:top}.modal-name{font-size:18px;font-weight:900}.modal-sub{font-size:11px;color:var(--t3);margin-top:2px}.modal-rating{margin-left:auto;font-size:17px;padding:6px 12px;border-radius:10px}.modal-close{margin-left:8px;border:none;background:var(--raise);color:var(--t2);width:30px;height:30px;border-radius:50%;font-size:13px;cursor:pointer}.modal-grid{display:grid;grid-template-columns:1fr 240px;border-top:1px solid var(--line)}.modal-grid.single{display:block}.modal-grid>div:first-child{border-right:1px solid var(--line)}.modal-grid.single>div:first-child{border-right:0}.popup-title{padding:12px 14px 0}.target-map{padding:14px}.map-box{position:relative;width:100%;height:250px;border-radius:10px;border:1px solid rgba(244,243,248,.08);background:repeating-linear-gradient(180deg,transparent 0 49px,rgba(244,243,248,.1) 49px 50px),linear-gradient(180deg,#10231a,#122a1d);margin-top:8px}.map-box:after{content:'';position:absolute;left:0;right:0;bottom:24px;height:2px;background:rgba(244,243,248,.3)}.los{position:absolute;right:6px;bottom:8px;font-size:8px;font-weight:800;letter-spacing:.15em;color:rgba(244,243,248,.4)}.dot{position:absolute;width:11px;height:11px;margin:-5.5px;border-radius:50%;box-shadow:0 0 0 2px rgba(14,13,21,.6);font-size:8px;text-align:center;line-height:11px}.dot.good{background:var(--rate-good);color:#04120c}.dot.bad{background:var(--rate-bad)}.dot.miss{background:transparent;border:2.5px solid var(--t2)}.legend{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap;font-size:10px;color:var(--t2)}.gap-box{display:grid;gap:6px;margin-top:8px}.gap-box span{padding:8px;border-radius:8px;background:var(--raise);font-size:11px}.gap-box .good{color:var(--win)}.gap-box .bad{color:var(--rate-bad)}.modal-foot{padding:10px 16px;border-top:1px solid var(--line);font-size:10px;color:var(--t3)}
 @media(max-width:980px){.lineup-page{grid-template-columns:1fr}.rot{grid-template-columns:1fr}.rot-col:first-child{border-right:none}.lineup-scorers{grid-template-columns:1fr;gap:10px}.lineup-scorers>div:nth-child(2){display:none}.fieldwrap{padding-left:8px;padding-right:8px}.modal-grid{grid-template-columns:1fr}.modal-grid>div:first-child{border-right:0}.rail{display:grid}}

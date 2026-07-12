@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { api } from '../api'
-import type { GameDetail, PlayerStats, WinProbPlay } from '../api'
+import type { GameDetail, GameLineup, PlayerStats, WeekGroup, WinProbPlay } from '../api'
 import Nav from '../components/Nav'
-import GameLineupView from '../components/GameLineupView'
+import GameLineupView, { GameRail, GameScorers, LINEUP_CSS } from '../components/GameLineupView'
+import Card from '../components/Card'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
 interface GameCtx { gameId: string; season: number; week: number; awayTeam: string; homeTeam: string; fromWeek?: number }
@@ -29,128 +30,32 @@ function formatGameday(s: string | null) {
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function Scoreboard({ game }: { game: GameDetail }) {
-  const awayWon = game.away_score !== null && game.home_score !== null && game.away_score > game.home_score
-  const homeWon = game.away_score !== null && game.home_score !== null && game.home_score > game.away_score
-  const isFinal = game.away_score !== null
+// ── Card 2: Team stats (away | label | home) ──────────────────────────────────
 
-  const qs = game.quarter_scores ?? []
-  const hasOT = qs.some(q => q.qtr >= 5)
-  const quarters = [1, 2, 3, 4, ...(hasOT ? [5] : [])]
-  const byQtr = Object.fromEntries(qs.map(q => [q.qtr, q]))
-
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
-      {/* Strip */}
-      <div className="px-4 py-2 border-b border-gray-800/60 text-center">
-        <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">
-          {weekLabel(game.week)} · {formatGameday(game.gameday)} · {game.season} Season
-        </span>
-      </div>
-
-      {/* Teams + score */}
-      <div className="flex items-center px-6 py-6 gap-2">
-        <Link to={`/teams/${game.away_team}`}
-          className={`flex flex-col items-center gap-2 group flex-1 transition-opacity ${awayWon || !isFinal ? '' : 'opacity-50 hover:opacity-75'}`}>
-          <img src={teamLogoUrl(game.away_team)} alt={game.away_team}
-            className="w-16 h-16 object-contain group-hover:scale-105 transition-transform" />
-          <div className="text-center">
-            <div className="font-bold text-white text-sm group-hover:text-indigo-400 transition-colors leading-tight">
-              {teamName(game.away_team)}
-            </div>
-            {game.away_record && <div className="text-xs text-gray-600 mt-0.5">{game.away_record}</div>}
-          </div>
-        </Link>
-
-        <div className="flex flex-col items-center gap-1 shrink-0 px-3">
-          {isFinal && <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Final</span>}
-          {isFinal ? (
-            <div className="flex items-center gap-3">
-              <span className={`text-5xl font-black tabular-nums ${awayWon ? 'text-white' : 'text-gray-600'}`}>
-                {game.away_score}
-              </span>
-              <span className="text-gray-700 text-2xl font-thin">·</span>
-              <span className={`text-5xl font-black tabular-nums ${homeWon ? 'text-white' : 'text-gray-600'}`}>
-                {game.home_score}
-              </span>
-            </div>
-          ) : (
-            <span className="text-gray-600 text-sm">Upcoming</span>
-          )}
-        </div>
-
-        <Link to={`/teams/${game.home_team}`}
-          className={`flex flex-col items-center gap-2 group flex-1 transition-opacity ${homeWon || !isFinal ? '' : 'opacity-50 hover:opacity-75'}`}>
-          <img src={teamLogoUrl(game.home_team)} alt={game.home_team}
-            className="w-16 h-16 object-contain group-hover:scale-105 transition-transform" />
-          <div className="text-center">
-            <div className="font-bold text-white text-sm group-hover:text-indigo-400 transition-colors leading-tight">
-              {teamName(game.home_team)}
-            </div>
-            {game.home_record && <div className="text-xs text-gray-600 mt-0.5">{game.home_record}</div>}
-          </div>
-        </Link>
-      </div>
-
-      {/* Quarter breakdown */}
-      {qs.length > 0 && (
-        <div className="mx-4 mb-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800">
-                <th className="pb-2 pl-3 pr-2 text-left w-20" />
-                {quarters.map(q => (
-                  <th key={q} className="pb-2 px-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {q <= 4 ? `Q${q}` : 'OT'}
-                  </th>
-                ))}
-                <th className="pb-2 px-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider border-l border-gray-800">
-                  Final
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { team: game.away_team, won: awayWon, total: game.away_score, key: 'away' as const },
-                { team: game.home_team, won: homeWon, total: game.home_score, key: 'home' as const },
-              ].map(({ team, won, total, key }) => (
-                <tr key={team} className="border-t border-gray-800/40">
-                  <td className="py-3 pl-3 pr-2">
-                    <div className="flex items-center gap-2">
-                      <img src={teamLogoUrl(team)} className="w-5 h-5 object-contain" alt="" />
-                      <span className="font-bold text-gray-300 text-sm">{team}</span>
-                    </div>
-                  </td>
-                  {quarters.map(q => (
-                    <td key={q} className="py-3 px-4 text-center tabular-nums text-gray-400 text-base">
-                      {byQtr[q]?.[key] ?? '—'}
-                    </td>
-                  ))}
-                  <td className={`py-3 px-4 text-center tabular-nums text-lg font-black border-l border-gray-800 ${won ? 'text-white' : 'text-gray-600'}`}>
-                    {total ?? '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Venue */}
-      {(game.stadium || game.temp !== null || game.wind !== null || game.surface || game.roof) && (
-        <div className="px-4 py-2.5 border-t border-gray-800/60 flex flex-wrap justify-center gap-x-3 gap-y-0.5 text-xs text-gray-600">
-          {game.stadium && <span>{game.stadium}</span>}
-          {game.temp !== null && <span>{game.temp}°F</span>}
-          {game.wind !== null && game.wind > 0 && <span>{game.wind} mph wind</span>}
-          {game.surface && <span className="capitalize">{game.surface}</span>}
-          {game.roof && <span className="capitalize">{game.roof}</span>}
-        </div>
-      )}
+function GameHeader({ game, lineup, tab, onTab }: { game: GameDetail; lineup: GameLineup | null; tab: GameTab; onTab: (tab: GameTab) => void }) {
+  const awayWon = game.away_score != null && game.home_score != null && game.away_score > game.home_score
+  const homeWon = game.away_score != null && game.home_score != null && game.home_score > game.away_score
+  const final = game.away_score != null
+  return <Card className="mb-5">
+    <div className={`flex items-center gap-4 border-b border-surface-line px-4 py-3 ${game.game_type === 'SB' ? 'bg-gradient-to-r from-gold/25 via-gold/10 to-transparent' : 'bg-surface-raise'}`}><div className="min-w-0"><div className={`text-[10px] font-bold uppercase tracking-[.14em] ${game.game_type === 'SB' ? 'text-gold' : 'text-ink-dim'}`}>{weekLabel(game.week)}</div><div className="mt-0.5 truncate text-xs text-ink-mid">{formatGameday(game.gameday)}{game.stadium ? ` · ${game.stadium}` : ''}</div></div><div className="ml-auto shrink-0 text-[10px] font-bold uppercase tracking-[.14em] text-ink-dim">{final ? 'Final' : 'Upcoming'}</div></div>
+    <div className="flex items-center gap-2 px-4 py-6 sm:px-6">
+      <Link to={`/teams/${game.away_team}`} className={`group flex flex-1 flex-col items-center gap-2 sm:flex-row ${awayWon || !final ? '' : 'opacity-50'}`}><img src={teamLogoUrl(game.away_team)} alt="" className="h-12 w-12 object-contain sm:h-16 sm:w-16" /><div className="text-center sm:text-left"><div className="text-xs font-bold text-ink group-hover:text-indigo-400 sm:text-sm">{teamName(game.away_team)}</div>{game.away_record && <div className="text-[10px] text-ink-dim sm:text-xs">{game.away_record}</div>}</div></Link>
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">{final ? <><span className={`text-3xl font-black tabular-nums sm:text-5xl ${awayWon ? 'text-ink' : 'text-ink-dim'}`}>{game.away_score}</span><span className="text-xl text-ink-dim">–</span><span className={`text-3xl font-black tabular-nums sm:text-5xl ${homeWon ? 'text-ink' : 'text-ink-dim'}`}>{game.home_score}</span></> : <span className="text-sm text-ink-dim">Upcoming</span>}</div>
+      <Link to={`/teams/${game.home_team}`} className={`group flex flex-1 flex-col items-center gap-2 sm:flex-row-reverse ${homeWon || !final ? '' : 'opacity-50'}`}><img src={teamLogoUrl(game.home_team)} alt="" className="h-12 w-12 object-contain sm:h-16 sm:w-16" /><div className="text-center sm:text-right"><div className="text-xs font-bold text-ink group-hover:text-indigo-400 sm:text-sm">{teamName(game.home_team)}</div>{game.home_record && <div className="text-[10px] text-ink-dim sm:text-xs">{game.home_record}</div>}</div></Link>
     </div>
-  )
+    {lineup && <GameScorers lineup={lineup} />}
+    <div className="flex overflow-x-auto border-t border-surface-line px-2">{([['overview', 'Overview'], ['lineup', 'Lineup'], ['stats', 'Stats'], ['plays', 'Plays']] as const).map(([key, label]) => <button key={key} type="button" onClick={() => onTab(key)} className={`relative min-w-24 px-4 py-3 text-xs font-bold ${tab === key ? 'text-indigo-400 after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-indigo-400' : 'text-ink-dim hover:text-ink'}`}>{label}</button>)}</div>
+  </Card>
 }
 
-// ── Card 2: Team stats (away | label | home) ──────────────────────────────────
+function QuarterScore({ game }: { game: GameDetail }) {
+  const qs = game.quarter_scores ?? []
+  if (!qs.length) return null
+  const quarters = [1, 2, 3, 4, ...(qs.some(q => q.qtr >= 5) ? [5] : [])]
+  const byQtr = Object.fromEntries(qs.map(q => [q.qtr, q]))
+  const awayWon = (game.away_score ?? 0) > (game.home_score ?? 0), homeWon = (game.home_score ?? 0) > (game.away_score ?? 0)
+  return <Card title="Scoring by quarter" className="mb-4"><div className="overflow-x-auto"><table className="w-full min-w-[420px] text-sm"><thead><tr className="border-t border-surface-line bg-surface-raise/40"><th className="px-4 py-2 text-left text-[10px] uppercase tracking-wider text-ink-dim">Team</th>{quarters.map(q => <th key={q} className="px-3 py-2 text-center text-[10px] uppercase tracking-wider text-ink-dim">{q <= 4 ? `Q${q}` : 'OT'}</th>)}<th className="border-l border-surface-line px-3 py-2 text-center text-[10px] uppercase tracking-wider text-ink-dim">Final</th></tr></thead><tbody>{([{ team: game.away_team, key: 'away' as const, won: awayWon, total: game.away_score }, { team: game.home_team, key: 'home' as const, won: homeWon, total: game.home_score }]).map(({ team, key, won, total }) => <tr key={team} className="border-t border-surface-line"><td className="px-4 py-3 font-bold text-ink">{team}</td>{quarters.map(q => <td key={q} className="px-3 py-3 text-center tabular-nums text-ink-mid">{byQtr[q]?.[key] ?? '—'}</td>)}<td className={`border-l border-surface-line px-3 py-3 text-center text-lg font-black tabular-nums ${won ? 'text-ink' : 'text-ink-dim'}`}>{total ?? '—'}</td></tr>)}</tbody></table></div></Card>
+}
 
 function teamTotals(players: PlayerStats[]) {
   const sum = (fn: (p: PlayerStats) => number) => players.reduce((a, p) => a + fn(p), 0)
@@ -198,8 +103,8 @@ function BoxScore({ game }: { game: GameDetail }) {
         </div>
         {!neutral && total > 0 && (
           <div className="relative h-1 rounded-full bg-gray-800/60 overflow-hidden flex">
-            <div className={`h-full ${aWon ? 'bg-rose-400' : 'bg-rose-400/30'}`} style={{ width: `${aPct}%` }} />
-            <div className={`h-full ${hWon ? 'bg-indigo-400' : 'bg-indigo-400/30'}`} style={{ width: `${hPct}%` }} />
+            <div className={`h-full ${aWon ? 'bg-data-win' : 'bg-data-loss/30'}`} style={{ width: `${aPct}%` }} />
+            <div className={`h-full ${hWon ? 'bg-data-win' : 'bg-data-loss/30'}`} style={{ width: `${hPct}%` }} />
           </div>
         )}
       </div>
@@ -569,7 +474,7 @@ function fmtRemaining(rem: number): string {
 
 const SCORE_KIND: Record<string, string> = {
   TD: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30',
-  FG: 'text-amber-300 bg-amber-500/15 border-amber-500/30',
+  FG: 'text-ink-mid bg-surface-raise border-surface-line',
   SAF: 'text-rose-300 bg-rose-500/15 border-rose-500/30',
   SCORE: 'text-gray-300 bg-gray-500/15 border-gray-500/30',
 }
@@ -814,11 +719,25 @@ export default function GamePage() {
   const [game, setGame] = useState<GameDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<GameTab>('overview')
+  const [lineup, setLineup] = useState<GameLineup | null>(null)
+  const [weeks, setWeeks] = useState<WeekGroup[]>([])
+  const season = game?.season
 
   useEffect(() => {
     if (!gameId) return
     api.game(gameId).then(setGame).finally(() => setLoading(false))
   }, [gameId])
+  useEffect(() => { if (gameId) api.gameLineup(gameId).then(setLineup).catch(() => setLineup(null)) }, [gameId])
+  useEffect(() => { if (season) api.schedule(season).then(setWeeks).catch(() => setWeeks([])) }, [season])
+
+  const sameRound = useMemo(() => {
+    if (!game) return []
+    const all = weeks.flatMap(w => w.games) as unknown as GameDetail[]
+    if (game.game_type === 'REG') return all.filter(g => g.week === game.week)
+    const teams = new Set([game.away_team, game.home_team])
+    return all.filter(g => g.game_type !== 'REG' && g.away_score != null && g.home_score != null)
+      .filter(g => teams.has(g.away_team) || teams.has(g.home_team) || g.game_id === game.game_id)
+  }, [weeks, game])
 
   if (loading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
   if (!game) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Game not found.</p></div>
@@ -828,26 +747,13 @@ export default function GamePage() {
       <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
         <GameContext.Provider value={{ gameId: game.game_id, season: game.season, week: game.week, awayTeam: game.away_team, homeTeam: game.home_team, fromWeek }}>
-          <Scoreboard game={game} />
-          <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-gray-800 bg-gray-900 p-1">
-            {([
-              ['overview', 'Overview'],
-              ['lineup', 'Lineup'],
-              ['stats', 'Stats'],
-              ['plays', 'Plays'],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={`min-w-24 rounded-lg px-4 py-2 text-sm font-bold transition-colors ${tab === key ? 'bg-indigo-500 text-white' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-200'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <style>{LINEUP_CSS}</style>
+          <GameHeader game={game} lineup={lineup} tab={tab} onTab={setTab} />
+          <div className="lineup-page">
+          <main className="feed">
           {tab === 'overview' && (
             <>
+              <QuarterScore game={game} />
               <ScoringSummary game={game} />
               <WinProbabilityChart game={game} />
               <KeyPlays game={game} />
@@ -855,7 +761,7 @@ export default function GamePage() {
               <BoxScore game={game} />
             </>
           )}
-          {tab === 'lineup' && <GameLineupView game={game} />}
+          {tab === 'lineup' && <GameLineupView game={game} lineup={lineup} />}
           {tab === 'stats' && (
             <>
               <BoxScore game={game} />
@@ -869,6 +775,9 @@ export default function GamePage() {
               <KeyPlays game={game} />
             </>
           )}
+          </main>
+          {lineup && <GameRail game={game} lineup={lineup} sameRound={sameRound} />}
+          </div>
         </GameContext.Provider>
 
       </div>
