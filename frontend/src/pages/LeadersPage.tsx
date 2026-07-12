@@ -218,7 +218,7 @@ function AwardWinnerCard({ winner }: { winner: AwardWinner }) {
   const isMvp = winner.award === 'MVP'
   return (
     <div className={`rounded-xl border p-3.5 ${isMvp ? 'border-gold/40 bg-gold/5' : 'border-surface-line bg-surface-card'}`}>
-      <div className={`text-[10px] font-black uppercase tracking-widest mb-2 ${isMvp ? 'text-yellow-300' : 'text-ink-dim'}`}>
+      <div className={`text-[10px] font-black uppercase tracking-widest mb-2 ${isMvp ? 'text-gold' : 'text-ink-dim'}`}>
         {AWARD_LABEL[winner.award]}
       </div>
       <div className="flex items-center gap-2.5">
@@ -242,7 +242,7 @@ function RaceCard({ scorer, leaders }: { scorer: RaceScorer; leaders: LeagueLead
   const isMvp = scorer.award === 'MVP'
   return (
     <div className={`rounded-xl border p-3.5 ${isMvp ? 'border-gold/40 bg-gold/5' : 'border-surface-line bg-surface-card'}`}>
-      <div className={`text-[10px] font-black uppercase tracking-widest mb-2.5 ${isMvp ? 'text-yellow-300' : 'text-ink-dim'}`}>
+      <div className={`text-[10px] font-black uppercase tracking-widest mb-2.5 ${isMvp ? 'text-gold' : 'text-ink-dim'}`}>
         {scorer.label}
       </div>
       {top3.length === 0
@@ -418,8 +418,8 @@ function StatDashboard({ leaders, onPick }: { leaders: LeagueLeader[]; onPick: (
 // ── Podium (top 3 for the active tab) ────────────────────────────────────────
 
 const PODIUM_TONES: Record<1 | 2 | 3, { ring: string; text: string; chipBg: string; chipText: string; medal: string }> = {
-  1: { ring: 'ring-yellow-500/60', text: 'text-yellow-300', chipBg: 'bg-gold/15 border-gold/40', chipText: 'text-yellow-200', medal: '1st' },
-  2: { ring: 'ring-gray-400/50',   text: 'text-ink',   chipBg: 'bg-gray-400/15 border-gray-400/40',     chipText: 'text-ink',  medal: '2nd' },
+  1: { ring: 'ring-gold/60', text: 'text-gold', chipBg: 'bg-gold/15 border-gold/40', chipText: 'text-gold', medal: '1st' },
+  2: { ring: 'ring-surface-line/50',   text: 'text-ink',   chipBg: 'bg-surface-raise border-surface-line/40',     chipText: 'text-ink',  medal: '2nd' },
   3: { ring: 'ring-surface-line',  text: 'text-ink-mid',  chipBg: 'bg-surface-raise border-surface-line',   chipText: 'text-ink-mid', medal: '3rd' },
 }
 

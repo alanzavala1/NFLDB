@@ -55,7 +55,7 @@ const GAME_KEY_KEYS: Record<string, string[]> = {
   rushing: ['yds', 'td', 'ypc', 'epa'],
   receiving: ['rec', 'yds', 'td', 'ypr', 'epa'],
 }
-const selectCls = 'bg-surface-card border border-surface-line text-ink text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-gray-600'
+const selectCls = 'bg-surface-card border border-surface-line text-ink text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-surface-line'
 
 function Seg<T extends string | number>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
   return (
@@ -95,7 +95,7 @@ function AddEntity({ mode, onAdd }: { mode: Mode; onAdd: (r: SearchResult) => vo
     <div className="relative">
       <input value={q} onChange={e => { setQ(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={mode === 'players' ? '+ Add player…' : '+ Add team…'}
-        className="bg-surface-card border border-surface-line text-ink text-sm rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-gray-600 placeholder:text-ink-dim" />
+        className="bg-surface-card border border-surface-line text-ink text-sm rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-surface-line placeholder:text-ink-dim" />
       {open && q.trim() && results.length > 0 && (
         <div className="absolute z-30 mt-1 w-64 max-h-72 overflow-y-auto bg-surface-card border border-surface-line rounded-lg shadow-2xl">
           {results.slice(0, 12).map(r => (

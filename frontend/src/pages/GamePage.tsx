@@ -97,12 +97,12 @@ function BoxScore({ game }: { game: GameDetail }) {
     return (
       <div className="px-5 py-2.5">
         <div className="flex items-baseline justify-between gap-3 mb-1.5">
-          <span className={`text-base font-bold tabular-nums w-20 text-right ${aWon ? 'text-white' : 'text-gray-500'}`}>{a}</span>
-          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider text-center">{label}</span>
-          <span className={`text-base font-bold tabular-nums w-20 text-left ${hWon ? 'text-white' : 'text-gray-500'}`}>{h}</span>
+          <span className={`text-base font-bold tabular-nums w-20 text-right ${aWon ? 'text-white' : 'text-ink-dim'}`}>{a}</span>
+          <span className="text-[10px] font-semibold text-ink-dim uppercase tracking-wider text-center">{label}</span>
+          <span className={`text-base font-bold tabular-nums w-20 text-left ${hWon ? 'text-white' : 'text-ink-dim'}`}>{h}</span>
         </div>
         {!neutral && total > 0 && (
-          <div className="relative h-1 rounded-full bg-gray-800/60 overflow-hidden flex">
+          <div className="relative h-1 rounded-full bg-surface-raise/60 overflow-hidden flex">
             <div className={`h-full ${aWon ? 'bg-data-win' : 'bg-data-loss/30'}`} style={{ width: `${aPct}%` }} />
             <div className={`h-full ${hWon ? 'bg-data-win' : 'bg-data-loss/30'}`} style={{ width: `${hPct}%` }} />
           </div>
@@ -113,21 +113,21 @@ function BoxScore({ game }: { game: GameDetail }) {
 
   function SectionDivider({ label }: { label: string }) {
     return (
-      <div className="px-5 pt-3 pb-1 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest border-t border-gray-800/40 mt-1">
+      <div className="px-5 pt-3 pb-1 text-center text-[10px] font-bold text-ink-dim uppercase tracking-widest border-t border-surface-line/40 mt-1">
         {label}
       </div>
     )
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
+    <Card className="mb-4">
       {/* Header */}
-      <div className="flex items-center border-b border-gray-800 bg-gray-800/40">
+      <div className="flex items-center border-b border-surface-line bg-surface-raise/40">
         <div className="flex-1 flex items-center justify-end gap-2 px-5 py-3">
           <span className="font-bold text-white text-sm">{game.away_team}</span>
           <img src={teamLogoUrl(game.away_team)} className="w-6 h-6 object-contain" alt="" />
         </div>
-        <div className="w-28 text-center text-[10px] font-bold text-gray-500 uppercase tracking-widest shrink-0">
+        <div className="w-28 text-center text-[10px] font-bold text-ink-dim uppercase tracking-widest shrink-0">
           Team Stats
         </div>
         <div className="flex-1 flex items-center justify-start gap-2 px-5 py-3">
@@ -167,7 +167,7 @@ function BoxScore({ game }: { game: GameDetail }) {
         <StatBar label="Sacks"         a={A.sacks}   h={H.sacks} />
         <StatBar label="Interceptions" a={A.defInts} h={H.defInts} />
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -238,37 +238,34 @@ function GameLeaders({ game }: { game: GameDetail }) {
     return (
       <div className={`flex-1 flex items-center gap-3 min-w-0 ${rev ? 'flex-row-reverse' : ''}`}>
         {leader.player.headshot_url
-          ? <img src={leader.player.headshot_url} alt="" className="w-12 h-12 rounded-full object-cover object-top shrink-0 bg-gray-800" />
-          : <div className="w-12 h-12 rounded-full bg-gray-800 shrink-0" />
+          ? <img src={leader.player.headshot_url} alt="" className="w-12 h-12 rounded-full object-cover object-top shrink-0 bg-surface-raise" />
+          : <div className="w-12 h-12 rounded-full bg-surface-raise shrink-0" />
         }
         <div className={`min-w-0 ${rev ? 'text-right' : ''}`}>
           <div className="text-xl font-black text-white tabular-nums leading-none">{leader.stat}</div>
           <Link to={to} state={state} className="text-indigo-400 hover:underline font-semibold text-sm leading-tight block truncate mt-0.5">
             {leader.player.player_name}
           </Link>
-          <div className="text-[11px] text-gray-500 mt-0.5">{leader.sub}</div>
+          <div className="text-[11px] text-ink-dim mt-0.5">{leader.sub}</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
-      <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-800/40">
-        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Game Leaders</span>
-      </div>
-      <div className="divide-y divide-gray-800/40">
+    <Card title="Game Leaders" className="mb-4">
+      <div className="divide-y divide-surface-line/40">
         {categories.map(({ label, away, home }) => (away || home) && (
           <div key={label} className="flex items-center gap-3 px-4 py-3">
             <Side leader={away} align="left" />
             <div className="shrink-0 w-32 text-center">
-              <span className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">{label}</span>
+              <span className="text-[10px] font-semibold text-ink-dim uppercase tracking-wider">{label}</span>
             </div>
             <Side leader={home} align="right" />
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -276,13 +273,13 @@ function GameLeaders({ game }: { game: GameDetail }) {
 
 function TeamDivider({ team }: { team: string }) {
   return (
-    <tr className="bg-gray-800/40 border-t border-gray-800/60">
+    <tr className="bg-surface-raise/40 border-t border-surface-line/60">
       <td colSpan={20} className="px-4 py-2">
         <div className="flex items-center gap-2.5">
           <img src={teamLogoUrl(team)} className="w-6 h-6 object-contain" alt="" />
           <span className="text-sm font-bold text-white">{team}</span>
-          <span className="text-xs text-gray-600">·</span>
-          <span className="text-xs text-gray-500">{teamName(team)}</span>
+          <span className="text-xs text-ink-dim">·</span>
+          <span className="text-xs text-ink-dim">{teamName(team)}</span>
         </div>
       </td>
     </tr>
@@ -299,28 +296,28 @@ function PlayerStats({ game }: { game: GameDetail }) {
         <Link to={to} state={state} className="text-indigo-400 hover:underline font-medium text-sm">
           {p.player_name}
         </Link>
-        {p.jersey_number !== null && <span className="text-gray-700 text-xs ml-1">#{p.jersey_number}</span>}
+        {p.jersey_number !== null && <span className="text-ink-dim text-xs ml-1">#{p.jersey_number}</span>}
       </td>
     )
   }
 
   const TH = (label: string) => (
-    <th key={label} className="py-2.5 px-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">{label}</th>
+    <th key={label} className="py-2.5 px-3 text-right text-xs font-semibold text-ink-dim whitespace-nowrap">{label}</th>
   )
   const THL = (label: string) => (
-    <th key={label} className="py-2.5 px-4 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{label}</th>
+    <th key={label} className="py-2.5 px-4 text-left text-xs font-semibold text-ink-dim whitespace-nowrap">{label}</th>
   )
   const TD = (val: string | number, dim = false) => {
     const empty = val === 0 || val === '0'
     return (
       <td className={`py-2 px-3 text-right tabular-nums text-sm whitespace-nowrap
-        ${empty ? 'text-gray-700' : dim ? 'text-gray-500' : 'text-gray-300'}`}>
+        ${empty ? 'text-ink-dim' : dim ? 'text-ink-dim' : 'text-ink-mid'}`}>
         {empty ? '—' : val}
       </td>
     )
   }
 
-  const rowCls = 'border-t border-gray-800/40 hover:bg-gray-800/30'
+  const rowCls = 'border-t border-surface-line/40 hover:bg-surface-raise/30'
 
   const passers   = { away: game.away.filter(p => p.attempts > 0), home: game.home.filter(p => p.attempts > 0) }
   const rushers   = { away: [...game.away].filter(p => p.carries > 0).sort((a, b) => b.rush_yards - a.rush_yards),
@@ -334,19 +331,16 @@ function PlayerStats({ game }: { game: GameDetail }) {
 
   function Section({ title, headers, children }: { title: string; headers: React.ReactNode[]; children: React.ReactNode }) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="px-4 py-2.5 bg-gray-800/50 border-b border-gray-800">
-          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{title}</span>
-        </div>
+      <Card title={title}>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-800/60 bg-gray-800/20">{headers}</tr>
+              <tr className="border-b border-surface-line/60 bg-surface-raise/20">{headers}</tr>
             </thead>
             <tbody>{children}</tbody>
           </table>
         </div>
-      </div>
+      </Card>
     )
   }
 
@@ -473,10 +467,10 @@ function fmtRemaining(rem: number): string {
 // ── Scoring summary ───────────────────────────────────────────────────────────
 
 const SCORE_KIND: Record<string, string> = {
-  TD: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30',
+  TD: 'text-data-win bg-data-win/15 border-data-win/30',
   FG: 'text-ink-mid bg-surface-raise border-surface-line',
-  SAF: 'text-rose-300 bg-rose-500/15 border-rose-500/30',
-  SCORE: 'text-gray-300 bg-gray-500/15 border-gray-500/30',
+  SAF: 'text-data-loss bg-data-loss/15 border-data-loss/30',
+  SCORE: 'text-ink-mid bg-surface-raise/15 border-surface-line/30',
 }
 const trimScoreDesc = (d: string | null) =>
   (d ?? '').replace(/^\(\d+:\d+\)\s*/, '').replace(/^\((Shotgun|No Huddle)[^)]*\)\s*/, '')
@@ -485,24 +479,21 @@ function ScoringSummary({ game }: { game: GameDetail }) {
   const plays = game.scoring ?? []
   if (!plays.length) return null
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
-      <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-800/40">
-        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Scoring Summary</span>
-      </div>
-      <div className="divide-y divide-gray-800/40">
+    <Card title="Scoring Summary" className="mb-4">
+      <div className="divide-y divide-surface-line/40">
         {plays.map((s, i) => (
           <div key={i} className="flex items-center gap-3 px-4 py-2">
-            <div className="shrink-0 w-14 text-[11px] text-gray-500 font-mono tabular-nums">Q{s.qtr} {s.clock}</div>
+            <div className="shrink-0 w-14 text-[11px] text-ink-dim font-mono tabular-nums">Q{s.qtr} {s.clock}</div>
             {s.team && <img src={teamLogoUrl(s.team)} className="w-5 h-5 object-contain shrink-0 opacity-80" alt="" />}
             <span className={`shrink-0 inline-block text-[10px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${SCORE_KIND[s.kind] ?? SCORE_KIND.SCORE}`}>{s.kind}</span>
-            <p className="flex-1 text-xs text-gray-400 leading-snug line-clamp-1 min-w-0">{trimScoreDesc(s.desc)}</p>
+            <p className="flex-1 text-xs text-ink-mid leading-snug line-clamp-1 min-w-0">{trimScoreDesc(s.desc)}</p>
             <span className="shrink-0 text-sm font-bold text-white tabular-nums">
-              {s.away_score}<span className="text-gray-600">–</span>{s.home_score}
+              {s.away_score}<span className="text-ink-dim">–</span>{s.home_score}
             </span>
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -545,9 +536,9 @@ function detectKeyPlays(plays: WinProbPlay[]): KeyPlayItem[] {
 }
 
 const KIND_META: Record<KeyPlayKind, { label: string; color: string; bg: string }> = {
-  int: { label: 'INT', color: 'text-rose-300',    bg: 'bg-rose-500/15 border-rose-500/30' },
-  fum: { label: 'FUM', color: 'text-rose-300',    bg: 'bg-rose-500/15 border-rose-500/30' },
-  big: { label: 'KEY', color: 'text-sky-300',     bg: 'bg-sky-500/15 border-sky-500/30' },
+  int: { label: 'INT', color: 'text-data-loss',    bg: 'bg-data-loss/15 border-data-loss/30' },
+  fum: { label: 'FUM', color: 'text-data-loss',    bg: 'bg-data-loss/15 border-data-loss/30' },
+  big: { label: 'KEY', color: 'text-ink-mid',     bg: 'bg-surface-raise/15 border-surface-line/30' },
 }
 
 function KeyPlays({ game }: { game: GameDetail }) {
@@ -555,12 +546,8 @@ function KeyPlays({ game }: { game: GameDetail }) {
   if (!plays.length) return null
   const homeTeam = game.home_team
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
-      <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-800/40 flex items-center justify-between">
-        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Key Plays</span>
-        <span className="text-[10px] text-gray-600 uppercase tracking-wider">{plays.length} events</span>
-      </div>
-      <div className="divide-y divide-gray-800/40 max-h-96 overflow-y-auto">
+    <Card title="Key Plays" action={<span className="text-[10px] text-ink-dim uppercase tracking-wider">{plays.length} events</span>} className="mb-4">
+      <div className="divide-y divide-surface-line/40 max-h-96 overflow-y-auto">
         {plays.map((p, i) => {
           const isHome = p.team === homeTeam
           // For scoring plays, swing is in offense's favor; for turnovers, against
@@ -569,14 +556,14 @@ function KeyPlays({ game }: { game: GameDetail }) {
           const meta = KIND_META[p.kind]
           return (
             <div key={i} className={`flex items-center gap-3 px-4 py-2.5 border-l-2 ${isHome ? 'border-l-indigo-500/60' : 'border-l-rose-500/60'}`}>
-              <div className="shrink-0 w-12 text-[11px] text-gray-500 font-mono tabular-nums">{fmtRemaining(p.rem)}</div>
+              <div className="shrink-0 w-12 text-[11px] text-ink-dim font-mono tabular-nums">{fmtRemaining(p.rem)}</div>
               <img src={teamLogoUrl(p.team ?? '')} className="w-5 h-5 object-contain shrink-0 opacity-70" alt="" />
               <span className={`shrink-0 inline-block text-[10px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${meta.color} ${meta.bg}`}>
                 {meta.label}
               </span>
-              <p className="flex-1 text-xs text-gray-400 leading-snug line-clamp-2 min-w-0">{p.desc}</p>
+              <p className="flex-1 text-xs text-ink-mid leading-snug line-clamp-2 min-w-0">{p.desc}</p>
               {swingStr && (
-                <span className={`shrink-0 text-[11px] tabular-nums font-semibold ${offSwing >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span className={`shrink-0 text-[11px] tabular-nums font-semibold ${offSwing >= 0 ? 'text-data-win' : 'text-data-loss'}`}>
                   {swingStr} WP
                 </span>
               )}
@@ -584,7 +571,7 @@ function KeyPlays({ game }: { game: GameDetail }) {
           )
         })}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -592,13 +579,13 @@ function WpTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload as ChartPoint
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 shadow-2xl max-w-[220px] pointer-events-none">
+    <div className="bg-surface-card border border-surface-line rounded-xl px-3 py-2.5 shadow-2xl max-w-[220px] pointer-events-none">
       <div className="flex justify-between gap-3 text-xs font-bold mb-1.5">
-        <span className="text-rose-400">{d.awayTeam} {(100 - d.wp).toFixed(1)}%</span>
-        <span className="text-gray-600 font-normal">{fmtRemaining(d.rem)}</span>
-        <span className="text-indigo-400">{d.homeTeam} {d.wp.toFixed(1)}%</span>
+        <span className="text-data-loss">{d.awayTeam} {(100 - d.wp).toFixed(1)}%</span>
+        <span className="text-ink-dim font-normal">{fmtRemaining(d.rem)}</span>
+        <span className="text-data-win">{d.homeTeam} {d.wp.toFixed(1)}%</span>
       </div>
-      {d.desc && <p className="text-[11px] text-gray-500 leading-snug line-clamp-2">{d.desc}</p>}
+      {d.desc && <p className="text-[11px] text-ink-dim leading-snug line-clamp-2">{d.desc}</p>}
     </div>
   )
 }
@@ -634,62 +621,58 @@ function WinProbabilityChart({ game }: { game: GameDetail }) {
   const turnovers = data.filter(d => d.turnover)
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
-      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Win Probability</span>
-        <div className="flex items-center gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />{awayTeam}</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" />{homeTeam}</span>
-        </div>
-      </div>
+    <Card title="Win Probability" action={<div className="flex items-center gap-4 text-xs text-ink-dim">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-data-loss inline-block" />{awayTeam}</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-data-win inline-block" />{homeTeam}</span>
+        </div>} className="mb-4">
 
       <div className="px-1 pt-3 pb-1">
         <ResponsiveContainer width="100%" height={220}>
           <AreaChart data={data} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="wpFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor="#818cf8" stopOpacity={0.25} />
-                <stop offset="100%" stopColor="#818cf8" stopOpacity={0.02} />
+                <stop offset="0%"   stopColor="#34d399" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#34d399" stopOpacity={0.02} />
               </linearGradient>
             </defs>
 
-            <CartesianGrid vertical={false} stroke="#1f2937" strokeDasharray="0" />
+            <CartesianGrid vertical={false} stroke="#2e2b3e" strokeDasharray="0" />
 
             {/* Background territory tint */}
-            <ReferenceArea y1={50} y2={100} fill="#6366f1" fillOpacity={0.05} ifOverflow="hidden" />
-            <ReferenceArea y1={0}  y2={50}  fill="#f43f5e" fillOpacity={0.05} ifOverflow="hidden" />
+            <ReferenceArea y1={50} y2={100} fill="#34d399" fillOpacity={0.05} ifOverflow="hidden" />
+            <ReferenceArea y1={0}  y2={50}  fill="#f87171" fillOpacity={0.05} ifOverflow="hidden" />
 
             {/* 50% line */}
-            <ReferenceLine y={50} stroke="#374151" strokeDasharray="4 3" strokeWidth={1} />
+            <ReferenceLine y={50} stroke="#2e2b3e" strokeDasharray="4 3" strokeWidth={1} />
 
             {/* Quarter separators */}
             {[900, 1800, 2700, 3600].filter(t => t < maxT).map(t => (
-              <ReferenceLine key={t} x={t} stroke="#1f2937" strokeWidth={1.5} />
+              <ReferenceLine key={t} x={t} stroke="#2e2b3e" strokeWidth={1.5} />
             ))}
 
             {/* Scoring play markers */}
             {scoringPlays.map((d, i) => (
               <ReferenceLine key={`td-${i}`} x={d.t} strokeWidth={1.5} strokeOpacity={0.55}
-                stroke={d.posteam === homeTeam ? '#818cf8' : '#fb7185'} />
+                stroke={d.posteam === homeTeam ? '#34d399' : '#f87171'} />
             ))}
             {turnovers.map((d, i) => (
               <ReferenceLine key={`to-${i}`} x={d.t} strokeWidth={1} strokeOpacity={0.4}
-                stroke={d.posteam === homeTeam ? '#fb7185' : '#818cf8'} strokeDasharray="2 2" />
+                stroke={d.posteam === homeTeam ? '#f87171' : '#34d399'} strokeDasharray="2 2" />
             ))}
 
             <XAxis dataKey="t" type="number" domain={[0, maxT]}
               ticks={[450, 1350, 2250, 3150, ...(maxT > 3600 ? [3825] : [])]}
               tickFormatter={v => (({ 450: 'Q1', 1350: 'Q2', 2250: 'Q3', 3150: 'Q4', 3825: 'OT' } as Record<number, string>)[v] ?? '')}
-              tick={{ fill: '#4b5563', fontSize: 11 }} axisLine={false} tickLine={false} />
+              tick={{ fill: '#6c6885', fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis domain={[0, 100]} ticks={[0, 50, 100]}
               tickFormatter={v => v === 50 ? '50%' : `${v}%`}
-              tick={{ fill: '#374151', fontSize: 10 }} axisLine={false} tickLine={false} width={34} />
+              tick={{ fill: '#2e2b3e', fontSize: 10 }} axisLine={false} tickLine={false} width={34} />
 
-            <Tooltip content={<WpTooltip />} cursor={{ stroke: '#6b7280', strokeWidth: 1, strokeDasharray: '3 3' }} />
+            <Tooltip content={<WpTooltip />} cursor={{ stroke: '#a3a0b8', strokeWidth: 1, strokeDasharray: '3 3' }} />
 
-            <Area type="monotone" dataKey="wp" stroke="#818cf8" strokeWidth={2.5}
+            <Area type="monotone" dataKey="wp" stroke="#34d399" strokeWidth={2.5}
               fill="url(#wpFill)" dot={false}
-              activeDot={{ r: 5, fill: '#818cf8', stroke: '#1e1b4b', strokeWidth: 2 }} />
+              activeDot={{ r: 5, fill: '#34d399', stroke: '#0e0d15', strokeWidth: 2 }} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -698,15 +681,15 @@ function WinProbabilityChart({ game }: { game: GameDetail }) {
       <div className="px-5 pb-4 pt-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img src={teamLogoUrl(awayTeam)} className="w-6 h-6 object-contain opacity-60" alt="" />
-          <span className="text-lg font-black tabular-nums text-rose-400">{(100 - finalWp).toFixed(0)}%</span>
+          <span className="text-lg font-black tabular-nums text-data-loss">{(100 - finalWp).toFixed(0)}%</span>
         </div>
-        <span className="text-[10px] text-gray-700 uppercase tracking-widest">final</span>
+        <span className="text-[10px] text-ink-dim uppercase tracking-widest">final</span>
         <div className="flex items-center gap-2">
-          <span className="text-lg font-black tabular-nums text-indigo-400">{finalWp.toFixed(0)}%</span>
+          <span className="text-lg font-black tabular-nums text-data-win">{finalWp.toFixed(0)}%</span>
           <img src={teamLogoUrl(homeTeam)} className="w-6 h-6 object-contain opacity-60" alt="" />
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -739,11 +722,11 @@ export default function GamePage() {
       .filter(g => teams.has(g.away_team) || teams.has(g.home_team) || g.game_id === game.game_id)
   }, [weeks, game])
 
-  if (loading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
-  if (!game) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Game not found.</p></div>
+  if (loading) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Loading...</p></div>
+  if (!game) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Game not found.</p></div>
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-surface-bg">
       <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
         <GameContext.Provider value={{ gameId: game.game_id, season: game.season, week: game.week, awayTeam: game.away_team, homeTeam: game.home_team, fromWeek }}>

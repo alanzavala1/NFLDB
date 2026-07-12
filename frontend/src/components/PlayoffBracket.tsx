@@ -17,8 +17,8 @@ export function teamConference(team: string): ConfKey | null {
 }
 
 export const CONF_STYLE: Record<ConfKey, { text: string; dot: string }> = {
-  AFC: { text: 'text-rose-300',   dot: 'bg-rose-400'   },
-  NFC: { text: 'text-indigo-300', dot: 'bg-indigo-400' },
+  AFC: { text: 'text-ink-mid', dot: 'bg-surface-raise' },
+  NFC: { text: 'text-ink-mid', dot: 'bg-surface-raise' },
 }
 
 function pickWinner(g: Game): string | null {
@@ -53,14 +53,14 @@ function PlayoffGameCard({ game }: { game: Game }) {
   return (
     <Link
       to={`/games/${game.game_id}`}
-      className="block bg-gray-900 border border-gray-800 rounded-md hover:border-gray-600 transition-colors overflow-hidden"
+      className="block bg-surface-card border border-surface-line rounded-md hover:border-surface-line transition-colors overflow-hidden"
     >
       <div className="px-2.5 py-1.5 space-y-1">
         {rows.map(t => (
           <div key={t.team} className={`flex items-center gap-2 ${finished && !t.won ? 'opacity-45' : ''}`}>
             <img src={teamLogoUrl(t.team)} alt={t.team} className="w-5 h-5 object-contain shrink-0" />
-            <span className={`text-xs font-semibold flex-1 ${t.won ? 'text-white' : 'text-gray-400'}`}>{t.team}</span>
-            <span className={`text-sm font-bold tabular-nums ${t.won ? 'text-white' : 'text-gray-500'}`}>
+            <span className={`text-xs font-semibold flex-1 ${t.won ? 'text-white' : 'text-ink-mid'}`}>{t.team}</span>
+            <span className={`text-sm font-bold tabular-nums ${t.won ? 'text-white' : 'text-ink-dim'}`}>
               {t.score ?? '—'}
             </span>
           </div>
@@ -74,7 +74,7 @@ function BracketRound({ label, games }: { label: string; games: Game[] }) {
   if (!games.length) return null
   return (
     <div className="flex-1 min-w-0 flex flex-col">
-      <div className="text-[10px] font-bold uppercase tracking-widest mb-2 text-center text-gray-600">
+      <div className="text-[10px] font-bold uppercase tracking-widest mb-2 text-center text-ink-dim">
         {label}
       </div>
       <div className="flex-1 flex flex-col justify-around gap-3">
@@ -94,12 +94,12 @@ function ConferenceBracket({ conf, games, champs, side = 'left' }: { conf: ConfK
   const reverseCls = side === 'right' ? 'lg:flex-row-reverse' : ''
   return (
     <div>
-      <div className={`flex items-center gap-2 mb-3 pb-2 border-b border-gray-800 ${reverseCls}`}>
+      <div className={`flex items-center gap-2 mb-3 pb-2 border-b border-surface-line ${reverseCls}`}>
         <span className={`inline-block w-1.5 h-1.5 rounded-full ${style.dot}`} />
         <span className={`text-sm font-bold uppercase tracking-widest ${style.text}`}>{conf}</span>
         <div className="flex-1" />
         {champTeam && (
-          <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+          <span className="text-[10px] text-ink-dim uppercase tracking-wider">
             Champion <span className="text-white font-bold">{champTeam}</span>
           </span>
         )}
@@ -123,10 +123,10 @@ function SuperBowlCard({ game, champ, season }: { game: Game; champ: string | nu
   return (
     <Link
       to={`/games/${game.game_id}`}
-      className="block rounded-xl border border-yellow-500/50 bg-gray-900 hover:bg-gray-900/80 transition-colors overflow-hidden"
+      className="block rounded-xl border border-gold/50 bg-surface-card hover:bg-surface-card/80 transition-colors overflow-hidden"
     >
-      <div className="px-4 py-2 border-b border-yellow-500/30 bg-yellow-500/10 text-center">
-        <span className="text-xs font-bold uppercase tracking-[0.25em] text-yellow-300">
+      <div className="px-4 py-2 border-b border-gold/30 bg-gold/10 text-center">
+        <span className="text-xs font-bold uppercase tracking-[0.25em] text-gold">
           Super Bowl {sbNumber > 0 ? toRoman(sbNumber) : ''}
         </span>
       </div>
@@ -134,16 +134,16 @@ function SuperBowlCard({ game, champ, season }: { game: Game; champ: string | nu
         {rows.map(t => (
           <div key={t.team} className={`flex items-center gap-3 ${finished && !t.won ? 'opacity-50' : ''}`}>
             <img src={teamLogoUrl(t.team)} alt={t.team} className="w-9 h-9 object-contain shrink-0" />
-            <span className={`text-base font-bold flex-1 ${t.won ? 'text-white' : 'text-gray-400'}`}>{t.team}</span>
-            <span className={`text-2xl font-black tabular-nums ${t.won ? 'text-white' : 'text-gray-500'}`}>
+            <span className={`text-base font-bold flex-1 ${t.won ? 'text-white' : 'text-ink-mid'}`}>{t.team}</span>
+            <span className={`text-2xl font-black tabular-nums ${t.won ? 'text-white' : 'text-ink-dim'}`}>
               {t.score ?? '—'}
             </span>
           </div>
         ))}
       </div>
       {champ && (
-        <div className="px-4 py-2 border-t border-yellow-500/30 bg-yellow-500/10 text-center">
-          <span className="text-xs font-bold uppercase tracking-widest text-yellow-300">
+        <div className="px-4 py-2 border-t border-gold/30 bg-gold/10 text-center">
+          <span className="text-xs font-bold uppercase tracking-widest text-gold">
             <span className="text-white">{champ}</span> · Champions
           </span>
         </div>

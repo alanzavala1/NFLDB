@@ -36,14 +36,14 @@ const MD: Components = {
   p: ({ node, ...p }) => { void node; return <p className="mb-3 leading-relaxed text-ink last:mb-0" {...p} /> },
   strong: ({ node, ...p }) => { void node; return <strong className="font-semibold text-ink" {...p} /> },
   em: ({ node, ...p }) => { void node; return <em className="text-ink-mid" {...p} /> },
-  ul: ({ node, ...p }) => { void node; return <ul className="mb-3 ml-5 list-disc space-y-1.5 marker:text-indigo-400 last:mb-0" {...p} /> },
+  ul: ({ node, ...p }) => { void node; return <ul className="mb-3 ml-5 list-disc space-y-1.5 marker:text-ink-dim last:mb-0" {...p} /> },
   ol: ({ node, ...p }) => { void node; return <ol className="mb-3 ml-5 list-decimal space-y-1.5 marker:text-ink-dim last:mb-0" {...p} /> },
   li: ({ node, ...p }) => { void node; return <li className="pl-1 leading-relaxed text-ink" {...p} /> },
   h1: ({ node, ...p }) => { void node; return <h3 className="mb-2 mt-4 text-base font-semibold text-ink first:mt-0" {...p} /> },
   h2: ({ node, ...p }) => { void node; return <h3 className="mb-2 mt-4 text-base font-semibold text-ink first:mt-0" {...p} /> },
   h3: ({ node, ...p }) => { void node; return <h4 className="mb-1.5 mt-3 text-sm font-semibold uppercase tracking-wide text-ink-mid first:mt-0" {...p} /> },
-  code: ({ node, ...p }) => { void node; return <code className="rounded bg-surface-raise px-1.5 py-0.5 text-[13px] text-indigo-300" {...p} /> },
-  a: ({ node, ...p }) => { void node; return <a className="text-indigo-400 underline hover:text-indigo-300" {...p} /> },
+  code: ({ node, ...p }) => { void node; return <code className="rounded bg-surface-raise px-1.5 py-0.5 text-[13px] text-ink-mid" {...p} /> },
+  a: ({ node, ...p }) => { void node; return <a className="text-indigo-400 underline hover:text-ink-mid" {...p} /> },
   table: ({ node, ...p }) => {
     void node
     return (

@@ -521,7 +521,7 @@ function FeaturedGameHero({ game }: { game: Game }) {
   const playoff = game.game_type === 'SB' || game.game_type === 'CON'
   const bandClass = playoff
     ? 'border-b border-gold/25 bg-linear-to-r from-gold/25 via-gold/10 to-transparent text-gold'
-    : 'border-b border-surface-line bg-surface-raise text-indigo-300'
+    : 'border-b border-surface-line bg-surface-raise text-ink-dim'
   const total = finished ? game.away_score! + game.home_score! : null
   const margin = finished ? Math.abs(game.away_score! - game.home_score!) : null
   const spread = formatSpread(game)
@@ -680,7 +680,7 @@ function GameRow({ game }: { game: Game }) {
       className="grid grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)_116px] gap-3 py-[13px] max-[780px]:grid-cols-[40px_minmax(0,1fr)_auto_minmax(0,1fr)] max-[780px]:gap-2"
     >
       <span className={`grid h-8 w-10 place-items-center rounded-lg text-[10px] font-black uppercase tracking-[0.12em] ${
-        finished ? 'bg-surface-raise text-ink-mid' : 'bg-indigo-500/20 text-indigo-300'
+        finished ? 'bg-surface-raise text-ink-mid' : 'bg-surface-raise text-ink-mid'
       }`}>
         {finished ? 'FT' : dayAbbrev(game.gameday)}
       </span>
@@ -865,7 +865,7 @@ function ConferenceLeadersCard({
     .map(group => ({ division: group.division.replace(`${conference} `, ''), team: group.teams[0] }))
     .filter((entry): entry is { division: string; team: StandingsTeam } => Boolean(entry.team))
 
-  const tagClass = conference === 'AFC' ? 'bg-[#d94f4f]' : 'bg-[#4f74d9]'
+  const tagClass = conference === 'AFC' ? 'bg-surface-raise' : 'bg-surface-raise'
 
   return (
     <Card

@@ -61,8 +61,8 @@ const queryClient = new QueryClient({
 function RouteLoading() {
   // Minimal skeleton — keeps the visual area reserved while the chunk loads.
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="text-gray-600 text-sm">Loading…</div>
+    <div className="min-h-screen bg-surface-bg flex items-center justify-center">
+      <div className="text-ink-dim text-sm">Loading…</div>
     </div>
   )
 }

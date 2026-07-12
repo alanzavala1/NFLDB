@@ -36,10 +36,10 @@ function DivisionCard({ division, teams }: { division: string; teams: StandingsT
           <tbody>
             {teams.map((t, i) => {
               const leader = i === 0
-              const streakCls = t.strk.startsWith('W') ? 'text-data-win font-semibold' : t.strk.startsWith('L') ? 'text-rose-400 font-semibold' : 'text-ink-dim'
+              const streakCls = t.strk.startsWith('W') ? 'text-data-win font-semibold' : t.strk.startsWith('L') ? 'text-data-loss font-semibold' : 'text-ink-dim'
               const pctStr = t.pct === 1 ? '1.000' : t.pct === 0 ? '.000' : t.pct.toFixed(3).replace(/^0/, '')
               const diff = t.pf - t.pa
-              const diffCls = diff > 0 ? 'text-data-win font-semibold' : diff < 0 ? 'text-rose-400 font-semibold' : 'text-ink-dim'
+              const diffCls = diff > 0 ? 'text-data-win font-semibold' : diff < 0 ? 'text-data-loss font-semibold' : 'text-ink-dim'
               return (
                 <tr key={t.team} className={`border-t border-surface-line/60 hover:bg-surface-raise/30 transition-colors ${leader ? `border-l-2 ${leaderBorder}` : 'border-l-2 border-l-transparent'}`}>
                   <td className="py-2.5 pl-3 pr-3 whitespace-nowrap">

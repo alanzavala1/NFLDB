@@ -138,7 +138,7 @@ export default function Nav() {
       <nav className="sticky top-0 z-40 border-b border-surface-line bg-surface-bg/90 backdrop-blur">
         <div className="flex h-14 items-center gap-1 px-4 sm:px-6">
           <Link to="/" className="mr-3 shrink-0 select-none text-lg font-black leading-none tracking-tight">
-            <span className="text-ink">NFL</span><span className="text-indigo-400">DB</span>
+            <span className="text-ink">NFL</span><span className="text-ink-mid">DB</span>
           </Link>
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {LINKS.map(l => (

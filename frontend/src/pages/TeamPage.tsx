@@ -264,7 +264,7 @@ function SortableTable({ title, section, players, cols, sortKey, sortDir, onSort
                       ${c.kind === 'adv' ? 'bg-surface-raise/10' : ''}
                       ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win font-semibold' : isNeg ? 'text-data-loss font-semibold' : c.highlight ? 'text-ink font-bold' : c.kind === 'adv' ? 'text-ink-mid/80' : c.dim ? 'text-ink-dim' : 'text-ink-mid'}`}>
                       {c.share && shareVal > 0 && !isNull && (
-                        <div className="pointer-events-none absolute inset-y-0 left-0 bg-indigo-500/20" style={{ width: `${Math.min(100, shareVal * 100)}%` }} />
+                        <div className="pointer-events-none absolute inset-y-0 left-0 bg-data-win/15" style={{ width: `${Math.min(100, shareVal * 100)}%` }} />
                       )}
                       <span className="relative">{isNull ? '—' : str}</span>
                     </td>
@@ -592,11 +592,11 @@ function ScoreChart({ profile }: { profile: TeamProfile }) {
       <div className="text-xs font-bold text-ink-dim uppercase tracking-wider mb-3">Point Differential</div>
       <ResponsiveContainer width="100%" height={90}>
         <BarChart data={data} barSize={14} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-          <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#4b5563' }} axisLine={false} tickLine={false} interval={0} />
-          <ReferenceLine y={0} stroke="#374151" strokeWidth={1} />
+          <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#6c6885' }} axisLine={false} tickLine={false} interval={0} />
+          <ReferenceLine y={0} stroke="#2e2b3e" strokeWidth={1} />
           <Tooltip
-            contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
-            labelStyle={{ color: '#9ca3af' }}
+            contentStyle={{ background: '#1b1a26', border: '1px solid #2e2b3e', borderRadius: 8, fontSize: 12 }}
+            labelStyle={{ color: '#a3a0b8' }}
             formatter={(_v: unknown, _n: unknown, entry: any) => {
               const { pf, pa, diff } = entry.payload
               return [`${pf}–${pa}  (${diff >= 0 ? '+' : ''}${diff})`, 'Score']
@@ -618,7 +618,7 @@ function ScoreChart({ profile }: { profile: TeamProfile }) {
 function SchedulePanel({ profile }: { profile: TeamProfile }) {
   let w = 0, l = 0, t = 0
   return (
-    <div className="overflow-y-auto divide-y divide-gray-800/60 flex-1 min-h-0">
+    <div className="overflow-y-auto divide-y divide-surface-line/60 flex-1 min-h-0">
       {profile.games.map(g => {
         const isAway = g.away_team === profile.team
         const opponent = isAway ? g.home_team : g.away_team
@@ -821,7 +821,7 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
     <div className="fixed inset-0 z-50 flex flex-col bg-surface-bg">
       <div className="flex items-center gap-2 px-6 py-4 border-b border-surface-line shrink-0">
         <span className="font-black text-base tracking-tight select-none shrink-0">
-          <span className="text-ink">NFL</span><span className="text-indigo-500">DB</span>
+          <span className="text-ink">NFL</span><span className="text-ink-mid">DB</span>
         </span>
         <span className="text-ink-dim">/</span>
         <img src={teamLogoUrl(profile.team)} alt={profile.team} className="w-5 h-5 object-contain shrink-0" />
@@ -884,7 +884,7 @@ function RosterModal({ profile, roster, onClose }: { profile: TeamProfile; roste
     <div className="fixed inset-0 z-50 flex flex-col bg-surface-bg">
       <div className="flex items-center gap-2 px-6 py-4 border-b border-surface-line shrink-0">
         <span className="font-black text-base tracking-tight select-none shrink-0">
-          <span className="text-ink">NFL</span><span className="text-indigo-500">DB</span>
+          <span className="text-ink">NFL</span><span className="text-ink-mid">DB</span>
         </span>
         <span className="text-ink-dim">/</span>
         <img src={teamLogoUrl(profile.team)} alt={profile.team} className="w-5 h-5 object-contain shrink-0" />
@@ -905,7 +905,7 @@ function RosterModal({ profile, roster, onClose }: { profile: TeamProfile; roste
                   <div className="px-4 py-2.5 border-b border-surface-line">
                     <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{g.label}</span>
                   </div>
-                  <div className="divide-y divide-gray-800/60">
+                  <div className="divide-y divide-surface-line/60">
                     {g.players.map(p => (
                       <Link key={p.player_id} to={`/players/${p.player_id}`} onClick={onClose}
                         className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-raise/40 transition-colors group">
@@ -947,9 +947,9 @@ function fmtNum(d = 1)    { return (v: number) => v.toFixed(d) }
 
 function rankClasses(rank: number): string {
   if (rank <= 6)  return 'text-green-300 bg-green-950/60 border-green-800/60'
-  if (rank <= 13) return 'text-data-win bg-emerald-950/40 border-emerald-800/40'
+  if (rank <= 13) return 'text-data-win bg-data-win/40 border-data-win/40'
   if (rank <= 19) return 'text-ink-mid bg-surface-raise/60 border-surface-line/50'
-  if (rank <= 26) return 'text-orange-300 bg-orange-950/40 border-orange-800/40'
+  if (rank <= 26) return 'text-data-loss bg-data-loss/40 border-data-loss/40'
   return 'text-red-300 bg-red-950/60 border-red-800/60'
 }
 
@@ -1265,7 +1265,7 @@ function TeamAnalytics({ team, season }: { team: string; season: number }) {
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-        <MetricPanel title="Offense"          accent="text-indigo-400"  metrics={offense} />
+        <MetricPanel title="Offense"          accent="text-ink-dim"  metrics={offense} />
         <MetricPanel title="Defense"          accent="text-data-loss"     metrics={defense} />
         <div className="space-y-4">
           <MetricPanel title="Overall"        accent="text-ink-mid"   metrics={overall} />
@@ -1294,10 +1294,10 @@ function TeamAnalytics({ team, season }: { team: string; season: number }) {
 
 function injuryToneClasses(status: string | null | undefined): string {
   switch (status) {
-    case 'Out':           return 'bg-rose-950/40 border-rose-800/70 text-rose-300'
-    case 'Doubtful':      return 'bg-orange-950/40 border-orange-800/70 text-orange-300'
+    case 'Out':           return 'bg-data-loss/40 border-data-loss/70 text-data-loss'
+    case 'Doubtful':      return 'bg-data-loss/40 border-data-loss/70 text-data-loss'
     case 'Questionable':  return 'bg-surface-raise/40 border-data-loss/40 text-data-loss'
-    case 'Probable':      return 'bg-emerald-950/40 border-emerald-800/70 text-data-win'
+    case 'Probable':      return 'bg-data-win/40 border-data-win/70 text-data-win'
     default:              return 'bg-surface-card border-surface-line text-ink-mid'
   }
 }
@@ -1316,7 +1316,7 @@ function InjuryReportPanel({ team, season }: { team: string; season: number }) {
         <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{headline}</span>
         <span className="text-[10px] font-bold text-ink-dim uppercase tracking-widest">{injuries.length} listed</span>
       </div>
-      <ul className="divide-y divide-gray-800/60">
+      <ul className="divide-y divide-surface-line/60">
         {injuries.map((inj, i) => (
           <li key={`${inj.gsis_id}-${i}`} className="px-4 py-2.5 flex items-center gap-3 text-sm">
             <span className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${injuryToneClasses(inj.report_status)}`}>
@@ -1353,7 +1353,7 @@ function StartingLineupPanel({ team, season }: { team: string; season: number })
       <div className="px-4 py-2.5 border-b border-surface-line flex items-center justify-between">
         <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{headline}</span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-800/60">
+      <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-surface-line/60">
         {offense.length > 0 && <LineupColumn label="Offense" rows={offense} />}
         {defense.length > 0 && <LineupColumn label="Defense" rows={defense} />}
       </div>
@@ -1368,7 +1368,7 @@ function LineupColumn({ label, rows }: { label: string; rows: { depth_position: 
       <ul className="space-y-0.5">
         {rows.map((r, i) => (
           <li key={`${r.depth_position}-${i}`} className="flex items-center gap-2 px-1 py-1 text-sm">
-            <span className="shrink-0 text-[10px] font-bold text-indigo-400 w-10 uppercase tracking-wider">
+            <span className="shrink-0 text-[10px] font-bold text-ink-dim w-10 uppercase tracking-wider">
               {r.depth_position ?? r.position ?? ''}
             </span>
             <span className="flex-1 min-w-0 text-ink-mid truncate">{r.full_name ?? '—'}</span>
@@ -1448,9 +1448,9 @@ type SeasonStatus = SeasonEntry['status']
 
 function StatusDot({ status }: { status: SeasonStatus }) {
   if (status === 'loading')
-    return <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />
+    return <span className="inline-block w-1.5 h-1.5 rounded-full bg-ink-dim animate-pulse shrink-0" />
   if (status === 'queued')
-    return <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-600 animate-pulse shrink-0" />
+    return <span className="inline-block w-1.5 h-1.5 rounded-full bg-surface-raise animate-pulse shrink-0" />
   return null
 }
 
@@ -1641,7 +1641,7 @@ export default function TeamPage() {
             <div>
               {anyInFlight
                 ? <div className="text-ink-dim mt-1 flex items-center gap-2">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-ink-dim animate-pulse" />
                     Loading season data — updates automatically…
                   </div>
                 : <p className="text-ink-dim mt-1">No data available for this team.</p>
