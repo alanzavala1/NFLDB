@@ -456,6 +456,8 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
         xp_result: str | None = None,
         kicker: str | None = None,
         touchdown: int = 0,
+        td_team: str | None = None,
+        td_player: str | None = None,
     ) -> None:
         nonlocal play_id
         names = {r[0]: r[1] for r in ROSTER}
@@ -465,7 +467,8 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
         rush_attempt = 1 if rusher is not None else 0
         play_type = "field_goal" if is_fg else "extra_point" if is_xp else "pass" if pass_attempt or sack else "run"
         yards = 5.0 if epa > 0 else -1.0
-        td_player = (receiver or rusher or passer) if touchdown else None
+        scoring_player = td_player or ((receiver or rusher or passer) if touchdown else None)
+        scoring_team = td_team or (posteam if touchdown else None)
         conn.execute(
             """INSERT INTO plays (
                 play_id, game_id, season, season_type, week, posteam, defteam,
@@ -488,7 +491,7 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
                 "12:34", f"{posteam} test play {play_id}", "middle", 6.0 if pass_attempt else None, "middle", "guard",
                 yards,
                 epa, epa, 1.0 if epa > 0 else 0.0, 0.0,
-                pass_attempt, rush_attempt, sack, 0, 0, 0, touchdown, posteam if touchdown else None, td_player,
+                pass_attempt, rush_attempt, sack, 0, 0, 0, touchdown, scoring_team, scoring_player,
                 interception, fumble_lost,
                 1 if pass_attempt and not interception else 0,
                 passer, names.get(passer), yards if passer else None,
@@ -508,6 +511,11 @@ def _seed(conn: duckdb.DuckDBPyConnection) -> None:
                     receiver="00-KC-OFF3" if i == 0 else None, touchdown=1 if i == 0 else 0)
     for i in range(12):
         insert_play("2024_01_DEN_KC", 1, "DEN", "KC", -1.0, passer="00-DEN-QB1", interception=1 if i < 2 else 0)
+    insert_play(
+        "2024_01_DEN_KC", 1, "DEN", "KC", -4.0,
+        passer="00-DEN-QB1", receiver="00-DEN-OFF3",
+        interception=1, touchdown=1, td_team="KC", td_player="00-KC-DE1",
+    )
     for _ in range(2):
         insert_play("2024_01_BUF_MIA", 1, "BUF", "MIA", 1.0, passer="00-BUF-QB1", receiver="00-BUF-WR1")
     for _ in range(8):

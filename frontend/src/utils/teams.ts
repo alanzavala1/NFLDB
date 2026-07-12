@@ -54,6 +54,24 @@ export function teamName(abbrev: string): string {
   return TEAM_NAMES[abbrev] ?? abbrev
 }
 
+export const TEAM_PRIMARY_COLORS: Record<string, string> = {
+  ARI: '#97233f', ATL: '#a71930', BAL: '#241773', BUF: '#00338d',
+  CAR: '#0085ca', CHI: '#0b162a', CIN: '#fb4f14', CLE: '#311d00',
+  DAL: '#003594', DEN: '#fb4f14', DET: '#0076b6', GB: '#203731',
+  HOU: '#03202f', IND: '#002c5f', JAX: '#006778', KC: '#e31837',
+  LA: '#003594', LAC: '#0080c6', LV: '#a5acaf', MIA: '#008e97',
+  MIN: '#4f2683', NE: '#002244', NO: '#d3bc8d', NYG: '#0b2265',
+  NYJ: '#125740', PHI: '#004c54', PIT: '#ffb612', SEA: '#69be28',
+  SF: '#aa0000', TB: '#d50a0a', TEN: '#4b92db', WAS: '#5a1414',
+  OAK: '#a5acaf', SD: '#0080c6', STL: '#003594', JAC: '#006778',
+  BLT: '#241773', CLV: '#311d00', ARZ: '#97233f', HST: '#03202f',
+  SL: '#003594',
+}
+
+export function teamPrimaryColor(abbrev: string): string {
+  return TEAM_PRIMARY_COLORS[abbrev] ?? '#6366f1'
+}
+
 export const CONFERENCES: Record<string, Record<string, string[]>> = {
   AFC: {
     East:  ['BUF', 'MIA', 'NE',  'NYJ'],

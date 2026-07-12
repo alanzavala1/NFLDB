@@ -7,6 +7,9 @@ def test_game_lineup_endpoint_returns_snap_starters_and_scoring(client):
     assert data["join_match_rate"] == 1.0
     assert any(s["kind"] == "TD" and s["player_id"] == "00-KC-OFF3" for s in data["scoring"])
     assert any(s["kind"] == "FG" and s["player_id"] == "00-KC-K1" for s in data["scoring"])
+    defensive_td = next(s for s in data["scoring"] if s["kind"] == "TD" and s["player_id"] == "00-KC-DE1")
+    assert defensive_td["team"] == "KC"
+    assert defensive_td["player_name"] == "Edge Dude"
 
     kc = next(t for t in data["teams"] if t["team"] == "KC")
     assert len(kc["offense"]) == 11

@@ -691,28 +691,40 @@ def get_game_lineup(game_id: str):
     match_rate = round(matched / eligible, 4) if eligible else None
 
     scoring = safe_query(
-        """
+        f"""
+        WITH {PGS_GAME_CTE},
+        roster_names AS (
+            SELECT player_id, season, ANY_VALUE(player_name) AS player_name
+            FROM rosters
+            GROUP BY player_id, season
+        )
         SELECT
-            CASE WHEN COALESCE(touchdown, 0) = 1 THEN COALESCE(td_team, posteam)
-                 ELSE posteam END AS team,
-            CASE WHEN COALESCE(touchdown, 0) = 1 THEN td_player_id
-                 ELSE kicker_player_id END AS player_id,
-            CASE WHEN COALESCE(touchdown, 0) = 1
-                    THEN COALESCE(receiver_player_name, rusher_player_name, passer_player_name)
-                 ELSE kicker_player_name END AS player_name,
-            CASE WHEN COALESCE(touchdown, 0) = 1 THEN 'TD'
-                 WHEN field_goal_result = 'made' THEN 'FG'
+            CASE WHEN COALESCE(p.touchdown, 0) = 1 THEN COALESCE(p.td_team, p.posteam)
+                 ELSE p.posteam END AS team,
+            CASE WHEN COALESCE(p.touchdown, 0) = 1 THEN p.td_player_id
+                 ELSE p.kicker_player_id END AS player_id,
+            CASE WHEN COALESCE(p.touchdown, 0) = 1
+                    THEN COALESCE(pgs.player_name, rn.player_name)
+                 ELSE p.kicker_player_name END AS player_name,
+            CASE WHEN COALESCE(p.touchdown, 0) = 1 THEN 'TD'
+                 WHEN p.field_goal_result = 'made' THEN 'FG'
                  ELSE 'SCORE' END AS kind,
-            CAST(qtr AS INTEGER) AS qtr,
-            "time" AS clock,
-            CAST(kick_distance AS INTEGER) AS distance,
-            "desc" AS desc
-        FROM plays
-        WHERE game_id = ?
-          AND (COALESCE(touchdown, 0) = 1 OR field_goal_result = 'made')
-        ORDER BY game_seconds_remaining DESC NULLS LAST, play_id
+            CAST(p.qtr AS INTEGER) AS qtr,
+            p."time" AS clock,
+            CAST(p.kick_distance AS INTEGER) AS distance,
+            p."desc" AS desc
+        FROM plays p
+        LEFT JOIN pgs_game pgs
+          ON pgs.game_id = p.game_id
+         AND pgs.player_id = p.td_player_id
+        LEFT JOIN roster_names rn
+          ON rn.player_id = p.td_player_id
+         AND rn.season = p.season
+        WHERE p.game_id = ?
+          AND (COALESCE(p.touchdown, 0) = 1 OR p.field_goal_result = 'made')
+        ORDER BY p.game_seconds_remaining DESC NULLS LAST, p.play_id
         """,
-        [game_id],
+        [game_id, game_id],
     )
 
     teams = []
@@ -883,6 +895,9 @@ def get_game_player_chart(game_id: str, player_id: str):
         "carries": p.get("carries") or 0,
         "rush_yards": p.get("rush_yards") or 0,
         "rush_tds": p.get("rush_tds") or 0,
+        "pass_epa": p.get("pass_epa") or 0,
+        "rec_epa": p.get("rec_epa") or 0,
+        "rush_epa": p.get("rush_epa") or 0,
         "sacks": p.get("sacks") or 0,
         "tackles": (p.get("solo_tackles") or 0) + (p.get("assist_tackles") or 0),
         "def_interceptions": p.get("def_interceptions") or 0,
