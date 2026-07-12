@@ -7,17 +7,23 @@ type Unit = 'offense' | 'defense'
 type Placed = LineupPlayer & { x: number; y: number; ol?: boolean }
 
 const OFF_COORDS = {
-  wr: [[8, 57], [22, 59], [92, 57]],
-  te: [[83, 60.5]],
+  wr: [[8, 57], [92, 57], [22, 59.5], [78, 59.5], [32, 61.5]],
+  te: [[83, 60.5], [17, 60.5]],
   ol: [[30, 62.5], [40, 66], [50, 62.5], [60, 66], [70, 62.5]],
   qb: [[50, 75]],
-  rb: [[50, 85], [42, 84]],
+  rb: [[50, 85], [40, 83]],
 }
-const DEF_COORDS = {
-  dl: [[30, 56], [43, 56], [57, 56], [70, 56]],
-  cb: [[8, 59], [92, 59], [19, 64]],
-  lb: [[40, 68], [60, 68], [50, 64]],
-  s: [[35, 80], [65, 80]],
+// Defensive rows are count-aware: each row spreads its actual players evenly
+// so any package (4-3, nickel, dime…) lays out without nodes clashing.
+const DEF_ROWS: Record<string, { y: number; lo: number; hi: number }> = {
+  dl: { y: 56, lo: 28, hi: 72 },
+  lb: { y: 66, lo: 30, hi: 70 },
+  s: { y: 78, lo: 34, hi: 66 },
+}
+
+function spreadX(count: number, lo: number, hi: number): number[] {
+  if (count <= 1) return [(lo + hi) / 2]
+  return Array.from({ length: count }, (_, i) => lo + (i * (hi - lo)) / (count - 1))
 }
 
 function initials(name: string) {
@@ -142,23 +148,20 @@ function fallbackRole(position: string | null | undefined) {
 }
 
 function placePlayers(players: LineupPlayer[], unit: Unit): Placed[] {
+  if (unit === 'defense') return placeDefense(players)
   const buckets = new Map<string, number>()
   const ordered = [...players].sort((a, b) => {
-    const order = unit === 'offense'
-      ? ['wr', 'te', 'ol', 'qb', 'rb']
-      : ['dl', 'cb', 'lb', 's']
+    const order = ['wr', 'te', 'ol', 'qb', 'rb']
     return order.indexOf(posKey(a)) - order.indexOf(posKey(b))
   })
   return ordered.map((p) => {
-    const key = unit === 'offense' ? posKey(p) : posKey(p)
+    const key = posKey(p)
     const idx = buckets.get(key) ?? 0
     buckets.set(key, idx + 1)
-    const coords = unit === 'offense'
-      ? (OFF_COORDS[key as keyof typeof OFF_COORDS] ?? [[50, 68]])
-      : (DEF_COORDS[key as keyof typeof DEF_COORDS] ?? [[50, 68]])
+    const coords = OFF_COORDS[key as keyof typeof OFF_COORDS] ?? [[50, 68]]
     let [x, y] = coords[Math.min(idx, coords.length - 1)]
-    // A group can exceed its template slots (e.g. 3 safeties in a big-nickel
-    // look); fan extras horizontally off the last slot so nodes never stack.
+    // A group can exceed its template slots (e.g. a 6-OL jumbo set); fan
+    // extras horizontally off the last slot so nodes never stack.
     const overflow = idx - (coords.length - 1)
     if (overflow > 0) {
       const step = Math.ceil(overflow / 2) * 14 * (overflow % 2 === 1 ? 1 : -1)
@@ -167,6 +170,30 @@ function placePlayers(players: LineupPlayer[], unit: Unit): Placed[] {
     }
     return { ...p, x, y, ol: key === 'ol' }
   })
+}
+
+function placeDefense(players: LineupPlayer[]): Placed[] {
+  const groups = new Map<string, LineupPlayer[]>()
+  for (const p of players) {
+    const key = posKey(p)
+    const k = key === 'dl' || key === 'lb' || key === 's' ? key : 'cb'
+    groups.set(k, [...(groups.get(k) ?? []), p])
+  }
+  const placed: Placed[] = []
+  for (const key of ['dl', 'lb', 's'] as const) {
+    const row = groups.get(key) ?? []
+    const xs = spreadX(row.length, DEF_ROWS[key].lo, DEF_ROWS[key].hi)
+    row.forEach((p, i) => placed.push({ ...p, x: xs[i], y: DEF_ROWS[key].y }))
+  }
+  // Corners hold the edges; extra DBs slot inside on their own row.
+  const cbs = groups.get('cb') ?? []
+  const edges = [[8, 58.5], [92, 58.5]]
+  const slots = spreadX(Math.max(cbs.length - 2, 0), 20, 80)
+  cbs.forEach((p, i) => {
+    if (i < 2 && cbs.length >= 2) placed.push({ ...p, x: edges[i][0], y: edges[i][1] })
+    else placed.push({ ...p, x: slots[Math.max(i - 2, 0)] ?? 50, y: 62 })
+  })
+  return placed
 }
 
 function FieldSvg({ awayTeam, homeTeam }: { awayTeam: string; homeTeam: string }) {
@@ -313,12 +340,61 @@ function zoneShade(att: number) {
   return 'z3'
 }
 
+const MAP_H = 230
+const LANE_X: Record<string, number> = { left: 18, middle: 50, right: 82 }
+// Deterministic within-lane spread: consecutive depths take alternating
+// offsets so dots never form a single-file column. Lane identity stays
+// readable through the lane dividers, not dot position.
+const LANE_JITTER = [0, -9, 9, -4.5, 4.5, -13, 13]
+
+function mapDepth(ay: number) {
+  return 30 + Math.min(33, Math.max(-4.5, ay)) * 5.4
+}
+
+function TargetMap({ events, role }: { events: PlayerChart['events']; role: string }) {
+  const lanes = new Map<string, { ay: number; outcome: string }[]>()
+  for (const e of events) {
+    const lane = (e.lane ?? '').toLowerCase()
+    if (e.air_yards == null || !(lane in LANE_X)) continue
+    lanes.set(lane, [...(lanes.get(lane) ?? []), { ay: e.air_yards, outcome: e.outcome }])
+  }
+  if (![...lanes.values()].some(l => l.length)) return null
+  const dots: { x: number; b: number; outcome: string }[] = []
+  for (const [lane, list] of lanes) {
+    list.sort((a, b) => a.ay - b.ay)
+    list.forEach((e, i) => dots.push({ x: LANE_X[lane] + LANE_JITTER[i % LANE_JITTER.length], b: mapDepth(e.ay), outcome: e.outcome }))
+  }
+  return (
+    <div>
+      <div className="micro">{role === 'passer' ? 'Passing map' : 'Target map'}</div>
+      <div className="tmap" style={{ height: MAP_H }}>
+        <span className="tm-lane-label" style={{ left: '18%' }}>Left</span>
+        <span className="tm-lane-label" style={{ left: '50%' }}>Mid</span>
+        <span className="tm-lane-label" style={{ left: '82%' }}>Right</span>
+        {[10, 20, 30].map(d => <span key={d} className="tm-depth" style={{ bottom: mapDepth(d) - 5 }}>{d}</span>)}
+        <div className="tm-los" style={{ bottom: mapDepth(0) }} />
+        <span className="tm-los-label" style={{ bottom: mapDepth(0) - 14 }}>LOS</span>
+        {dots.map((d, i) => {
+          const cls = d.outcome === 'TD' ? 'td' : d.outcome === 'INT' ? 'int' : d.outcome === 'Complete' ? 'catch' : 'miss'
+          return <span key={i} className={`tm-dot ${cls}`} style={{ left: `${d.x}%`, bottom: d.b }}>{d.outcome === 'TD' ? '✦' : d.outcome === 'INT' ? '✕' : ''}</span>
+        })}
+      </div>
+      <div className="legend">
+        <span className="lg"><i className="tm-key catch" />Catch</span>
+        <span className="lg"><i className="tm-key miss" />Incomplete</span>
+        <span className="lg" style={{ color: 'var(--rate-good)' }}>✦ TD</span>
+        <span className="lg" style={{ color: 'var(--rate-bad)' }}>✕ INT</span>
+      </div>
+    </div>
+  )
+}
+
 function ZoneGrid({ events }: { events: PlayerChart['events'] }) {
   const { cells, plotted } = zoneData(events)
   if (plotted === 0) return null
   return (
-    <div>
-      <div className="micro">Passing zones · comp/att</div>
+    <div className="zones-wrap">
+      <div className="micro">By zone · comp/att</div>
       <div className="zones">
         <span className="zlab" /><span className="zlab col">Left</span><span className="zlab col">Middle</span><span className="zlab col">Right</span>
         {ZONE_BANDS.map(band => (
@@ -338,7 +414,7 @@ function ZoneGrid({ events }: { events: PlayerChart['events'] }) {
         ))}
         <span className="zone-los">Line of scrimmage</span>
       </div>
-      <div className="legend"><span className="lg"><i style={{ background: '#403a6e' }} />More attempts</span><span style={{ color: 'var(--rate-good)' }}>✦ TD</span><span style={{ color: 'var(--rate-bad)' }}>✕ INT</span></div>
+      <div className="legend"><span className="lg"><i style={{ background: '#403a6e' }} />More attempts</span></div>
     </div>
   )
 }
@@ -428,7 +504,7 @@ function Popup({ game, player, onClose }: { game: GameDetail; player: LineupPlay
       : 'From nflverse play-by-play and official game stats.'
   return <div className="lineup-overlay" onClick={onClose}><div className="lineup-modal" onClick={e => e.stopPropagation()}>
     <div className="modal-head"><div className="modal-avatar" style={{ background: teamPrimaryColor(player.team) }}>{player.headshot_url ? <img src={player.headshot_url} alt="" /> : initials(player.player_name)}</div><div><div className="modal-name">{player.player_name}</div><div className="modal-sub">{player.position} · {player.team} · {gameLabel(game)} · {pct(player.snap_pct)} of snaps</div></div>{player.rating != null && <span className={`rbadge ${ratingClass(player.rating)} modal-rating`}>{player.rating.toFixed(1)}{player.rating >= 8.5 ? ' ✦' : ''}</span>}<button className="modal-close" onClick={onClose}>✕</button></div>
-    <div className={`modal-grid ${role === 'defender' ? 'single' : ''}`}><div><div className="micro popup-title">{title}</div>{stats.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}{adot != null && <div className="rrow"><span>Average depth of target</span><b style={{ marginLeft: 'auto' }}>{adot.toFixed(1)}</b></div>}</div>{showZones &&<div className="target-map"><ZoneGrid events={events} /></div>}{showRush && <div className="target-map"><GapStrip events={events} /></div>}</div>
+    <div className={`modal-grid ${role === 'defender' ? 'single' : ''}`}><div><div className="micro popup-title">{title}</div>{stats.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}{adot != null && <div className="rrow"><span>Average depth of target</span><b style={{ marginLeft: 'auto' }}>{adot.toFixed(1)}</b></div>}</div>{showZones && <div className="target-map"><TargetMap events={events} role={role} /><ZoneGrid events={events} /></div>}{showRush && <div className="target-map"><GapStrip events={events} /></div>}</div>
     <div className="modal-foot">{footer}</div>
   </div></div>
 }
@@ -491,6 +567,21 @@ export const LINEUP_CSS = `
 .upill .mini{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:-2px}
 .ol-unit{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:6px;background:rgba(14,13,21,.82);border:1px solid var(--line);border-radius:8px;padding:3px 9px;pointer-events:none}
 .ol-unit .micro{letter-spacing:.1em;font-size:8.5px}.ol-unit .val{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:5px;font-variant-numeric:tabular-nums}
+.tmap{position:relative;margin-top:8px;border-radius:10px;border:1px solid rgba(244,243,248,.08);background:linear-gradient(180deg,#10231a,#122a1d);overflow:hidden}
+.tmap:before,.tmap:after{content:'';position:absolute;top:8px;bottom:8px;border-left:1px dashed rgba(244,243,248,.12)}
+.tmap:before{left:33.3%}.tmap:after{left:66.6%}
+.tm-lane-label{position:absolute;top:6px;transform:translateX(-50%);font-size:8px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(244,243,248,.3)}
+.tm-depth{position:absolute;left:6px;font-size:8px;font-weight:700;color:rgba(244,243,248,.28);font-variant-numeric:tabular-nums}
+.tm-los{position:absolute;left:0;right:0;height:2px;background:rgba(244,243,248,.28)}
+.tm-los-label{position:absolute;right:6px;font-size:8px;font-weight:800;letter-spacing:.15em;color:rgba(244,243,248,.4)}
+.tm-dot{position:absolute;width:12px;height:12px;margin-left:-6px;margin-bottom:-6px;border-radius:50%;box-shadow:0 0 0 2px rgba(14,13,21,.6);font-size:8px;font-weight:900;text-align:center;line-height:12px}
+.tm-dot.catch{background:var(--rate-good)}
+.tm-dot.miss{background:transparent;border:2.5px solid var(--t2)}
+.tm-dot.td{background:var(--rate-good);color:#04120c;width:15px;height:15px;margin-left:-7.5px;margin-bottom:-7.5px;line-height:15px}
+.tm-dot.int{background:var(--rate-bad);color:#fff}
+.tm-key{width:10px;height:10px;border-radius:50%;display:inline-block}
+.tm-key.catch{background:var(--rate-good)}.tm-key.miss{border:2px solid var(--t2)}
+.zones-wrap{margin-top:14px}
 .zones{display:grid;grid-template-columns:46px repeat(3,1fr);gap:4px;align-items:stretch;margin-top:8px}
 .zlab{display:flex;align-items:center;font-size:8.5px;font-weight:800;letter-spacing:.08em;color:var(--t3);text-transform:uppercase}.zlab.col{justify-content:center;padding-bottom:2px}
 .zcell{position:relative;border-radius:8px;padding:8px 6px 7px;text-align:center;min-height:52px;display:flex;flex-direction:column;justify-content:center;gap:2px}
