@@ -5,6 +5,7 @@ import { api, CURRENT_NFL_SEASON } from '../api'
 import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, KickingStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader, CombineData, DepthChartEntry, InjuryStatus } from '../api'
 import { useLeaders, usePlayer, usePlayerComparables, useSeasons } from '../queries'
 import Nav from '../components/Nav'
+import Card from '../components/Card'
 import { teamLogoUrl, teamName } from '../utils/teams'
 import { AWARD_LABEL, type AwardKey } from '../utils/awards'
 
@@ -56,7 +57,7 @@ function AwardBadge({ season, award }: { season: number; award: AwardKey }) {
   return (
     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border whitespace-nowrap ${
       isMvp
-        ? 'border-yellow-500/50 bg-yellow-500/15 text-yellow-300'
+        ? 'border-gold/50 bg-gold/15 text-yellow-300'
         : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200'
     }`}>
       {isMvp ? '★ ' : ''}{AWARD_LABEL[award]} {season}
@@ -97,19 +98,19 @@ function CareerTrajectory({ seasons, bySeason, pos }: {
     <section className="mb-8">
       <div className="flex items-end justify-between mb-3">
         <div className="flex items-baseline gap-2">
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Career Trajectory</h2>
-          <span className="text-[10px] text-gray-700">{statLabel} by season</span>
+          <h2 className="text-xs font-bold text-ink-dim uppercase tracking-widest">Career Trajectory</h2>
+          <span className="text-[10px] text-ink-dim">{statLabel} by season</span>
         </div>
-        <span className="text-[10px] text-gray-700">{data[0].season}–{data[data.length - 1].season}</span>
+        <span className="text-[10px] text-ink-dim">{data[0].season}–{data[data.length - 1].season}</span>
       </div>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="bg-surface-card border border-surface-line rounded-xl p-4">
         <div className="flex items-end gap-2 overflow-x-auto" style={{ minHeight: BAR_MAX_H + 28 }}>
           {data.map(d => {
             const isPeak = d.season === peakSeason
             const barH = d.value > 0 ? Math.max(2, Math.round((d.value / max) * BAR_MAX_H)) : 0
             return (
               <div key={d.season} className="flex flex-col items-center shrink-0 w-12">
-                <div className="text-[10px] tabular-nums text-gray-400 mb-1 font-semibold leading-none h-3">
+                <div className="text-[10px] tabular-nums text-ink-mid mb-1 font-semibold leading-none h-3">
                   {d.value > 0 ? d.value.toLocaleString() : ''}
                 </div>
                 <div
@@ -117,7 +118,7 @@ function CareerTrajectory({ seasons, bySeason, pos }: {
                   style={{ height: `${barH}px` }}
                   title={`${d.season}: ${d.value.toLocaleString()} ${d.label} · ${d.games}G`}
                 />
-                <div className={`text-[10px] tabular-nums mt-1 leading-none ${isPeak ? 'text-indigo-300 font-bold' : 'text-gray-600'}`}>
+                <div className={`text-[10px] tabular-nums mt-1 leading-none ${isPeak ? 'text-indigo-300 font-bold' : 'text-ink-dim'}`}>
                   {String(d.season).slice(-2)}
                 </div>
               </div>
@@ -470,13 +471,13 @@ function HighlightsBar({ pos, totals, games, ngs, ranks }: {
       {stats.map(s => {
         const rank = ranks?.[s.label]
         return (
-          <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div key={s.label} className="bg-surface-card border border-surface-line rounded-xl p-4">
             <div className={`text-2xl font-black tabular-nums leading-none mb-1.5
-              ${s.value == null ? 'text-gray-700' : s.green ? 'text-emerald-400' : s.red ? 'text-red-400' : 'text-white'}`}>
+              ${s.value == null ? 'text-ink-dim' : s.green ? 'text-data-win' : s.red ? 'text-data-loss' : 'text-ink'}`}>
               {s.value ?? '—'}
             </div>
-            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">{s.label}</div>
-            {s.note && <div className="text-xs text-gray-700 mt-0.5">{s.note}</div>}
+            <div className="text-xs font-bold text-ink-dim uppercase tracking-wider">{s.label}</div>
+            {s.note && <div className="text-xs text-ink-dim mt-0.5">{s.note}</div>}
             {rank && (
               <div className="text-[10px] text-indigo-400 mt-1 font-semibold uppercase tracking-wider">{rank}</div>
             )}
@@ -505,7 +506,8 @@ function aggregateSituational(situational: Record<number, SituationalStats>): Si
 }
 
 // — career stats table —
-function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking, wpa, advStats, position, onlyKinds, showGroupHeaders = true }: {
+function CareerTable({ title, seasons, bySeason, ngs, snapTotals, situational, kicking, wpa, advStats, position, onlyKinds, showGroupHeaders = true }: {
+  title?: string
   seasons: number[]
   bySeason: Record<number, PlayerGame[]>
   ngs: Record<number, NgsStats>
@@ -614,23 +616,23 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking,
   if (cols.length === 0) return null
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
+    <Card title={title} className="mb-4">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             {showGroupHeaders && (
-              <tr className="border-b border-gray-800/50">
+              <tr className="border-b border-surface-line/50">
                 <th colSpan={2} />
                 {sections.map((s, i) => {
                   if (s.kind === 'trad' && !s.group) return <th key={i} colSpan={s.count} />
                   const cls =
                     s.kind === 'trad' && s.group === 'Passing'   ? 'text-sky-400/80 bg-sky-950/25 border-l border-sky-900/40' :
                     s.kind === 'trad' && s.group === 'Rushing'   ? 'text-orange-400/80 bg-orange-950/25 border-l border-orange-900/40' :
-                    s.kind === 'trad' && s.group === 'Receiving' ? 'text-emerald-400/80 bg-emerald-950/25 border-l border-emerald-900/40' :
-                    s.kind === 'adv'  ? 'text-amber-500/60 bg-amber-950/20 border-l border-gray-800/40' :
-                    s.kind === 'ngs'  ? 'text-indigo-400 bg-indigo-950/25 border-l border-gray-800/40' :
-                    s.kind === 'snap' ? 'text-gray-700 border-l border-gray-800/40' :
-                    s.kind === 'sit'  ? 'text-teal-500/60 bg-teal-950/20 border-l border-gray-800/40' : 'text-gray-600'
+                    s.kind === 'trad' && s.group === 'Receiving' ? 'text-data-win/80 bg-emerald-950/25 border-l border-emerald-900/40' :
+                    s.kind === 'adv'  ? 'text-ink-dim/60 bg-surface-raise/20 border-l border-surface-line/40' :
+                    s.kind === 'ngs'  ? 'text-indigo-400 bg-indigo-950/25 border-l border-surface-line/40' :
+                    s.kind === 'snap' ? 'text-ink-dim border-l border-surface-line/40' :
+                    s.kind === 'sit'  ? 'text-ink-dim/60 bg-surface-raise/20 border-l border-surface-line/40' : 'text-ink-dim'
                   return (
                     <th key={i} colSpan={s.count} className={`py-1 text-center text-[10px] font-semibold uppercase tracking-widest ${cls}`}>
                       {s.label}
@@ -639,23 +641,23 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking,
                 })}
               </tr>
             )}
-            <tr className="border-b border-gray-800">
-              <th className={`${thBase} text-gray-500 pl-4`}>Season</th>
-              <th className={`${thBase} text-gray-500`}>Team</th>
+            <tr className="border-b border-surface-line">
+              <th className={`${thBase} text-ink-dim pl-4`}>Season</th>
+              <th className={`${thBase} text-ink-dim`}>Team</th>
               {cols.map((c, i) => {
                 const sep = i > 0 && (cols[i - 1].kind !== c.kind || cols[i - 1].group !== c.group)
                 const isPass = c.kind === 'trad' && c.group === 'Passing'
                 const isRush = c.kind === 'trad' && c.group === 'Rushing'
                 const isRec  = c.kind === 'trad' && c.group === 'Receiving'
                 return (
-                  <th key={c.key} className={`${thBase} ${sep ? 'border-l border-gray-800/40' : ''}
+                  <th key={c.key} className={`${thBase} ${sep ? 'border-l border-surface-line/40' : ''}
                     ${isPass ? 'text-sky-400/50 bg-sky-950/10' :
                       isRush ? 'text-orange-400/50 bg-orange-950/10' :
-                      isRec  ? 'text-emerald-400/50 bg-emerald-950/10' :
-                      c.kind === 'adv'  ? 'text-amber-300/50 bg-amber-950/10' :
+                      isRec  ? 'text-data-win/50 bg-emerald-950/10' :
+                      c.kind === 'adv'  ? 'text-ink-dim bg-surface-raise/10' :
                       c.kind === 'ngs'  ? 'text-indigo-300/50 bg-indigo-950/10' :
-                      c.kind === 'snap' ? 'text-gray-700' :
-                      c.kind === 'sit'  ? 'text-teal-400/50 bg-teal-950/10' : 'text-gray-500'}`}>
+                      c.kind === 'snap' ? 'text-ink-dim' :
+                      c.kind === 'sit'  ? 'text-ink-dim bg-surface-raise/10' : 'text-ink-dim'}`}>
                     {c.label}
                   </th>
                 )
@@ -674,16 +676,16 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking,
               const k = kicking?.[s] as KickingStats | undefined
               const teams = [...new Set(games.map(g => g.team))]
               return (
-                <tr key={s} className="border-t border-gray-800/60 hover:bg-gray-800/30">
-                  <td className="py-2.5 pl-4 pr-3 font-bold text-white whitespace-nowrap">{s}</td>
+                <tr key={s} className="border-t border-surface-line/60 hover:bg-surface-raise/30">
+                  <td className="py-2.5 pl-4 pr-3 font-bold text-ink whitespace-nowrap">{s}</td>
                   <td className="py-2.5 px-3">
                     <div className="flex items-center gap-1.5">
                       <div className="flex -space-x-1">
                         {teams.map(tm => (
-                          <img key={tm} src={teamLogoUrl(tm)} alt={tm} className="w-5 h-5 object-contain ring-1 ring-gray-900 rounded-full bg-gray-900" />
+                          <img key={tm} src={teamLogoUrl(tm)} alt={tm} className="w-5 h-5 object-contain ring-1 ring-gray-900 rounded-full bg-surface-card" />
                         ))}
                       </div>
-                      <span className="text-gray-400 text-xs">{teams.join('/')}</span>
+                      <span className="text-ink-mid text-xs">{teams.join('/')}</span>
                     </div>
                   </td>
                   {cols.map((c, i) => {
@@ -697,21 +699,21 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking,
                       c.kind === 'trad' && c.group === 'Passing'   ? 'bg-sky-950/10' :
                       c.kind === 'trad' && c.group === 'Rushing'   ? 'bg-orange-950/10' :
                       c.kind === 'trad' && c.group === 'Receiving' ? 'bg-emerald-950/10' :
-                      c.kind === 'adv'  ? 'bg-amber-950/10'  :
+                      c.kind === 'adv'  ? 'bg-surface-raise/10'  :
                       c.kind === 'ngs'  ? 'bg-indigo-950/10' :
-                      c.kind === 'sit'  ? 'bg-teal-950/10'   :
+                      c.kind === 'sit'  ? 'bg-surface-raise/10'   :
                       ''
                     return (
                       <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums ${bgClass}
-                        ${sep ? 'border-l border-gray-800/30' : ''}
-                        ${isNull   ? 'text-gray-700' :
-                          isPos    ? 'text-emerald-400 font-semibold' :
-                          isNeg    ? 'text-red-400 font-semibold' :
-                          c.highlight ? 'text-white font-bold' :
-                          c.kind === 'ngs'  ? 'text-gray-200' :
-                          c.kind === 'adv'  ? 'text-amber-200/80' :
-                          c.kind === 'sit'  ? 'text-teal-200/80' :
-                          'text-gray-300'}`}>
+                        ${sep ? 'border-l border-surface-line/30' : ''}
+                        ${isNull   ? 'text-ink-dim' :
+                          isPos    ? 'text-data-win font-semibold' :
+                          isNeg    ? 'text-data-loss font-semibold' :
+                          c.highlight ? 'text-ink font-bold' :
+                          c.kind === 'ngs'  ? 'text-ink' :
+                          c.kind === 'adv'  ? 'text-ink-mid/80' :
+                          c.kind === 'sit'  ? 'text-ink-mid/80' :
+                          'text-ink-mid'}`}>
                         {isNull ? '—' : strVal}
                       </td>
                     )
@@ -720,9 +722,9 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking,
               )
             })}
             {seasons.length > 1 && (
-              <tr className="border-t-2 border-gray-700 bg-gray-800/40">
-                <td className="py-2.5 pl-4 pr-3 text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Career</td>
-                <td className="py-2.5 px-3 text-gray-600 text-xs">{careerGames}G</td>
+              <tr className="border-t-2 border-surface-line bg-surface-raise/40">
+                <td className="py-2.5 pl-4 pr-3 text-xs font-bold text-ink-mid uppercase tracking-wider whitespace-nowrap">Career</td>
+                <td className="py-2.5 px-3 text-ink-dim text-xs">{careerGames}G</td>
                 {cols.map((c, i) => {
                   const sep = i > 0 && (cols[i - 1].kind !== c.kind || cols[i - 1].group !== c.group)
                   const raw = (c.kind === 'trad' || c.kind === 'adv' || c.kind === 'sit')
@@ -736,14 +738,14 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking,
                     c.kind === 'trad' && c.group === 'Passing'   ? 'bg-sky-950/10' :
                     c.kind === 'trad' && c.group === 'Rushing'   ? 'bg-orange-950/10' :
                     c.kind === 'trad' && c.group === 'Receiving' ? 'bg-emerald-950/10' :
-                    c.kind === 'adv'  ? 'bg-amber-950/10'  :
+                    c.kind === 'adv'  ? 'bg-surface-raise/10'  :
                     c.kind === 'ngs'  ? 'bg-indigo-950/10' :
-                    c.kind === 'sit'  ? 'bg-teal-950/10' : ''
+                    c.kind === 'sit'  ? 'bg-surface-raise/10' : ''
                   return (
                     <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums font-semibold ${bgClass}
-                      ${sep ? 'border-l border-gray-800/30' : ''}
-                      ${c.kind === 'ngs' ? 'text-gray-700' : ''}
-                      ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-400' : isNeg ? 'text-red-400' : c.highlight ? 'text-white' : c.kind === 'adv' ? 'text-amber-200/80' : c.kind === 'sit' ? 'text-teal-200/80' : 'text-gray-300'}`}>
+                      ${sep ? 'border-l border-surface-line/30' : ''}
+                      ${c.kind === 'ngs' ? 'text-ink-dim' : ''}
+                      ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win' : isNeg ? 'text-data-loss' : c.highlight ? 'text-ink' : c.kind === 'adv' ? 'text-ink-mid/80' : c.kind === 'sit' ? 'text-ink-mid/80' : 'text-ink-mid'}`}>
                       {isNull ? '—' : String(raw)}
                     </td>
                   )
@@ -754,7 +756,7 @@ function CareerTable({ seasons, bySeason, ngs, snapTotals, situational, kicking,
         </table>
       </div>
       <TableEraNotes seasons={seasons} cols={cols} />
-    </div>
+    </Card>
   )
 }
 
@@ -778,11 +780,11 @@ function TableEraNotes({ seasons, cols }: { seasons: number[]; cols: Col[] }) {
   if (notes.length === 0) return null
 
   return (
-    <div className="border-t border-gray-800/60 px-4 py-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest shrink-0">—</span>
-      <span className="text-[11px] text-gray-500">means data unavailable for that season:</span>
+    <div className="border-t border-surface-line/60 px-4 py-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <span className="text-[10px] font-bold text-ink-dim uppercase tracking-widest shrink-0">—</span>
+      <span className="text-[11px] text-ink-dim">means data unavailable for that season:</span>
       {notes.map(n => (
-        <span key={n} className="text-[11px] text-gray-500">· {n}</span>
+        <span key={n} className="text-[11px] text-ink-dim">· {n}</span>
       ))}
     </div>
   )
@@ -809,18 +811,18 @@ function TeamSplits({ seasons, bySeason, position }: {
   const cols = colSet.filter(c => c.kind === 'trad' && c.key !== 'g' && !c.derived)
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
-      <div className="px-4 py-2.5 border-b border-gray-800">
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Career by Team</span>
+    <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden mb-4">
+      <div className="px-4 py-2.5 border-b border-surface-line">
+        <span className="text-xs font-bold text-ink-dim uppercase tracking-widest">Career by Team</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800">
-              <th className="py-2 pl-4 pr-3 text-xs font-medium text-gray-500 text-left whitespace-nowrap">Team</th>
-              <th className="py-2 px-3 text-xs font-medium text-gray-500 text-left whitespace-nowrap">Seasons</th>
+            <tr className="border-b border-surface-line">
+              <th className="py-2 pl-4 pr-3 text-xs font-medium text-ink-dim text-left whitespace-nowrap">Team</th>
+              <th className="py-2 px-3 text-xs font-medium text-ink-dim text-left whitespace-nowrap">Seasons</th>
               {cols.map(c => (
-                <th key={c.key} className="py-2 px-3 text-xs font-medium text-gray-500 text-left whitespace-nowrap">{c.label}</th>
+                <th key={c.key} className="py-2 px-3 text-xs font-medium text-ink-dim text-left whitespace-nowrap">{c.label}</th>
               ))}
             </tr>
           </thead>
@@ -832,19 +834,19 @@ function TeamSplits({ seasons, bySeason, position }: {
                 ? `${teamSeasons[0]} · ${games.length}G`
                 : `${teamSeasons[0]}–${teamSeasons[teamSeasons.length - 1]} · ${games.length}G`
               return (
-                <tr key={team} className="border-t border-gray-800/60 hover:bg-gray-800/30">
+                <tr key={team} className="border-t border-surface-line/60 hover:bg-surface-raise/30">
                   <td className="py-2.5 pl-4 pr-3">
                     <Link to={`/teams/${team}`} className="flex items-center gap-2 group w-fit">
                       <img src={teamLogoUrl(team)} className="w-5 h-5 object-contain opacity-80 group-hover:opacity-100" alt="" />
-                      <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">{team}</span>
+                      <span className="text-sm font-bold text-ink-mid group-hover:text-ink transition-colors">{team}</span>
                     </Link>
                   </td>
-                  <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">{label}</td>
+                  <td className="py-2.5 px-3 text-xs text-ink-dim whitespace-nowrap">{label}</td>
                   {cols.map(c => {
                     const raw = c.cell(t, games.length)
                     const isNull = raw === null || raw === undefined
                     return (
-                      <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums text-sm ${isNull ? 'text-gray-700' : c.highlight ? 'text-white font-bold' : 'text-gray-300'}`}>
+                      <td key={c.key} className={`py-2.5 px-3 whitespace-nowrap tabular-nums text-sm ${isNull ? 'text-ink-dim' : c.highlight ? 'text-ink font-bold' : 'text-ink-mid'}`}>
                         {isNull ? '—' : String(raw)}
                       </td>
                     )
@@ -861,8 +863,8 @@ function TeamSplits({ seasons, bySeason, position }: {
 
 // — game log —
 function resultBadge(result: PlayerGame['result']) {
-  if (!result) return <span className="text-gray-600 text-xs font-bold">—</span>
-  const cls = { W: 'text-green-400', L: 'text-red-400', T: 'text-gray-400' }
+  if (!result) return <span className="text-ink-dim text-xs font-bold">—</span>
+  const cls = { W: 'text-green-400', L: 'text-data-loss', T: 'text-ink-mid' }
   return <span className={`text-xs font-bold ${cls[result]}`}>{result}</span>
 }
 
@@ -930,30 +932,30 @@ function GameLog({ season, games, pos, playerId, playerName, fromGame, defaultOp
   const gameCols = getGameCols(pos)
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+    <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-800/50 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-surface-raise/50 transition-colors text-left"
       >
         <div className="flex -space-x-1.5">
           {seasonTeams.map(t => (
-            <img key={t} src={teamLogoUrl(t)} alt={t} className="w-6 h-6 object-contain ring-1 ring-gray-900 rounded-full bg-gray-900" />
+            <img key={t} src={teamLogoUrl(t)} alt={t} className="w-6 h-6 object-contain ring-1 ring-gray-900 rounded-full bg-surface-card" />
           ))}
         </div>
-        <span className="font-semibold text-white">{season}</span>
-        <span className="text-gray-500 text-xs">{seasonTeams.join('/')} · {record} · {games.length}G</span>
-        <span className="ml-auto text-gray-600 text-xs">{open ? '▲' : '▼'}</span>
+        <span className="font-semibold text-ink">{season}</span>
+        <span className="text-ink-dim text-xs">{seasonTeams.join('/')} · {record} · {games.length}G</span>
+        <span className="ml-auto text-ink-dim text-xs">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="overflow-x-auto border-t border-gray-800">
+        <div className="overflow-x-auto border-t border-surface-line">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className="py-2 px-4 text-xs font-medium text-gray-600 text-left">Wk</th>
-                <th className="py-2 px-4 text-xs font-medium text-gray-600 text-left">Opponent</th>
-                <th className="py-2 px-4 text-xs font-medium text-gray-600 text-left">Result</th>
+              <tr className="border-b border-surface-line">
+                <th className="py-2 px-4 text-xs font-medium text-ink-dim text-left">Wk</th>
+                <th className="py-2 px-4 text-xs font-medium text-ink-dim text-left">Opponent</th>
+                <th className="py-2 px-4 text-xs font-medium text-ink-dim text-left">Result</th>
                 {gameCols.map(c => (
-                  <th key={c.label} className="py-2 px-4 text-xs font-medium text-gray-600 text-left">{c.label}</th>
+                  <th key={c.label} className="py-2 px-4 text-xs font-medium text-ink-dim text-left">{c.label}</th>
                 ))}
               </tr>
             </thead>
@@ -961,11 +963,11 @@ function GameLog({ season, games, pos, playerId, playerName, fromGame, defaultOp
               {games.map(g => {
                 const score = g.away_score !== null ? `${g.away_score}–${g.home_score}` : null
                 return (
-                  <tr key={g.game_id} className="border-t border-gray-800/60 hover:bg-gray-800/40">
+                  <tr key={g.game_id} className="border-t border-surface-line/60 hover:bg-surface-raise/40">
                     <td className="py-2 px-4 text-xs tabular-nums whitespace-nowrap">
                       {g.game_type === 'REG'
-                        ? <span className="text-gray-500">Wk {g.week}</span>
-                        : <span className="text-amber-500 font-bold">{g.game_type}</span>
+                        ? <span className="text-ink-dim">Wk {g.week}</span>
+                        : <span className="text-ink-dim font-bold">{g.game_type}</span>
                       }
                     </td>
                     <td className="py-2 px-4">
@@ -983,7 +985,7 @@ function GameLog({ season, games, pos, playerId, playerName, fromGame, defaultOp
                     <td className="py-2 px-4">
                       <div className="flex items-center gap-1.5">
                         {resultBadge(g.result)}
-                        {score && <span className="text-gray-600 text-xs">{score}</span>}
+                        {score && <span className="text-ink-dim text-xs">{score}</span>}
                       </div>
                     </td>
                     {gameCols.map(c => {
@@ -995,7 +997,7 @@ function GameLog({ season, games, pos, playerId, playerName, fromGame, defaultOp
                       const isNeg = isSigned && strVal?.startsWith('-')
                       return (
                         <td key={c.label} className={`py-2 px-4 tabular-nums text-sm whitespace-nowrap
-                          ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-400' : isNeg ? 'text-red-400' : c.highlight ? 'text-white font-semibold' : 'text-gray-300'}`}>
+                          ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win' : isNeg ? 'text-data-loss' : c.highlight ? 'text-ink font-semibold' : 'text-ink-mid'}`}>
                           {isNull ? '—' : strVal}
                         </td>
                       )
@@ -1013,16 +1015,16 @@ function GameLog({ season, games, pos, playerId, playerName, fromGame, defaultOp
 
 // — comparables —
 function simColor(s: number) {
-  if (s >= 95) return 'text-emerald-400'
+  if (s >= 95) return 'text-data-win'
   if (s >= 88) return 'text-green-400'
-  if (s >= 80) return 'text-yellow-400'
-  return 'text-gray-500'
+  if (s >= 80) return 'text-gold'
+  return 'text-ink-dim'
 }
 
 function simBar(s: number) {
-  if (s >= 95) return 'bg-emerald-500'
+  if (s >= 95) return 'bg-data-win'
   if (s >= 88) return 'bg-green-500'
-  if (s >= 80) return 'bg-yellow-500'
+  if (s >= 80) return 'bg-gold'
   return 'bg-gray-600'
 }
 
@@ -1042,39 +1044,39 @@ function ComparableCard({ p, pos }: { p: PlayerComparable; pos: string }) {
   }
 
   return (
-    <Link to={`/players/${p.player_id}`} className="block bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 hover:bg-gray-800/60 transition-all group">
+    <Link to={`/players/${p.player_id}`} className="block bg-surface-card border border-surface-line rounded-xl p-4 hover:border-surface-line hover:bg-surface-raise/60 transition-all group">
       <div className="flex items-start gap-3 mb-3">
         {p.headshot_url
-          ? <img src={p.headshot_url} className="w-12 h-12 rounded-full object-cover object-top bg-gray-800 shrink-0" alt="" />
-          : <div className="w-12 h-12 rounded-full bg-gray-800 shrink-0" />
+          ? <img src={p.headshot_url} className="w-12 h-12 rounded-full object-cover object-top bg-surface-raise shrink-0" alt="" />
+          : <div className="w-12 h-12 rounded-full bg-surface-raise shrink-0" />
         }
         <div className="min-w-0 flex-1">
-          <div className="font-bold text-white text-sm leading-tight group-hover:text-indigo-400 transition-colors truncate">{p.player_name}</div>
+          <div className="font-bold text-ink text-sm leading-tight group-hover:text-indigo-400 transition-colors truncate">{p.player_name}</div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-xs text-gray-500 font-medium">{p.position ?? '—'}</span>
+            <span className="text-xs text-ink-dim font-medium">{p.position ?? '—'}</span>
             {p.team && (
               <>
-                <span className="text-gray-700">·</span>
+                <span className="text-ink-dim">·</span>
                 <img src={teamLogoUrl(p.team)} className="w-4 h-4 object-contain opacity-70" alt="" />
-                <span className="text-xs text-gray-500">{p.team}</span>
+                <span className="text-xs text-ink-dim">{p.team}</span>
               </>
             )}
           </div>
-          <div className="text-xs text-gray-600 mt-0.5">{era} · {p.games}G</div>
+          <div className="text-xs text-ink-dim mt-0.5">{era} · {p.games}G</div>
         </div>
       </div>
 
       <div className="mb-2">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] text-gray-600 uppercase tracking-wider">Similarity</span>
+          <span className="text-[10px] text-ink-dim uppercase tracking-wider">Similarity</span>
           <span className={`text-sm font-black tabular-nums ${simColor(p.similarity)}`}>{p.similarity}%</span>
         </div>
-        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-surface-raise rounded-full overflow-hidden">
           <div className={`h-full rounded-full ${simBar(p.similarity)}`} style={{ width: `${p.similarity}%` }} />
         </div>
       </div>
 
-      <div className="text-[11px] text-gray-500 leading-relaxed">{statLine}</div>
+      <div className="text-[11px] text-ink-dim leading-relaxed">{statLine}</div>
     </Link>
   )
 }
@@ -1084,8 +1086,8 @@ function ComparablesSection({ playerId, pos }: { playerId: string; pos: string }
 
   if (loading) return (
     <div className="mt-8">
-      <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Similar Players</div>
-      <p className="text-xs text-gray-600 pl-1">Computing comparables…</p>
+      <div className="text-xs font-bold text-ink-dim uppercase tracking-widest mb-3">Similar Players</div>
+      <p className="text-xs text-ink-dim pl-1">Computing comparables…</p>
     </div>
   )
   if (comps.length === 0) return null
@@ -1093,8 +1095,8 @@ function ComparablesSection({ playerId, pos }: { playerId: string; pos: string }
   return (
     <div className="mt-8">
       <div className="flex items-center gap-3 mb-3">
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Similar Players</span>
-        <span className="text-xs text-gray-700">Cosine similarity on career rate stats · same position group</span>
+        <span className="text-xs font-bold text-ink-dim uppercase tracking-widest">Similar Players</span>
+        <span className="text-xs text-ink-dim">Cosine similarity on career rate stats · same position group</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {comps.map(p => <ComparableCard key={p.player_id} p={p} pos={pos} />)}
@@ -1109,9 +1111,9 @@ function injuryToneClasses(status: string | null | undefined): string {
   switch (status) {
     case 'Out':           return 'bg-rose-950/60 border-rose-800 text-rose-300'
     case 'Doubtful':      return 'bg-orange-950/60 border-orange-800 text-orange-300'
-    case 'Questionable':  return 'bg-amber-950/60 border-amber-800 text-amber-300'
-    case 'Probable':      return 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
-    default:              return 'bg-gray-900 border-gray-800 text-gray-400'
+    case 'Questionable':  return 'bg-surface-raise/60 border-data-loss/40 text-data-loss'
+    case 'Probable':      return 'bg-emerald-950/60 border-emerald-800 text-data-win'
+    default:              return 'bg-surface-card border-surface-line text-ink-mid'
   }
 }
 
@@ -1132,13 +1134,13 @@ function StatusStrip({ depth, injury }: {
   return (
     <div className="flex flex-wrap gap-2 mt-3">
       {depthCurrent && depthCurrent.depth_position && depthCurrent.depth_team === '1' && (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-emerald-950/50 border border-emerald-800 text-emerald-300">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-emerald-950/50 border border-emerald-800 text-data-win">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           Starting {depthCurrent.depth_position}
         </span>
       )}
       {depthCurrent && depthCurrent.depth_position && depthCurrent.depth_team !== '1' && (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-gray-900 border border-gray-800 text-gray-400">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-surface-card border border-surface-line text-ink-mid">
           {depthCurrent.depth_position} · {depthCurrent.depth_team === '2' ? 'Backup' : `Depth ${depthCurrent.depth_team}`}
         </span>
       )}
@@ -1175,9 +1177,9 @@ function ordinal(n: number): string {
 function BigStat({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</span>
-      <span className="text-2xl font-black text-white tabular-nums leading-tight mt-0.5">{value}</span>
-      {sub && <span className="text-[10px] text-gray-600 uppercase tracking-wider mt-0.5">{sub}</span>}
+      <span className="text-[10px] font-bold text-ink-dim uppercase tracking-widest">{label}</span>
+      <span className="text-2xl font-black text-ink tabular-nums leading-tight mt-0.5">{value}</span>
+      {sub && <span className="text-[10px] text-ink-dim uppercase tracking-wider mt-0.5">{sub}</span>}
     </div>
   )
 }
@@ -1188,8 +1190,8 @@ function EmptyCardBody({ headline, sub }: { headline: string; sub?: string }) {
   // and the sub-line explains why or what era it's about.
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center py-4">
-      <div className="text-xl font-black text-gray-500 leading-none">{headline}</div>
-      {sub && <div className="mt-2 text-[10px] text-gray-700 uppercase tracking-wider max-w-[80%]">{sub}</div>}
+      <div className="text-xl font-black text-ink-dim leading-none">{headline}</div>
+      {sub && <div className="mt-2 text-[10px] text-ink-dim uppercase tracking-wider max-w-[80%]">{sub}</div>}
     </div>
   )
 }
@@ -1203,17 +1205,17 @@ function DraftCardContent({ player }: { player: PlayerProfile }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Drafted</div>
-          <div className="text-3xl font-black text-white leading-none">
+          <div className="text-3xl font-black text-ink leading-none">
             {ordinal(draft.round)} <span className="text-indigo-300">Round</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-5xl font-black text-white tabular-nums leading-none">#{draft.pick}</span>
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">overall · {draft.season}</span>
+            <span className="text-5xl font-black text-ink tabular-nums leading-none">#{draft.pick}</span>
+            <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">overall · {draft.season}</span>
           </div>
           {draft.college && (
-            <div className="mt-3 text-xs text-gray-400">
-              <span className="text-gray-600 uppercase tracking-wider text-[10px] font-bold">College</span>
-              <span className="ml-2 text-gray-200 font-semibold">{draft.college}</span>
+            <div className="mt-3 text-xs text-ink-mid">
+              <span className="text-ink-dim uppercase tracking-wider text-[10px] font-bold">College</span>
+              <span className="ml-2 text-ink font-semibold">{draft.college}</span>
             </div>
           )}
         </div>
@@ -1223,7 +1225,7 @@ function DraftCardContent({ player }: { player: PlayerProfile }) {
           title={`Drafted by ${teamName(draft.team)}`}
         >
           <img src={teamLogoUrl(draft.team)} className="w-16 h-16 object-contain" alt="" />
-          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{draft.team}</span>
+          <span className="text-[10px] font-bold text-ink-dim uppercase tracking-wider">{draft.team}</span>
         </Link>
       </div>
     )
@@ -1240,7 +1242,7 @@ function DraftCardContent({ player }: { player: PlayerProfile }) {
 
   return (
     <>
-      <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">Drafted</div>
+      <div className="text-[10px] font-bold text-ink-dim uppercase tracking-widest mb-3">Drafted</div>
       <EmptyCardBody headline={headline} sub={sub} />
     </>
   )
@@ -1273,7 +1275,7 @@ function CareerCardContent({ player }: { player: PlayerProfile }) {
 
   return (
     <>
-      <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Career Achievements</div>
+      <div className="text-[10px] font-bold text-ink-dim uppercase tracking-widest mb-3">Career Achievements</div>
       {hasContent ? (
         <div className="flex flex-col gap-3">
           {career.length > 0 && (
@@ -1302,7 +1304,7 @@ function CombineCardContent({ player }: { player: PlayerProfile }) {
 
   return (
     <>
-      <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Combine</div>
+      <div className="text-[10px] font-bold text-ink-dim uppercase tracking-widest mb-3">Combine</div>
       {hasAny && combine ? (
         <div className="grid grid-cols-3 gap-3">
           {combine.forty      != null && <BigStat label="40 yd"   value={combine.forty.toFixed(2)} sub="seconds" />}
@@ -1331,10 +1333,10 @@ function BackgroundCard({ player }: { player: PlayerProfile }) {
       <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950/40 via-gray-900 to-gray-900 border border-indigo-900/60 rounded-xl p-5 flex flex-col min-h-[180px]">
         <DraftCardContent player={player} />
       </div>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col min-h-[180px]">
+      <div className="bg-surface-card border border-surface-line rounded-xl p-5 flex flex-col min-h-[180px]">
         <CareerCardContent player={player} />
       </div>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col min-h-[180px]">
+      <div className="bg-surface-card border border-surface-line rounded-xl p-5 flex flex-col min-h-[180px]">
         <CombineCardContent player={player} />
       </div>
     </div>
@@ -1405,8 +1407,8 @@ export default function PlayerPage() {
     if (newlyDone) qc.invalidateQueries({ queryKey: ['player', playerId] })
   }, [seasonsList, player, playerId, qc])
 
-  if (loading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
-  if (!player) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Player not found.</p></div>
+  if (loading) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Loading...</p></div>
+  if (!player) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Player not found.</p></div>
 
   const regGames     = player.games.filter(g => g.game_type === 'REG')
   const playoffGames = player.games.filter(g => g.game_type !== 'REG')
@@ -1452,28 +1454,27 @@ export default function PlayerPage() {
     : false
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-surface-bg">
       <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Profile header */}
-        <div className="flex items-start gap-6 mb-8 flex-wrap">
+        <Card title={player.player_name} className="mb-8"><div className="flex items-start gap-6 border-t border-surface-line p-5 flex-wrap">
           {player.headshot_url
-            ? <img src={player.headshot_url} alt={player.player_name} className="w-24 h-24 rounded-full object-cover bg-gray-800 shrink-0 object-top ring-2 ring-gray-800" />
-            : <div className="w-24 h-24 rounded-full bg-gray-800 shrink-0" />
+            ? <img src={player.headshot_url} alt={player.player_name} className="w-24 h-24 rounded-full object-cover bg-surface-raise shrink-0 object-top ring-2 ring-gray-800" />
+            : <div className="w-24 h-24 rounded-full bg-surface-raise shrink-0" />
           }
           <div className="flex-1 min-w-0">
             {(player.position || player.jersey_number != null) && (
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+              <div className="text-[10px] font-bold text-ink-dim uppercase tracking-widest flex items-center gap-2">
                 {player.position && <span>{player.position}</span>}
                 {player.jersey_number != null && (
                   <>
-                    {player.position && <span className="text-gray-700">·</span>}
-                    <span className="text-gray-600">#{player.jersey_number}</span>
+                    {player.position && <span className="text-ink-dim">·</span>}
+                    <span className="text-ink-dim">#{player.jersey_number}</span>
                   </>
                 )}
               </div>
             )}
-            <h1 className="text-4xl font-black text-white tracking-tight leading-none mt-1">{player.player_name}</h1>
 
             {/* Team chips — prominent and clearly clickable */}
             {recentTeams.length > 0 && (
@@ -1482,11 +1483,11 @@ export default function PlayerPage() {
                   <Link
                     key={t}
                     to={`/teams/${t}`}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-indigo-500 rounded-lg transition-colors group"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-card hover:bg-surface-raise border border-surface-line hover:border-indigo-500 rounded-lg transition-colors group"
                   >
                     <img src={teamLogoUrl(t)} className="w-5 h-5 object-contain" alt="" />
-                    <span className="text-sm font-bold text-white">{t}</span>
-                    <span className="text-xs text-gray-400 group-hover:text-gray-200 transition-colors">{teamName(t)}</span>
+                    <span className="text-sm font-bold text-ink">{t}</span>
+                    <span className="text-xs text-ink-mid group-hover:text-ink transition-colors">{teamName(t)}</span>
                     <span className="text-indigo-400 text-xs">→</span>
                   </Link>
                 ))}
@@ -1500,7 +1501,7 @@ export default function PlayerPage() {
             />
 
             {/* Bio */}
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-gray-600">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-ink-dim">
               {player.height && <span>{player.height}</span>}
               {player.weight && <span>{player.weight} lbs</span>}
               {player.age && <span>Age {player.age}</span>}
@@ -1508,7 +1509,7 @@ export default function PlayerPage() {
               {player.entry_year && <span>Since {player.entry_year}</span>}
             </div>
           </div>
-        </div>
+        </div></Card>
 
         {/* Background: draft pick + career achievements + combine.
             Always renders the same 3-card grid so the layout never shifts;
@@ -1533,20 +1534,19 @@ export default function PlayerPage() {
 
         {/* Sticky section nav */}
         {seasons.length > 0 && (
-          <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-gray-950/95 backdrop-blur border-b border-gray-800/60 mb-6 flex gap-1">
-            <button onClick={() => scrollTo(statsRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Stats</button>
-            {hasAdvanced && <button onClick={() => scrollTo(advRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Advanced</button>}
-            {playoffSeasons.length > 0 && <button onClick={() => scrollTo(postRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Postseason</button>}
-            <button onClick={() => scrollTo(logRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Game Log</button>
-            <button onClick={() => scrollTo(compRef)} className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors">Comparables</button>
+          <div className="sticky top-14 z-20 mb-6 flex gap-1 overflow-x-auto rounded-card bg-surface-card px-2 shadow-xl">
+            <button onClick={() => scrollTo(statsRef)} className="relative px-3 py-3 text-xs font-semibold text-indigo-400 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-indigo-400">Stats</button>
+            {hasAdvanced && <button onClick={() => scrollTo(advRef)} className="px-3 py-1.5 text-xs font-semibold text-ink-mid hover:text-ink rounded-lg hover:bg-surface-raise transition-colors">Advanced</button>}
+            {playoffSeasons.length > 0 && <button onClick={() => scrollTo(postRef)} className="px-3 py-1.5 text-xs font-semibold text-ink-mid hover:text-ink rounded-lg hover:bg-surface-raise transition-colors">Postseason</button>}
+            <button onClick={() => scrollTo(logRef)} className="px-3 py-1.5 text-xs font-semibold text-ink-mid hover:text-ink rounded-lg hover:bg-surface-raise transition-colors">Game Log</button>
+            <button onClick={() => scrollTo(compRef)} className="px-3 py-1.5 text-xs font-semibold text-ink-mid hover:text-ink rounded-lg hover:bg-surface-raise transition-colors">Comparables</button>
           </div>
         )}
 
         {/* Regular season — main stats */}
-        <div ref={statsRef} className="scroll-mt-12 text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
-          Regular Season
-        </div>
+        <div ref={statsRef} className="scroll-mt-12" />
         <CareerTable
+          title="Regular Season"
           seasons={seasons}
           bySeason={regBySeason}
           ngs={player.ngs ?? {}}
@@ -1560,7 +1560,7 @@ export default function PlayerPage() {
           showGroupHeaders={true}
         />
         {careerInFlight && (
-          <p className="text-xs text-gray-600 -mt-2 mb-4 pl-1 flex items-center gap-1.5">
+          <p className="text-xs text-ink-dim -mt-2 mb-4 pl-1 flex items-center gap-1.5">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
             Loading historical seasons — stats will update automatically.
           </p>
@@ -1569,10 +1569,9 @@ export default function PlayerPage() {
         {/* Regular season — advanced stats */}
         {hasAdvanced && seasons.length > 0 && (
           <>
-            <div ref={advRef} className="scroll-mt-12 text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 mt-2">
-              Advanced Stats
-            </div>
+            <div ref={advRef} className="scroll-mt-12" />
             <CareerTable
+              title="Advanced Stats"
               seasons={seasons}
               bySeason={regBySeason}
               ngs={player.ngs ?? {}}
@@ -1589,9 +1588,9 @@ export default function PlayerPage() {
         {/* Postseason stats */}
         {playoffSeasons.length > 0 && (
           <>
-            <div ref={postRef} className="scroll-mt-12 text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 mt-6 flex items-center gap-2">
+            <div ref={postRef} className="scroll-mt-12 text-xs font-bold text-ink-dim uppercase tracking-widest mb-3 mt-6 flex items-center gap-2">
               Postseason
-              <span className="text-gray-700 font-normal normal-case tracking-normal text-xs">
+              <span className="text-ink-dim font-normal normal-case tracking-normal text-xs">
                 ({playoffGames.length} game{playoffGames.length !== 1 ? 's' : ''})
               </span>
             </div>
@@ -1614,8 +1613,8 @@ export default function PlayerPage() {
         <TeamSplits seasons={seasons} bySeason={regBySeason} position={player.position} />
 
         {/* Game log — all games, playoff games show their round label */}
-        <div ref={logRef} className="scroll-mt-12 text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 mt-2">Game Log</div>
-        <div className="space-y-2">
+        <div ref={logRef} className="scroll-mt-12" />
+        <Card title="Game Log" className="mb-4"><div className="space-y-2 border-t border-surface-line p-3">
           {allSeasons.map((s, i) => (
             <GameLog
               key={s}
@@ -1628,7 +1627,7 @@ export default function PlayerPage() {
               defaultOpen={i === 0}
             />
           ))}
-        </div>
+        </div></Card>
 
         {/* Similar players */}
         {seasons.length > 0 && (

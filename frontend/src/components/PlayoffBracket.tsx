@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api'
 import type { Game, WeekGroup } from '../api'
 import { teamLogoUrl, CONFERENCES } from '../utils/teams'
+import Card from './Card'
 
 export type ConfKey = 'AFC' | 'NFC'
 
@@ -187,22 +188,17 @@ export function PlayoffBracket({ season, title }: { season: number; title?: stri
   }
 
   return (
-    <div className="mb-10">
-      <div className="flex items-center gap-3 mb-5">
-        <h2 className="text-xl font-black text-white tracking-tight">{title ?? `${season} Playoffs`}</h2>
-        <div className="flex-1 h-px bg-gray-800" />
-        <span className="text-[10px] text-gray-500 uppercase tracking-widest">
+    <Card title={title ?? `${season} Playoffs`} action={<span className="text-[10px] uppercase tracking-widest text-ink-dim">
           {playoffGames.length} game{playoffGames.length === 1 ? '' : 's'}
-        </span>
-      </div>
+        </span>} className="mb-10">
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(260px,auto)_1fr] gap-4 items-center">
+      <div className="grid grid-cols-1 gap-4 border-t border-surface-line p-4 lg:grid-cols-[1fr_minmax(260px,auto)_1fr] lg:items-center">
         <ConferenceBracket conf="AFC" games={afc} champs={champs} side="left" />
         {sb
           ? <SuperBowlCard game={sb} champ={champs.sb} season={season} />
           : <div className="hidden lg:block" />}
         <ConferenceBracket conf="NFC" games={nfc} champs={champs} side="right" />
       </div>
-    </div>
+    </Card>
   )
 }

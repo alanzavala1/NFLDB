@@ -5,6 +5,7 @@ import { api } from '../api'
 import type { TeamProfile, TeamGame, TeamLeader, SeasonEntry, RosterPlayer, TeamAnalyticsTeam, TeamSplit } from '../api'
 import { useTeamDepthChart, useTeamInjuries, useTeamSplits } from '../queries'
 import Nav from '../components/Nav'
+import Card from '../components/Card'
 import { teamLogoUrl, teamName } from '../utils/teams'
 
 const GAME_TYPE_LABELS: Record<string, string> = { WC: 'Wild Card', DIV: 'Divisional', CON: 'Conference', SB: 'Super Bowl' }
@@ -173,12 +174,12 @@ function buildSummary(section: SectionKind, t: SectionTotals, games: number): Su
 
 function SectionStrip({ items }: { items: SummaryBox[] }) {
   return (
-    <div className="px-4 py-3 bg-gray-950/40 border-b border-gray-800/80">
+    <div className="px-4 py-3 bg-surface-bg/40 border-b border-surface-line/80">
       <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
         {items.map(b => (
           <div key={b.label} className="text-center">
-            <div className="text-base font-bold text-white tabular-nums leading-tight">{b.value}</div>
-            <div className="text-[10px] text-gray-600 uppercase tracking-wider mt-0.5">{b.label}</div>
+            <div className="text-base font-bold text-ink tabular-nums leading-tight">{b.value}</div>
+            <div className="text-[10px] text-ink-dim uppercase tracking-wider mt-0.5">{b.label}</div>
           </div>
         ))}
       </div>
@@ -205,33 +206,33 @@ function SortableTable({ title, section, players, cols, sortKey, sortDir, onSort
   })
   const visible = defaultLimit && !expanded ? sorted.slice(0, defaultLimit) : sorted
   const hiddenCount = sorted.length - (defaultLimit ?? sorted.length)
-  const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-right cursor-pointer select-none hover:text-white transition-colors'
+  const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-right cursor-pointer select-none hover:text-ink transition-colors'
   return (
-    <div className="mb-6 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{title}</span>
-        <span className="text-[10px] text-gray-600 uppercase tracking-wider">Team Totals</span>
+    <div className="mb-6 bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-surface-line flex items-center justify-between">
+        <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{title}</span>
+        <span className="text-[10px] text-ink-dim uppercase tracking-wider">Team Totals</span>
       </div>
       <SectionStrip items={buildSummary(section, totals, games)} />
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800/50">
+            <tr className="border-b border-surface-line/50">
               <th colSpan={3} />
-              {tradCount > 0 && <th colSpan={tradCount} className="py-1 text-center text-[10px] font-semibold text-gray-600 uppercase tracking-widest border-l border-gray-800/40">Stats</th>}
-              {advCount  > 0 && <th colSpan={advCount}  className="py-1 text-center text-[10px] font-semibold text-amber-500/60 uppercase tracking-widest bg-amber-950/20 border-l border-gray-800/40">Advanced</th>}
+              {tradCount > 0 && <th colSpan={tradCount} className="py-1 text-center text-[10px] font-semibold text-ink-dim uppercase tracking-widest border-l border-surface-line/40">Stats</th>}
+              {advCount  > 0 && <th colSpan={advCount}  className="py-1 text-center text-[10px] font-semibold text-ink-dim/60 uppercase tracking-widest bg-surface-raise/20 border-l border-surface-line/40">Advanced</th>}
             </tr>
-            <tr className="border-b border-gray-800 bg-gray-800/60">
-              <th className="py-2 pl-4 pr-2 text-xs font-medium text-gray-500 text-left whitespace-nowrap">Player</th>
-              <th className="py-2 px-2 text-xs font-medium text-gray-500 text-left whitespace-nowrap">Pos</th>
-              <th className="py-2 px-3 text-xs font-medium text-gray-500 text-right whitespace-nowrap">G</th>
+            <tr className="border-b border-surface-line bg-surface-raise/60">
+              <th className="py-2 pl-4 pr-2 text-xs font-medium text-ink-dim text-left whitespace-nowrap">Player</th>
+              <th className="py-2 px-2 text-xs font-medium text-ink-dim text-left whitespace-nowrap">Pos</th>
+              <th className="py-2 px-3 text-xs font-medium text-ink-dim text-right whitespace-nowrap">G</th>
               {cols.map((c, i) => {
                 const active = sortKey === c.key
                 const sep = i === 0 || cols[i - 1].kind !== c.kind
                 return (
                   <th key={c.key} onClick={() => onSort(c.key)}
-                    className={`${thBase} ${sep ? 'border-l border-gray-800/40' : ''}
-                      ${c.kind === 'adv' ? 'bg-amber-950/10 text-amber-300/50 hover:text-amber-200' : active ? 'text-white' : 'text-gray-500'}`}>
+                    className={`${thBase} ${sep ? 'border-l border-surface-line/40' : ''}
+                      ${c.kind === 'adv' ? 'bg-surface-raise/10 text-ink-dim hover:text-ink-mid' : active ? 'text-ink' : 'text-ink-dim'}`}>
                     <span className="flex items-center justify-end gap-1">
                       {c.label}
                       <span className={`text-[10px] ${active ? 'opacity-100' : 'opacity-0'}`}>{sortDir === 'desc' ? '↓' : '↑'}</span>
@@ -243,12 +244,12 @@ function SortableTable({ title, section, players, cols, sortKey, sortDir, onSort
           </thead>
           <tbody>
             {visible.map(p => (
-              <tr key={p.player_id} className="border-t border-gray-800/60 hover:bg-gray-800/30">
+              <tr key={p.player_id} className="border-t border-surface-line/60 hover:bg-surface-raise/30">
                 <td className="py-2 pl-4 pr-2 whitespace-nowrap">
                   <Link to={`/players/${p.player_id}`} onClick={onClose} className="text-indigo-400 hover:underline font-medium text-sm">{p.player_name}</Link>
                 </td>
-                <td className="py-2 px-2 text-xs text-gray-500 whitespace-nowrap">{p.position ?? '—'}</td>
-                <td className="py-2 px-3 text-right tabular-nums text-gray-500 text-sm">{p.games_played}</td>
+                <td className="py-2 px-2 text-xs text-ink-dim whitespace-nowrap">{p.position ?? '—'}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-ink-dim text-sm">{p.games_played}</td>
                 {cols.map((c, i) => {
                   const sep = i === 0 || cols[i - 1].kind !== c.kind
                   const val = c.render(p, totals)
@@ -259,9 +260,9 @@ function SortableTable({ title, section, players, cols, sortKey, sortDir, onSort
                   const shareVal = c.share ? c.share(p, totals) : 0
                   return (
                     <td key={c.key} className={`relative py-2 px-3 text-right tabular-nums text-sm whitespace-nowrap
-                      ${sep ? 'border-l border-gray-800/30' : ''}
-                      ${c.kind === 'adv' ? 'bg-amber-950/10' : ''}
-                      ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-400 font-semibold' : isNeg ? 'text-red-400 font-semibold' : c.highlight ? 'text-white font-bold' : c.kind === 'adv' ? 'text-amber-200/80' : c.dim ? 'text-gray-500' : 'text-gray-300'}`}>
+                      ${sep ? 'border-l border-surface-line/30' : ''}
+                      ${c.kind === 'adv' ? 'bg-surface-raise/10' : ''}
+                      ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win font-semibold' : isNeg ? 'text-data-loss font-semibold' : c.highlight ? 'text-ink font-bold' : c.kind === 'adv' ? 'text-ink-mid/80' : c.dim ? 'text-ink-dim' : 'text-ink-mid'}`}>
                       {c.share && shareVal > 0 && !isNull && (
                         <div className="pointer-events-none absolute inset-y-0 left-0 bg-indigo-500/20" style={{ width: `${Math.min(100, shareVal * 100)}%` }} />
                       )}
@@ -273,10 +274,10 @@ function SortableTable({ title, section, players, cols, sortKey, sortDir, onSort
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-gray-700/80 bg-gray-800/40">
-              <td className="py-2.5 pl-4 pr-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Team</td>
+            <tr className="border-t-2 border-surface-line/80 bg-surface-raise/40">
+              <td className="py-2.5 pl-4 pr-2 text-[11px] font-bold text-ink-mid uppercase tracking-wider">Team</td>
               <td />
-              <td className="py-2.5 px-3 text-right tabular-nums text-gray-400 text-sm font-semibold">{games > 0 ? games : '—'}</td>
+              <td className="py-2.5 px-3 text-right tabular-nums text-ink-mid text-sm font-semibold">{games > 0 ? games : '—'}</td>
               {cols.map((c, i) => {
                 const sep = i === 0 || cols[i - 1].kind !== c.kind
                 const val = c.total ? c.total(totals, games) : null
@@ -286,20 +287,20 @@ function SortableTable({ title, section, players, cols, sortKey, sortDir, onSort
                 const isNeg = !isNull && str!.startsWith('-')
                 return (
                   <td key={c.key} className={`py-2.5 px-3 text-right tabular-nums text-sm whitespace-nowrap font-bold
-                    ${sep ? 'border-l border-gray-800/30' : ''}
-                    ${c.kind === 'adv' ? 'bg-amber-950/10' : ''}
-                    ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-300' : isNeg ? 'text-red-300' : c.kind === 'adv' ? 'text-amber-200/90' : 'text-gray-200'}`}>
+                    ${sep ? 'border-l border-surface-line/30' : ''}
+                    ${c.kind === 'adv' ? 'bg-surface-raise/10' : ''}
+                    ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win' : isNeg ? 'text-red-300' : c.kind === 'adv' ? 'text-ink-mid/90' : 'text-ink'}`}>
                     <span className="relative">{isNull ? '—' : str}</span>
                   </td>
                 )
               })}
             </tr>
             {defaultLimit && hiddenCount > 0 && (
-              <tr className="border-t border-gray-800/60">
+              <tr className="border-t border-surface-line/60">
                 <td colSpan={3 + cols.length} className="py-0">
                   <button
                     onClick={() => setExpanded(e => !e)}
-                    className="w-full py-2 text-xs text-gray-600 hover:text-gray-400 transition-colors flex items-center justify-center gap-1"
+                    className="w-full py-2 text-xs text-ink-dim hover:text-ink-mid transition-colors flex items-center justify-center gap-1"
                   >
                     {expanded ? <>show less <span className="text-[10px]">↑</span></> : <>{hiddenCount} more <span className="text-[10px]">↓</span></>}
                   </button>
@@ -560,11 +561,11 @@ function SeasonSummary({ profile }: { profile: TeamProfile }) {
         const isPos = b.signed && str.startsWith('+')
         const isNeg = b.signed && str.startsWith('-')
         return (
-          <div key={b.label} className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2.5 text-center">
-            <div className={`text-sm font-bold tabular-nums ${isPos ? 'text-emerald-400' : isNeg ? 'text-red-400' : 'text-white'}`}>
+          <div key={b.label} className="bg-surface-card border border-surface-line rounded-lg px-3 py-2.5 text-center">
+            <div className={`text-sm font-bold tabular-nums ${isPos ? 'text-data-win' : isNeg ? 'text-data-loss' : 'text-ink'}`}>
               {b.val}
             </div>
-            <div className="text-[10px] text-gray-600 uppercase tracking-wider mt-0.5 leading-tight">{b.label}</div>
+            <div className="text-[10px] text-ink-dim uppercase tracking-wider mt-0.5 leading-tight">{b.label}</div>
           </div>
         )
       })}
@@ -587,8 +588,8 @@ function ScoreChart({ profile }: { profile: TeamProfile }) {
   if (data.length === 0) return null
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 pt-4 pb-2 mb-4">
-      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Point Differential</div>
+    <div className="bg-surface-card border border-surface-line rounded-xl px-4 pt-4 pb-2 mb-4">
+      <div className="text-xs font-bold text-ink-dim uppercase tracking-wider mb-3">Point Differential</div>
       <ResponsiveContainer width="100%" height={90}>
         <BarChart data={data} barSize={14} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
           <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#4b5563' }} axisLine={false} tickLine={false} interval={0} />
@@ -625,7 +626,7 @@ function SchedulePanel({ profile }: { profile: TeamProfile }) {
         const oppScore = isAway ? g.home_score : g.away_score
         const result = gameResult(g, profile.team)
         const finished = teamScore !== null && oppScore !== null
-        const resultColor = result === 'W' ? 'text-green-400' : result === 'L' ? 'text-red-400' : 'text-gray-400'
+        const resultColor = result === 'W' ? 'text-green-400' : result === 'L' ? 'text-data-loss' : 'text-ink-mid'
 
         if (result === 'W') w++
         else if (result === 'L') l++
@@ -636,21 +637,21 @@ function SchedulePanel({ profile }: { profile: TeamProfile }) {
           <Link
             key={g.game_id}
             to={`/games/${g.game_id}`}
-            className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800/50 transition-colors group"
+            className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-raise/50 transition-colors group"
           >
-            <span className="text-xs text-gray-600 w-14 shrink-0">{weekLabel(g.week, (g as any).game_type)}</span>
+            <span className="text-xs text-ink-dim w-14 shrink-0">{weekLabel(g.week, (g as any).game_type)}</span>
             <img src={teamLogoUrl(opponent)} alt={opponent} className="w-5 h-5 object-contain shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" />
-            <span className="text-sm text-gray-400 flex-1 group-hover:text-white transition-colors">
+            <span className="text-sm text-ink-mid flex-1 group-hover:text-ink transition-colors">
               {isAway ? '@' : 'vs'} {opponent}
             </span>
             {finished ? (
               <>
                 <span className={`text-xs font-bold w-4 text-center ${resultColor}`}>{result}</span>
-                <span className="text-xs tabular-nums text-gray-500 w-12 text-right">{teamScore}–{oppScore}</span>
-                <span className="text-xs tabular-nums text-gray-700 w-10 text-right">{runningRec}</span>
+                <span className="text-xs tabular-nums text-ink-dim w-12 text-right">{teamScore}–{oppScore}</span>
+                <span className="text-xs tabular-nums text-ink-dim w-10 text-right">{runningRec}</span>
               </>
             ) : (
-              <span className="text-xs text-gray-700 w-16 text-right">{g.gameday}</span>
+              <span className="text-xs text-ink-dim w-16 text-right">{g.gameday}</span>
             )}
           </Link>
         )
@@ -670,18 +671,18 @@ interface LeaderRowProps {
 }
 function LeaderRow({ player, primary, secondary }: LeaderRowProps) {
   return (
-    <Link to={`/players/${player.player_id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800/50 transition-colors group">
+    <Link to={`/players/${player.player_id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-raise/50 transition-colors group">
       {player.headshot_url
         ? <img src={player.headshot_url} alt={player.player_name} className="w-8 h-8 rounded-full object-cover shrink-0 opacity-80 group-hover:opacity-100 transition-opacity" />
-        : <div className="w-8 h-8 rounded-full bg-gray-800 shrink-0 flex items-center justify-center text-xs text-gray-600">#</div>
+        : <div className="w-8 h-8 rounded-full bg-surface-raise shrink-0 flex items-center justify-center text-xs text-ink-dim">#</div>
       }
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-gray-200 truncate group-hover:text-white transition-colors">{player.player_name}</div>
-        <div className="text-xs text-gray-600">{player.position ?? '—'} · {player.games_played}G</div>
+        <div className="text-sm font-medium text-ink truncate group-hover:text-ink transition-colors">{player.player_name}</div>
+        <div className="text-xs text-ink-dim">{player.position ?? '—'} · {player.games_played}G</div>
       </div>
       <div className="text-right shrink-0">
-        <div className="text-base font-bold text-white tabular-nums">{primary.value} <span className="text-xs font-normal text-gray-500">{primary.label}</span></div>
-        <div className="text-xs text-gray-500 tabular-nums">{secondary}</div>
+        <div className="text-base font-bold text-ink tabular-nums">{primary.value} <span className="text-xs font-normal text-ink-dim">{primary.label}</span></div>
+        <div className="text-xs text-ink-dim tabular-nums">{secondary}</div>
       </div>
     </Link>
   )
@@ -691,8 +692,8 @@ function LeaderSection({ title, rows }: { title: string; rows: React.ReactNode[]
   if (!rows.length) return null
   return (
     <div>
-      <div className="px-4 py-1.5 bg-gray-800/40 border-t border-gray-800">
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{title}</span>
+      <div className="px-4 py-1.5 bg-surface-raise/40 border-t border-surface-line">
+        <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{title}</span>
       </div>
       {rows}
     </div>
@@ -736,7 +737,7 @@ function LeadersPanel({ leaders, onViewFull }: { leaders: TeamLeader[]; onViewFu
       ))} />
       <button
         onClick={onViewFull}
-        className="w-full text-xs text-indigo-400 hover:text-indigo-300 py-2.5 border-t border-gray-800 transition-colors font-medium"
+        className="w-full text-xs text-indigo-400 hover:text-indigo-300 py-2.5 border-t border-surface-line transition-colors font-medium"
       >
         Full season stats →
       </button>
@@ -817,30 +818,30 @@ function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: (
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gray-950">
-      <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-800 shrink-0">
+    <div className="fixed inset-0 z-50 flex flex-col bg-surface-bg">
+      <div className="flex items-center gap-2 px-6 py-4 border-b border-surface-line shrink-0">
         <span className="font-black text-base tracking-tight select-none shrink-0">
-          <span className="text-white">NFL</span><span className="text-indigo-500">DB</span>
+          <span className="text-ink">NFL</span><span className="text-indigo-500">DB</span>
         </span>
-        <span className="text-gray-700">/</span>
+        <span className="text-ink-dim">/</span>
         <img src={teamLogoUrl(profile.team)} alt={profile.team} className="w-5 h-5 object-contain shrink-0" />
-        <span className="text-gray-400 text-sm">{teamName(profile.team)}</span>
-        <span className="text-gray-700">/</span>
-        <span className="text-gray-400 text-sm">{profile.season} Stats</span>
+        <span className="text-ink-mid text-sm">{teamName(profile.team)}</span>
+        <span className="text-ink-dim">/</span>
+        <span className="text-ink-mid text-sm">{profile.season} Stats</span>
         <button onClick={onClose}
-          className="ml-auto shrink-0 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors"
+          className="ml-auto shrink-0 text-sm text-ink-mid hover:text-ink bg-surface-raise hover:bg-surface-raise border border-surface-line rounded-lg px-3 py-1.5 transition-colors"
         >
           Close
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6 max-w-6xl mx-auto w-full">
-        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-5">Regular Season</div>
+        <div className="text-xs font-bold text-ink-dim uppercase tracking-widest mb-5">Regular Season</div>
         <StatsSections leaders={profile.leaders} sorts={regSorts} onSort={makeSort(setRegSorts)} onClose={onClose} games={regGames} />
 
         {hasPlayoffs && (
           <>
-            <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-5 mt-4">Postseason</div>
+            <div className="text-xs font-bold text-ink-dim uppercase tracking-widest mb-5 mt-4">Postseason</div>
             <StatsSections leaders={profile.playoff_leaders} sorts={postSorts} onSort={makeSort(setPostSorts)} onClose={onClose} games={postGames} />
           </>
         )}
@@ -880,41 +881,41 @@ function RosterModal({ profile, roster, onClose }: { profile: TeamProfile; roste
   const other = roster.filter(p => !ROSTER_MAPPED.has(p.position ?? ''))
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gray-950">
-      <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-800 shrink-0">
+    <div className="fixed inset-0 z-50 flex flex-col bg-surface-bg">
+      <div className="flex items-center gap-2 px-6 py-4 border-b border-surface-line shrink-0">
         <span className="font-black text-base tracking-tight select-none shrink-0">
-          <span className="text-white">NFL</span><span className="text-indigo-500">DB</span>
+          <span className="text-ink">NFL</span><span className="text-indigo-500">DB</span>
         </span>
-        <span className="text-gray-700">/</span>
+        <span className="text-ink-dim">/</span>
         <img src={teamLogoUrl(profile.team)} alt={profile.team} className="w-5 h-5 object-contain shrink-0" />
-        <span className="text-gray-400 text-sm">{teamName(profile.team)}</span>
-        <span className="text-gray-700">/</span>
-        <span className="text-gray-400 text-sm">{profile.season} Roster</span>
-        <button onClick={onClose} className="ml-auto shrink-0 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-1.5 transition-colors">
+        <span className="text-ink-mid text-sm">{teamName(profile.team)}</span>
+        <span className="text-ink-dim">/</span>
+        <span className="text-ink-mid text-sm">{profile.season} Roster</span>
+        <button onClick={onClose} className="ml-auto shrink-0 text-sm text-ink-mid hover:text-ink bg-surface-raise hover:bg-surface-raise border border-surface-line rounded-lg px-3 py-1.5 transition-colors">
           Close
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-6 py-6 max-w-5xl mx-auto w-full">
         {grouped.length === 0
-          ? <p className="text-gray-600">No roster data available for this season.</p>
+          ? <p className="text-ink-dim">No roster data available for this season.</p>
           : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...grouped, ...(other.length > 0 ? [{ label: 'Other', players: other }] : [])].map(g => (
-                <div key={g.label} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-gray-800">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{g.label}</span>
+                <div key={g.label} className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-surface-line">
+                    <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{g.label}</span>
                   </div>
                   <div className="divide-y divide-gray-800/60">
                     {g.players.map(p => (
                       <Link key={p.player_id} to={`/players/${p.player_id}`} onClick={onClose}
-                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800/40 transition-colors group">
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-raise/40 transition-colors group">
                         {p.headshot_url
-                          ? <img src={p.headshot_url} alt={p.player_name} className="w-8 h-8 rounded-full object-cover shrink-0 bg-gray-800" />
-                          : <div className="w-8 h-8 rounded-full bg-gray-800 shrink-0 flex items-center justify-center text-xs text-gray-600">{p.player_name[0]}</div>
+                          ? <img src={p.headshot_url} alt={p.player_name} className="w-8 h-8 rounded-full object-cover shrink-0 bg-surface-raise" />
+                          : <div className="w-8 h-8 rounded-full bg-surface-raise shrink-0 flex items-center justify-center text-xs text-ink-dim">{p.player_name[0]}</div>
                         }
                         <div className="min-w-0">
                           <div className="text-sm text-indigo-400 group-hover:underline font-medium truncate">{p.player_name}</div>
-                          {p.jersey_number != null && <div className="text-xs text-gray-600">#{p.jersey_number}</div>}
+                          {p.jersey_number != null && <div className="text-xs text-ink-dim">#{p.jersey_number}</div>}
                         </div>
                       </Link>
                     ))}
@@ -946,14 +947,14 @@ function fmtNum(d = 1)    { return (v: number) => v.toFixed(d) }
 
 function rankClasses(rank: number): string {
   if (rank <= 6)  return 'text-green-300 bg-green-950/60 border-green-800/60'
-  if (rank <= 13) return 'text-emerald-300 bg-emerald-950/40 border-emerald-800/40'
-  if (rank <= 19) return 'text-gray-300 bg-gray-800/60 border-gray-700/50'
+  if (rank <= 13) return 'text-data-win bg-emerald-950/40 border-emerald-800/40'
+  if (rank <= 19) return 'text-ink-mid bg-surface-raise/60 border-surface-line/50'
   if (rank <= 26) return 'text-orange-300 bg-orange-950/40 border-orange-800/40'
   return 'text-red-300 bg-red-950/60 border-red-800/60'
 }
 
 function RankBadge({ rank }: { rank: number | null | undefined }) {
-  if (rank == null) return <span className="text-gray-700 text-xs">—</span>
+  if (rank == null) return <span className="text-ink-dim text-xs">—</span>
   return (
     <span className={`inline-block text-xs font-bold tabular-nums rounded px-1.5 py-0.5 border ${rankClasses(rank)}`}>
       #{rank}
@@ -964,10 +965,10 @@ function RankBadge({ rank }: { rank: number | null | undefined }) {
 function MetricRow({ m }: { m: MetricSpec }) {
   const hasValue = m.value != null && Number.isFinite(m.value as number)
   return (
-    <tr className="border-t border-gray-800/60 hover:bg-gray-800/30 transition-colors">
-      <td className="py-1.5 pl-4 pr-2 text-gray-400 text-xs whitespace-nowrap" title={m.hint}>{m.label}</td>
-      <td className="py-1.5 px-2 text-right tabular-nums text-white text-sm font-semibold whitespace-nowrap">
-        {hasValue ? m.fmt(m.value as number) : <span className="text-gray-700">—</span>}
+    <tr className="border-t border-surface-line/60 hover:bg-surface-raise/30 transition-colors">
+      <td className="py-1.5 pl-4 pr-2 text-ink-mid text-xs whitespace-nowrap" title={m.hint}>{m.label}</td>
+      <td className="py-1.5 px-2 text-right tabular-nums text-ink text-sm font-semibold whitespace-nowrap">
+        {hasValue ? m.fmt(m.value as number) : <span className="text-ink-dim">—</span>}
       </td>
       <td className="py-1.5 pr-4 pl-2 text-right whitespace-nowrap">
         <RankBadge rank={m.rank} />
@@ -978,8 +979,8 @@ function MetricRow({ m }: { m: MetricSpec }) {
 
 function MetricPanel({ title, accent, metrics }: { title: string; accent: string; metrics: MetricSpec[] }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-gray-800 flex items-center gap-2">
+    <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-surface-line flex items-center gap-2">
         <span className={`text-xs font-bold uppercase tracking-wider ${accent}`}>{title}</span>
       </div>
       <table className="w-full text-sm">
@@ -1122,15 +1123,15 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
   })()
 
   const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-left'
-  const segWrap = 'inline-flex items-center gap-0.5 bg-gray-900 border border-gray-800 rounded-lg p-0.5'
+  const segWrap = 'inline-flex items-center gap-0.5 bg-surface-card border border-surface-line rounded-lg p-0.5'
 
   const renderRow = (r: TeamSplit, isTotal: boolean) => (
     <tr key={r.split_value} className={isTotal
-      ? 'border-t-2 border-gray-700 bg-gray-800/40'
-      : 'border-t border-gray-800/60 hover:bg-gray-800/30'}>
+      ? 'border-t-2 border-surface-line bg-surface-raise/40'
+      : 'border-t border-surface-line/60 hover:bg-surface-raise/30'}>
       <td className={`py-2.5 pl-4 pr-3 whitespace-nowrap ${isTotal
-        ? 'text-xs font-bold text-gray-400 uppercase tracking-wider'
-        : 'font-semibold text-white'}`}>
+        ? 'text-xs font-bold text-ink-mid uppercase tracking-wider'
+        : 'font-semibold text-ink'}`}>
         {isTotal ? 'Total' : teamSplitValueLabel(dim, r.split_value)}
       </td>
       {TEAM_SPLIT_COLS.map(c => {
@@ -1143,11 +1144,11 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
           <td key={c.label}
             style={isTotal ? undefined : heatStyle(r, c)}
             className={`py-2.5 px-3 whitespace-nowrap tabular-nums ${isTotal ? 'font-semibold' : ''} ${
-            isNull ? 'text-gray-700'
-              : isPos ? 'text-emerald-300 font-semibold'
+            isNull ? 'text-ink-dim'
+              : isPos ? 'text-data-win font-semibold'
               : isNeg ? 'text-red-300 font-semibold'
-              : c.highlight ? 'text-white font-bold'
-              : 'text-gray-200'}`}>
+              : c.highlight ? 'text-ink font-bold'
+              : 'text-ink'}`}>
             {str}
           </td>
         )
@@ -1160,11 +1161,11 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
   return (
     <div className="mb-4">
       <div className="flex items-baseline justify-between gap-3 mb-2 px-1">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Situational Splits</h3>
+        <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Situational Splits</h3>
         {insight && (
-          <span className="text-xs text-gray-500">
-            {side === 'offense' ? 'Best' : 'Stingiest'}: <span className="text-emerald-400 font-semibold">{insight.label}</span>
-            <span className="text-gray-600"> · {fmtSign3(insight.epa)} EPA</span>
+          <span className="text-xs text-ink-dim">
+            {side === 'offense' ? 'Best' : 'Stingiest'}: <span className="text-data-win font-semibold">{insight.label}</span>
+            <span className="text-ink-dim"> · {fmtSign3(insight.epa)} EPA</span>
           </span>
         )}
       </div>
@@ -1173,7 +1174,7 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
           {(['offense', 'defense'] as const).map(s => (
             <button key={s} onClick={() => { setSide(s); setDim('game_script') }}
               className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-colors ${
-                side === s ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+                side === s ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}>
               {s}
             </button>
           ))}
@@ -1182,22 +1183,22 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
           {TEAM_SPLIT_DIMS.map(d => (
             <button key={d.key} onClick={() => setDim(d.key)}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                dim === d.key ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                dim === d.key ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}>
               {d.label}
             </button>
           ))}
         </div>
       </div>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className={`${thBase} text-gray-500 pl-4`}>
+              <tr className="border-b border-surface-line">
+                <th className={`${thBase} text-ink-dim pl-4`}>
                   {TEAM_SPLIT_DIMS.find(d => d.key === dim)?.label}
                 </th>
                 {TEAM_SPLIT_COLS.map(c => (
-                  <th key={c.label} className={`${thBase} text-gray-500`}>{c.label}</th>
+                  <th key={c.label} className={`${thBase} text-ink-dim`}>{c.label}</th>
                 ))}
               </tr>
             </thead>
@@ -1210,9 +1211,9 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
       </div>
       <div className="flex items-center gap-2 mt-2 px-1">
         <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: 'rgba(16,185,129,0.4)' }} />
-        <span className="text-[11px] text-gray-600">better than this unit's average</span>
+        <span className="text-[11px] text-ink-dim">better than this unit's average</span>
         <span className="inline-block w-2.5 h-2.5 rounded-sm ml-2" style={{ backgroundColor: 'rgba(244,63,94,0.4)' }} />
-        <span className="text-[11px] text-gray-600">worse · {side === 'defense' ? 'lower EPA allowed = better' : 'regular season'}</span>
+        <span className="text-[11px] text-ink-dim">worse · {side === 'defense' ? 'lower EPA allowed = better' : 'regular season'}</span>
       </div>
     </div>
   )
@@ -1238,14 +1239,14 @@ function TeamAnalytics({ team, season }: { team: string; season: number }) {
 
   if (loading) {
     return (
-      <div className="mb-4 bg-gray-900 border border-gray-800 rounded-xl px-4 py-8 text-center text-gray-600 text-sm">
+      <div className="mb-4 bg-surface-card border border-surface-line rounded-xl px-4 py-8 text-center text-ink-dim text-sm">
         Loading analytics…
       </div>
     )
   }
   if (!focal) {
     return (
-      <div className="mb-4 bg-gray-900 border border-gray-800 rounded-xl px-4 py-6 text-center text-gray-600 text-sm">
+      <div className="mb-4 bg-surface-card border border-surface-line rounded-xl px-4 py-6 text-center text-ink-dim text-sm">
         Analytics unavailable for this season.
       </div>
     )
@@ -1259,25 +1260,25 @@ function TeamAnalytics({ team, season }: { team: string; season: number }) {
     <div className="mb-4">
       <div className="flex items-end justify-between mb-2 px-1">
         <div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Team Analytics</h3>
-          <p className="text-xs text-gray-600 mt-0.5">League rank out of 32 · regular season · 1 = best</p>
+          <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Team Analytics</h3>
+          <p className="text-xs text-ink-dim mt-0.5">League rank out of 32 · regular season · 1 = best</p>
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         <MetricPanel title="Offense"          accent="text-indigo-400"  metrics={offense} />
-        <MetricPanel title="Defense"          accent="text-red-400"     metrics={defense} />
+        <MetricPanel title="Defense"          accent="text-data-loss"     metrics={defense} />
         <div className="space-y-4">
-          <MetricPanel title="Overall"        accent="text-amber-400"   metrics={overall} />
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-xs text-gray-500">
+          <MetricPanel title="Overall"        accent="text-ink-mid"   metrics={overall} />
+          <div className="bg-surface-card border border-surface-line rounded-xl p-4 text-xs text-ink-dim">
             <div className="grid grid-cols-2 gap-y-1.5">
-              <span>Record</span><span className="text-right text-gray-300 font-semibold">{focal.wins}-{focal.losses}{focal.ties ? `-${focal.ties}` : ''}</span>
-              <span>Games</span><span className="text-right text-gray-300">{focal.games}</span>
-              <span>Points For</span><span className="text-right text-gray-300">{focal.pf_total}</span>
-              <span>Points Against</span><span className="text-right text-gray-300">{focal.pa_total}</span>
-              <span>Off Drives</span><span className="text-right text-gray-300">{focal.total_drives ?? '—'}</span>
-              <span>Def Drives</span><span className="text-right text-gray-300">{focal.total_drives_allowed ?? '—'}</span>
-              <span>Giveaways</span><span className="text-right text-gray-300">{focal.off_turnovers_total}</span>
-              <span>Takeaways</span><span className="text-right text-gray-300">{focal.def_takeaways_total}</span>
+              <span>Record</span><span className="text-right text-ink-mid font-semibold">{focal.wins}-{focal.losses}{focal.ties ? `-${focal.ties}` : ''}</span>
+              <span>Games</span><span className="text-right text-ink-mid">{focal.games}</span>
+              <span>Points For</span><span className="text-right text-ink-mid">{focal.pf_total}</span>
+              <span>Points Against</span><span className="text-right text-ink-mid">{focal.pa_total}</span>
+              <span>Off Drives</span><span className="text-right text-ink-mid">{focal.total_drives ?? '—'}</span>
+              <span>Def Drives</span><span className="text-right text-ink-mid">{focal.total_drives_allowed ?? '—'}</span>
+              <span>Giveaways</span><span className="text-right text-ink-mid">{focal.off_turnovers_total}</span>
+              <span>Takeaways</span><span className="text-right text-ink-mid">{focal.def_takeaways_total}</span>
             </div>
           </div>
         </div>
@@ -1295,9 +1296,9 @@ function injuryToneClasses(status: string | null | undefined): string {
   switch (status) {
     case 'Out':           return 'bg-rose-950/40 border-rose-800/70 text-rose-300'
     case 'Doubtful':      return 'bg-orange-950/40 border-orange-800/70 text-orange-300'
-    case 'Questionable':  return 'bg-amber-950/40 border-amber-800/70 text-amber-300'
-    case 'Probable':      return 'bg-emerald-950/40 border-emerald-800/70 text-emerald-300'
-    default:              return 'bg-gray-900 border-gray-800 text-gray-400'
+    case 'Questionable':  return 'bg-surface-raise/40 border-data-loss/40 text-data-loss'
+    case 'Probable':      return 'bg-emerald-950/40 border-emerald-800/70 text-data-win'
+    default:              return 'bg-surface-card border-surface-line text-ink-mid'
   }
 }
 
@@ -1310,10 +1311,10 @@ function InjuryReportPanel({ team, season }: { team: string; season: number }) {
   const headline = `Week ${injuries[0].week} Injury Report`
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{headline}</span>
-        <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{injuries.length} listed</span>
+    <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-surface-line flex items-center justify-between">
+        <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{headline}</span>
+        <span className="text-[10px] font-bold text-ink-dim uppercase tracking-widest">{injuries.length} listed</span>
       </div>
       <ul className="divide-y divide-gray-800/60">
         {injuries.map((inj, i) => (
@@ -1321,11 +1322,11 @@ function InjuryReportPanel({ team, season }: { team: string; season: number }) {
             <span className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${injuryToneClasses(inj.report_status)}`}>
               {inj.report_status ?? '—'}
             </span>
-            <span className="shrink-0 text-[11px] text-gray-600 w-9 text-center font-bold">{inj.position ?? ''}</span>
-            <span className="flex-1 min-w-0 text-gray-200 truncate">{inj.full_name ?? '—'}</span>
-            <span className="text-xs text-gray-500 truncate max-w-[40%]">
+            <span className="shrink-0 text-[11px] text-ink-dim w-9 text-center font-bold">{inj.position ?? ''}</span>
+            <span className="flex-1 min-w-0 text-ink truncate">{inj.full_name ?? '—'}</span>
+            <span className="text-xs text-ink-dim truncate max-w-[40%]">
               {inj.report_primary_injury ?? '—'}
-              {inj.report_secondary_injury && <span className="text-gray-700"> · {inj.report_secondary_injury}</span>}
+              {inj.report_secondary_injury && <span className="text-ink-dim"> · {inj.report_secondary_injury}</span>}
             </span>
           </li>
         ))}
@@ -1348,9 +1349,9 @@ function StartingLineupPanel({ team, season }: { team: string; season: number })
   const headline = week ? `Week ${week} Starting Lineup` : 'Starting Lineup'
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{headline}</span>
+    <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-surface-line flex items-center justify-between">
+        <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{headline}</span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-800/60">
         {offense.length > 0 && <LineupColumn label="Offense" rows={offense} />}
@@ -1363,14 +1364,14 @@ function StartingLineupPanel({ team, season }: { team: string; season: number })
 function LineupColumn({ label, rows }: { label: string; rows: { depth_position: string | null; full_name: string | null; position: string | null }[] }) {
   return (
     <div className="p-3">
-      <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-2 px-1">{label}</div>
+      <div className="text-[10px] font-bold text-ink-dim uppercase tracking-widest mb-2 px-1">{label}</div>
       <ul className="space-y-0.5">
         {rows.map((r, i) => (
           <li key={`${r.depth_position}-${i}`} className="flex items-center gap-2 px-1 py-1 text-sm">
             <span className="shrink-0 text-[10px] font-bold text-indigo-400 w-10 uppercase tracking-wider">
               {r.depth_position ?? r.position ?? ''}
             </span>
-            <span className="flex-1 min-w-0 text-gray-300 truncate">{r.full_name ?? '—'}</span>
+            <span className="flex-1 min-w-0 text-ink-mid truncate">{r.full_name ?? '—'}</span>
           </li>
         ))}
       </ul>
@@ -1397,19 +1398,19 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
       {rosterOpen && <RosterModal profile={profile} roster={roster} onClose={() => setRosterOpen(false)} />}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-white font-bold text-xl">{profile.season} Season</div>
-          <div className="text-gray-500 text-sm">{played} games · {label}</div>
+          <div className="text-ink font-bold text-xl">{profile.season} Season</div>
+          <div className="text-ink-dim text-sm">{played} games · {label}</div>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setRosterOpen(true)}
-            className="text-sm text-gray-400 hover:text-white bg-gray-800/60 hover:bg-gray-700/60 border border-gray-700 rounded-lg px-4 py-2 transition-colors font-medium"
+            className="text-sm text-ink-mid hover:text-ink bg-surface-raise/60 hover:bg-surface-raise/60 border border-surface-line rounded-lg px-4 py-2 transition-colors font-medium"
           >
             Roster
           </button>
           <button
             onClick={() => setStatsOpen(true)}
-            className="text-sm text-indigo-400 hover:text-white bg-indigo-900/30 hover:bg-indigo-800/50 border border-indigo-700/50 rounded-lg px-4 py-2 transition-colors font-medium"
+            className="text-sm text-indigo-400 hover:text-ink bg-indigo-900/30 hover:bg-indigo-800/50 border border-indigo-700/50 rounded-lg px-4 py-2 transition-colors font-medium"
           >
             Full Stats
           </button>
@@ -1424,15 +1425,15 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
       </div>
       <ScoreChart profile={profile} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col">
-          <div className="px-4 py-2.5 border-b border-gray-800">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Schedule</span>
+        <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden flex flex-col">
+          <div className="px-4 py-2.5 border-b border-surface-line">
+            <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">Schedule</span>
           </div>
           <SchedulePanel profile={profile} />
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col">
-          <div className="px-4 py-2.5 border-b border-gray-800">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Leaders</span>
+        <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden flex flex-col">
+          <div className="px-4 py-2.5 border-b border-surface-line">
+            <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">Leaders</span>
           </div>
           <LeadersPanel leaders={profile.leaders} onViewFull={() => setStatsOpen(true)} />
         </div>
@@ -1483,9 +1484,9 @@ function SeasonSidebar({
   )
 
   return (
-    <div className="flex flex-col border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shrink-0 lg:w-40">
-      <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-800/40">
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Seasons</span>
+    <div className="flex flex-col border border-surface-line rounded-xl overflow-hidden bg-surface-card shrink-0 lg:w-40">
+      <div className="px-4 py-2.5 border-b border-surface-line bg-surface-raise/40">
+        <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">Seasons</span>
       </div>
       <div className="overflow-y-auto">
         {visibleYears.map(year => {
@@ -1500,17 +1501,17 @@ function SeasonSidebar({
               key={year}
               onClick={() => profile ? onSelect(year) : undefined}
               disabled={inProgress && !profile}
-              className={`w-full text-left px-4 py-3 border-b border-gray-800/60 transition-colors
-                ${active ? 'bg-indigo-900/30 border-l-2 border-l-indigo-500' : 'hover:bg-gray-800/60'}
+              className={`w-full text-left px-4 py-3 border-b border-surface-line/60 transition-colors
+                ${active ? 'bg-indigo-900/30 border-l-2 border-l-indigo-500' : 'hover:bg-surface-raise/60'}
                 ${inProgress && !profile ? 'cursor-default' : ''}`}
             >
               <div className="flex items-center gap-1.5">
                 <StatusDot status={status} />
-                <span className={`text-sm font-bold ${active ? 'text-indigo-300' : inProgress ? 'text-gray-400' : 'text-gray-300'}`}>
+                <span className={`text-sm font-bold ${active ? 'text-indigo-300' : inProgress ? 'text-ink-mid' : 'text-ink-mid'}`}>
                   {year}
                 </span>
               </div>
-              <div className="text-xs text-gray-600 mt-0.5">
+              <div className="text-xs text-ink-dim mt-0.5">
                 {inProgress ? (status === 'loading' ? 'Loading…' : 'Queued') : rec ? rec.label : ''}
               </div>
             </button>
@@ -1520,7 +1521,7 @@ function SeasonSidebar({
       {canLoadMore && (
         <button
           onClick={() => onQueueSeason(nextAvailable!)}
-          className="text-xs text-gray-600 hover:text-gray-300 py-2.5 border-t border-gray-800 transition-colors"
+          className="text-xs text-ink-dim hover:text-ink-mid py-2.5 border-t border-surface-line transition-colors"
         >
           + {nextAvailable}
         </button>
@@ -1626,28 +1627,27 @@ export default function TeamPage() {
     }
   }
 
-  if (initialLoading) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Loading...</p></div>
-  if (!teamAbbrev) return <div className="min-h-screen bg-gray-950"><Nav /><p className="p-8 text-gray-500">Team not found.</p></div>
+  if (initialLoading) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Loading...</p></div>
+  if (!teamAbbrev) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Team not found.</p></div>
 
   if (!profiles.length) {
     const anyInFlight = Object.values(seasonStatuses).some(s => s === 'loading' || s === 'queued')
     return (
-      <div className="min-h-screen bg-gray-950">
+      <div className="min-h-screen bg-surface-bg">
         <Nav />
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <div className="flex items-center gap-5 mb-8">
+          <Card title={teamName(teamAbbrev)} className="mb-8"><div className="flex items-center gap-5 border-t border-surface-line p-5">
             <img src={teamLogoUrl(teamAbbrev)} alt={teamAbbrev} className="w-20 h-20 object-contain shrink-0" />
             <div>
-              <h1 className="text-3xl font-bold text-white leading-tight">{teamName(teamAbbrev)}</h1>
               {anyInFlight
-                ? <div className="text-gray-500 mt-1 flex items-center gap-2">
+                ? <div className="text-ink-dim mt-1 flex items-center gap-2">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
                     Loading season data — updates automatically…
                   </div>
-                : <p className="text-gray-600 mt-1">No data available for this team.</p>
+                : <p className="text-ink-dim mt-1">No data available for this team.</p>
               }
             </div>
-          </div>
+          </div></Card>
         </div>
       </div>
     )
@@ -1658,20 +1658,19 @@ export default function TeamPage() {
   const activeProfile = profiles.find(p => p.season === selectedSeason) ?? profiles[0]
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-surface-bg">
       <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-5 mb-8">
+        <Card title={teamName(teamAbbrev)} className="mb-8"><div className="flex items-center gap-5 border-t border-surface-line p-5">
           <img src={teamLogoUrl(teamAbbrev)} alt={teamAbbrev} className="w-20 h-20 object-contain shrink-0" />
           <div>
-            <h1 className="text-3xl font-bold text-white leading-tight">{teamName(teamAbbrev)}</h1>
-            <div className="text-gray-400 mt-1">
+            <div className="text-ink-mid mt-1">
               {profiles.length} season{profiles.length !== 1 ? 's' : ''} loaded ·{' '}
-              <span className="text-white font-semibold">{allTime.label}</span>
-              <span className="text-gray-600 text-xs ml-2">{allTime.w + allTime.l + allTime.t} games</span>
+              <span className="text-ink font-semibold">{allTime.label}</span>
+              <span className="text-ink-dim text-xs ml-2">{allTime.w + allTime.l + allTime.t} games</span>
             </div>
           </div>
-        </div>
+        </div></Card>
 
         <div className="flex flex-col lg:flex-row gap-4 lg:items-start">
           <SeasonSidebar

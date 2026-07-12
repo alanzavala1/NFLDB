@@ -16,6 +16,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { PlayerSplit, TeamSplit, DefensiveSplit, SearchResult } from '../api'
 import Nav from '../components/Nav'
+import Card from '../components/Card'
 import { teamLogoUrl, teamName } from '../utils/teams'
 import {
   PLAYER_SPLIT_CONFIG, TEAM_SPLIT_CONFIG, DEFENSE_SPLIT_CONFIG,
@@ -54,14 +55,14 @@ const GAME_KEY_KEYS: Record<string, string[]> = {
   rushing: ['yds', 'td', 'ypc', 'epa'],
   receiving: ['rec', 'yds', 'td', 'ypr', 'epa'],
 }
-const selectCls = 'bg-gray-900 border border-gray-800 text-gray-200 text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-gray-600'
+const selectCls = 'bg-surface-card border border-surface-line text-ink text-xs rounded-lg px-2.5 py-2 focus:outline-none focus:border-gray-600'
 
 function Seg<T extends string | number>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
   return (
-    <div className="inline-flex items-center gap-0.5 bg-gray-900 border border-gray-800 rounded-lg p-0.5 flex-wrap">
+    <div className="inline-flex items-center gap-0.5 bg-surface-card border border-surface-line rounded-lg p-0.5 flex-wrap">
       {options.map(o => (
         <button key={String(o.value)} onClick={() => onChange(o.value)}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${value === o.value ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}>{o.label}</button>
+          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${value === o.value ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}>{o.label}</button>
       ))}
     </div>
   )
@@ -70,7 +71,7 @@ function Seg<T extends string | number>({ value, options, onChange }: { value: T
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick}
-      className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${active ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'}`}>{children}</button>
+      className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${active ? 'bg-indigo-600 border-indigo-500 text-ink' : 'bg-surface-card border-surface-line text-ink-mid hover:text-ink hover:border-surface-line'}`}>{children}</button>
   )
 }
 
@@ -94,16 +95,16 @@ function AddEntity({ mode, onAdd }: { mode: Mode; onAdd: (r: SearchResult) => vo
     <div className="relative">
       <input value={q} onChange={e => { setQ(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={mode === 'players' ? '+ Add player…' : '+ Add team…'}
-        className="bg-gray-900 border border-gray-800 text-gray-200 text-sm rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-gray-600 placeholder-gray-600" />
+        className="bg-surface-card border border-surface-line text-ink text-sm rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-gray-600 placeholder:text-ink-dim" />
       {open && q.trim() && results.length > 0 && (
-        <div className="absolute z-30 mt-1 w-64 max-h-72 overflow-y-auto bg-gray-900 border border-gray-700 rounded-lg shadow-2xl">
+        <div className="absolute z-30 mt-1 w-64 max-h-72 overflow-y-auto bg-surface-card border border-surface-line rounded-lg shadow-2xl">
           {results.slice(0, 12).map(r => (
-            <button key={r.id} onMouseDown={() => { onAdd(r); setQ(''); setResults([]) }} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-800 text-left">
+            <button key={r.id} onMouseDown={() => { onAdd(r); setQ(''); setResults([]) }} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-surface-raise text-left">
               {r.type === 'team' ? <img src={teamLogoUrl(r.id)} className="w-6 h-6 object-contain shrink-0" alt="" />
-                : r.headshot_url ? <img src={r.headshot_url} className="w-6 h-6 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" /> : <div className="w-6 h-6 rounded-full bg-gray-800 shrink-0" />}
+                : r.headshot_url ? <img src={r.headshot_url} className="w-6 h-6 rounded-full object-cover object-top shrink-0 bg-surface-raise" alt="" /> : <div className="w-6 h-6 rounded-full bg-surface-raise shrink-0" />}
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-white truncate">{r.type === 'team' ? teamName(r.id) : r.name}</div>
-                <div className="text-xs text-gray-500 truncate">{r.type === 'team' ? r.id : [r.position, r.team].filter(Boolean).join(' · ')}</div>
+                <div className="text-sm font-semibold text-ink truncate">{r.type === 'team' ? teamName(r.id) : r.name}</div>
+                <div className="text-xs text-ink-dim truncate">{r.type === 'team' ? r.id : [r.position, r.team].filter(Boolean).join(' · ')}</div>
               </div>
             </button>
           ))}
@@ -117,15 +118,15 @@ function MatchupHeader({ entities, onRemove }: { entities: EntityCard[]; onRemov
   return (
     <div className="flex flex-wrap items-stretch gap-2 mb-5">
       {entities.map((e, i) => (
-        <div key={e.key} className="group relative flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-xl pl-3 pr-8 py-2.5 min-w-[150px]" style={{ boxShadow: `inset 0 2px 0 0 rgba(${e.color},0.9)` }}>
+        <div key={e.key} className="group relative flex items-center gap-3 bg-surface-card border border-surface-line rounded-xl pl-3 pr-8 py-2.5 min-w-[150px]" style={{ boxShadow: `inset 0 2px 0 0 rgba(${e.color},0.9)` }}>
           {e.logo ? <img src={e.logo} className="w-10 h-10 object-contain shrink-0" alt="" />
-            : e.headshot ? <img src={e.headshot} className="w-10 h-10 rounded-full object-cover object-top bg-gray-800 shrink-0" style={{ boxShadow: `0 0 0 2px rgba(${e.color},0.55)` }} alt="" /> : <div className="w-10 h-10 rounded-full bg-gray-800 shrink-0" />}
+            : e.headshot ? <img src={e.headshot} className="w-10 h-10 rounded-full object-cover object-top bg-surface-raise shrink-0" style={{ boxShadow: `0 0 0 2px rgba(${e.color},0.55)` }} alt="" /> : <div className="w-10 h-10 rounded-full bg-surface-raise shrink-0" />}
           <div className="min-w-0">
-            <div className="text-sm font-bold text-white truncate leading-tight">{e.label}</div>
-            {e.sub && <div className="text-[11px] text-gray-500 truncate">{e.sub}</div>}
+            <div className="text-sm font-bold text-ink truncate leading-tight">{e.label}</div>
+            {e.sub && <div className="text-[11px] text-ink-dim truncate">{e.sub}</div>}
           </div>
-          <button onClick={() => onRemove(e.key)} className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded text-gray-600 hover:text-red-400 hover:bg-gray-800">×</button>
-          {i < entities.length - 1 && entities.length === 2 && <span className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-[10px] font-black text-gray-600">VS</span>}
+          <button onClick={() => onRemove(e.key)} className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded text-ink-dim hover:text-data-loss hover:bg-surface-raise">×</button>
+          {i < entities.length - 1 && entities.length === 2 && <span className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-[10px] font-black text-ink-dim">VS</span>}
         </div>
       ))}
     </div>
@@ -190,31 +191,31 @@ function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defaultSort
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b-2 border-gray-800">
-            <th className="py-2 pl-4 pr-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-left whitespace-nowrap">{firstCol}</th>
-            {hasDefRk && <th onClick={() => clickSort('__defrk', 'asc')} className="py-2 px-3 text-[11px] font-bold text-amber-500/70 uppercase tracking-wider text-left whitespace-nowrap cursor-pointer hover:text-amber-300 select-none">Def Rk{arrow('__defrk')}</th>}
+          <tr className="border-b-2 border-surface-line">
+            <th className="py-2 pl-4 pr-3 text-[11px] font-bold text-ink-mid uppercase tracking-wider text-left whitespace-nowrap">{firstCol}</th>
+            {hasDefRk && <th onClick={() => clickSort('__defrk', 'asc')} className="py-2 px-3 text-[11px] font-bold text-ink-dim/70 uppercase tracking-wider text-left whitespace-nowrap cursor-pointer hover:text-data-loss select-none">Def Rk{arrow('__defrk')}</th>}
             {metrics.map(m => (
-              <th key={m.key} onClick={() => clickSort(m.key)} className="py-2 px-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-left whitespace-nowrap cursor-pointer hover:text-white select-none">{m.label}{arrow(m.key)}</th>
+              <th key={m.key} onClick={() => clickSort(m.key)} className="py-2 px-3 text-[11px] font-bold text-ink-dim uppercase tracking-wider text-left whitespace-nowrap cursor-pointer hover:text-ink select-none">{m.label}{arrow(m.key)}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {sorted.map(r => (
-            <tr key={r.key} className={`border-t border-gray-800/50 hover:bg-gray-800/30 ${r.sub ? 'bg-gray-950/40' : ''}`}>
-              <td className={`py-2 pr-3 whitespace-nowrap ${r.sub ? 'pl-9 text-gray-400 text-xs' : 'pl-4 font-semibold text-white'}`}>
+            <tr key={r.key} className={`border-t border-surface-line/50 hover:bg-surface-raise/30 ${r.sub ? 'bg-surface-bg/40' : ''}`}>
+              <td className={`py-2 pr-3 whitespace-nowrap ${r.sub ? 'pl-9 text-ink-mid text-xs' : 'pl-4 font-semibold text-ink'}`}>
                 <span className="inline-flex items-center gap-1.5">
                   {onToggleExpand && !r.sub && (
-                    <button onClick={() => onToggleExpand(r.key)} className="text-gray-600 hover:text-white w-3">▸</button>
+                    <button onClick={() => onToggleExpand(r.key)} className="text-ink-dim hover:text-ink w-3">▸</button>
                   )}
                   {r.label}
                 </span>
               </td>
-              {hasDefRk && <td className="py-2 px-3 whitespace-nowrap tabular-nums text-amber-200/80 text-xs">{r.defRk != null ? `#${r.defRk}` : '—'}</td>}
+              {hasDefRk && <td className="py-2 px-3 whitespace-nowrap tabular-nums text-ink-mid/80 text-xs">{r.defRk != null ? `#${r.defRk}` : '—'}</td>}
               {metrics.map(m => {
                 const v = r.row ? m.value(r.row) : null
                 const isBest = !r.sub && colBest.get(m.key)?.has(visibleRows.indexOf(r))
                 return (
-                  <td key={m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums ${v == null ? 'text-gray-700' : isBest ? 'text-emerald-300 font-bold bg-emerald-500/15' : r.sub ? 'text-gray-400' : 'text-gray-200'}`}>
+                  <td key={m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums ${v == null ? 'text-ink-dim' : isBest ? 'text-data-win font-bold bg-data-win/15' : r.sub ? 'text-ink-mid' : 'text-ink'}`}>
                     {v == null ? '—' : m.fmt(v)}
                   </td>
                 )
@@ -222,12 +223,12 @@ function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defaultSort
             </tr>
           ))}
           {total && (
-            <tr className="border-t-2 border-gray-700 bg-gray-800/50">
-              <td className="py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-gray-300 uppercase tracking-wider">Total</td>
+            <tr className="border-t-2 border-surface-line bg-surface-raise/50">
+              <td className="py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-ink-mid uppercase tracking-wider">Total</td>
               {hasDefRk && <td />}
               {metrics.map(m => {
                 const v = m.value(total)
-                return <td key={m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums font-bold ${v == null ? 'text-gray-700' : 'text-gray-200'}`}>{v == null ? '—' : m.fmt(v)}</td>
+                return <td key={m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums font-bold ${v == null ? 'text-ink-dim' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
               })}
             </tr>
           )}
@@ -239,12 +240,12 @@ function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defaultSort
 
 function Section({ title, children, open, onToggle }: { title: string; children: React.ReactNode; open: boolean; onToggle: () => void }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-800/40">
-        <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">{title}</span>
-        <span className="text-gray-600 text-xs">{open ? '▾' : '▸'}</span>
+    <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-surface-raise/40">
+        <span className="text-xs font-bold text-ink-mid uppercase tracking-wider">{title}</span>
+        <span className="text-ink-dim text-xs">{open ? '▾' : '▸'}</span>
       </button>
-      {open && <div className="border-t border-gray-800">{children}</div>}
+      {open && <div className="border-t border-surface-line">{children}</div>}
     </div>
   )
 }
@@ -268,17 +269,17 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
   onToggleExpand?: (k: string) => void
   flip: (hib: boolean | undefined) => boolean | undefined
 }) {
-  const sticky = 'sticky left-0 z-10 bg-gray-900'
+  const sticky = 'sticky left-0 z-10 bg-surface-card'
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm border-separate" style={{ borderSpacing: 0 }}>
         <thead>
           <tr>
-            <th rowSpan={2} className={`${sticky} py-2 pl-4 pr-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-gray-800`}>{label}</th>
+            <th rowSpan={2} className={`${sticky} py-2 pl-4 pr-3 text-[11px] font-bold text-ink-mid uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-surface-line`}>{label}</th>
             {entities.map(e => (
-              <th key={e.key} colSpan={metrics.length} className="py-1.5 px-3 text-left whitespace-nowrap border-b border-l border-gray-800" style={{ color: `rgb(${e.color})` }}>
+              <th key={e.key} colSpan={metrics.length} className="py-1.5 px-3 text-left whitespace-nowrap border-b border-l border-surface-line" style={{ color: `rgb(${e.color})` }}>
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold">
-                  {e.headshot ? <img src={e.headshot} className="w-5 h-5 rounded-full object-cover object-top bg-gray-800" alt="" /> : e.logo ? <img src={e.logo} className="w-5 h-5 object-contain" alt="" /> : null}
+                  {e.headshot ? <img src={e.headshot} className="w-5 h-5 rounded-full object-cover object-top bg-surface-raise" alt="" /> : e.logo ? <img src={e.logo} className="w-5 h-5 object-contain" alt="" /> : null}
                   {e.label}
                 </span>
               </th>
@@ -286,7 +287,7 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
           </tr>
           <tr>
             {entities.map(e => metrics.map((m, mi) => (
-              <th key={e.key + m.key} className={`py-1.5 px-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-gray-800 ${mi === 0 ? 'border-l border-gray-800' : ''}`}>{m.label}</th>
+              <th key={e.key + m.key} className={`py-1.5 px-3 text-[10px] font-semibold text-ink-dim uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line' : ''}`}>{m.label}</th>
             )))}
           </tr>
         </thead>
@@ -296,19 +297,19 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
             const bestByMetric = metrics.map(m => bestSet(sections.map(s => { const r = s.map.get(k); return r ? m.value(r) : null }), flip(m.higherIsBetter)))
             return (
               <Fragment key={k}>
-                <tr className="hover:bg-gray-800/20">
-                  <td className={`${sticky} py-2 pl-4 pr-3 whitespace-nowrap font-semibold text-white border-t border-gray-800/50`}>
+                <tr className="hover:bg-surface-raise/20">
+                  <td className={`${sticky} py-2 pl-4 pr-3 whitespace-nowrap font-semibold text-ink border-t border-surface-line/50`}>
                     <span className="inline-flex items-center gap-1.5">
-                      {expandable && onToggleExpand && <button onClick={() => onToggleExpand(k)} className="text-gray-600 hover:text-white w-3">{expandedKeys.has(k) ? '▾' : '▸'}</button>}
+                      {expandable && onToggleExpand && <button onClick={() => onToggleExpand(k)} className="text-ink-dim hover:text-ink w-3">{expandedKeys.has(k) ? '▾' : '▸'}</button>}
                       {keyLabel(k)}
-                      {dr != null && <span className="text-amber-500/70 text-[10px] font-bold">#{dr}</span>}
+                      {dr != null && <span className="text-ink-dim/70 text-[10px] font-bold">#{dr}</span>}
                     </span>
                   </td>
                   {sections.map((s, si) => {
                     const r = s.map.get(k)
                     return metrics.map((m, mi) => {
                       const v = r ? m.value(r) : null
-                      return <td key={si + m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums border-t border-gray-800/50 ${mi === 0 ? 'border-l border-gray-800/50' : ''} ${v == null ? 'text-gray-700' : bestByMetric[mi].has(si) ? 'text-emerald-300 font-bold bg-emerald-500/15' : 'text-gray-200'}`}>{v == null ? '—' : m.fmt(v)}</td>
+                      return <td key={si + m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums border-t border-surface-line/50 ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : bestByMetric[mi].has(si) ? 'text-data-win font-bold bg-data-win/15' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
                     })
                   })}
                 </tr>
@@ -323,14 +324,14 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
                   })
                   const gks = [...new Set(rowMaps.flatMap(mm => [...mm.keys()]))].sort((a, b) => a - b)
                   return gks.map(gk => (
-                    <tr key={`g-${gk}`} className="bg-gray-950/40">
-                      <td className={`${sticky} bg-gray-950 py-1.5 pl-9 pr-3 whitespace-nowrap text-xs text-gray-500 border-t border-gray-800/40`}>{expandShowSeason ? `${Math.floor(gk / 100)} Wk ${gk % 100}` : `Wk ${gk % 100}`}</td>
+                    <tr key={`g-${gk}`} className="bg-surface-bg/40">
+                      <td className={`${sticky} bg-surface-bg py-1.5 pl-9 pr-3 whitespace-nowrap text-xs text-ink-dim border-t border-surface-line/40`}>{expandShowSeason ? `${Math.floor(gk / 100)} Wk ${gk % 100}` : `Wk ${gk % 100}`}</td>
                       {sections.map((_, si) => {
                         const x = rowMaps[si].get(gk)
                         return metrics.map((m, mi) => {
                           const v = x ? m.value(x.r) : null
                           return (
-                            <td key={si + m.key} className={`py-1.5 px-3 whitespace-nowrap tabular-nums text-xs border-t border-gray-800/40 ${mi === 0 ? 'border-l border-gray-800/50' : ''} ${v == null ? 'text-gray-800' : 'text-gray-400'}`}>
+                            <td key={si + m.key} className={`py-1.5 px-3 whitespace-nowrap tabular-nums text-xs border-t border-surface-line/40 ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : 'text-ink-mid'}`}>
                               {mi === 0 && x ? (
                                 <div className="flex flex-col leading-tight">
                                   <span>{v == null ? '—' : m.fmt(v)}</span>
@@ -348,10 +349,10 @@ function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defR
             )
           })}
           <tr>
-            <td className={`${sticky} bg-gray-800 py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-gray-300 uppercase tracking-wider border-t-2 border-gray-700`}>Total</td>
+            <td className={`${sticky} bg-surface-raise py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-ink-mid uppercase tracking-wider border-t-2 border-surface-line`}>Total</td>
             {sections.map((s, si) => metrics.map((m, mi) => {
               const v = s.total ? m.value(s.total) : null
-              return <td key={si + m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums font-bold bg-gray-800/40 border-t-2 border-gray-700 ${mi === 0 ? 'border-l border-gray-800/50' : ''} ${v == null ? 'text-gray-700' : 'text-gray-200'}`}>{v == null ? '—' : m.fmt(v)}</td>
+              return <td key={si + m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums font-bold bg-surface-raise/40 border-t-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
             }))}
           </tr>
         </tbody>
@@ -468,7 +469,7 @@ export default function SplitsPage() {
 
   const summaryRows: TRow[] = entityMeta.map((meta, i) => ({
     key: meta.key,
-    label: <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: `rgb(${meta.color})` }} />{meta.headshot ? <img src={meta.headshot} className="w-6 h-6 rounded-full object-cover object-top bg-gray-800" alt="" /> : meta.logo ? <img src={meta.logo} className="w-6 h-6 object-contain" alt="" /> : null}{meta.label}</span>,
+    label: <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: `rgb(${meta.color})` }} />{meta.headshot ? <img src={meta.headshot} className="w-6 h-6 rounded-full object-cover object-top bg-surface-raise" alt="" /> : meta.logo ? <img src={meta.logo} className="w-6 h-6 object-contain" alt="" /> : null}{meta.label}</span>,
     row: situationRow(entityData[i]),
   }))
 
@@ -496,7 +497,7 @@ export default function SplitsPage() {
       for (const k of keys) {
         const grp = groups.get(k)!
         const pkey = `${dim}:${k}`
-        const gp = <span className="text-gray-500 text-[11px] font-normal ml-1.5">· {grp.length} G</span>
+        const gp = <span className="text-ink-dim text-[11px] font-normal ml-1.5">· {grp.length} G</span>
         out.push({
           key: pkey, row: aggregatePlayerSplitRows(grp.map(x => x.r)),
           defRk: dim === 'opponent' && wantDef ? (defRank.get(k) ?? null) : undefined,
@@ -595,33 +596,33 @@ export default function SplitsPage() {
   const visibleDims = sectionDims.filter(d => !hidden.has(d.key))
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-surface-bg text-ink">
       <Nav />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        <div className="flex items-start justify-between gap-3 mb-1">
-          <h1 className="text-xl font-bold text-white">Splits Explorer</h1>
+        <Card title="Build a split" className="mb-4"><div className="flex items-start justify-between gap-3 border-t border-surface-line px-4 pt-4">
           {entityCount > 0 && (
             <button onClick={() => { navigator.clipboard?.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
-              className="shrink-0 inline-flex items-center gap-1.5 bg-gray-900 border border-gray-800 text-gray-300 text-xs font-semibold rounded-lg px-3 py-1.5 hover:border-gray-600 hover:text-white transition-colors">
+              className="shrink-0 inline-flex items-center gap-1.5 bg-surface-card border border-surface-line text-ink-mid text-xs font-semibold rounded-lg px-3 py-1.5 hover:border-surface-line hover:text-ink transition-colors">
               {copied ? '✓ Copied' : '🔗 Copy link'}
             </button>
           )}
         </div>
-        <p className="text-sm text-gray-500 mb-5">Compare head-to-head, then explore every split at once for one entity — by season (down to each game), down, situation, opponent and more. Every view has a shareable link.</p>
+        <p className="text-sm text-ink-dim mb-5">Compare head-to-head, then explore every split at once for one entity — by season (down to each game), down, situation, opponent and more. Every view has a shareable link.</p>
 
-        <div className="flex flex-wrap items-center gap-3 mb-3">
+        <div className="flex flex-wrap items-center gap-3 border-t border-surface-line p-4">
           <Seg<Mode> value={mode} options={[{ value: 'players', label: 'Players' }, { value: 'teams', label: 'Teams' }]}
             onChange={m => { setMode(m); setSituation(null); if (m === 'teams' && season === CAREER_SEASON) setSeason(CURRENT_NFL_SEASON) }} />
           <AddEntity mode={mode} onAdd={addEntity} />
         </div>
 
+        </Card>
         {entityCount > 0 && <MatchupHeader entities={entityMeta} onRemove={k => mode === 'players' ? setPlayers(xs => xs.filter(x => x.id !== k)) : setTeams(xs => xs.filter(x => x !== k))} />}
 
         {entityCount === 0 ? (
-          <div className="bg-gray-900 border border-gray-800 border-dashed rounded-xl px-6 py-16 text-center">
-            <p className="text-gray-400 font-medium">Add {mode} to compare</p>
-            <p className="text-gray-600 text-sm mt-1">Search above to add up to 6 {mode}.</p>
-          </div>
+          <Card title="Results"><div className="border-t border-surface-line px-6 py-16 text-center">
+            <p className="text-ink-mid font-medium">Add {mode} to compare</p>
+            <p className="text-ink-dim text-sm mt-1">Search above to add up to 6 {mode}.</p>
+          </div></Card>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -636,33 +637,33 @@ export default function SplitsPage() {
 
             {/* Head-to-head summary with situation chips */}
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1">Compare on</span>
+              <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider mr-1">Compare on</span>
               <Chip active={!situation} onClick={() => setSituation(null)}>Overall</Chip>
               {situations.map(s => <Chip key={s.label} active={situation?.label === s.label} onClick={() => setSituation(s)}>{s.label}</Chip>)}
             </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
+            <Card title="Results" className="mb-6">
               {summaryRows.every(r => r.row == null)
-                ? <div className="py-8 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
+                ? <div className="py-8 text-center text-ink-dim text-sm">{loading ? 'Loading…' : 'No data.'}</div>
                 : <StatTable firstCol={mode === 'players' ? 'Player' : 'Team'} rows={summaryRows} metrics={metrics} flip={flip} />}
-            </div>
+            </Card>
 
             {/* Where they stand out — auto-surfaced standout splits (single player) */}
             {notable && notable.items.length > 0 && (
               <div className="mb-6">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
-                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Where {entityMeta[0].label} stands out</span>
-                  <span className="text-[11px] text-gray-600">biggest swings in {notable.met.label} vs {isCareer ? 'career' : season} avg of {notable.met.fmt(notable.base)}</span>
+                  <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider">Where {entityMeta[0].label} stands out</span>
+                  <span className="text-[11px] text-ink-dim">biggest swings in {notable.met.label} vs {isCareer ? 'career' : season} avg of {notable.met.fmt(notable.base)}</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                   {notable.items.map((it, i) => {
                     const good = notable.met.higherIsBetter ? it.delta > 0 : it.delta < 0
                     return (
-                      <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5" style={{ boxShadow: `inset 0 2px 0 0 ${good ? 'rgba(16,185,129,0.7)' : 'rgba(244,63,94,0.7)'}` }}>
-                        <div className="text-xs font-semibold text-gray-200 truncate flex items-center gap-1">{it.label}</div>
-                        <div className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">{it.kind}</div>
-                        <div className="text-lg font-bold text-white tabular-nums leading-none">{notable.met.fmt(it.v)}</div>
-                        <div className={`text-[11px] font-semibold tabular-nums mt-1 ${good ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {it.delta >= 0 ? '+' : '−'}{notable.met.fmt(Math.abs(it.delta))}<span className="text-gray-600 font-normal"> · {it.vol} {notable.unit}</span>
+                      <div key={i} className="bg-surface-card border border-surface-line rounded-xl px-3 py-2.5" style={{ boxShadow: `inset 0 2px 0 0 ${good ? 'rgba(16,185,129,0.7)' : 'rgba(244,63,94,0.7)'}` }}>
+                        <div className="text-xs font-semibold text-ink truncate flex items-center gap-1">{it.label}</div>
+                        <div className="text-[10px] text-ink-dim uppercase tracking-wide mb-1.5">{it.kind}</div>
+                        <div className="text-lg font-bold text-ink tabular-nums leading-none">{notable.met.fmt(it.v)}</div>
+                        <div className={`text-[11px] font-semibold tabular-nums mt-1 ${good ? 'text-data-win' : 'text-data-loss'}`}>
+                          {it.delta >= 0 ? '+' : '−'}{notable.met.fmt(Math.abs(it.delta))}<span className="text-ink-dim font-normal"> · {it.vol} {notable.unit}</span>
                         </div>
                       </div>
                     )
@@ -673,13 +674,13 @@ export default function SplitsPage() {
 
             {/* All splits — single = traditional page; multiple = side-by-side */}
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{single ? 'Splits for' : 'Splits side-by-side'}</span>
+              <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider">{single ? 'Splits for' : 'Splits side-by-side'}</span>
               {single
-                ? <span className="text-sm font-bold text-white">{entityMeta[0].label}</span>
+                ? <span className="text-sm font-bold text-ink">{entityMeta[0].label}</span>
                 : <Seg value={keyStatsOnly ? 'key' : 'all'} options={[{ value: 'key', label: 'Key stats' }, { value: 'all', label: 'All stats' }]} onChange={v => setKeyStatsOnly(v === 'key')} />}
             </div>
             <div className="flex flex-wrap items-center gap-1.5 mb-3">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mr-1">Show</span>
+              <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider mr-1">Show</span>
               {sectionDims.map(d => <Chip key={d.key} active={!hidden.has(d.key)} onClick={() => setHidden(h => { const n = new Set(h); n.has(d.key) ? n.delete(d.key) : n.add(d.key); return n })}>{d.label}</Chip>)}
             </div>
 
@@ -691,7 +692,7 @@ export default function SplitsPage() {
                   return (
                     <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
                       {rows.length === 0
-                        ? <div className="py-6 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
+                        ? <div className="py-6 text-center text-ink-dim text-sm">{loading ? 'Loading…' : 'No data.'}</div>
                         : <StatTable firstCol={d.label} rows={rows} total={total} metrics={gameBased ? gameMetrics : metrics} flip={flip}
                             hasDefRk={d.key === 'opponent' && wantDef} naturalSort={!gameBased}
                             onToggleExpand={gameBased ? (k => setExpandedKeys(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })) : undefined} />}
@@ -716,7 +717,7 @@ export default function SplitsPage() {
                 return (
                   <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
                     {keys.length === 0
-                      ? <div className="py-6 text-center text-gray-600 text-sm">{loading ? 'Loading…' : 'No data.'}</div>
+                      ? <div className="py-6 text-center text-ink-dim text-sm">{loading ? 'Loading…' : 'No data.'}</div>
                       : <GroupedTable label={d.label} entities={entityMeta} metrics={m} keys={keys} keyLabel={keyLabel} sections={secs}
                           defRkFor={d.key === 'opponent' && wantDef ? (k => defRank.get(k)) : undefined}
                           expandable={gameBased} expandShowSeason={d.key === 'opponent'} expandedKeys={expandedKeys}
@@ -726,7 +727,7 @@ export default function SplitsPage() {
                 )
               })}
             </div>
-            <p className="text-[11px] text-gray-600 mt-3 px-1">
+            <p className="text-[11px] text-ink-dim mt-3 px-1">
               {single ? 'Click a column to sort · ' : ''}▸ expands a season into its games (linked to the game page) · Season &amp; Opponent use official game-log totals; other splits are play-by-play · green = best{single ? ' in column' : ''} · regular season.
             </p>
           </>

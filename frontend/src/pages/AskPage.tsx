@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Nav from '../components/Nav'
+import Card from '../components/Card'
 import { askStream } from '../api'
 import type { ToolCall } from '../types'
 
@@ -32,28 +33,28 @@ const TOOL_LABELS: Record<string, string> = {
 // element (React warns on unknown props); `void node` marks it intentionally
 // unused.
 const MD: Components = {
-  p: ({ node, ...p }) => { void node; return <p className="mb-3 leading-relaxed text-gray-200 last:mb-0" {...p} /> },
-  strong: ({ node, ...p }) => { void node; return <strong className="font-semibold text-white" {...p} /> },
-  em: ({ node, ...p }) => { void node; return <em className="text-gray-300" {...p} /> },
+  p: ({ node, ...p }) => { void node; return <p className="mb-3 leading-relaxed text-ink last:mb-0" {...p} /> },
+  strong: ({ node, ...p }) => { void node; return <strong className="font-semibold text-ink" {...p} /> },
+  em: ({ node, ...p }) => { void node; return <em className="text-ink-mid" {...p} /> },
   ul: ({ node, ...p }) => { void node; return <ul className="mb-3 ml-5 list-disc space-y-1.5 marker:text-indigo-400 last:mb-0" {...p} /> },
-  ol: ({ node, ...p }) => { void node; return <ol className="mb-3 ml-5 list-decimal space-y-1.5 marker:text-gray-500 last:mb-0" {...p} /> },
-  li: ({ node, ...p }) => { void node; return <li className="pl-1 leading-relaxed text-gray-200" {...p} /> },
-  h1: ({ node, ...p }) => { void node; return <h3 className="mb-2 mt-4 text-base font-semibold text-white first:mt-0" {...p} /> },
-  h2: ({ node, ...p }) => { void node; return <h3 className="mb-2 mt-4 text-base font-semibold text-white first:mt-0" {...p} /> },
-  h3: ({ node, ...p }) => { void node; return <h4 className="mb-1.5 mt-3 text-sm font-semibold uppercase tracking-wide text-gray-400 first:mt-0" {...p} /> },
-  code: ({ node, ...p }) => { void node; return <code className="rounded bg-gray-800 px-1.5 py-0.5 text-[13px] text-indigo-300" {...p} /> },
+  ol: ({ node, ...p }) => { void node; return <ol className="mb-3 ml-5 list-decimal space-y-1.5 marker:text-ink-dim last:mb-0" {...p} /> },
+  li: ({ node, ...p }) => { void node; return <li className="pl-1 leading-relaxed text-ink" {...p} /> },
+  h1: ({ node, ...p }) => { void node; return <h3 className="mb-2 mt-4 text-base font-semibold text-ink first:mt-0" {...p} /> },
+  h2: ({ node, ...p }) => { void node; return <h3 className="mb-2 mt-4 text-base font-semibold text-ink first:mt-0" {...p} /> },
+  h3: ({ node, ...p }) => { void node; return <h4 className="mb-1.5 mt-3 text-sm font-semibold uppercase tracking-wide text-ink-mid first:mt-0" {...p} /> },
+  code: ({ node, ...p }) => { void node; return <code className="rounded bg-surface-raise px-1.5 py-0.5 text-[13px] text-indigo-300" {...p} /> },
   a: ({ node, ...p }) => { void node; return <a className="text-indigo-400 underline hover:text-indigo-300" {...p} /> },
   table: ({ node, ...p }) => {
     void node
     return (
-      <div className="my-3 overflow-x-auto rounded-lg border border-gray-800">
+      <div className="my-3 overflow-x-auto rounded-lg border border-surface-line">
         <table className="w-full text-sm" {...p} />
       </div>
     )
   },
-  thead: ({ node, ...p }) => { void node; return <thead className="bg-gray-900/80 text-left text-gray-400" {...p} /> },
+  thead: ({ node, ...p }) => { void node; return <thead className="bg-surface-card/80 text-left text-ink-mid" {...p} /> },
   th: ({ node, ...p }) => { void node; return <th className="px-3 py-2 font-medium" {...p} /> },
-  td: ({ node, ...p }) => { void node; return <td className="border-t border-gray-800/70 px-3 py-2 text-gray-200" {...p} /> },
+  td: ({ node, ...p }) => { void node; return <td className="border-t border-surface-line/70 px-3 py-2 text-ink" {...p} /> },
 }
 
 function prettyKey(k: string): string {
@@ -77,8 +78,8 @@ function fmt(v: unknown): string {
 function Transparency({ tools }: { tools: ToolCall[] }) {
   if (!tools.length) return null
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-gray-800 pt-3 text-xs text-gray-500">
-      <span className="text-gray-600">How I got this</span>
+    <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-surface-line pt-3 text-xs text-ink-dim">
+      <span className="text-ink-dim">How I got this</span>
       {tools.map((t, i) => {
         const args = Object.entries((t.args ?? {}) as Record<string, unknown>)
           .filter(([k]) => k !== 'player_id')
@@ -86,10 +87,10 @@ function Transparency({ tools }: { tools: ToolCall[] }) {
           .join(' · ')
         return (
           <span key={i} className="inline-flex items-center gap-2">
-            {i > 0 && <span className="text-gray-700">›</span>}
-            <span className="rounded-md bg-gray-800/70 px-2 py-0.5 text-gray-300">
+            {i > 0 && <span className="text-ink-dim">›</span>}
+            <span className="rounded-md bg-surface-raise/70 px-2 py-0.5 text-ink-mid">
               {TOOL_LABELS[t.tool] ?? t.tool}
-              {args && <span className="text-gray-500"> · {args}</span>}
+              {args && <span className="text-ink-dim"> · {args}</span>}
             </span>
           </span>
         )
@@ -107,10 +108,10 @@ function DataView({ data }: { data: Record<string, unknown>[] }) {
   if (allPrimitive) {
     const cols = Array.from(new Set(data.flatMap((r) => Object.keys(r))))
     return (
-      <div className="overflow-x-auto rounded-xl border border-gray-800">
+      <div className="overflow-x-auto rounded-xl border border-surface-line">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-900/80 text-left text-gray-400">
+            <tr className="bg-surface-card/80 text-left text-ink-mid">
               {cols.map((c) => (
                 <th key={c} className="px-3 py-2 font-medium whitespace-nowrap">{prettyKey(c)}</th>
               ))}
@@ -118,7 +119,7 @@ function DataView({ data }: { data: Record<string, unknown>[] }) {
           </thead>
           <tbody>
             {data.map((row, i) => (
-              <tr key={i} className="border-t border-gray-800/70 text-gray-200">
+              <tr key={i} className="border-t border-surface-line/70 text-ink">
                 {cols.map((c) => (
                   <td key={c} className="px-3 py-2 whitespace-nowrap">{fmt(row[c])}</td>
                 ))}
@@ -135,16 +136,16 @@ function DataView({ data }: { data: Record<string, unknown>[] }) {
       {data.map((row, i) => (
         <div key={i} className="grid gap-3 sm:grid-cols-2">
           {Object.entries(row).map(([k, v]) => (
-            <div key={k} className="rounded-xl border border-gray-800 bg-gray-900/40 p-3">
-              <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">{prettyKey(k)}</div>
+            <div key={k} className="rounded-xl border border-surface-line bg-surface-card/40 p-3">
+              <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-dim">{prettyKey(k)}</div>
               {isPrimitive(v) ? (
-                <div className="text-sm text-gray-200">{fmt(v)}</div>
+                <div className="text-sm text-ink">{fmt(v)}</div>
               ) : (
                 <div className="space-y-1">
                   {Object.entries(v as Record<string, unknown>).map(([kk, vv]) => (
                     <div key={kk} className="flex justify-between gap-3 text-sm">
-                      <span className="text-gray-500">{prettyKey(kk)}</span>
-                      <span className="font-medium text-gray-100">{fmt(vv)}</span>
+                      <span className="text-ink-dim">{prettyKey(kk)}</span>
+                      <span className="font-medium text-ink">{fmt(vv)}</span>
                     </div>
                   ))}
                 </div>
@@ -160,12 +161,12 @@ function DataView({ data }: { data: Record<string, unknown>[] }) {
 // The in-progress tool chain, shown live while the agent works.
 function LiveTools({ names }: { names: string[] }) {
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-gray-500">
-      <span className="text-gray-600">Working</span>
+    <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-ink-dim">
+      <span className="text-ink-dim">Working</span>
       {names.map((n, i) => (
         <span key={i} className="inline-flex items-center gap-2">
-          {i > 0 && <span className="text-gray-700">›</span>}
-          <span className="rounded-md bg-gray-800/70 px-2 py-0.5 text-gray-300">{TOOL_LABELS[n] ?? n}</span>
+          {i > 0 && <span className="text-ink-dim">›</span>}
+          <span className="rounded-md bg-surface-raise/70 px-2 py-0.5 text-ink-mid">{TOOL_LABELS[n] ?? n}</span>
         </span>
       ))}
       <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
@@ -209,45 +210,45 @@ export default function AskPage() {
   const hasOutput = loading || !!answer || tools.length > 0 || data.length > 0
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-surface-bg text-ink">
       <Nav />
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-        <h1 className="text-2xl font-bold tracking-tight">Ask the data</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-400">
+        <Card title="Ask the data" className="mb-4">
+        <p className="border-t border-surface-line px-4 py-3 text-sm leading-relaxed text-ink-mid">
           Ask in plain English. Answers come only from the platform's verified
           stats — every number is pulled through the same queries the rest of the
           site uses, never made up.
-        </p>
+        </p></Card>
 
-        <form onSubmit={(e) => { e.preventDefault(); run(question) }} className="mt-6 flex gap-2">
+        <Card title="Start a conversation" className="mb-4"><form onSubmit={(e) => { e.preventDefault(); run(question) }} className="flex gap-2 border-t border-surface-line p-4">
           <input
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="e.g. How did Josh Allen do under pressure in 2023?"
             maxLength={500}
-            className="flex-1 rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-white placeholder-gray-600 transition-colors focus:border-indigo-500 focus:outline-none"
+            className="flex-1 rounded-xl border border-surface-line bg-surface-card px-4 py-3 text-sm text-ink placeholder:text-ink-dim transition-colors focus:border-indigo-500 focus:outline-none"
           />
           <button
             type="submit"
             disabled={loading || !question.trim()}
-            className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-ink transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Thinking…' : 'Ask'}
           </button>
         </form>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 border-t border-surface-line p-4">
           {EXAMPLES.map((ex) => (
             <button
               key={ex}
               onClick={() => { setQuestion(ex); run(ex) }}
               disabled={loading}
-              className="rounded-full border border-gray-800 bg-gray-900/50 px-3 py-1.5 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-gray-200 disabled:opacity-50"
+              className="rounded-full border border-surface-line bg-surface-card/50 px-3 py-1.5 text-xs text-ink-mid transition-colors hover:border-surface-line hover:text-ink disabled:opacity-50"
             >
               {ex}
             </button>
           ))}
-        </div>
+        </div></Card>
 
         {error && (
           <div className="mt-6 rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300">
@@ -257,7 +258,7 @@ export default function AskPage() {
 
         {hasOutput && !error && (
           <div className="mt-8 space-y-4">
-            <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5">
+            <Card title="Answer"><div className="border-t border-surface-line p-5">
               {loading && tools.length === 0 && <LiveTools names={live} />}
               {answer ? (
                 <div className="text-[15px]">
@@ -267,14 +268,14 @@ export default function AskPage() {
                 </div>
               ) : (
                 loading && live.length === 0 && (
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="flex items-center gap-2 text-sm text-ink-dim">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
                     Pulling the numbers…
                   </div>
                 )
               )}
               {tools.length > 0 && <Transparency tools={tools} />}
-            </div>
+            </div></Card>
             {data.length > 0 && <DataView data={data} />}
           </div>
         )}

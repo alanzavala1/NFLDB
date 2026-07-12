@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import type { LeagueLeader, SeasonEntry, WpaLeader, WpaLeaders } from '../api'
 import Nav from '../components/Nav'
+import Card from '../components/Card'
 import { teamLogoUrl } from '../utils/teams'
 
 function passerRating(cmp: number, att: number, yds: number, td: number, int_: number): number | null {
@@ -216,15 +217,15 @@ const RACE_SCORERS: RaceScorer[] = [
 function AwardWinnerCard({ winner }: { winner: AwardWinner }) {
   const isMvp = winner.award === 'MVP'
   return (
-    <div className={`rounded-xl border p-3.5 ${isMvp ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-gray-800 bg-gray-900'}`}>
-      <div className={`text-[10px] font-black uppercase tracking-widest mb-2 ${isMvp ? 'text-yellow-300' : 'text-gray-500'}`}>
+    <div className={`rounded-xl border p-3.5 ${isMvp ? 'border-gold/40 bg-gold/5' : 'border-surface-line bg-surface-card'}`}>
+      <div className={`text-[10px] font-black uppercase tracking-widest mb-2 ${isMvp ? 'text-yellow-300' : 'text-ink-dim'}`}>
         {AWARD_LABEL[winner.award]}
       </div>
       <div className="flex items-center gap-2.5">
         <img src={teamLogoUrl(winner.team)} className="w-8 h-8 object-contain shrink-0" alt="" />
         <div className="min-w-0">
-          <div className={`text-sm font-bold truncate ${isMvp ? 'text-white' : 'text-gray-200'}`}>{winner.player}</div>
-          <div className="text-[11px] text-gray-500">{winner.team} · {winner.pos}</div>
+          <div className={`text-sm font-bold truncate ${isMvp ? 'text-ink' : 'text-ink'}`}>{winner.player}</div>
+          <div className="text-[11px] text-ink-dim">{winner.team} · {winner.pos}</div>
         </div>
       </div>
     </div>
@@ -240,25 +241,25 @@ function RaceCard({ scorer, leaders }: { scorer: RaceScorer; leaders: LeagueLead
     .map(x => x.p)
   const isMvp = scorer.award === 'MVP'
   return (
-    <div className={`rounded-xl border p-3.5 ${isMvp ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-gray-800 bg-gray-900'}`}>
-      <div className={`text-[10px] font-black uppercase tracking-widest mb-2.5 ${isMvp ? 'text-yellow-300' : 'text-gray-500'}`}>
+    <div className={`rounded-xl border p-3.5 ${isMvp ? 'border-gold/40 bg-gold/5' : 'border-surface-line bg-surface-card'}`}>
+      <div className={`text-[10px] font-black uppercase tracking-widest mb-2.5 ${isMvp ? 'text-yellow-300' : 'text-ink-dim'}`}>
         {scorer.label}
       </div>
       {top3.length === 0
-        ? <p className="text-xs text-gray-700">No qualifying candidates yet</p>
+        ? <p className="text-xs text-ink-dim">No qualifying candidates yet</p>
         : (
           <div className="space-y-1.5">
             {top3.map((p, i) => (
               <Link key={p.player_id} to={`/players/${p.player_id}`}
-                className="flex items-center gap-2 group hover:bg-gray-800/40 rounded px-1 py-0.5 -mx-1 transition-colors">
-                <span className={`text-[10px] font-black tabular-nums w-3 shrink-0 ${i === 0 ? 'text-yellow-400' : 'text-gray-600'}`}>{i + 1}</span>
+                className="flex items-center gap-2 group hover:bg-surface-raise/40 rounded px-1 py-0.5 -mx-1 transition-colors">
+                <span className={`text-[10px] font-black tabular-nums w-3 shrink-0 ${i === 0 ? 'text-gold' : 'text-ink-dim'}`}>{i + 1}</span>
                 {p.headshot_url
-                  ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" />
-                  : <div className="w-7 h-7 rounded-full bg-gray-800 shrink-0" />
+                  ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-surface-raise" alt="" />
+                  : <div className="w-7 h-7 rounded-full bg-surface-raise shrink-0" />
                 }
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-gray-200 group-hover:text-white truncate transition-colors">{p.player_name}</div>
-                  <div className="text-[10px] text-gray-600 truncate">{p.team} · {p.position} · {scorer.statLine(p)}</div>
+                  <div className="text-xs font-semibold text-ink group-hover:text-ink truncate transition-colors">{p.player_name}</div>
+                  <div className="text-[10px] text-ink-dim truncate">{p.team} · {p.position} · {scorer.statLine(p)}</div>
                 </div>
               </Link>
             ))}
@@ -275,34 +276,23 @@ function AwardsSection({ season, leaders }: { season: number; leaders: LeagueLea
 
   if (isPast) {
     return (
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-base font-black text-white tracking-tight uppercase">{season} Award Winners</h2>
-          <div className="flex-1 h-px bg-gray-800" />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <Card title={`${season} Award Winners`} className="mb-8"><div className="grid grid-cols-2 gap-3 border-t border-surface-line p-4 sm:grid-cols-3 lg:grid-cols-6">
           {AWARD_ORDER.map(key => {
             const w = past.find(x => x.award === key)
             return w ? <AwardWinnerCard key={key} winner={w} /> : null
           })}
-        </div>
-      </div>
+        </div></Card>
     )
   }
 
   // In-progress season: race view
   if (leaders.length === 0) return null
   return (
-    <div className="mb-8">
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-base font-black text-white tracking-tight uppercase">{season} Award Races</h2>
-        <div className="flex-1 h-px bg-gray-800" />
-        <span className="text-[10px] text-gray-600 uppercase tracking-widest">Stat-based · Voting decides actual winners</span>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+    <Card title={`${season} Award Races`} className="mb-8"><div className="border-t border-surface-line px-4 py-3 text-right">
+        <span className="text-[10px] text-ink-dim uppercase tracking-widest">Stat-based · Voting decides actual winners</span>
+      </div><div className="grid grid-cols-1 gap-3 border-t border-surface-line p-4 lg:grid-cols-3">
         {RACE_SCORERS.map(s => <RaceCard key={s.award} scorer={s} leaders={leaders} />)}
-      </div>
-    </div>
+      </div></Card>
   )
 }
 
@@ -383,34 +373,34 @@ function DashboardTile({ cat, leaders, onClick }: { cat: DashboardCategory; lead
   const top = leaders.filter(cat.filter).sort((a, b) => cat.primary.value(b) - cat.primary.value(a))[0]
   if (!top) {
     return (
-      <button onClick={onClick} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-left hover:border-gray-700 transition-colors min-h-[148px]">
-        <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{cat.label}</div>
-        <p className="text-xs text-gray-700 mt-4">No data yet</p>
+      <button onClick={onClick} className="bg-surface-card border border-surface-line rounded-xl p-4 text-left hover:border-surface-line transition-colors min-h-[148px]">
+        <div className="text-[10px] font-bold text-ink-dim uppercase tracking-widest">{cat.label}</div>
+        <p className="text-xs text-ink-dim mt-4">No data yet</p>
       </button>
     )
   }
   return (
-    <button onClick={onClick} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-left hover:border-indigo-600 hover:bg-gray-900/70 transition-all w-full">
-      <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">{cat.label}</div>
+    <button onClick={onClick} className="bg-surface-card border border-surface-line rounded-xl p-4 text-left hover:border-indigo-600 hover:bg-surface-card/70 transition-all w-full">
+      <div className="text-[10px] font-bold text-ink-dim uppercase tracking-widest mb-3">{cat.label}</div>
       <div className="flex items-center gap-3">
         {top.headshot_url
-          ? <img src={top.headshot_url} className="w-12 h-12 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" />
-          : <div className="w-12 h-12 rounded-full bg-gray-800 shrink-0" />
+          ? <img src={top.headshot_url} className="w-12 h-12 rounded-full object-cover object-top shrink-0 bg-surface-raise" alt="" />
+          : <div className="w-12 h-12 rounded-full bg-surface-raise shrink-0" />
         }
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-white truncate">{top.player_name}</div>
-          <div className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
+          <div className="text-sm font-bold text-ink truncate">{top.player_name}</div>
+          <div className="text-[11px] text-ink-dim flex items-center gap-1.5 mt-0.5">
             {top.team && <img src={teamLogoUrl(top.team)} className="w-3.5 h-3.5 object-contain opacity-80" alt="" />}
             <span>{top.team ?? '—'}</span>
-            {top.position && <><span className="text-gray-700">·</span><span>{top.position}</span></>}
+            {top.position && <><span className="text-ink-dim">·</span><span>{top.position}</span></>}
           </div>
         </div>
       </div>
       <div className="mt-3 flex items-baseline justify-between">
-        <span className="text-2xl font-black text-white tabular-nums leading-none">{cat.primary.display(top)}</span>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-600">{cat.primary.label}</span>
+        <span className="text-2xl font-black text-ink tabular-nums leading-none">{cat.primary.display(top)}</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-ink-dim">{cat.primary.label}</span>
       </div>
-      <div className="text-[11px] text-gray-500 mt-1.5 truncate">{cat.primary.secondary(top)}</div>
+      <div className="text-[11px] text-ink-dim mt-1.5 truncate">{cat.primary.secondary(top)}</div>
     </button>
   )
 }
@@ -428,9 +418,9 @@ function StatDashboard({ leaders, onPick }: { leaders: LeagueLeader[]; onPick: (
 // ── Podium (top 3 for the active tab) ────────────────────────────────────────
 
 const PODIUM_TONES: Record<1 | 2 | 3, { ring: string; text: string; chipBg: string; chipText: string; medal: string }> = {
-  1: { ring: 'ring-yellow-500/60', text: 'text-yellow-300', chipBg: 'bg-yellow-500/15 border-yellow-500/40', chipText: 'text-yellow-200', medal: '1st' },
-  2: { ring: 'ring-gray-400/50',   text: 'text-gray-200',   chipBg: 'bg-gray-400/15 border-gray-400/40',     chipText: 'text-gray-100',  medal: '2nd' },
-  3: { ring: 'ring-amber-700/60',  text: 'text-amber-400',  chipBg: 'bg-amber-700/15 border-amber-700/40',   chipText: 'text-amber-200', medal: '3rd' },
+  1: { ring: 'ring-yellow-500/60', text: 'text-yellow-300', chipBg: 'bg-gold/15 border-gold/40', chipText: 'text-yellow-200', medal: '1st' },
+  2: { ring: 'ring-gray-400/50',   text: 'text-ink',   chipBg: 'bg-gray-400/15 border-gray-400/40',     chipText: 'text-ink',  medal: '2nd' },
+  3: { ring: 'ring-surface-line',  text: 'text-ink-mid',  chipBg: 'bg-surface-raise border-surface-line',   chipText: 'text-ink-mid', medal: '3rd' },
 }
 
 function PodiumCard({ player, rank, primary }: { player: LeagueLeader; rank: 1 | 2 | 3; primary: PrimaryStat }) {
@@ -439,32 +429,32 @@ function PodiumCard({ player, rank, primary }: { player: LeagueLeader; rank: 1 |
   return (
     <Link
       to={`/players/${player.player_id}`}
-      className={`block relative bg-gray-900 border border-gray-800 rounded-xl px-4 hover:border-gray-600 transition-colors ${isGold ? 'py-5' : 'py-4'}`}
+      className={`block relative bg-surface-card border border-surface-line rounded-xl px-4 hover:border-surface-line transition-colors ${isGold ? 'py-5' : 'py-4'}`}
     >
       <div className={`absolute -top-2.5 left-3 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${tone.chipBg} ${tone.chipText}`}>
         {tone.medal}
       </div>
       <div className="flex items-center gap-3 mt-1">
         {player.headshot_url
-          ? <img src={player.headshot_url} className={`rounded-full object-cover object-top shrink-0 bg-gray-800 ring-2 ${tone.ring} ${isGold ? 'w-16 h-16' : 'w-14 h-14'}`} alt="" />
-          : <div className={`rounded-full bg-gray-800 shrink-0 ${isGold ? 'w-16 h-16' : 'w-14 h-14'}`} />
+          ? <img src={player.headshot_url} className={`rounded-full object-cover object-top shrink-0 bg-surface-raise ring-2 ${tone.ring} ${isGold ? 'w-16 h-16' : 'w-14 h-14'}`} alt="" />
+          : <div className={`rounded-full bg-surface-raise shrink-0 ${isGold ? 'w-16 h-16' : 'w-14 h-14'}`} />
         }
         <div className="flex-1 min-w-0">
-          <div className={`font-bold text-white truncate leading-tight ${isGold ? 'text-base' : 'text-sm'}`}>{player.player_name}</div>
-          <div className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
+          <div className={`font-bold text-ink truncate leading-tight ${isGold ? 'text-base' : 'text-sm'}`}>{player.player_name}</div>
+          <div className="text-[11px] text-ink-dim flex items-center gap-1.5 mt-0.5">
             {player.team && <img src={teamLogoUrl(player.team)} className="w-3.5 h-3.5 object-contain opacity-80" alt="" />}
             <span>{player.team ?? '—'}</span>
-            {player.position && <><span className="text-gray-700">·</span><span>{player.position}</span></>}
+            {player.position && <><span className="text-ink-dim">·</span><span>{player.position}</span></>}
           </div>
         </div>
       </div>
       <div className="mt-3 flex items-baseline gap-2">
-        <span className={`font-black text-white tabular-nums leading-none ${isGold ? 'text-3xl' : 'text-2xl'}`}>
+        <span className={`font-black text-ink tabular-nums leading-none ${isGold ? 'text-3xl' : 'text-2xl'}`}>
           {primary.display(player)}
         </span>
         <span className={`text-[10px] font-bold uppercase tracking-widest ${tone.text}`}>{primary.label}</span>
       </div>
-      <div className="text-[11px] text-gray-500 mt-1 truncate">{primary.secondary(player)}</div>
+      <div className="text-[11px] text-ink-dim mt-1 truncate">{primary.secondary(player)}</div>
     </Link>
   )
 }
@@ -485,7 +475,7 @@ function Podium({ players, primary }: { players: LeagueLeader[]; primary: Primar
 // ── Shared rank badge ─────────────────────────────────────────────────────────
 
 function RankBadge({ rank }: { rank: number }) {
-  const cls = rank === 1 ? 'text-yellow-400 font-black' : rank === 2 ? 'text-gray-300 font-bold' : rank === 3 ? 'text-amber-600 font-bold' : 'text-gray-600 font-medium'
+  const cls = rank === 1 ? 'text-gold font-black' : rank === 2 ? 'text-ink-mid font-bold' : rank === 3 ? 'text-ink-mid font-bold' : 'text-ink-dim font-medium'
   return <span className={`text-sm tabular-nums ${cls}`}>{rank}</span>
 }
 
@@ -507,29 +497,29 @@ function LeaderTable({ players, cols, sort, onSort }: {
     return sort.dir === 'desc' ? diff : -diff
   })
 
-  const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-right cursor-pointer select-none hover:text-white transition-colors'
+  const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-right cursor-pointer select-none hover:text-ink transition-colors'
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-800/50">
+          <tr className="border-b border-surface-line/50">
             <th colSpan={4} />
-            {tradCount > 0 && <th colSpan={tradCount} className="py-1 text-center text-[10px] font-semibold text-gray-600 uppercase tracking-widest border-l border-gray-800/40">Stats</th>}
-            {advCount  > 0 && <th colSpan={advCount}  className="py-1 text-center text-[10px] font-semibold text-amber-500/60 uppercase tracking-widest bg-amber-950/20 border-l border-gray-800/40">Advanced</th>}
+            {tradCount > 0 && <th colSpan={tradCount} className="py-1 text-center text-[10px] font-semibold text-ink-dim uppercase tracking-widest border-l border-surface-line/40">Stats</th>}
+            {advCount  > 0 && <th colSpan={advCount}  className="py-1 text-center text-[10px] font-semibold text-ink-dim/60 uppercase tracking-widest bg-surface-raise/20 border-l border-surface-line/40">Advanced</th>}
           </tr>
-          <tr className="border-b border-gray-800">
-            <th className="py-2.5 pl-4 pr-2 text-xs font-semibold text-gray-500 text-right w-8">#</th>
-            <th className="py-2.5 pl-2 pr-3 text-xs font-semibold text-gray-500 text-left">Player</th>
-            <th className="py-2.5 px-2 text-xs font-semibold text-gray-500 text-left">Pos</th>
-            <th className="py-2.5 px-3 text-xs font-semibold text-gray-500 text-left">Team</th>
+          <tr className="border-b border-surface-line">
+            <th className="py-2.5 pl-4 pr-2 text-xs font-semibold text-ink-dim text-right w-8">#</th>
+            <th className="py-2.5 pl-2 pr-3 text-xs font-semibold text-ink-dim text-left">Player</th>
+            <th className="py-2.5 px-2 text-xs font-semibold text-ink-dim text-left">Pos</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-ink-dim text-left">Team</th>
             {cols.map((c, i) => {
               const active = sort.key === c.key
               const sep = i === 0 || cols[i - 1].kind !== c.kind
               return (
                 <th key={c.key} onClick={() => onSort(c.key)}
-                  className={`${thBase} ${sep ? 'border-l border-gray-800/40' : ''}
-                    ${c.kind === 'adv' ? 'bg-amber-950/10 text-amber-300/50 hover:text-amber-200' : active ? 'text-white' : 'text-gray-500'}`}>
+                  className={`${thBase} ${sep ? 'border-l border-surface-line/40' : ''}
+                    ${c.kind === 'adv' ? 'bg-surface-raise/10 text-ink-dim hover:text-ink-mid' : active ? 'text-ink' : 'text-ink-dim'}`}>
                   <span className="flex items-center justify-end gap-1">
                     {c.label}
                     <span className={`text-[10px] transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}>
@@ -543,27 +533,27 @@ function LeaderTable({ players, cols, sort, onSort }: {
         </thead>
         <tbody>
           {sorted.map((p, i) => (
-            <tr key={p.player_id} className="border-t border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+            <tr key={p.player_id} className="border-t border-surface-line/50 hover:bg-surface-raise/30 transition-colors">
               <td className="py-2.5 pl-4 pr-2 text-right"><RankBadge rank={i + 1} /></td>
               <td className="py-2.5 pl-2 pr-3 whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   {p.headshot_url
-                    ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" />
-                    : <div className="w-7 h-7 rounded-full bg-gray-800 shrink-0" />
+                    ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-surface-raise" alt="" />
+                    : <div className="w-7 h-7 rounded-full bg-surface-raise shrink-0" />
                   }
                   <Link to={`/players/${p.player_id}`} className="text-indigo-400 hover:underline font-semibold text-sm leading-tight">{p.player_name}</Link>
                 </div>
               </td>
               <td className="py-2.5 px-2 whitespace-nowrap">
-                <span className="text-xs text-gray-500 font-medium">{p.position ?? '—'}</span>
+                <span className="text-xs text-ink-dim font-medium">{p.position ?? '—'}</span>
               </td>
               <td className="py-2.5 px-3 whitespace-nowrap">
                 {p.team
                   ? <Link to={`/teams/${p.team}`} className="flex items-center gap-1.5 group w-fit">
                       <img src={teamLogoUrl(p.team)} className="w-5 h-5 object-contain opacity-80 group-hover:opacity-100" alt="" />
-                      <span className="text-xs text-gray-400 group-hover:text-white transition-colors font-medium">{p.team}</span>
+                      <span className="text-xs text-ink-mid group-hover:text-ink transition-colors font-medium">{p.team}</span>
                     </Link>
-                  : <span className="text-gray-700 text-xs">—</span>
+                  : <span className="text-ink-dim text-xs">—</span>
                 }
               </td>
               {cols.map((c, i) => {
@@ -575,9 +565,9 @@ function LeaderTable({ players, cols, sort, onSort }: {
                 const isNeg = !isNull && str!.startsWith('-')
                 return (
                   <td key={c.key} className={`py-2.5 px-3 text-right tabular-nums text-sm whitespace-nowrap
-                    ${sep ? 'border-l border-gray-800/30' : ''}
-                    ${c.kind === 'adv' ? 'bg-amber-950/10' : ''}
-                    ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-400 font-semibold' : isNeg ? 'text-red-400 font-semibold' : c.highlight ? 'text-white font-bold' : c.kind === 'adv' ? 'text-amber-200/80' : c.dim ? 'text-gray-500' : 'text-gray-300'}`}>
+                    ${sep ? 'border-l border-surface-line/30' : ''}
+                    ${c.kind === 'adv' ? 'bg-surface-raise/10' : ''}
+                    ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win font-semibold' : isNeg ? 'text-data-loss font-semibold' : c.highlight ? 'text-ink font-bold' : c.kind === 'adv' ? 'text-ink-mid/80' : c.dim ? 'text-ink-dim' : 'text-ink-mid'}`}>
                     {isNull ? '—' : str}
                   </td>
                 )
@@ -605,21 +595,21 @@ function PosTable({ players, cols, sort, onSort }: {
     return sort.dir === 'desc' ? diff : -diff
   })
 
-  const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-right cursor-pointer select-none hover:text-white transition-colors'
+  const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-right cursor-pointer select-none hover:text-ink transition-colors'
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-800">
-            <th className="py-2.5 pl-4 pr-2 text-xs font-semibold text-gray-500 text-right w-8">#</th>
-            <th className="py-2.5 pl-2 pr-3 text-xs font-semibold text-gray-500 text-left min-w-[160px]">Player</th>
-            <th className="py-2.5 px-3 text-xs font-semibold text-gray-500 text-left">Team</th>
+          <tr className="border-b border-surface-line">
+            <th className="py-2.5 pl-4 pr-2 text-xs font-semibold text-ink-dim text-right w-8">#</th>
+            <th className="py-2.5 pl-2 pr-3 text-xs font-semibold text-ink-dim text-left min-w-[160px]">Player</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-ink-dim text-left">Team</th>
             {cols.map(c => {
               const active = sort.key === c.key
               return (
                 <th key={c.key} onClick={() => onSort(c.key)} title={c.desc}
-                  className={`${thBase} ${active ? 'text-white' : c.dim ? 'text-gray-600' : 'text-gray-500'}`}>
+                  className={`${thBase} ${active ? 'text-ink' : c.dim ? 'text-ink-dim' : 'text-ink-dim'}`}>
                   <span className="flex items-center justify-end gap-1">
                     {c.label}
                     <span className={`text-[10px] transition-opacity ${active ? 'opacity-100' : 'opacity-0'}`}>
@@ -633,13 +623,13 @@ function PosTable({ players, cols, sort, onSort }: {
         </thead>
         <tbody>
           {sorted.map((p, i) => (
-            <tr key={p.player_id} className="border-t border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+            <tr key={p.player_id} className="border-t border-surface-line/50 hover:bg-surface-raise/30 transition-colors">
               <td className="py-2.5 pl-4 pr-2 text-right"><RankBadge rank={i + 1} /></td>
               <td className="py-2.5 pl-2 pr-3 whitespace-nowrap">
                 <div className="flex items-center gap-2">
                   {p.headshot_url
-                    ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" />
-                    : <div className="w-7 h-7 rounded-full bg-gray-800 shrink-0" />
+                    ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-surface-raise" alt="" />
+                    : <div className="w-7 h-7 rounded-full bg-surface-raise shrink-0" />
                   }
                   <Link to={`/players/${p.player_id}`} className="text-indigo-400 hover:underline font-semibold text-sm leading-tight">{p.player_name}</Link>
                 </div>
@@ -648,9 +638,9 @@ function PosTable({ players, cols, sort, onSort }: {
                 {p.team
                   ? <Link to={`/teams/${p.team}`} className="flex items-center gap-1.5 group w-fit">
                       <img src={teamLogoUrl(p.team)} className="w-5 h-5 object-contain opacity-80 group-hover:opacity-100" alt="" />
-                      <span className="text-xs text-gray-400 group-hover:text-white transition-colors font-medium">{p.team}</span>
+                      <span className="text-xs text-ink-mid group-hover:text-ink transition-colors font-medium">{p.team}</span>
                     </Link>
-                  : <span className="text-gray-700 text-xs">—</span>
+                  : <span className="text-ink-dim text-xs">—</span>
                 }
               </td>
               {cols.map(c => {
@@ -661,7 +651,7 @@ function PosTable({ players, cols, sort, onSort }: {
                 const isNeg = !isNull && str!.startsWith('-')
                 return (
                   <td key={c.key} className={`py-2.5 px-3 text-right tabular-nums text-sm whitespace-nowrap
-                    ${isNull ? 'text-gray-700' : isPos ? 'text-emerald-400 font-semibold' : isNeg ? 'text-red-400 font-semibold' : c.highlight ? 'text-white font-bold' : c.dim ? 'text-gray-500' : 'text-gray-300'}`}>
+                    ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win font-semibold' : isNeg ? 'text-data-loss font-semibold' : c.highlight ? 'text-ink font-bold' : c.dim ? 'text-ink-dim' : 'text-ink-mid'}`}>
                     {isNull ? '—' : str}
                   </td>
                 )
@@ -683,19 +673,19 @@ function WpaTable({ players, contextLabel }: { players: WpaLeader[]; contextLabe
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-800/50">
+          <tr className="border-b border-surface-line/50">
             <th colSpan={4} />
-            <th colSpan={1} className="py-1 text-center text-[10px] font-semibold text-violet-400/60 uppercase tracking-widest bg-violet-950/20 border-l border-gray-800/40">WPA</th>
-            <th colSpan={2} className="py-1 text-center text-[10px] font-semibold text-gray-600 uppercase tracking-widest border-l border-gray-800/40">Context</th>
+            <th colSpan={1} className="py-1 text-center text-[10px] font-semibold text-ink-dim/60 uppercase tracking-widest bg-surface-raise/20 border-l border-surface-line/40">WPA</th>
+            <th colSpan={2} className="py-1 text-center text-[10px] font-semibold text-ink-dim uppercase tracking-widest border-l border-surface-line/40">Context</th>
           </tr>
-          <tr className="border-b border-gray-800">
-            <th className="py-2.5 pl-4 pr-2 text-xs font-semibold text-gray-500 text-right w-8">#</th>
-            <th className="py-2.5 pl-2 pr-3 text-xs font-semibold text-gray-500 text-left">Player</th>
-            <th className="py-2.5 px-2 text-xs font-semibold text-gray-500 text-left">Pos</th>
-            <th className="py-2.5 px-3 text-xs font-semibold text-gray-500 text-left">Team</th>
-            <th className="py-2.5 px-3 text-xs font-semibold text-violet-400/50 text-right border-l border-gray-800/40 bg-violet-950/10">WPA</th>
-            <th className="py-2.5 px-3 text-xs font-semibold text-gray-600 text-right border-l border-gray-800/40">G</th>
-            <th className="py-2.5 px-3 text-xs font-semibold text-gray-600 text-right">{contextLabel}</th>
+          <tr className="border-b border-surface-line">
+            <th className="py-2.5 pl-4 pr-2 text-xs font-semibold text-ink-dim text-right w-8">#</th>
+            <th className="py-2.5 pl-2 pr-3 text-xs font-semibold text-ink-dim text-left">Player</th>
+            <th className="py-2.5 px-2 text-xs font-semibold text-ink-dim text-left">Pos</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-ink-dim text-left">Team</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-ink-dim/50 text-right border-l border-surface-line/40 bg-surface-raise/10">WPA</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-ink-dim text-right border-l border-surface-line/40">G</th>
+            <th className="py-2.5 px-3 text-xs font-semibold text-ink-dim text-right">{contextLabel}</th>
           </tr>
         </thead>
         <tbody>
@@ -704,36 +694,36 @@ function WpaTable({ players, contextLabel }: { players: WpaLeader[]; contextLabe
             const isPos = p.wpa >= 0
             const ctx = p.attempts ?? p.carries ?? p.receptions ?? null
             return (
-              <tr key={p.player_id} className="border-t border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+              <tr key={p.player_id} className="border-t border-surface-line/50 hover:bg-surface-raise/30 transition-colors">
                 <td className="py-2.5 pl-4 pr-2 text-right">
-                  <span className={`text-sm tabular-nums ${i === 0 ? 'text-yellow-400 font-black' : i === 1 ? 'text-gray-300 font-bold' : i === 2 ? 'text-amber-600 font-bold' : 'text-gray-600 font-medium'}`}>{i + 1}</span>
+                  <span className={`text-sm tabular-nums ${i === 0 ? 'text-gold font-black' : i === 1 ? 'text-ink-mid font-bold' : i === 2 ? 'text-ink-mid font-bold' : 'text-ink-dim font-medium'}`}>{i + 1}</span>
                 </td>
                 <td className="py-2.5 pl-2 pr-3 whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     {p.headshot_url
-                      ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-gray-800" alt="" />
-                      : <div className="w-7 h-7 rounded-full bg-gray-800 shrink-0" />
+                      ? <img src={p.headshot_url} className="w-7 h-7 rounded-full object-cover object-top shrink-0 bg-surface-raise" alt="" />
+                      : <div className="w-7 h-7 rounded-full bg-surface-raise shrink-0" />
                     }
                     <Link to={`/players/${p.player_id}`} className="text-indigo-400 hover:underline font-semibold text-sm leading-tight">{p.player_name}</Link>
                   </div>
                 </td>
                 <td className="py-2.5 px-2 whitespace-nowrap">
-                  <span className="text-xs text-gray-500 font-medium">{p.position ?? '—'}</span>
+                  <span className="text-xs text-ink-dim font-medium">{p.position ?? '—'}</span>
                 </td>
                 <td className="py-2.5 px-3 whitespace-nowrap">
                   {p.team
                     ? <Link to={`/teams/${p.team}`} className="flex items-center gap-1.5 group w-fit">
                         <img src={teamLogoUrl(p.team)} className="w-5 h-5 object-contain opacity-80 group-hover:opacity-100" alt="" />
-                        <span className="text-xs text-gray-400 group-hover:text-white transition-colors font-medium">{p.team}</span>
+                        <span className="text-xs text-ink-mid group-hover:text-ink transition-colors font-medium">{p.team}</span>
                       </Link>
-                    : <span className="text-gray-700 text-xs">—</span>
+                    : <span className="text-ink-dim text-xs">—</span>
                   }
                 </td>
-                <td className={`py-2.5 px-3 text-right tabular-nums font-bold text-sm border-l border-gray-800/30 bg-violet-950/10 ${isPos ? 'text-emerald-400' : 'text-red-400'}`}>
+                <td className={`py-2.5 px-3 text-right tabular-nums font-bold text-sm border-l border-surface-line/30 bg-surface-raise/10 ${isPos ? 'text-data-win' : 'text-data-loss'}`}>
                   {wpaStr}
                 </td>
-                <td className="py-2.5 px-3 text-right tabular-nums text-sm text-gray-600 border-l border-gray-800/30">{p.games_played}</td>
-                <td className="py-2.5 px-3 text-right tabular-nums text-sm text-gray-500">{ctx ?? '—'}</td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-sm text-ink-dim border-l border-surface-line/30">{p.games_played}</td>
+                <td className="py-2.5 px-3 text-right tabular-nums text-sm text-ink-dim">{ctx ?? '—'}</td>
               </tr>
             )
           })}
@@ -801,24 +791,21 @@ export default function LeadersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-surface-bg">
       <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-          <div>
-            <h1 className="text-4xl font-black text-white tracking-tight leading-none">League Leaders</h1>
-            <p className="text-gray-500 text-sm mt-2 uppercase tracking-widest font-medium">{season} NFL Season</p>
-          </div>
+        <Card title="League Leaders" className="mb-5"><div className="flex items-center justify-between gap-4 border-t border-surface-line px-4 py-3">
+            <p className="text-ink-dim text-[10px] uppercase tracking-widest font-bold">{season} NFL Season</p>
           <select
             value={season}
             onChange={e => setSearchParams(p => { p.set('season', String(e.target.value)); return p }, { replace: true })}
-            className="bg-gray-800 border border-gray-700 text-white text-sm font-semibold rounded-lg px-4 py-2.5 focus:outline-none focus:border-indigo-500 cursor-pointer hover:border-gray-500 transition-colors"
+            className="bg-surface-raise border border-surface-line text-ink text-sm font-semibold rounded-lg px-4 py-2.5 focus:outline-none focus:border-indigo-500 cursor-pointer hover:border-surface-line transition-colors"
           >
             {seasons.map(s => (
               <option key={s.season} value={s.season}>{s.season}</option>
             ))}
           </select>
-        </div>
+        </div></Card>
 
         {/* Awards section */}
         {(PAST_AWARDS[season] || (!loading && leaders.length > 0)) && (
@@ -836,33 +823,33 @@ export default function LeadersPage() {
         )}
 
         {/* Mode toggle */}
-        <div className="flex gap-1 mb-5 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+        <Card title="View" className="mb-5"><div className="flex flex-wrap gap-1 border-t border-surface-line p-2">
           <button
             onClick={() => setMode('leaders')}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${mode === 'leaders' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${mode === 'leaders' ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}
           >
             Stat Leaders
           </button>
           <button
             onClick={() => setMode('positions')}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${mode === 'positions' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${mode === 'positions' ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}
           >
             By Position
           </button>
-        </div>
+        </div></Card>
 
         {mode === 'leaders' ? (
           <>
             {/* Stat leaders tab bar */}
-            <div className="flex gap-1 mb-4 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit flex-wrap">
+            <div className="flex gap-1 mb-4 bg-surface-card border border-surface-line rounded-xl p-1 w-fit flex-wrap">
               {STAT_TABS.map(t => (
                 <button key={t.key} onClick={() => setStatTab(t.key)}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${statKey === t.key ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${statKey === t.key ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}>
                   {t.label}
                 </button>
               ))}
               <button onClick={() => setStatTab(WPA_KEY)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${isWpa ? 'bg-violet-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${isWpa ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}>
                 WPA
               </button>
             </div>
@@ -870,33 +857,33 @@ export default function LeadersPage() {
             {isWpa ? (
               <div>
                 <div className="mb-3 flex items-center gap-2">
-                  <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+                  <div className="flex gap-1 bg-surface-card border border-surface-line rounded-xl p-1 w-fit">
                     {(['passing', 'rushing', 'receiving'] as WpaSubTab[]).map(s => (
                       <button key={s} onClick={() => setWpaSubTab(s)}
-                        className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition-colors ${wpaSubTab === s ? 'bg-violet-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition-colors ${wpaSubTab === s ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}>
                         {s}
                       </button>
                     ))}
                   </div>
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-ink-dim">
                     {wpaSubTab === 'passing' ? 'Air WPA credited to passer (≥50 att)' : wpaSubTab === 'rushing' ? 'WPA on rush plays (≥50 car)' : 'YAC WPA credited to receiver (≥20 rec)'}
                   </span>
                 </div>
-                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                  {wpaLoading ? <p className="p-8 text-gray-500 text-sm">Loading…</p>
-                    : !wpaData ? <p className="p-8 text-gray-600 text-sm">No WPA data for {season}.</p>
+                <Card title={`${statTab.label} leaders`}>
+                  {wpaLoading ? <p className="p-8 text-ink-dim text-sm">Loading…</p>
+                    : !wpaData ? <p className="p-8 text-ink-dim text-sm">No WPA data for {season}.</p>
                     : <WpaTable players={wpaData[wpaSubTab]} contextLabel={wpaSubTab === 'passing' ? 'ATT' : wpaSubTab === 'rushing' ? 'CAR' : 'REC'} />
                   }
-                </div>
+                </Card>
               </div>
             ) : (
               <>
                 {!loading && leaders.filter(statTab.filter).length >= 3 && STAT_PRIMARY[statTab.key] && (
                   <Podium players={leaders.filter(statTab.filter)} primary={STAT_PRIMARY[statTab.key]} />
                 )}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                  {loading ? <p className="p-8 text-gray-500 text-sm">Loading…</p>
-                    : leaders.filter(statTab.filter).length === 0 ? <p className="p-8 text-gray-600 text-sm">No data for {season}.</p>
+                <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+                  {loading ? <p className="p-8 text-ink-dim text-sm">Loading…</p>
+                    : leaders.filter(statTab.filter).length === 0 ? <p className="p-8 text-ink-dim text-sm">No data for {season}.</p>
                     : <LeaderTable
                         players={leaders.filter(statTab.filter)}
                         cols={statTab.cols}
@@ -911,10 +898,10 @@ export default function LeadersPage() {
         ) : (
           <>
             {/* By position tab bar */}
-            <div className="flex gap-1 mb-4 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit flex-wrap">
+            <div className="flex gap-1 mb-4 bg-surface-card border border-surface-line rounded-xl p-1 w-fit flex-wrap">
               {POS_TABS.map(t => (
                 <button key={t.key} onClick={() => setPosTab(t.key)}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${posKey === t.key ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${posKey === t.key ? 'bg-indigo-600 text-ink' : 'text-ink-mid hover:text-ink'}`}>
                   {t.label}
                 </button>
               ))}
@@ -923,9 +910,9 @@ export default function LeadersPage() {
             {!loading && leaders.filter(posTab.filter).length >= 3 && POS_PRIMARY[posTab.key] && (
               <Podium players={leaders.filter(posTab.filter)} primary={POS_PRIMARY[posTab.key]} />
             )}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              {loading ? <p className="p-8 text-gray-500 text-sm">Loading…</p>
-                : leaders.filter(posTab.filter).length === 0 ? <p className="p-8 text-gray-600 text-sm">No {posTab.label} data for {season}.</p>
+            <Card title={`${posTab.label} leaders`}>
+              {loading ? <p className="p-8 text-ink-dim text-sm">Loading…</p>
+                : leaders.filter(posTab.filter).length === 0 ? <p className="p-8 text-ink-dim text-sm">No {posTab.label} data for {season}.</p>
                 : <PosTable
                     players={leaders.filter(posTab.filter)}
                     cols={posTab.cols}
@@ -933,7 +920,7 @@ export default function LeadersPage() {
                     onSort={key => handleSort(posTab.key, key)}
                   />
               }
-            </div>
+            </Card>
           </>
         )}
 
