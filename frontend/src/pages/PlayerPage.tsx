@@ -24,7 +24,6 @@ function ratio(y: number, a: number, dec = 1): string | null { return a > 0 ? (y
 function sfmt(x: number | null | undefined, dec = 1): string | null { if (x == null) return null; return `${x >= 0 ? '+' : ''}${x.toFixed(dec)}` }
 function dfmt(x: number | null | undefined, dec = 1): string | null { if (x == null) return null; return x.toFixed(dec) }
 
-// — aggregation —
 function sumGames(games: PlayerGame[]) {
   const s = {
     attempts: 0, completions: 0, pass_yards: 0, pass_tds: 0,
@@ -38,31 +37,17 @@ function sumGames(games: PlayerGame[]) {
     punts: 0, punt_yards: 0,
   }
   for (const g of games) {
-    for (const k of Object.keys(s) as (keyof typeof s)[]) {
-      s[k] += g[k] ?? 0
-    }
+    for (const k of Object.keys(s) as (keyof typeof s)[]) s[k] += g[k] ?? 0
   }
   return s
 }
 type Totals = ReturnType<typeof sumGames>
 
-// — awards lookup —
-// Awards are sourced from the player_awards backend table via the API
-// (player.awards on PlayerProfile). The old hardcoded PAST_AWARDS table
-// in src/utils/awards.ts is being retired; AWARD_LABEL still lives there
-// because it's a small display-only enum.
-
 function AwardBadge({ season, award }: { season: number; award: AwardKey }) {
   const isMvp = award === 'MVP'
-  return (
-    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border whitespace-nowrap ${
-      isMvp
-        ? 'border-gold/50 bg-gold/15 text-gold'
-        : 'border-gold/40 bg-gold/10 text-gold'
-    }`}>
-      {isMvp ? '★ ' : ''}{AWARD_LABEL[award]} {season}
-    </span>
-  )
+  return <span className={`whitespace-nowrap rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${isMvp ? 'border-gold/50 bg-gold/15 text-gold' : 'border-gold/40 bg-gold/10 text-gold'}`}>
+    {isMvp ? '★ ' : ''}{AWARD_LABEL[award]} {season}
+  </span>
 }
 
 // — career trajectory chart —
@@ -95,15 +80,12 @@ function CareerTrajectory({ seasons, bySeason, pos }: {
   const BAR_MAX_H = 96  // px
 
   return (
-    <section className="mb-8">
-      <div className="flex items-end justify-between mb-3">
-        <div className="flex items-baseline gap-2">
-          <h2 className="text-xs font-bold text-ink-dim uppercase tracking-widest">Career Trajectory</h2>
-          <span className="text-[10px] text-ink-dim">{statLabel} by season</span>
-        </div>
-        <span className="text-[10px] text-ink-dim">{data[0].season}–{data[data.length - 1].season}</span>
-      </div>
-      <div className="bg-surface-card border border-surface-line rounded-xl p-4">
+    <Card
+      title={<span>Career Trajectory <span className="ml-2 text-[10px] font-bold uppercase tracking-widest text-ink-dim">{statLabel} by season</span></span>}
+      action={<span className="text-[10px] tabular-nums text-ink-dim">{data[0].season}–{data[data.length - 1].season}</span>}
+      className="mb-8"
+    >
+      <div className="border-t border-surface-line p-4">
         <div className="flex items-end gap-2 overflow-x-auto" style={{ minHeight: BAR_MAX_H + 28 }}>
           {data.map(d => {
             const isPeak = d.season === peakSeason
@@ -114,11 +96,11 @@ function CareerTrajectory({ seasons, bySeason, pos }: {
                   {d.value > 0 ? d.value.toLocaleString() : ''}
                 </div>
                 <div
-                  className={`w-full rounded-t transition-colors ${isPeak ? 'bg-data-win' : 'bg-data-win/50 hover:bg-data-win/70'}`}
+                  className={`w-full rounded-t transition-colors ${isPeak ? 'bg-indigo-500' : 'bg-surface-raise opacity-70 hover:opacity-100'}`}
                   style={{ height: `${barH}px` }}
                   title={`${d.season}: ${d.value.toLocaleString()} ${d.label} · ${d.games}G`}
                 />
-                <div className={`text-[10px] tabular-nums mt-1 leading-none ${isPeak ? 'text-data-win font-bold' : 'text-ink-dim'}`}>
+                <div className={`text-[10px] tabular-nums mt-1 leading-none ${isPeak ? 'text-indigo-400 font-bold' : 'text-ink-dim'}`}>
                   {String(d.season).slice(-2)}
                 </div>
               </div>
@@ -126,7 +108,7 @@ function CareerTrajectory({ seasons, bySeason, pos }: {
           })}
         </div>
       </div>
-    </section>
+    </Card>
   )
 }
 
@@ -1557,13 +1539,9 @@ export default function PlayerPage() {
         {/* Postseason stats */}
         {playoffSeasons.length > 0 && (
           <>
-            <div ref={postRef} className="scroll-mt-12 text-xs font-bold text-ink-dim uppercase tracking-widest mb-3 mt-6 flex items-center gap-2">
-              Postseason
-              <span className="text-ink-dim font-normal normal-case tracking-normal text-xs">
-                ({playoffGames.length} game{playoffGames.length !== 1 ? 's' : ''})
-              </span>
-            </div>
+            <div ref={postRef} className="scroll-mt-12" />
             <CareerTable
+              title={`Postseason · ${playoffGames.length} game${playoffGames.length !== 1 ? 's' : ''}`}
               seasons={playoffSeasons}
               bySeason={playoffBySeason}
               ngs={{}}
