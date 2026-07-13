@@ -108,9 +108,9 @@ const STAT_LABELS: Record<string, string> = {
   sacks: 'Sacks',
   tackles: 'Tackles',
   def_interceptions: 'Interceptions',
-  pass_epa: 'EPA',
-  rec_epa: 'EPA',
-  rush_epa: 'EPA',
+  pass_epa: 'Passing EPA',
+  rec_epa: 'Receiving EPA',
+  rush_epa: 'Rushing EPA',
 }
 
 const ROLE_STAT_KEYS: Record<string, string[]> = {
@@ -118,6 +118,15 @@ const ROLE_STAT_KEYS: Record<string, string[]> = {
   receiver: ['targets', 'receptions', 'rec_yards', 'rec_tds', 'rec_epa'],
   rusher: ['carries', 'rush_yards', 'rush_tds', 'rush_epa'],
   defender: ['sacks', 'tackles', 'def_interceptions'],
+}
+
+// A player's game is often bigger than his primary role — a back who feasts
+// as a receiver, a receiver who takes jet sweeps. Show the secondary stat
+// family whenever it has volume, so the rating is explainable from the popup.
+const SECONDARY_FAMILY: Record<string, { gate: string; title: string; keys: string[] }[]> = {
+  rusher: [{ gate: 'targets', title: 'Receiving', keys: ROLE_STAT_KEYS.receiver }],
+  receiver: [{ gate: 'carries', title: 'Rushing', keys: ROLE_STAT_KEYS.rusher }],
+  passer: [{ gate: 'carries', title: 'Rushing', keys: ROLE_STAT_KEYS.rusher }],
 }
 
 function isOL(p: LineupPlayer) {
@@ -371,6 +380,7 @@ function TargetMap({ events, role }: { events: PlayerChart['events']; role: stri
         <span className="tm-lane-label" style={{ left: '18%' }}>Left</span>
         <span className="tm-lane-label" style={{ left: '50%' }}>Mid</span>
         <span className="tm-lane-label" style={{ left: '82%' }}>Right</span>
+        {[10, 20, 30].map(d => <span key={d} className="tm-yard" style={{ bottom: mapDepth(d) }} />)}
         {[10, 20, 30].map(d => <span key={d} className="tm-depth" style={{ bottom: mapDepth(d) - 5 }}>{d}</span>)}
         <div className="tm-los" style={{ bottom: mapDepth(0) }} />
         <span className="tm-los-label" style={{ bottom: mapDepth(0) - 14 }}>LOS</span>
@@ -429,6 +439,54 @@ const GAP_ORDER = [
   { key: 'right end', label: 'R END' },
 ] as const
 
+const GAP_X: Record<string, number> = {
+  'left end': 9, 'left tackle': 22.6, 'left guard': 36.3, middle: 50,
+  'right guard': 63.6, 'right tackle': 77.3, 'right end': 91,
+}
+const RUN_H = 200
+
+function runDepth(yards: number) {
+  return 34 + Math.min(27, Math.max(-3, yards)) * 5
+}
+
+function RunMap({ events }: { events: PlayerChart['events'] }) {
+  const lanes = new Map<string, { yards: number; outcome: string }[]>()
+  for (const e of events) {
+    if (e.role !== 'rusher') continue
+    const gap = (e.lane ?? '').toLowerCase().trim()
+    if (!(gap in GAP_X)) continue
+    lanes.set(gap, [...(lanes.get(gap) ?? []), { yards: Number(e.yards ?? 0), outcome: e.outcome }])
+  }
+  if (![...lanes.values()].some(l => l.length)) return null
+  const dots: { x: number; b: number; yards: number; outcome: string }[] = []
+  for (const [gap, list] of lanes) {
+    list.sort((a, b) => a.yards - b.yards)
+    list.forEach((e, i) => dots.push({ x: GAP_X[gap] + [0, -4, 4, -2, 2][i % 5], b: runDepth(e.yards), yards: e.yards, outcome: e.outcome }))
+  }
+  return (
+    <div>
+      <div className="micro">Carry map</div>
+      <div className="tmap rmap" style={{ height: RUN_H }}>
+        {[10, 20].map(d => <span key={d} className="tm-yard" style={{ bottom: runDepth(d) }} />)}
+        {[10, 20].map(d => <span key={d} className="tm-depth" style={{ bottom: runDepth(d) - 5 }}>{d}</span>)}
+        <div className="tm-los" style={{ bottom: runDepth(0) }} />
+        <span className="tm-los-label" style={{ bottom: runDepth(0) - 14 }}>LOS</span>
+        {[22.6, 36.3, 50, 63.6, 77.3].map(x => <span key={x} className="rm-oc" style={{ left: `${x}%`, bottom: runDepth(0) - 6 }} />)}
+        {Object.entries(GAP_X).map(([gap, x]) => <span key={gap} className="rm-gap" style={{ left: `${x}%` }}>{GAP_ORDER.find(g => g.key === gap)?.label}</span>)}
+        {dots.map((d, i) => {
+          const cls = d.outcome === 'TD' ? 'td' : d.yards <= 0 ? 'int' : 'catch'
+          return <span key={i} className={`tm-dot ${cls}`} style={{ left: `${d.x}%`, bottom: d.b }}>{d.outcome === 'TD' ? '✦' : ''}</span>
+        })}
+      </div>
+      <div className="legend">
+        <span className="lg"><i className="tm-key catch" />Gain</span>
+        <span className="lg"><i className="tm-key" style={{ background: 'var(--rate-bad)' }} />Stuffed</span>
+        <span className="lg" style={{ color: 'var(--rate-good)' }}>✦ TD</span>
+      </div>
+    </div>
+  )
+}
+
 function GapStrip({ events }: { events: PlayerChart['events'] }) {
   const gaps = new Map<string, { att: number; yds: number; td: boolean }>()
   for (const e of events) {
@@ -443,8 +501,8 @@ function GapStrip({ events }: { events: PlayerChart['events'] }) {
   }
   if (gaps.size === 0) return null
   return (
-    <div>
-      <div className="micro">Run direction · carries &amp; yards</div>
+    <div className="zones-wrap">
+      <div className="micro">By gap · carries &amp; yards</div>
       <div className="gaps">
         {GAP_ORDER.map(g => {
           const cell = gaps.get(g.key)
@@ -456,8 +514,6 @@ function GapStrip({ events }: { events: PlayerChart['events'] }) {
           </div>
         })}
       </div>
-      <div className="oline-strip"><span /><span className="oc" /><span className="oc" /><span className="oc" /><span className="oc" /><span className="oc" /><span /></div>
-      <div className="oline-cap">Offensive line</div>
     </div>
   )
 }
@@ -485,7 +541,7 @@ function Popup({ game, player, onClose }: { game: GameDetail; player: LineupPlay
   if (!player) return null
   const role = chart?.role ?? fallbackRole(player.position)
   const title = role === 'defender' ? 'Defense' : role === 'rusher' ? 'Rushing' : role === 'receiver' ? 'Receiving' : role === 'passer' ? 'Passing' : 'Game'
-  const stats = (ROLE_STAT_KEYS[role] ?? Object.keys(chart?.stats ?? {}))
+  const statRows = (keys: string[]) => keys
     .map(k => [k, chart?.stats?.[k as keyof typeof chart.stats]] as const)
     .filter(([k, v]) => {
       const num = Number(v)
@@ -493,18 +549,23 @@ function Popup({ game, player, onClose }: { game: GameDetail; player: LineupPlay
       return k.endsWith('_epa') ? num !== 0 : num > 0
     })
     .slice(0, 8)
+  const stats = statRows(ROLE_STAT_KEYS[role] ?? Object.keys(chart?.stats ?? {}))
+  const secondary = (SECONDARY_FAMILY[role] ?? [])
+    .filter(fam => Number(chart?.stats?.[fam.gate as keyof typeof chart.stats] ?? 0) > 0)
+    .map(fam => ({ title: fam.title, rows: statRows(fam.keys) }))
+    .filter(fam => fam.rows.length > 0)
   const events = chart?.events ?? []
   const showZones = role === 'passer' || role === 'receiver'
   const showRush = role === 'rusher'
   const adot = role === 'passer' ? avgDepthOfTarget(events) : null
   const footer = showRush
-    ? 'From nflverse play-by-play: gap = recorded run gap and direction. Cell shading = more carries. Exact counts, no interpolation.'
+    ? 'From nflverse play-by-play: lane = recorded run gap and direction, height = yards gained on the carry. Exact counts, no interpolation.'
     : showZones
       ? "From nflverse play-by-play: lane = recorded pass direction (left/middle/right), band = air yards. Cells show completions/attempts and yards — exact counts, drawn at the data's real resolution."
       : 'From nflverse play-by-play and official game stats.'
   return <div className="lineup-overlay" onClick={onClose}><div className="lineup-modal" onClick={e => e.stopPropagation()}>
     <div className="modal-head"><div className="modal-avatar" style={{ background: teamPrimaryColor(player.team) }}>{player.headshot_url ? <img src={player.headshot_url} alt="" /> : initials(player.player_name)}</div><div><div className="modal-name">{player.player_name}</div><div className="modal-sub">{player.position} · {player.team} · {gameLabel(game)} · {pct(player.snap_pct)} of snaps</div></div>{player.rating != null && <span className={`rbadge ${ratingClass(player.rating)} modal-rating`}>{player.rating.toFixed(1)}{player.rating >= 8.5 ? ' ✦' : ''}</span>}<button className="modal-close" onClick={onClose}>✕</button></div>
-    <div className={`modal-grid ${role === 'defender' ? 'single' : ''}`}><div><div className="micro popup-title">{title}</div>{stats.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}{adot != null && <div className="rrow"><span>Average depth of target</span><b style={{ marginLeft: 'auto' }}>{adot.toFixed(1)}</b></div>}</div>{showZones && <div className="target-map"><TargetMap events={events} role={role} /><ZoneGrid events={events} /></div>}{showRush && <div className="target-map"><GapStrip events={events} /></div>}</div>
+    <div className={`modal-grid ${role === 'defender' ? 'single' : ''}`}><div><div className="micro popup-title">{title}</div>{stats.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}{adot != null && <div className="rrow"><span>Average depth of target</span><b style={{ marginLeft: 'auto' }}>{adot.toFixed(1)}</b></div>}{secondary.map(fam => <div key={fam.title}><div className="micro popup-title">{fam.title}</div>{fam.rows.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}</div>)}</div>{showZones && <div className="target-map"><TargetMap events={events} role={role} /><ZoneGrid events={events} /></div>}{showRush && <div className="target-map"><RunMap events={events} /><GapStrip events={events} /></div>}</div>
     <div className="modal-foot">{footer}</div>
   </div></div>
 }
@@ -567,9 +628,13 @@ export const LINEUP_CSS = `
 .upill .mini{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:-2px}
 .ol-unit{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:6px;background:rgba(14,13,21,.82);border:1px solid var(--line);border-radius:8px;padding:3px 9px;pointer-events:none}
 .ol-unit .micro{letter-spacing:.1em;font-size:8.5px}.ol-unit .val{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:5px;font-variant-numeric:tabular-nums}
-.tmap{position:relative;margin-top:8px;border-radius:10px;border:1px solid rgba(244,243,248,.08);background:linear-gradient(180deg,#10231a,#122a1d);overflow:hidden}
+.tmap{position:relative;margin-top:8px;border-radius:10px;border:1px solid rgba(244,243,248,.1);border-left-width:3px;border-right-width:3px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.028) 0 27px,transparent 27px 54px),radial-gradient(120% 90% at 50% 45%,#143122,#0f2318);overflow:hidden}
 .tmap:before,.tmap:after{content:'';position:absolute;top:8px;bottom:8px;border-left:1px dashed rgba(244,243,248,.12)}
 .tmap:before{left:33.3%}.tmap:after{left:66.6%}
+.tmap.rmap:before,.tmap.rmap:after{display:none}
+.tm-yard{position:absolute;left:0;right:0;height:1px;background:rgba(244,243,248,.1)}
+.rm-oc{position:absolute;width:11px;height:11px;margin-left:-5.5px;border-radius:50%;background:rgba(244,243,248,.16);border:1px solid rgba(244,243,248,.3)}
+.rm-gap{position:absolute;bottom:6px;transform:translateX(-50%);font-size:7px;font-weight:800;letter-spacing:.06em;color:rgba(244,243,248,.35);text-transform:uppercase;white-space:nowrap}
 .tm-lane-label{position:absolute;top:6px;transform:translateX(-50%);font-size:8px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(244,243,248,.3)}
 .tm-depth{position:absolute;left:6px;font-size:8px;font-weight:700;color:rgba(244,243,248,.28);font-variant-numeric:tabular-nums}
 .tm-los{position:absolute;left:0;right:0;height:2px;background:rgba(244,243,248,.28)}
@@ -592,7 +657,5 @@ export const LINEUP_CSS = `
 .gaps{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}
 .gcell{position:relative;border-radius:8px;padding:7px 2px 6px;text-align:center;min-height:56px;display:flex;flex-direction:column;justify-content:center;gap:1px}
 .gcell b{font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums}.gcell small{font-size:8.5px;color:var(--t2);font-variant-numeric:tabular-nums}.gcell .glab{font-size:7.5px;font-weight:800;letter-spacing:.06em;color:var(--t3);margin-top:2px}
-.oline-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:6px}.oline-strip .oc{width:14px;height:14px;border-radius:50%;background:var(--raise);margin:0 auto;border:1px solid var(--line)}
-.oline-cap{text-align:center;font-size:8px;color:var(--t3);margin-top:2px;letter-spacing:.15em;text-transform:uppercase}
 @media(max-width:980px){.lineup-page{grid-template-columns:1fr}.rot{grid-template-columns:1fr}.rot-col:first-child{border-right:none}.lineup-scorers{grid-template-columns:1fr;gap:10px}.lineup-scorers>div:nth-child(2){display:none}.fieldwrap{padding-left:8px;padding-right:8px}.modal-grid{grid-template-columns:1fr}.modal-grid>div:first-child{border-right:0}.rail{display:grid}}
 `
