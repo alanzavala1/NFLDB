@@ -36,6 +36,19 @@ type Sort = { key: string; dir: 'asc' | 'desc' }
 type TRow = { key: string; label: React.ReactNode; row: Row | null; defRk?: number | null; sub?: boolean }
 
 const SEASONS = Array.from({ length: CURRENT_NFL_SEASON - 1998 }, (_, i) => CURRENT_NFL_SEASON - i)
+
+// One-click starters for the empty state — resolved through search so no
+// player ids are hardcoded.
+type Example = { label: string; names?: string[]; cat?: PCat; teams?: string[] }
+const PLAYER_EXAMPLES: Example[] = [
+  { label: 'Allen vs Mahomes', names: ['Josh Allen', 'Patrick Mahomes'], cat: 'passing' },
+  { label: 'Jefferson vs Chase', names: ['Justin Jefferson', "Ja'Marr Chase"], cat: 'receiving' },
+  { label: 'Henry vs Barkley', names: ['Derrick Henry', 'Saquon Barkley'], cat: 'rushing' },
+]
+const TEAM_EXAMPLES: Example[] = [
+  { label: 'Seahawks vs Patriots', teams: ['SEA', 'NE'] },
+  { label: 'Chiefs vs Bills', teams: ['KC', 'BUF'] },
+]
 const ENTITY_COLORS = ['99,102,241', '20,184,166', '245,158,11', '56,189,248', '244,63,94', '168,85,247']
 const colorOf = (i: number) => ENTITY_COLORS[i % ENTITY_COLORS.length]
 
@@ -590,6 +603,19 @@ export default function SplitsPage() {
     if (r.type === 'team') setTeams(t => t.includes(r.id) ? t : [...t, r.id].slice(0, 6))
     else setPlayers(p => p.some(x => x.id === r.id) ? p : [...p, { id: r.id, name: r.name, headshot: r.headshot_url, sub: [r.position, r.team].filter(Boolean).join(' · ') }].slice(0, 6))
   }
+
+  async function loadExample(ex: Example) {
+    setSituation(null)
+    if (ex.teams) { setTeams(ex.teams.slice(0, 6)); return }
+    if (ex.cat) setPCat(ex.cat)
+    for (const name of ex.names ?? []) {
+      try {
+        const res = await api.search(name)
+        const r = res.find(x => x.type === 'player')
+        if (r) addEntity(r)
+      } catch { /* example is best-effort; search failures just skip */ }
+    }
+  }
   const isOpen = (k: string) => openSections.has(k) || (!openSections.has(`!${k}`) && DEFAULT_OPEN.includes(k))
   const toggleOpen = (k: string) => setOpenSections(s => { const n = new Set(s); const open = isOpen(k); n.delete(k); n.delete(`!${k}`); n.add(open ? `!${k}` : k); return n })
   const loading = mode === 'players' ? playerResults.some(r => r.isPending && r.fetchStatus !== 'idle') : teamResults.some(r => r.isPending && r.fetchStatus !== 'idle')
@@ -599,62 +625,86 @@ export default function SplitsPage() {
     <div className="min-h-screen bg-surface-bg text-ink">
       <Nav />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        <Card title="Build a split" className="mb-4"><div className="flex items-start justify-between gap-3 border-t border-surface-line px-4 pt-4">
-          {entityCount > 0 && (
-            <button onClick={() => { navigator.clipboard?.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
-              className="shrink-0 inline-flex items-center gap-1.5 bg-surface-card border border-surface-line text-ink-mid text-xs font-semibold rounded-lg px-3 py-1.5 hover:border-surface-line hover:text-ink transition-colors">
-              {copied ? '✓ Copied' : '🔗 Copy link'}
-            </button>
+        <Card title="Splits" className="mb-5" action={entityCount > 0 ? (
+          <button onClick={() => { navigator.clipboard?.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-mid rounded-lg border border-surface-line px-3 py-1.5 hover:border-indigo-500/60 hover:text-ink transition-colors">
+            {copied ? '✓ Copied' : 'Copy link'}
+          </button>
+        ) : undefined}>
+          <div className="border-t border-surface-line px-4 py-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Seg<Mode> value={mode} options={[{ value: 'players', label: 'Players' }, { value: 'teams', label: 'Teams' }]}
+                onChange={m => { setMode(m); setSituation(null); if (m === 'teams' && season === CAREER_SEASON) setSeason(CURRENT_NFL_SEASON) }} />
+              <AddEntity mode={mode} onAdd={addEntity} />
+              {entityCount > 0 && <>
+                <span className="hidden sm:block w-px h-6 bg-surface-line" />
+                {mode === 'players'
+                  ? <Seg<PCat> value={pCat} options={[...(Object.keys(PLAYER_SPLIT_CONFIG) as PlayerCategory[]).map(c => ({ value: c as PCat, label: PLAYER_SPLIT_CONFIG[c].label })), { value: 'defense' as PCat, label: 'Defense' }]} onChange={c => { setPCat(c); setSituation(null) }} />
+                  : <Seg<TeamSide> value={tSide} options={(Object.keys(TEAM_SPLIT_CONFIG) as TeamSide[]).map(s => ({ value: s, label: TEAM_SPLIT_CONFIG[s].label }))} onChange={s => { setTSide(s); setSituation(null) }} />}
+                <select value={season} onChange={e => setSeason(Number(e.target.value))} className={selectCls}>
+                  {mode === 'players' && <option value={CAREER_SEASON}>Career</option>}
+                  {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </>}
+            </div>
+            {entityCount > 0 && <MatchupHeader entities={entityMeta} onRemove={k => mode === 'players' ? setPlayers(xs => xs.filter(x => x.id !== k)) : setTeams(xs => xs.filter(x => x !== k))} />}
+          </div>
+          {entityCount === 0 && (
+            <p className="border-t border-surface-line px-4 py-2.5 text-xs text-ink-dim">
+              Compare head-to-head, then explore every split at once — by season (down to each game), down, game script, opponent and more. Every view has a shareable link.
+            </p>
           )}
-        </div>
-        <p className="text-sm text-ink-dim mb-5">Compare head-to-head, then explore every split at once for one entity — by season (down to each game), down, situation, opponent and more. Every view has a shareable link.</p>
-
-        <div className="flex flex-wrap items-center gap-3 border-t border-surface-line p-4">
-          <Seg<Mode> value={mode} options={[{ value: 'players', label: 'Players' }, { value: 'teams', label: 'Teams' }]}
-            onChange={m => { setMode(m); setSituation(null); if (m === 'teams' && season === CAREER_SEASON) setSeason(CURRENT_NFL_SEASON) }} />
-          <AddEntity mode={mode} onAdd={addEntity} />
-        </div>
-
         </Card>
-        {entityCount > 0 && <MatchupHeader entities={entityMeta} onRemove={k => mode === 'players' ? setPlayers(xs => xs.filter(x => x.id !== k)) : setTeams(xs => xs.filter(x => x !== k))} />}
 
         {entityCount === 0 ? (
-          <Card title="Results"><div className="border-t border-surface-line px-6 py-16 text-center">
-            <p className="text-ink-mid font-medium">Add {mode} to compare</p>
-            <p className="text-ink-dim text-sm mt-1">Search above to add up to 6 {mode}.</p>
-          </div></Card>
+          <Card title="Get started" className="mb-6">
+            <div className="border-t border-surface-line px-6 py-12 text-center">
+              <p className="text-ink font-semibold">Compare anyone, in any situation</p>
+              <p className="text-ink-dim text-sm mt-1.5 max-w-md mx-auto">Search above to add up to six {mode === 'players' ? 'players' : 'teams'} — or start from one of these:</p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {(mode === 'players' ? PLAYER_EXAMPLES : TEAM_EXAMPLES).map(ex => (
+                  <button key={ex.label} onClick={() => loadExample(ex)}
+                    className="rounded-full border border-surface-line bg-surface-raise/40 px-3.5 py-2 text-xs font-semibold text-ink-mid hover:border-indigo-500/60 hover:text-ink transition-colors">
+                    {ex.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-10 flex flex-wrap items-start justify-center gap-x-8 gap-y-3 text-left">
+                {[
+                  ['1', 'Add players or teams', 'up to six, side by side'],
+                  ['2', 'Pick a lens', 'stat category, season or career'],
+                  ['3', 'Drill in', 'by down, game script, opponent — to the game'],
+                ].map(([n, t, s]) => (
+                  <div key={n} className="flex w-48 items-start gap-2.5">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-raise text-[10px] font-bold text-ink-mid">{n}</span>
+                    <div>
+                      <div className="text-xs font-semibold text-ink">{t}</div>
+                      <div className="mt-0.5 text-[11px] leading-snug text-ink-dim">{s}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              {mode === 'players'
-                ? <Seg<PCat> value={pCat} options={[...(Object.keys(PLAYER_SPLIT_CONFIG) as PlayerCategory[]).map(c => ({ value: c as PCat, label: PLAYER_SPLIT_CONFIG[c].label })), { value: 'defense' as PCat, label: 'Defense' }]} onChange={c => { setPCat(c); setSituation(null) }} />
-                : <Seg<TeamSide> value={tSide} options={(Object.keys(TEAM_SPLIT_CONFIG) as TeamSide[]).map(s => ({ value: s, label: TEAM_SPLIT_CONFIG[s].label }))} onChange={s => { setTSide(s); setSituation(null) }} />}
-              <select value={season} onChange={e => setSeason(Number(e.target.value))} className={selectCls}>
-                {mode === 'players' && <option value={CAREER_SEASON}>Career</option>}
-                {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
             {/* Head-to-head summary with situation chips */}
-            <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider mr-1">Compare on</span>
-              <Chip active={!situation} onClick={() => setSituation(null)}>Overall</Chip>
-              {situations.map(s => <Chip key={s.label} active={situation?.label === s.label} onClick={() => setSituation(s)}>{s.label}</Chip>)}
-            </div>
-            <Card title="Results" className="mb-6">
+            <Card title="Head-to-head" className="mb-6">
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-surface-line px-4 py-3">
+                <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider mr-1">Compare on</span>
+                <Chip active={!situation} onClick={() => setSituation(null)}>Overall</Chip>
+                {situations.map(s => <Chip key={s.label} active={situation?.label === s.label} onClick={() => setSituation(s)}>{s.label}</Chip>)}
+              </div>
               {summaryRows.every(r => r.row == null)
-                ? <div className="py-8 text-center text-ink-dim text-sm">{loading ? 'Loading…' : 'No data.'}</div>
-                : <StatTable firstCol={mode === 'players' ? 'Player' : 'Team'} rows={summaryRows} metrics={metrics} flip={flip} />}
+                ? <div className="py-8 text-center text-ink-dim text-sm border-t border-surface-line">{loading ? 'Loading…' : 'No data.'}</div>
+                : <div className="border-t border-surface-line"><StatTable firstCol={mode === 'players' ? 'Player' : 'Team'} rows={summaryRows} metrics={metrics} flip={flip} /></div>}
             </Card>
 
             {/* Where they stand out — auto-surfaced standout splits (single player) */}
             {notable && notable.items.length > 0 && (
-              <div className="mb-6">
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
-                  <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider">Where {entityMeta[0].label} stands out</span>
-                  <span className="text-[11px] text-ink-dim">biggest swings in {notable.met.label} vs {isCareer ? 'career' : season} avg of {notable.met.fmt(notable.base)}</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <Card title={`Where ${entityMeta[0].label} stands out`} className="mb-6"
+                action={<span className="text-[11px] font-normal text-ink-dim">biggest swings in {notable.met.label} vs {isCareer ? 'career' : season} avg of {notable.met.fmt(notable.base)}</span>}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 border-t border-surface-line p-4">
                   {notable.items.map((it, i) => {
                     const good = notable.met.higherIsBetter ? it.delta > 0 : it.delta < 0
                     return (
@@ -669,20 +719,18 @@ export default function SplitsPage() {
                     )
                   })}
                 </div>
-              </div>
+              </Card>
             )}
 
             {/* All splits — single = traditional page; multiple = side-by-side */}
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider">{single ? 'Splits for' : 'Splits side-by-side'}</span>
-              {single
-                ? <span className="text-sm font-bold text-ink">{entityMeta[0].label}</span>
-                : <Seg value={keyStatsOnly ? 'key' : 'all'} options={[{ value: 'key', label: 'Key stats' }, { value: 'all', label: 'All stats' }]} onChange={v => setKeyStatsOnly(v === 'key')} />}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 mb-3">
-              <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider mr-1">Show</span>
-              {sectionDims.map(d => <Chip key={d.key} active={!hidden.has(d.key)} onClick={() => setHidden(h => { const n = new Set(h); n.has(d.key) ? n.delete(d.key) : n.add(d.key); return n })}>{d.label}</Chip>)}
-            </div>
+            <Card className="mb-3"
+              title={single ? <span>All splits · <span className="text-ink-mid">{entityMeta[0].label}</span></span> : 'All splits · side-by-side'}
+              action={!single ? <Seg value={keyStatsOnly ? 'key' : 'all'} options={[{ value: 'key', label: 'Key stats' }, { value: 'all', label: 'All stats' }]} onChange={v => setKeyStatsOnly(v === 'key')} /> : undefined}>
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-surface-line px-4 py-3">
+                <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider mr-1">Show</span>
+                {sectionDims.map(d => <Chip key={d.key} active={!hidden.has(d.key)} onClick={() => setHidden(h => { const n = new Set(h); n.has(d.key) ? n.delete(d.key) : n.add(d.key); return n })}>{d.label}</Chip>)}
+              </div>
+            </Card>
 
             <div className="space-y-3">
               {visibleDims.map(d => {
