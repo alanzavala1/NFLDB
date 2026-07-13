@@ -1,14 +1,17 @@
-# NFLDB — NFL Analytics & Situational Splits
+# NFLDB — NFL Analytics, Game Ratings & Situational Splits
 
-A full-stack NFL analytics platform built on nflfastR play-by-play. The
-centerpiece is a **situational splits engine** that conditions any player's or
-team's full stat line on one dimension at a time — pass depth, pressure,
-play-action, game state, opponent, and 15+ more — for **offense *and* defense**.
-Every derived number is verified to reconcile with official NFL stats.
+A full-stack NFL analytics platform built on nflfastR play-by-play — a
+"FotMob for the NFL." Its signature features: a **per-game player ratings
+engine** (EPA-based, percentile-calibrated across 27 seasons) rendered on a
+**matchup lineup field view**, a **situational splits engine** that conditions
+any player's or team's full stat line on one dimension at a time, and an
+**AI chat** that answers plain-English questions through the platform's own
+typed queries. Every derived number is verified to reconcile with official
+NFL stats.
 
 **[Deployment guide →](./DEPLOY.md)** &nbsp;·&nbsp; one-container deploy to Cloud Run (free tier)
 
-![Splits Explorer](docs/img/splits.png)
+![Game lineup — matchup field view with per-player EPA game ratings](docs/img/lineup.png)
 
 ---
 
@@ -16,11 +19,24 @@ Every derived number is verified to reconcile with official NFL stats.
 
 Most public stats sites show you a stat line. This shows you the *story behind it*.
 
+- **Per-game player ratings, free.** Every skill player, defender and kicker
+  gets a 3.0–10.0 grade per game — computed from play-by-play EPA and defensive
+  event stats, percentile-calibrated over **436,000+ player-games** so a 9.0 is
+  a true top-2% performance. Offensive lines get an honest **unit grade**
+  (public data records nothing per-blocker, so nothing per-blocker is faked).
+- **The lineup field view.** Each game renders one team's offense against the
+  other's defense in their actual personnel packages, rating badges on every
+  player, with popups charting each passer/receiver's targets by lane × depth
+  and each back's carries by gap — **exact counts at the data's real
+  resolution**, no interpolated dots.
 - **A situational splits engine.** Compare players or teams head-to-head, then
   break any one of them down across **18 dimensions at once** — down, pass
   depth, pressure (clean vs hit), play-action, blitz, red zone, dome,
   *competitive-snaps-only*, vs each opponent, and more — with an auto-surfaced
   "where they stand out" panel. Works for offense and defense, players and teams.
+- **Ask in plain English.** A tool-calling AI agent answers questions through
+  the same typed endpoints the site uses — **no text-to-SQL, nothing made up** —
+  and shows its chain of real database lookups under every answer.
 - **Accuracy verified to the play.** The play-by-play–derived splits reconcile
   **exactly** with official weekly stats (0 mismatches on attempts / carries /
   targets, league-wide), enforced by automated reconciliation tests that gate
@@ -29,7 +45,11 @@ Most public stats sites show you a stat line. This shows you the *story behind i
   point-lookup indexes, per-request cursors for lock-free concurrent reads, and
   a pruned columnar store.
 
-| Game page — box score, scoring summary, win probability | Home — playoff bracket, storylines, leaders |
+| Splits explorer — head-to-head, then 18 dimensions at once | Ask — a chat over verified stats, with receipts |
+|---|---|
+| ![Splits explorer](docs/img/splits.png) | ![Ask](docs/img/ask.png) |
+
+| Game page — scoring, win probability, team stats | Home — scores, power rankings, storylines |
 |---|---|
 | ![Game page](docs/img/game.png) | ![Home](docs/img/home.png) |
 
@@ -63,6 +83,30 @@ These are the parts I'm most proud of — and the ones worth a closer look.
   **872MB → 400MB** with zero loss of functionality (every builder + query
   re-verified against the slim schema).
 
+### The ratings engine
+- **Per-game grades from raw play-by-play**: QB/RB/WR/TE rate on total EPA over
+  their plays; defenders on a weighted event score (sacks, TFLs, INTs, PBUs…);
+  kickers on made-vs-expected by distance. Raw scores map through a
+  **piecewise percentile curve** calibrated across all 27 seasons, so the scale
+  reads like the one fans know: 6.5 average, 8+ great, 9+ elite (~top 2%).
+- **Validated against history, not vibes**: the all-time top-rated QB games are
+  Roethlisberger's perfect-rating 2014 game, Brady 2007, Foles's 7-TD game;
+  team power rankings (net EPA/play, early-season shrinkage) put the actual
+  Super Bowl teams at the top of each season.
+- **Honest limits by design**: O-lines are graded as a **unit** on what they
+  allow together (sack/QB-hit rate + stuffed-run rate) because public data
+  attributes nothing to individual blockers; the UI says so.
+- **A layered ID crosswalk** joins snap counts (PFR ids) to play-by-play (GSIS
+  ids) at ~98%+ per game — PFR id → id-map table → normalized name+position —
+  so lineups, snaps, and ratings agree on who's who.
+
+### The Ask agent
+- Plain-English Q&A over the database via **eight typed tools** (leaders,
+  player/team splits, standings, comparables…) — the model can only call the
+  same verified queries the site serves, **never generate SQL or invent
+  numbers**. The UI streams the tool chain live and prints a "how I got this"
+  receipt under every answer.
+
 ### The splits engine
 - **Long-format materialized tables** (`player_splits`, `defense_splits`,
   `team_splits`): one row per `(entity, season, category, dimension, value)`, so
@@ -85,7 +129,8 @@ These are the parts I'm most proud of — and the ones worth a closer look.
 |---|---|
 | Backend | Python, FastAPI, Pydantic, DuckDB |
 | Data | `nfl_data_py` / nflfastR (play-by-play, weekly stats, NGS, FTN charting, snaps, rosters) |
-| Frontend | React, TypeScript, Vite, Tailwind CSS, Recharts |
+| AI | Claude (tool-calling agent over the platform's typed queries — no text-to-SQL) |
+| Frontend | React, TypeScript, Vite, Tailwind CSS (custom card design system), Recharts |
 | Tests / CI | pytest (incl. data-reconciliation invariants), GitHub Actions |
 | Deploy | Docker, Google Cloud Run |
 
@@ -96,9 +141,10 @@ nfl_data_py ─► DuckDB (raw play-by-play, ~169 cols)
                     │
                     ├─► materialize ─► player_splits · defense_splits · team_splits
                     │                  player_game_stats · team_season_analytics · comparables
+                    │                  player_game_ratings · team_power_rankings · team_game_ol_grades
                     ▼
               FastAPI  (gzip · Cache-Control · per-request cursors)   ── /api/*
-                    │
+                    │                                    └── /api/ask (Claude agent → typed tools)
               OpenAPI ─► openapi-typescript ─► typed React/TS client  ── /
 ```
 
@@ -118,11 +164,16 @@ nfl-platform/
 │   ├── splits_builder.py          # player_splits (passing/rushing/receiving)
 │   ├── def_splits_builder.py      # defense_splits (event-based)
 │   ├── team_splits_builder.py     # team_splits (offense/defense rate profile)
-│   ├── routers/                   # schedule, players, teams, leaders, meta
+│   ├── game_ratings_builder.py    # per-game player ratings (EPA → percentile curve)
+│   ├── power_rankings_builder.py  # weekly team power rankings (net EPA/play)
+│   ├── ol_grades_builder.py       # O-line unit grades (pressure + stuff rate)
+│   ├── routers/                   # schedule (incl. lineup/ratings), players, teams, leaders, assistant (Ask), meta
 │   ├── tests/                     # endpoints, invariants, data-reconciliation
 │   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
 └── frontend/src/
+    ├── components/GameLineupView.tsx  # matchup field view, rating badges, popup charts
     ├── pages/SplitsPage.tsx       # the splits explorer
+    ├── pages/AskPage.tsx          # the AI chat
     ├── pages/                     # Schedule, Game, Player, Team, Leaders, Standings
     ├── splits.ts                  # split metrics / dimensions config
     └── api.ts, types/             # typed client (codegen from OpenAPI)
