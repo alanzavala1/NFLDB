@@ -87,6 +87,145 @@ _DIMENSIONS: dict[str, list[str]] = {
 _TEAM_DIMS = ["down", "quarter", "game_script", "field_zone", "home_away",
               "roof", "surface", "no_huddle", "game_state", "opponent", "opp_division"]
 
+# Exact split_value labels from splits_core.py and the three split builders.
+# Synonyms are routing hints only; tools must still receive the exact labels.
+_OPPONENT_VALUES = [
+    "ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE",
+    "DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC",
+    "LA", "LAC", "LV", "MIA", "MIN", "NE", "NO", "NYG",
+    "NYJ", "PHI", "PIT", "SEA", "SF", "TB", "TEN", "WAS",
+    "OAK", "SD", "STL",
+]
+_DIVISION_VALUES = [
+    "AFC East", "AFC North", "AFC South", "AFC West",
+    "NFC East", "NFC North", "NFC South", "NFC West",
+]
+
+_SPLIT_VOCABULARY: dict[str, dict[str, Any]] = {
+    "pass_depth": {
+        "values": ["short", "deep"],
+        "synonyms": {"short": ["short pass", "underneath"],
+                     "deep": ["deep ball", "shot downfield"]},
+    },
+    "pass_location": {
+        "values": ["left", "middle", "right"],
+        "synonyms": {"middle": ["over the middle"]},
+    },
+    "pressure": {
+        "values": ["clean", "pressured"],
+        "synonyms": {"clean": ["clean pocket"],
+                     "pressured": ["under pressure", "QB hit"]},
+        "note": "Pressure is the nflfastR qb_hit proxy, not a charted pressure rate.",
+    },
+    "play_action": {
+        "values": ["play_action", "no_pa"],
+        "synonyms": {"play_action": ["play fake", "play-action"],
+                     "no_pa": ["no play action", "straight dropback"]},
+    },
+    "blitz": {
+        "values": ["standard_rush", "blitz"],
+        "synonyms": {"standard_rush": ["not blitzed"],
+                     "blitz": ["when blitzed", "5+ rushers"]},
+    },
+    "target_depth": {
+        "values": ["short", "deep"],
+        "synonyms": {"short": ["short target", "underneath"],
+                     "deep": ["deep target", "deep ball"]},
+    },
+    "target_direction": {
+        "values": ["left", "middle", "right"],
+        "synonyms": {"middle": ["over the middle"]},
+    },
+    "run_gap": {
+        "values": ["guard", "tackle", "end"],
+        "synonyms": {"guard": ["guard gap"], "tackle": ["tackle gap"],
+                     "end": ["edge", "end run"]},
+    },
+    "run_direction": {
+        "values": ["left", "middle", "right"],
+        "synonyms": {"middle": ["up the middle"]},
+    },
+    "box_count": {
+        "values": ["light_box", "neutral_box", "stacked_box"],
+        "synonyms": {"light_box": ["light box", "6 or fewer defenders"],
+                     "neutral_box": ["7-man box"],
+                     "stacked_box": ["stacked box", "loaded box", "8+ defenders"]},
+    },
+    "vs_play": {
+        "values": ["vs_pass", "vs_run"],
+        "synonyms": {"vs_pass": ["against passes", "on pass plays"],
+                     "vs_run": ["against runs", "on run plays"]},
+    },
+    "down": {
+        "values": ["1", "2", "3", "4"],
+        "synonyms": {"1": ["first down", "1st down"],
+                     "2": ["second down", "2nd down"],
+                     "3": ["third down", "3rd down"],
+                     "4": ["fourth down", "4th down"]},
+    },
+    "game_script": {
+        "values": ["leading", "tied", "trailing"],
+        "synonyms": {"leading": ["ahead", "playing with a lead"],
+                     "tied": ["score tied"],
+                     "trailing": ["behind", "playing from behind", "down big"]},
+        "note": "These labels do not encode lead size; defense uses its own perspective.",
+    },
+    "quarter": {
+        "values": ["1", "2", "3", "4", "OT"],
+        "synonyms": {"1": ["first quarter"], "2": ["second quarter"],
+                     "3": ["third quarter"], "4": ["fourth quarter"],
+                     "OT": ["overtime"]},
+    },
+    "shotgun": {
+        "values": ["shotgun", "under_center"],
+        "synonyms": {"under_center": ["under center"]},
+    },
+    "field_zone": {
+        "values": ["own_territory", "opp_territory", "red_zone"],
+        "synonyms": {"own_territory": ["own side of the field"],
+                     "opp_territory": ["opponent territory", "plus territory"],
+                     "red_zone": ["red zone", "inside the 20"]},
+    },
+    "home_away": {
+        "values": ["home", "away"],
+        "synonyms": {"home": ["at home"], "away": ["on the road", "road game"]},
+    },
+    "roof": {
+        "values": ["dome", "outdoors"],
+        "synonyms": {"dome": ["indoors", "closed roof"],
+                     "outdoors": ["outside", "open roof"]},
+        "note": "Source roof values dome/closed map to dome; outdoors/open map to outdoors.",
+    },
+    "surface": {
+        "values": ["grass", "turf"],
+        "synonyms": {"turf": ["artificial turf", "synthetic surface"]},
+        "note": "Every non-empty source surface other than grass maps to turf.",
+    },
+    "no_huddle": {
+        "values": ["huddle", "no_huddle"],
+        "synonyms": {"huddle": ["with a huddle"],
+                     "no_huddle": ["no huddle", "hurry-up"]},
+    },
+    "game_state": {
+        "values": ["competitive", "garbage"],
+        "synonyms": {"competitive": ["meaningful snaps", "close game"],
+                     "garbage": ["garbage time", "blowout", "game already decided"]},
+        "note": "Competitive means win probability 5%-95%; garbage is outside that band.",
+    },
+    "opponent": {
+        "values": _OPPONENT_VALUES,
+        "synonyms": {},
+        "note": "Use the team abbreviation from resolve_entity; OAK/SD/STL are historical labels.",
+        "prompt": "team abbreviation from resolve_entity; historical OAK/SD/STL",
+    },
+    "opp_division": {
+        "values": _DIVISION_VALUES,
+        "synonyms": {},
+        "note": "The opponent's division.",
+        "prompt": "AFC/NFC East, North, South, or West",
+    },
+}
+
 # Numeric columns the leaders table exposes (the season totals you can rank by).
 _LEADER_STATS = [
     "attempts", "completions", "pass_yards", "pass_tds", "interceptions_thrown",
@@ -96,6 +235,25 @@ _LEADER_STATS = [
     "def_interceptions", "pass_breakups", "forced_fumbles", "fumble_recoveries",
     "fg_att", "fg_made", "xp_att", "xp_made", "punts", "punt_yards",
 ]
+
+_DERIVED_METRICS = {
+    "completion_pct": {"formula": "100 * completions / attempts",
+                       "inputs": ["completions", "attempts"]},
+    "yards_per_attempt": {"formula": "pass_yards / attempts",
+                          "inputs": ["pass_yards", "attempts"]},
+    "yards_per_carry": {"formula": "rush_yards / carries",
+                        "inputs": ["rush_yards", "carries"]},
+    "catch_rate": {"formula": "100 * receptions / targets",
+                   "inputs": ["receptions", "targets"]},
+    "td_rate": {"formula": "100 * touchdowns / matching attempts or opportunities",
+                "inputs": ["touchdowns", "matching attempts or opportunities"]},
+    "passer_rating": {
+        "formula": "standard NFL passer-rating formula",
+        "inputs": ["completions", "attempts", "pass_yards", "pass_tds",
+                   "interceptions_thrown"],
+        "requirement": "Fetch every input (all four formula components) or decline.",
+    },
+}
 
 _COVERAGE = {
     "seasons": f"{FIRST_SEASON}-{CURRENT_SEASON} (regular season)",
@@ -407,9 +565,9 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
     @beta_tool
     def get_metadata() -> str:
         """The exact vocabulary this platform supports: seasons available,
-        split categories and their valid dimensions, the rankable leader stats,
-        team abbreviations, and data coverage limits. Call this when you are
-        unsure whether a stat/dimension/season exists before answering.
+        split categories/dimensions/values and their plain-English synonyms,
+        rankable and derived stats, team abbreviations, and coverage limits.
+        Call this when unsure whether a stat/dimension/value/season exists.
         """
         if ctx.over_budget():
             return _BUDGET_MSG
@@ -418,7 +576,9 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
             "split_categories": list(_DIMENSIONS),
             "split_dimensions": _DIMENSIONS,
             "team_split_dimensions": _TEAM_DIMS,
+            "split_value_vocabulary": _SPLIT_VOCABULARY,
             "leader_stats": _LEADER_STATS,
+            "derived_metrics": _DERIVED_METRICS,
             "teams": TEAM_NAMES,
             "coverage_limits": _COVERAGE,
         }
@@ -457,6 +617,22 @@ def _dim_lines() -> str:
     return "\n".join(f"  - {cat}: {', '.join(dims)}" for cat, dims in _DIMENSIONS.items())
 
 
+def _vocab_lines() -> str:
+    lines = []
+    for dim, spec in _SPLIT_VOCABULARY.items():
+        if spec.get("prompt"):
+            detail = spec["prompt"]
+        else:
+            parts = []
+            for value in spec["values"]:
+                synonyms = spec["synonyms"].get(value, [])
+                hint = f" [{'/'.join(synonyms)}]" if synonyms else ""
+                parts.append(f"{value}{hint}")
+            detail = "; ".join(parts)
+        lines.append(f"- {dim}: {detail}")
+    return "\n".join(lines)
+
+
 SYSTEM_PROMPT = f"""You are the NFL stats assistant for this analytics platform. \
 You answer questions about NFL players and teams ONLY by calling the provided \
 tools, which read the platform's verified statistics database. You never invent, \
@@ -471,11 +647,22 @@ DATA YOU CAN REACH (seasons {FIRST_SEASON}-{CURRENT_SEASON}, regular season):
 - get_leaders: league leaders for a stat in a season.
 - get_standings: division standings for a season.
 - get_comparables: statistically similar players.
-- get_metadata: the exact valid categories/dimensions/stats and coverage limits.
+- get_metadata: exact dimensions, values/synonyms, stats, and coverage limits.
 
 SPLIT DIMENSIONS (the `dimension` argument to get_player_splits):
 {_dim_lines()}
 Team split dimensions: {', '.join(_TEAM_DIMS)}
+
+SPLIT VALUE VOCABULARY (exact labels precede brackets; brackets are normal phrasing):
+{_vocab_lines()}
+
+DERIVED METRICS:
+- You MAY compute completion %, yards/attempt, yards/carry, catch rate, and TD \
+rate only from counting-stat inputs fetched in this conversation. Show the \
+inputs and arithmetic (for example, "389/579 = 67.2%").
+- Never derive a metric requiring an input you did not fetch. Compute passer \
+rating only after fetching attempts, completions, pass yards, pass TDs, and \
+interceptions (all four formula components); otherwise decline.
 
 COVERAGE LIMITS — respect these; if asked for data outside them, say it is not \
 available rather than guessing:
