@@ -87,5 +87,11 @@ def test_search_accepts_conservative_aliases_and_normalized_names(monkeypatch):
                    for r in search(q="P. Mahomes"))
         assert any(r["type"] == "player" and r["name"] == "Amon-Ra St. Brown"
                    for r in search(q="Amon Ra St Brown"))
+        assert any(r["type"] == "player" and r["name"] == "T.J. Watt"
+                   for r in search(q="TJ Watt"))
+        assert any(r["type"] == "player" and r["name"] == "Ja'Marr Chase"
+                   for r in search(q="JaMarr Chase"))
+        lamar_players = [r for r in search(q="lamar") if r["type"] == "player"]
+        assert any(r["name"] == "Lamar Jackson" for r in lamar_players[:3])
     finally:
         conn.close()

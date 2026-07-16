@@ -285,11 +285,12 @@ def search(q: str = Query(..., min_length=1)):
             break
 
     parts = ql.split()
+    compact = ql.replace(" ", "")
     initial_last = len(parts) == 2 and len(parts[0]) == 1
     initial = parts[0] if initial_last else ""
     last = parts[1] if initial_last else ""
 
-    # First-initial + surname is accepted after punctuation normalization.
+    # Initials and punctuation-free spellings supplement normalized name search.
     players = safe_query(
         """
         WITH normalized AS (
@@ -299,7 +300,9 @@ def search(q: str = Query(..., min_length=1)):
                 position,
                 team,
                 headshot_url,
-                TRIM(REGEXP_REPLACE(LOWER(player_name), '[^a-z0-9]+', ' ', 'g')) AS normalized_name
+                season,
+                TRIM(REGEXP_REPLACE(LOWER(player_name), '[^a-z0-9]+', ' ', 'g')) AS normalized_name,
+                REGEXP_REPLACE(LOWER(player_name), '[^a-z0-9]+', '', 'g') AS compact_name
             FROM rosters
             QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY season DESC) = 1
         )
@@ -314,17 +317,19 @@ def search(q: str = Query(..., min_length=1)):
                 WHEN normalized_name LIKE ? || '%' THEN 1
                 WHEN ? AND LEFT(normalized_name, 1) = ?
                          AND REGEXP_EXTRACT(normalized_name, '([a-z0-9]+)$', 1) = ? THEN 2
-                ELSE 3
+                WHEN normalized_name LIKE '%' || ? || '%' THEN 3
+                ELSE 4
             END AS rank
         FROM normalized
         WHERE normalized_name LIKE '%' || ? || '%'
+           OR compact_name LIKE '%' || ? || '%'
            OR (? AND LEFT(normalized_name, 1) = ?
                     AND REGEXP_EXTRACT(normalized_name, '([a-z0-9]+)$', 1) = ?)
-        ORDER BY rank, player_name
+        ORDER BY rank, season DESC, player_name
         LIMIT 8
         """,
         [ql, ql, initial_last, initial, last,
-         ql, initial_last, initial, last],
+         ql, ql, compact, initial_last, initial, last],
     )
 
     player_results = [
