@@ -22,7 +22,7 @@ import type {
   SnapTotals, StandingsRow, TeamAnalyticsResponse, TeamAnalyticsRow,
   TeamGame, TeamLeader, TeamProfile, TeamSplit, TeamGameStats, ScoringPlay, WinProbPlay, WpaLeader, WpaLeaders,
   GameLineup, LineupPlayer, LineupTeam, LineupScoringEvent, PlayerChart, PlayerChartEvent,
-  AskResponse, ToolCall,
+  AskHistoryMessage, AskRequest, AskResponse, ToolCall,
 } from './types'
 
 const BASE = '/api'
@@ -42,7 +42,7 @@ export type {
   RosterPlayer, SearchResult, SituationalStats, SnapTotals, TeamGame,
   TeamLeader, TeamProfile, TeamSplit, TeamGameStats, ScoringPlay, WinProbPlay, WpaLeader, WpaLeaders,
   GameLineup, LineupPlayer, LineupTeam, LineupScoringEvent, PlayerChart, PlayerChartEvent,
-  AskResponse,
+  AskHistoryMessage, AskRequest, AskResponse,
 }
 
 export type SeasonEntry        = SeasonStatus
@@ -80,7 +80,8 @@ export const api = {
   splits:        (playerId: string)            => get<PlayerSplit[]>(`/players/${playerId}/splits`),
   defSplits:     (playerId: string)            => get<DefensiveSplit[]>(`/players/${playerId}/def-splits`),
   search:        (q: string)                   => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
-  ask:           (question: string)            => post<AskResponse>('/ask', { question }),
+  ask:           (question: string, history: AskHistoryMessage[] = []) =>
+    post<AskResponse>('/ask', { question, history } satisfies AskRequest),
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -107,11 +108,15 @@ export type AskEvent =
   | { type: 'done'; answer: string; data: Record<string, unknown>[]; tools_used: ToolCall[] }
   | { type: 'error'; detail: string }
 
-export async function askStream(question: string, onEvent: (e: AskEvent) => void): Promise<void> {
+export async function askStream(
+  question: string,
+  history: AskHistoryMessage[],
+  onEvent: (e: AskEvent) => void,
+): Promise<void> {
   const res = await fetch(`${BASE}/ask/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, history } satisfies AskRequest),
   })
   if (!res.ok || !res.body) {
     // Pre-stream rejection (rate limit, bad input) comes back as normal JSON.

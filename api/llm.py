@@ -278,6 +278,33 @@ def _nonzero(d: dict) -> dict:
     return {k: v for k, v in d.items() if v not in (None, 0, 0.0)}
 
 
+def _conversation_messages(question: str, history: list[dict] | None = None) -> list[dict]:
+    """Build an Anthropic-safe text transcript ending with the new question.
+
+    Routes already cap history; this defensive pass drops malformed entries,
+    removes an assistant-only prefix, and merges consecutive equal roles.
+    """
+    raw = [*(history or []), {"role": "user", "content": question}]
+    messages: list[dict] = []
+    for message in raw:
+        if isinstance(message, dict):
+            role = message.get("role")
+            content = message.get("content")
+        else:
+            role = getattr(message, "role", None)
+            content = getattr(message, "content", None)
+        if role not in ("user", "assistant") or not isinstance(content, str):
+            continue
+        content = content.strip()
+        if not content or (not messages and role == "assistant"):
+            continue
+        if messages and messages[-1]["role"] == role:
+            messages[-1]["content"] += "\n\n" + content
+        else:
+            messages.append({"role": role, "content": content})
+    return messages
+
+
 # Stat columns to sum for a player's season line, reusing the platform's single
 # source of truth for what "a stat" is.
 from sql_helpers import STAT_COLS  # noqa: E402
@@ -664,6 +691,11 @@ inputs and arithmetic (for example, "389/579 = 67.2%").
 rating only after fetching attempts, completions, pass yards, pass TDs, and \
 interceptions (all four formula components); otherwise decline.
 
+CONVERSATION CONTEXT:
+- Prior turns are context for resolving references and follow-ups. Every number \
+in a NEW answer must come from a tool call made for that answer; never reuse a \
+figure from an earlier assistant message.
+
 COVERAGE LIMITS — respect these; if asked for data outside them, say it is not \
 available rather than guessing:
 - NGS tracking stats (CPOE, time-to-throw, separation, etc.): 2016 onward.
@@ -690,10 +722,10 @@ best answer) to record what was missing — this is how we find what to add next
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def run_ask(question: str) -> dict:
-    """Run one natural-language question through the tool-calling loop and
-    return {answer, data, tools_used}. Raises anthropic.* errors on auth /
-    upstream failures (the route maps them to HTTP statuses)."""
+def run_ask(question: str, history: list[dict] | None = None) -> dict:
+    """Run one question plus bounded text history through the tool-calling
+    loop and return {answer, data, tools_used}. Raises anthropic.* errors on
+    auth / upstream failures (the route maps them to HTTP statuses)."""
     ctx = _Ctx()
     ctx.question = question
     tools = _build_tools(ctx)
@@ -704,7 +736,7 @@ def run_ask(question: str) -> dict:
         max_tokens=2048,
         system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
         tools=tools,
-        messages=[{"role": "user", "content": question}],
+        messages=_conversation_messages(question, history),
     )
 
     answer = ""
@@ -717,7 +749,7 @@ def run_ask(question: str) -> dict:
             "tools_used": [{"tool": c["tool"], "args": c["args"]} for c in ctx.calls]}
 
 
-def run_ask_stream(question: str):
+def run_ask_stream(question: str, history: list[dict] | None = None):
     """Streaming sibling of run_ask, for the SSE endpoint. Yields event dicts:
 
         {"type": "tool",  "tool": <name>}                    a tool call has begun
@@ -740,7 +772,7 @@ def run_ask_stream(question: str):
     tool_params = [t.to_dict() for t in tools]
     client = _get_client()
 
-    messages: list[dict] = [{"role": "user", "content": question}]
+    messages = _conversation_messages(question, history)
     answer = ""
 
     while True:

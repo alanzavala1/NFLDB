@@ -73,5 +73,7 @@ export type DepthChartEntry = Schemas['DepthChartEntry']
 export type PlayerAward     = Schemas['PlayerAward']
 
 // Natural-language ask assistant
-export type AskResponse = Schemas['AskResponse']
-export type ToolCall    = Schemas['ToolCall']
+export type AskHistoryMessage = Schemas['AskHistoryMessage']
+export type AskRequest        = Schemas['AskRequest']
+export type AskResponse       = Schemas['AskResponse']
+export type ToolCall          = Schemas['ToolCall']

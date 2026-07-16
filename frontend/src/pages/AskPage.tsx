@@ -4,7 +4,7 @@ import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Nav from '../components/Nav'
 import { askStream } from '../api'
-import type { ToolCall } from '../types'
+import type { AskHistoryMessage, ToolCall } from '../types'
 
 // Welcome-screen prompts, grouped so a first-time visitor learns the range of
 // what the agent can answer by reading the grid.
@@ -184,6 +184,21 @@ type Exchange = {
   loading: boolean
 }
 
+const MAX_HISTORY_MESSAGES = 12
+
+function historyFrom(exchanges: Exchange[]): AskHistoryMessage[] {
+  return exchanges
+    .flatMap<AskHistoryMessage>((exchange) => {
+      const messages: AskHistoryMessage[] = [
+        { role: 'user', content: exchange.q },
+      ]
+      const answer = exchange.answer.trim()
+      if (answer) messages.push({ role: 'assistant', content: answer })
+      return messages
+    })
+    .slice(-MAX_HISTORY_MESSAGES)
+}
+
 function Mark({ size = 'h-7 w-7 text-[10px]' }: { size?: string }) {
   return (
     <span className={`flex shrink-0 select-none items-center justify-center rounded-full bg-indigo-600/20 font-black tracking-tight text-indigo-300 ring-1 ring-indigo-500/40 ${size}`}>
@@ -237,7 +252,7 @@ function Welcome({ onAsk, disabled }: { onAsk: (q: string) => void; disabled: bo
           </div>
         ))}
       </div>
-      <p className="mt-6 text-[11px] text-ink-dim">Each question stands on its own — the agent doesn't carry context between them.</p>
+      <p className="mt-6 text-[11px] text-ink-dim">Ask follow-ups — the agent carries the conversation's text context forward.</p>
     </div>
   )
 }
@@ -255,10 +270,11 @@ export default function AskPage() {
   async function run(q: string) {
     const query = q.trim()
     if (!query || loading) return
+    const history = historyFrom(exchanges)
     setQuestion('')
     setExchanges((xs) => [...xs, { q: query, answer: '', data: [], tools: [], live: [], error: null, loading: true }])
     try {
-      await askStream(query, (e) => {
+      await askStream(query, history, (e) => {
         if (e.type === 'tool') {
           // A tool call means any text streamed so far wasn't the final answer.
           patchLast((prev) => ({ live: [...prev.live, e.tool], answer: '' }))

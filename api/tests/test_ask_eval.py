@@ -1,7 +1,7 @@
 """Gold-set evaluation for the natural-language /ask assistant.
 
 This is the headline deliverable: a measured accuracy number, not a vibe. It
-runs ~20 plain-English questions through the real model + tools and checks two
+runs ~40 plain-English questions through the real model + tools and checks two
 things per question:
 
   (a) routing  — did the model call the expected tool with the expected args?
@@ -84,13 +84,20 @@ def _standings_record(fns, season, team):
 
 # ── Graders ───────────────────────────────────────────────────────────────────
 
+_DASH_TRANSLATION = str.maketrans({"–": "-", "—": "-", "−": "-"})
+
+
+def _normalize_answer(answer):
+    return answer.translate(_DASH_TRANSLATION)
+
+
 def num_in(answer, value):
     """An integer value appears in the answer (commas tolerated)."""
-    return str(int(round(float(value)))) in answer.replace(",", "")
+    return str(int(round(float(value)))) in _normalize_answer(answer).replace(",", "")
 
 
 def text_in(answer, options):
-    a = answer.lower()
+    a = _normalize_answer(answer).lower()
     return any(o.lower() in a for o in options)
 
 
@@ -125,6 +132,11 @@ def _leader_tops(fns, stat, season):
         return []
     top = rows[0][stat]
     return [r["player"] for r in rows if r[stat] == top]
+
+
+def _leader_nth(fns, stat, season, rank):
+    rows = json.loads(fns["get_leaders"](stat=stat, season=season, limit=rank))
+    return rows[rank - 1]["player"]
 
 
 # ── The gold set ──────────────────────────────────────────────────────────────
@@ -310,6 +322,33 @@ GOLD = [
      "tool": None,
      "grade": lambda a, f: text_in(a, ["2022", "not available", "isn't available",
                                        "no data", "don't have", "do not have", "unavailable"])},
+
+    # multi-turn follow-ups (history is text context, not replayed tool state)
+    {"q": "What about 2022?",
+     "history": [
+         {"role": "user", "content": "How many passing yards did Patrick Mahomes have in 2023?"},
+         {"role": "assistant", "content": "Patrick Mahomes threw for 4,183 yards in 2023."},
+     ],
+     "tool": "get_player_overview", "args": {"season": 2022},
+     "grade": lambda a, f: num_in(a, _overview_val(f, "Patrick Mahomes", 2022, "pass_yards"))},
+
+    {"q": "And against light boxes?",
+     "history": [
+         {"role": "user", "content": "How many rushing yards did CMC have against stacked boxes in 2023?"},
+         {"role": "assistant", "content": "I pulled Christian McCaffrey's 2023 stacked-box rushing split."},
+     ],
+     "tool": "get_player_splits",
+     "args": {"category": "rushing", "dimension": "box_count", "season": 2023},
+     "grade": lambda a, f: num_in(a, _split_val(
+         f, "Christian McCaffrey", 2023, "rushing", "box_count", "light_box", "yards"))},
+
+    {"q": "Who was second?",
+     "history": [
+         {"role": "user", "content": "Who led the league in sacks in 2022?"},
+         {"role": "assistant", "content": "Nick Bosa led the NFL in sacks in 2022."},
+     ],
+     "tool": "get_leaders", "args": {"stat": "sacks", "season": 2022},
+     "grade": lambda a, f: name_in(a, _leader_nth(f, "sacks", 2022, 2))},
 ]
 
 
@@ -347,7 +386,7 @@ def test_ask_eval_accuracy():
     rows = []
 
     for g in GOLD:
-        res = run_ask(g["q"])
+        res = run_ask(g["q"], history=g.get("history", []))
         used, answer = res["tools_used"], res["answer"]
 
         if g["tool"] is None:

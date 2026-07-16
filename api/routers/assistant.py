@@ -13,17 +13,54 @@ from fastapi.responses import StreamingResponse
 
 from llm import read_gaps, run_ask, run_ask_stream
 from rate_limit import RateLimiter
-from schemas.assistant import AskRequest, AskResponse
+from schemas.assistant import AskHistoryMessage, AskRequest, AskResponse
 
 router = APIRouter()
 
 # Billed endpoint, so the per-IP window is tight.
 _limiter = RateLimiter(max_hits=8)
 
+_MAX_HISTORY_MESSAGES = 12
+_MAX_HISTORY_CHARS = 8_000
 
-def _guard(req: AskRequest, request: Request) -> str:
+
+def _history_cost(messages: list[dict[str, str]]) -> int:
+    """Characters sent after adjacent same-role messages are merged."""
+    separators = sum(
+        2 for previous, current in zip(messages, messages[1:])
+        if previous["role"] == current["role"]
+    )
+    return sum(len(message["content"]) for message in messages) + separators
+
+
+def _normalize_history(history: list[AskHistoryMessage]) -> list[dict[str, str]]:
+    """Bound text history and make it safe for Anthropic's alternating roles.
+
+    Trimming removes whole oldest messages. Blank messages and any assistant
+    prefix left by trimming carry no usable conversational context.
+    """
+    messages = [
+        {"role": message.role, "content": message.content.strip()}
+        for message in history[-_MAX_HISTORY_MESSAGES:]
+        if message.content.strip()
+    ]
+    while messages and _history_cost(messages) > _MAX_HISTORY_CHARS:
+        messages.pop(0)
+    while messages and messages[0]["role"] == "assistant":
+        messages.pop(0)
+
+    normalized: list[dict[str, str]] = []
+    for message in messages:
+        if normalized and normalized[-1]["role"] == message["role"]:
+            normalized[-1]["content"] += "\n\n" + message["content"]
+        else:
+            normalized.append(message.copy())
+    return normalized
+
+
+def _guard(req: AskRequest, request: Request) -> tuple[str, list[dict[str, str]]]:
     """Shared per-IP rate limit + input validation. Returns the cleaned
-    question, or raises an HTTPException."""
+    question and bounded text history, or raises an HTTPException."""
     ip = request.client.host if request.client else "unknown"
     if _limiter.limited(ip):
         raise HTTPException(status_code=429, detail="Too many questions — give it a minute.")
@@ -32,15 +69,15 @@ def _guard(req: AskRequest, request: Request) -> str:
         raise HTTPException(status_code=400, detail="Ask a question first.")
     if len(question) > 500:
         raise HTTPException(status_code=400, detail="Question is too long (max 500 characters).")
-    return question
+    return question, _normalize_history(req.history)
 
 
 @router.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest, request: Request):
     """Non-streaming answer (used by the eval and as a simple fallback)."""
-    question = _guard(req, request)
+    question, history = _guard(req, request)
     try:
-        return run_ask(question)
+        return run_ask(question, history)
     except anthropic.AuthenticationError:
         # No usable credentials (no API key and no logged-in profile).
         raise HTTPException(status_code=503, detail="The assistant isn't configured with API credentials.")
@@ -56,13 +93,13 @@ def ask_stream(req: AskRequest, request: Request):
     the agent works. Validation + rate limit run before the stream opens; errors
     that surface mid-stream (auth, upstream) arrive as an `error` event, since
     the HTTP status is already committed once streaming starts."""
-    question = _guard(req, request)
+    question, history = _guard(req, request)
 
     def sse():
         def ev(d: dict) -> str:
             return f"data: {json.dumps(d)}\n\n"
         try:
-            for e in run_ask_stream(question):
+            for e in run_ask_stream(question, history):
                 yield ev(e)
         except anthropic.AuthenticationError:
             yield ev({"type": "error", "detail": "The assistant isn't configured with API credentials."})

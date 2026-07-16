@@ -528,10 +528,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AskHistoryMessage */
+        AskHistoryMessage: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Content */
+            content: string;
+        };
         /** AskRequest */
         AskRequest: {
             /** Question */
             question: string;
+            /** History */
+            history?: components["schemas"]["AskHistoryMessage"][];
         };
         /** AskResponse */
         AskResponse: {
