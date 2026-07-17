@@ -104,10 +104,10 @@ def test_grouped_rows_are_ordered_and_capped():
     payload = json.loads(_tool()(season=2023, group_by="offense"))
     teams = [row["offense"] for row in payload["rows"]]
 
-    assert len(teams) == 25
+    assert len(teams) == 32
     assert teams == sorted(teams)
     assert teams[0] == "ARI"
-    assert teams[-1] == "NYJ"
+    assert teams[-1] == "WAS"
 
 
 def test_small_sample_note_and_ydstogo_refresh_message():

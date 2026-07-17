@@ -292,6 +292,7 @@ _QUERY_PLAY_GROUP_COLUMNS = {
     "offense": ("posteam", "offense"),
     "defense": ("defteam", "defense"),
 }
+_QUERY_PLAY_GROUP_LIMIT = 32
 _QUERY_PLAY_ENUMS = {
     "season_type": ("REG", "POST", "ALL"),
     "play": ("pass", "run"),
@@ -747,7 +748,7 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
             conditions.append(f"{group_column} IS NOT NULL")
             select_group = f"{group_column} AS {group_alias}, "
             group_sql = (f" GROUP BY {group_column} ORDER BY {group_column} "
-                         f"LIMIT {_RESULT_LIMIT}")
+                         f"LIMIT {_QUERY_PLAY_GROUP_LIMIT}")
         measures = _QUERY_PLAY_MEASURES
         if enum_values["play"] == "pass":
             measures += _QUERY_PLAY_PASS_MEASURES
