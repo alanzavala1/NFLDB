@@ -40,6 +40,12 @@ from routers.leaders import get_leaders as _leaders_query
 from routers.leaders import get_standings as _standings_query
 from routers.leaders import search as _search_query
 from routers.players import get_player as _player_profile
+from routers.power_rankings import get_power_rankings as _power_rankings_query
+from routers.schedule import get_game as _game_query
+from routers.schedule import get_schedule as _schedule_query
+from routers.teams import get_team as _team_query
+from routers.teams import get_team_depth_chart as _team_depth_query
+from routers.teams import get_team_injuries as _team_injuries_query
 
 # ── Model + client ────────────────────────────────────────────────────────────
 
@@ -256,7 +262,9 @@ _DERIVED_METRICS = {
 }
 
 _COVERAGE = {
-    "seasons": f"{FIRST_SEASON}-{CURRENT_SEASON} (regular season)",
+    "seasons": f"{FIRST_SEASON}-{CURRENT_SEASON}",
+    "game_results": "Regular season and playoffs (WC, DIV, CON, SB).",
+    "player_team_stats": "Regular season only.",
     "ngs_tracking_stats_from": 2016,      # CPOE, time-to-throw, separation, ...
     "ftn_charting_dims_from": 2022,       # play_action, blitz, box_count
     "snap_counts_from": 2012,
@@ -276,6 +284,40 @@ def _nonzero(d: dict) -> dict:
     """Drop null/zero fields — used only for the overview's counting line, to
     keep it compact (a stat of 0 isn't interesting context for the model)."""
     return {k: v for k, v in d.items() if v not in (None, 0, 0.0)}
+
+
+_RESULT_LIMIT = 25
+_GAME_LINE_STATS = [
+    "attempts", "completions", "pass_yards", "pass_tds", "interceptions_thrown",
+    "sacks_taken", "carries", "rush_yards", "rush_tds", "targets", "receptions",
+    "rec_yards", "rec_tds",
+]
+
+
+def _season_stat_line(games: list[dict]) -> dict:
+    """Sum the profile page's reconciled per-game columns into one compact line."""
+    totals = {col: round(sum(g.get(col) or 0 for g in games), 2) for col in STAT_COLS}
+    return _nonzero(totals)
+
+
+def _regular_record(games: list[dict], team: str) -> str:
+    """Fallback record from the team router's completed regular-season games."""
+    wins = losses = ties = 0
+    for game in games:
+        if game.get("game_type") != "REG":
+            continue
+        away_score, home_score = game.get("away_score"), game.get("home_score")
+        if away_score is None or home_score is None:
+            continue
+        team_score = home_score if game.get("home_team") == team else away_score
+        opp_score = away_score if game.get("home_team") == team else home_score
+        if team_score > opp_score:
+            wins += 1
+        elif team_score < opp_score:
+            losses += 1
+        else:
+            ties += 1
+    return f"{wins}-{losses}-{ties}" if ties else f"{wins}-{losses}"
 
 
 def _conversation_messages(question: str, history: list[dict] | None = None) -> list[dict]:
@@ -402,6 +444,321 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
                 "position": r.get("position"), "team": r.get("team")} for r in rows]
         ctx.record("resolve_entity", {"name": name})
         return _dumps(out) if out else "No player or team matched that name."
+
+    @beta_tool
+    def find_games(season: int, team: str = "", week: int = 0) -> str:
+        """Find regular-season or playoff game results and game_ids. Use the
+        game_id from a filtered result with get_game_detail when box-score
+        context is needed.
+
+        Args:
+            season: The season year, e.g. 2023.
+            team: Optional team abbreviation from resolve_entity, e.g. "KC".
+            week: Optional NFL week; 0 searches the whole season.
+        """
+        if ctx.over_budget():
+            return _BUDGET_MSG
+        s = int(season)
+        tm = team.upper().strip()
+        wk = max(0, int(week))
+        args = {"season": s, "team": tm, "week": wk}
+        schedule = _schedule_query(season=s)
+        matches = [
+            game
+            for group in schedule
+            for game in group.get("games", [])
+            if (not tm or tm in (game.get("away_team"), game.get("home_team")))
+            and (not wk or int(game.get("week", -1)) == wk)
+        ]
+        truncated = len(matches) > _RESULT_LIMIT
+        if truncated:
+            # Preserve postseason discoverability in a whole-season preview so
+            # Super Bowl questions do not require the caller to know its week.
+            preview = sorted(
+                matches,
+                key=lambda game: (game.get("game_type") == "REG", int(game.get("week", 0))),
+            )
+            keys = ("week", "game_type", "away_team", "home_team", "away_score", "home_score")
+        else:
+            preview = matches
+            keys = ("game_id", "week", "game_type", "gameday", "away_team",
+                    "home_team", "away_score", "home_score", "overtime")
+        rows = [
+            {key: (bool(game[key]) if key == "overtime" else game[key])
+             for key in keys if game.get(key) is not None}
+            for game in preview[:_RESULT_LIMIT]
+        ]
+        payload = {
+            "season": s,
+            "matched": len(matches),
+            "truncated": truncated,
+            "games": rows,
+        }
+        if truncated:
+            payload["note"] = "Showing 25 compact results; narrow by team and/or week to get game_ids."
+        ctx.record("find_games", args, rows)
+        return _dumps(payload) if matches else f"No games found for those filters in {s}."
+
+    @beta_tool
+    def get_game_detail(game_id: str) -> str:
+        """One trimmed game result: game metadata, quarter scoring, and each
+        team's top five pass/rush/receiving performers. Get game_id from
+        find_games first; the full play chart and full box score are omitted.
+
+        Args:
+            game_id: Exact game_id returned by find_games.
+        """
+        if ctx.over_budget():
+            return _BUDGET_MSG
+        args = {"game_id": game_id}
+        try:
+            game = _game_query(game_id)
+        except HTTPException:
+            ctx.record("get_game_detail", args)
+            return "No game found for that game_id."
+
+        meta_keys = (
+            "game_id", "season", "game_type", "week", "gameday", "away_team",
+            "home_team", "away_score", "home_score", "away_record", "home_record",
+            "overtime", "roof", "surface", "away_coach", "home_coach",
+        )
+        meta = {
+            key: (bool(game[key]) if key == "overtime" else game[key])
+            for key in meta_keys if game.get(key) is not None
+        }
+
+        performers = {}
+        for side in ("away", "home"):
+            team = game.get(f"{side}_team")
+            players = [
+                player for player in game.get(side, [])
+                if any(player.get(stat) not in (None, 0, 0.0)
+                       for stat in ("pass_yards", "rush_yards", "rec_yards"))
+            ]
+            players.sort(
+                key=lambda player: (
+                    sum(float(player.get(stat) or 0)
+                        for stat in ("pass_yards", "rush_yards", "rec_yards")),
+                    player.get("player_name") or "",
+                ),
+                reverse=True,
+            )
+            performers[team] = [
+                {
+                    "player_id": player.get("player_id"),
+                    "player": player.get("player_name"),
+                    "position": player.get("position"),
+                    **_nonzero({stat: player.get(stat) for stat in _GAME_LINE_STATS}),
+                }
+                for player in players[:5]
+            ]
+
+        payload = {
+            "game": meta,
+            "quarter_scores": game.get("quarter_scores", [])[:5],
+            "top_performers": performers,
+        }
+        ctx.record("get_game_detail", args, [meta])
+        return _dumps(payload)
+
+    @beta_tool
+    def get_player_game_log(player_id: str, season: int) -> str:
+        """A player's compact regular-season game log for one season. Use for
+        a specific week or best/worst-game question; each row retains game
+        context and only nonzero verified stat columns.
+
+        Args:
+            player_id: The player's id from resolve_entity.
+            season: The season year, e.g. 2020.
+        """
+        if ctx.over_budget():
+            return _BUDGET_MSG
+        s = int(season)
+        args = {"player_id": player_id, "season": s}
+        try:
+            profile = _player_profile(player_id)
+        except HTTPException:
+            ctx.record("get_player_game_log", args)
+            return "No player found for that id."
+        games = [
+            game for game in profile.get("games", [])
+            if int(game.get("season", -1)) == s and game.get("game_type") == "REG"
+        ][:_RESULT_LIMIT]
+        rows = []
+        for game in games:
+            context = {
+                key: game.get(key)
+                for key in ("game_id", "week", "game_type", "gameday", "team",
+                            "opponent", "location", "result")
+                if game.get(key) is not None
+            }
+            rows.append({**context, **_nonzero({col: game.get(col) for col in STAT_COLS})})
+        payload = {
+            "player": {"id": player_id, "name": profile.get("player_name"),
+                       "position": profile.get("position")},
+            "season": s,
+            "games": rows,
+        }
+        ctx.record("get_player_game_log", args, rows)
+        return _dumps(payload) if rows else f"No regular-season games for that player in {s}."
+
+    @beta_tool
+    def get_player_career(player_id: str) -> str:
+        """Regular-season totals for every season in a player's profile plus
+        one career-total line. Use for career totals, number of seasons, and
+        best-season questions; all sums reconcile with the profile game rows.
+
+        Args:
+            player_id: The player's id from resolve_entity.
+        """
+        if ctx.over_budget():
+            return _BUDGET_MSG
+        args = {"player_id": player_id}
+        try:
+            profile = _player_profile(player_id)
+        except HTTPException:
+            ctx.record("get_player_career", args)
+            return "No player found for that id."
+        regular = [game for game in profile.get("games", []) if game.get("game_type") == "REG"]
+        seasons = []
+        for season in sorted({int(game["season"]) for game in regular}):
+            games = [game for game in regular if int(game["season"]) == season]
+            seasons.append({"season": season, "games_played": len(games),
+                            **_season_stat_line(games)})
+        all_seasons = seasons
+        seasons = all_seasons[-_RESULT_LIMIT:]
+        career_total = {
+            "seasons": len(all_seasons),
+            "first_season": all_seasons[0]["season"] if all_seasons else None,
+            "last_season": all_seasons[-1]["season"] if all_seasons else None,
+            "games_played": len(regular),
+            **_season_stat_line(regular),
+        }
+        career_total = {key: value for key, value in career_total.items() if value is not None}
+        payload = {
+            "player": {"id": player_id, "name": profile.get("player_name"),
+                       "position": profile.get("position")},
+            "seasons": seasons,
+            "career_total": career_total,
+        }
+        if len(all_seasons) > _RESULT_LIMIT:
+            payload["note"] = (f"Showing the most recent {_RESULT_LIMIT} of "
+                               f"{len(all_seasons)} seasons.")
+        ctx.record("get_player_career", args, seasons)
+        return _dumps(payload) if seasons else "No regular-season career games for that player."
+
+    @beta_tool
+    def get_team_overview(team: str, season: int) -> str:
+        """A compact regular-season team record/standing summary. For the
+        current season it also includes the latest injury report and current
+        offensive depth-chart starters at QB/RB/WR/TE.
+
+        Args:
+            team: Team abbreviation from resolve_entity, e.g. "BAL".
+            season: The season year, e.g. 2023.
+        """
+        if ctx.over_budget():
+            return _BUDGET_MSG
+        tm = team.upper().strip()
+        s = int(season)
+        args = {"team": tm, "season": s}
+        try:
+            profile = _team_query(tm, s)
+        except HTTPException:
+            ctx.record("get_team_overview", args)
+            return f"No team profile found for {tm} in {s}."
+
+        standing = None
+        standing_division = None
+        for division in _standings_query(season=s):
+            standing = next(
+                (row for row in division.get("teams", []) if row.get("team") == tm),
+                None,
+            )
+            if standing:
+                standing_division = division.get("division")
+                break
+        if standing:
+            record = f'{standing["w"]}-{standing["l"]}'
+            if standing.get("t"):
+                record += f'-{standing["t"]}'
+            standing_line = {
+                "division": standing_division,
+                "pct": standing.get("pct"),
+                "points_for": standing.get("pf"),
+                "points_against": standing.get("pa"),
+                "division_record": standing.get("div"),
+                "streak": standing.get("strk"),
+            }
+            regular_games = int(standing["w"] + standing["l"] + standing.get("t", 0))
+        else:
+            game_types = {
+                game.get("game_id"): game.get("game_type")
+                for group in _schedule_query(season=s)
+                for game in group.get("games", [])
+            }
+            games = [
+                {**game, "game_type": game_types.get(game.get("game_id"))}
+                for game in profile.get("games", [])
+            ]
+            record = _regular_record(games, tm)
+            standing_line = {}
+            regular_games = None
+        payload = {"team": tm, "season": s, "record": record}
+        if regular_games is not None:
+            payload["regular_season_games"] = regular_games
+        if standing_line:
+            payload["standing"] = standing_line
+
+        if s == CURRENT_SEASON:
+            injuries = _team_injuries_query(tm, s, None)
+            payload["current_injuries"] = [
+                {key: row.get(source) for key, source in (
+                    ("name", "full_name"), ("position", "position"),
+                    ("injury", "report_primary_injury"),
+                    ("status", "report_status"), ("practice_status", "practice_status"),
+                    ("week", "week"),
+                ) if row.get(source) is not None}
+                for row in injuries[:20]
+            ]
+            depth = _team_depth_query(tm, s, None)
+            payload["offensive_starters"] = [
+                {"name": row.get("full_name"), "position": row.get("depth_position")}
+                for row in depth
+                if row.get("formation") == "Offense"
+                and row.get("depth_position") in {"QB", "RB", "WR", "TE"}
+                and str(row.get("depth_team")) == "1"
+            ][:5]
+        payload = {key: value for key, value in payload.items() if value not in (None, [], {})}
+        ctx.record("get_team_overview", args, [payload])
+        return _dumps(payload)
+
+    @beta_tool
+    def get_power_rankings(season: int, week: int = 0) -> str:
+        """This platform's EPA-based power rankings, not a media poll. week 0
+        returns the latest available model run for the season.
+
+        Args:
+            season: The season year, e.g. 2023.
+            week: Ranking week, or 0 for the latest available.
+        """
+        if ctx.over_budget():
+            return _BUDGET_MSG
+        s = int(season)
+        wk = max(0, int(week))
+        args = {"season": s, "week": wk}
+        rows = _power_rankings_query(season=s, week=wk or None)
+        out = [
+            {key: row.get(key) for key in
+             ("rank", "team", "record", "net_epa_play", "movement")
+             if row.get(key) is not None}
+            for row in rows[:_RESULT_LIMIT]
+        ]
+        payload = {"season": s, "week": wk or "latest", "rankings": out}
+        if len(rows) > _RESULT_LIMIT:
+            payload["note"] = f"Showing the top {_RESULT_LIMIT} of {len(rows)} teams."
+        ctx.record("get_power_rankings", args, out)
+        return _dumps(payload) if out else f"No power rankings available for {s}."
 
     @beta_tool
     def get_player_overview(player_id: str, season: int) -> str:
@@ -607,6 +964,10 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
             "leader_stats": _LEADER_STATS,
             "derived_metrics": _DERIVED_METRICS,
             "teams": TEAM_NAMES,
+            "other_data": [
+                "find_games", "get_game_detail", "get_player_game_log",
+                "get_player_career", "get_team_overview", "get_power_rankings",
+            ],
             "coverage_limits": _COVERAGE,
         }
         ctx.record("get_metadata", {})
@@ -631,8 +992,10 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         ctx.record("report_data_gap", {"topic": topic.strip()})
         return "Logged the data gap for later review."
 
-    return [resolve_entity, get_player_overview, get_player_splits, get_team_splits,
-            get_leaders, get_standings, get_comparables, get_metadata, report_data_gap]
+    return [resolve_entity, find_games, get_game_detail, get_player_game_log,
+            get_player_career, get_team_overview, get_power_rankings,
+            get_player_overview, get_player_splits, get_team_splits, get_leaders,
+            get_standings, get_comparables, get_metadata, report_data_gap]
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -666,8 +1029,14 @@ tools, which read the platform's verified statistics database. You never invent,
 estimate, or recall numbers from memory — every figure in your answer must come \
 from a tool result in this conversation.
 
-DATA YOU CAN REACH (seasons {FIRST_SEASON}-{CURRENT_SEASON}, regular season):
+DATA YOU CAN REACH (seasons {FIRST_SEASON}-{CURRENT_SEASON}):
 - resolve_entity: name -> id. ALWAYS call first for any player/team named.
+- find_games: regular-season and playoff schedules/results; returns game_ids when filtered.
+- get_game_detail: one trimmed game result with quarter scores and top performers.
+- get_player_game_log: one player's regular-season game rows for a season.
+- get_player_career: one player's per-season and career regular-season totals.
+- get_team_overview: team record/standing; current injuries and skill-position starters.
+- get_power_rankings: this platform's EPA model rankings, not a media poll.
 - get_player_overview: a player's season line + NGS, red-zone/3rd-down, snaps, awards, draft.
 - get_player_splits: a player's stat line conditioned on ONE situation (the centerpiece).
 - get_team_splits: a team's offense/defense rate profile by situation.
@@ -698,6 +1067,8 @@ figure from an earlier assistant message.
 
 COVERAGE LIMITS — respect these; if asked for data outside them, say it is not \
 available rather than guessing:
+- Game schedules/results include playoffs (WC/DIV/CON/SB); player career, \
+season, game-log, and team stat tools are regular-season only.
 - NGS tracking stats (CPOE, time-to-throw, separation, etc.): 2016 onward.
 - FTN charting dimensions (play_action, blitz, box_count): 2022 onward.
 - Snap counts: ~2012 onward.

@@ -1,7 +1,7 @@
 """Gold-set evaluation for the natural-language /ask assistant.
 
 This is the headline deliverable: a measured accuracy number, not a vibe. It
-runs ~40 plain-English questions through the real model + tools and checks two
+runs ~50 plain-English questions through the real model + tools and checks two
 things per question:
 
   (a) routing  — did the model call the expected tool with the expected args?
@@ -80,6 +80,56 @@ def _standings_record(fns, season, team):
     rows = json.loads(fns["get_standings"](season=season))
     r = next(x for x in rows if x["team"] == team)
     return f"{r['w']}-{r['l']}"
+
+
+def _find_game(fns, season, *, team="", week=0, away=None, home=None, game_type=None):
+    payload = json.loads(fns["find_games"](season=season, team=team, week=week))
+    return next(
+        game for game in payload["games"]
+        if (away is None or game["away_team"] == away)
+        and (home is None or game["home_team"] == home)
+        and (game_type is None or game["game_type"] == game_type)
+    )
+
+
+def _game_log(fns, name, season):
+    return json.loads(fns["get_player_game_log"](
+        player_id=_pid(fns, name), season=season))["games"]
+
+
+def _career_val(fns, name, key):
+    payload = json.loads(fns["get_player_career"](player_id=_pid(fns, name)))
+    return payload["career_total"][key]
+
+
+def _team_overview_record(fns, team, season):
+    payload = json.loads(fns["get_team_overview"](team=team, season=season))
+    return payload["record"]
+
+
+def _power_rank(fns, team, season):
+    payload = json.loads(fns["get_power_rankings"](season=season, week=0))
+    return next(row["rank"] for row in payload["rankings"] if row["team"] == team)
+
+
+def _game_coaches(fns, game_id):
+    payload = json.loads(fns["get_game_detail"](game_id=game_id))
+    return payload["game"]["away_coach"], payload["game"]["home_coach"]
+
+
+def _winner_options(fns, season, game_type):
+    from config import TEAM_NAMES
+
+    game = _find_game(fns, season, game_type=game_type)
+    winner = game["away_team"] if game["away_score"] > game["home_score"] else game["home_team"]
+    full_name = TEAM_NAMES[winner]
+    return [winner, full_name, full_name.split()[-1]]
+
+
+def _score_in(answer, game):
+    away, home = int(game["away_score"]), int(game["home_score"])
+    return text_in(answer, [f"{away}-{home}", f"{away} to {home}",
+                            f"{home}-{away}", f"{home} to {away}"])
 
 
 # ── Graders ───────────────────────────────────────────────────────────────────
@@ -323,6 +373,49 @@ GOLD = [
      "grade": lambda a, f: text_in(a, ["2022", "not available", "isn't available",
                                        "no data", "don't have", "do not have", "unavailable"])},
 
+    # schedules, games, careers, teams, and platform power rankings
+    {"q": "What was the score of the Bills-Chiefs game in week 14 of 2023?",
+     "tool": "find_games", "args": {"season": 2023, "week": 14},
+     "grade": lambda a, f: _score_in(
+         a, _find_game(f, 2023, week=14, away="BUF", home="KC"))},
+
+    {"q": "Who won the Super Bowl after the 2022 season?",
+     "tool": "find_games", "args": {"season": 2022},
+     "grade": lambda a, f: text_in(a, _winner_options(f, 2022, "SB"))},
+
+    {"q": "Who coached the teams in the Super Bowl after the 2022 season?",
+     "tool": "get_game_detail", "args": {"game_id": "2022_22_KC_PHI"},
+     "grade": lambda a, f: all(
+         coach.lower() in a.lower() for coach in _game_coaches(f, "2022_22_KC_PHI"))},
+
+    {"q": "How many rushing yards did Derrick Henry have in week 8 of 2020?",
+     "tool": "get_player_game_log", "args": {"season": 2020},
+     "grade": lambda a, f: num_in(
+         a, next(game for game in _game_log(f, "Derrick Henry", 2020)
+                 if game["week"] == 8)["rush_yards"])},
+
+    {"q": "How many career passing touchdowns does Aaron Rodgers have?",
+     "tool": "get_player_career", "args": {},
+     "grade": lambda a, f: num_in(a, _career_val(f, "Aaron Rodgers", "pass_tds"))},
+
+    {"q": "What was Derrick Henry's best rushing game of 2020?",
+     "tool": "get_player_game_log", "args": {"season": 2020},
+     "grade": lambda a, f: num_in(
+         a, max(game.get("rush_yards", 0) for game in _game_log(f, "Derrick Henry", 2020)))},
+
+    {"q": "What was the Ravens' record in 2023?",
+     "tool": "get_team_overview", "args": {"season": 2023},
+     "grade": lambda a, f: text_in(a, [_team_overview_record(f, "BAL", 2023)])},
+
+    {"q": "Where did the Chiefs rank in the 2023 power rankings?",
+     "tool": "get_power_rankings", "args": {"season": 2023},
+     "grade": lambda a, f: num_in(a, _power_rank(f, "KC", 2023))},
+
+    {"q": "How many receiving yards did Jerry Rice have in 1989?",
+     "tool": None,
+     "grade": lambda a, f: text_in(a, ["1999", "not available", "isn't available",
+                                       "no data", "don't have", "do not have", "unavailable"])},
+
     # multi-turn follow-ups (history is text context, not replayed tool state)
     {"q": "What about 2022?",
      "history": [
@@ -406,9 +499,9 @@ def test_ask_eval_accuracy():
 
     print("\n\n==================== /ask gold-set eval ====================")
     for tool_ok, ans_ok, q, ans in rows:
-        mark = "✓" if (tool_ok and ans_ok) else ("~" if (tool_ok or ans_ok) else "✗")
+        mark = "OK" if (tool_ok and ans_ok) else ("~" if (tool_ok or ans_ok) else "X")
         print(f" {mark} [tool {'Y' if tool_ok else 'n'} | ans {'Y' if ans_ok else 'n'}] {q}")
-        print(f"       → {ans}")
+        print(f"       -> {ans}")
     print("------------------------------------------------------------")
     print(f" Tool routing accuracy : {tool_hits}/{total} = {tool_hits/total:.0%}")
     print(f" Answer accuracy       : {ans_hits}/{total} = {ans_hits/total:.0%}")

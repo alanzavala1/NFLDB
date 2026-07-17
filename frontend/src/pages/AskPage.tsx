@@ -12,12 +12,19 @@ const EXAMPLE_GROUPS: { label: string; examples: string[] }[] = [
   { label: 'Players', examples: ['How did Josh Allen do under pressure in 2023?', 'Which players are most similar to Justin Jefferson?'] },
   { label: 'Leaders & awards', examples: ['Who led the NFL in rushing yards in 2022?', 'Has Josh Allen ever won MVP?'] },
   { label: 'Teams', examples: ['How is the Chiefs defense in the red zone in 2023?', 'Which team had the best offense in 2024?'] },
+  { label: 'Games', examples: ['Who won the Super Bowl after the 2022 season?', 'What was the score of Bills-Chiefs in week 14 of 2023?'] },
   { label: 'Situations', examples: ['How does Derrick Henry run on 3rd and short?', 'Who is best deep passer this season?'] },
 ]
 
 // Tool names → friendly labels for the "how I got this" line.
 const TOOL_LABELS: Record<string, string> = {
   resolve_entity: 'looked up',
+  find_games: 'game search',
+  get_game_detail: 'game detail',
+  get_player_game_log: 'player game log',
+  get_player_career: 'player career',
+  get_team_overview: 'team overview',
+  get_power_rankings: 'EPA power rankings',
   get_player_overview: 'player overview',
   get_player_splits: 'player splits',
   get_team_splits: 'team splits',
