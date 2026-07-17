@@ -132,6 +132,19 @@ def _score_in(answer, game):
                             f"{home}-{away}", f"{home} to {away}"])
 
 
+def _query_play_payload(fns, **kwargs):
+    return json.loads(fns["query_plays"](**kwargs))
+
+
+def _query_play_value(fns, key, **kwargs):
+    return _query_play_payload(fns, **kwargs)["rows"][0][key]
+
+
+def _query_play_top_group(fns, group_key, **kwargs):
+    rows = _query_play_payload(fns, group_by=group_key, **kwargs)["rows"]
+    return max(rows, key=lambda row: row["plays"])[group_key]
+
+
 # ── Graders ───────────────────────────────────────────────────────────────────
 
 _DASH_TRANSLATION = str.maketrans({"–": "-", "—": "-", "−": "-"})
@@ -172,6 +185,16 @@ def pct_in(answer, value):
     whole-number form the model is likely to print (e.g. 44.9 -> "44.9%")."""
     v = float(value)
     return f"{round(v, 1)}" in answer or f"{round(v)}" in answer
+
+
+def down_in(answer, value):
+    options = {
+        1: ["first down", "1st down"],
+        2: ["second down", "2nd down"],
+        3: ["third down", "3rd down"],
+        4: ["fourth down", "4th down"],
+    }
+    return text_in(answer, options[int(value)])
 
 
 def _leader_tops(fns, stat, season):
@@ -246,11 +269,11 @@ GOLD = [
 
     # ── standings ──
     {"q": "What was the Cincinnati Bengals' record in 2021?",
-     "tool": "get_standings", "args": {"season": 2021},
+     "tools": ["get_standings", "get_team_overview"], "args": {"season": 2021},
      "grade": lambda a, f: text_in(a, [_standings_record(f, 2021, "CIN")])},
 
     {"q": "What was the Detroit Lions' record in 2023?",
-     "tool": "get_standings", "args": {"season": 2023},
+     "tools": ["get_standings", "get_team_overview"], "args": {"season": 2023},
      "grade": lambda a, f: text_in(a, [_standings_record(f, 2023, "DET")])},
 
     # ── team splits ──
@@ -418,6 +441,38 @@ GOLD = [
      "tool": None,
      "grade": lambda a, f: text_in(a, ["1999", "not available", "isn't available",
                                        "no data", "don't have", "do not have", "unavailable"])},
+
+    # granular semantic play queries
+    {"q": "How many rushing touchdowns did the Eagles score in the red zone in 2022?",
+     "tool": "query_plays",
+     "args": {"season": 2022, "offense": "PHI", "play": "run", "red_zone": True},
+     "grade": lambda a, f: num_in(a, _query_play_value(
+         f, "touchdowns", season=2022, offense="PHI", play="run", red_zone=True))},
+
+    {"q": "What was Patrick Mahomes' success rate on deep passes on first down in 2022?",
+     "tool": "query_plays",
+     "args": {"season": 2022, "play": "pass", "pass_length": "deep", "down": 1},
+     "grade": lambda a, f: pct_in(a, 100 * _query_play_value(
+         f, "success_rate", season=2022, play="pass", pass_length="deep", down=1,
+         passer_id=_pid(f, "Patrick Mahomes")))},
+
+    {"q": "Which down did the Ravens run on most in 2023?",
+     "tool": "query_plays",
+     "args": {"season": 2023, "offense": "BAL", "play": "run", "group_by": "down"},
+     "grade": lambda a, f: down_in(a, _query_play_top_group(
+         f, "down", season=2023, offense="BAL", play="run"))},
+
+    {"q": "What about on first down?",
+     "history": [
+         {"role": "user", "content": "How many rushing touchdowns did the Ravens score in the red zone in 2023?"},
+         {"role": "assistant", "content": "I checked Baltimore's 2023 regular-season red-zone rushing plays."},
+     ],
+     "tool": "query_plays",
+     "args": {"season": 2023, "offense": "BAL", "play": "run",
+              "red_zone": True, "down": 1},
+     "grade": lambda a, f: num_in(a, _query_play_value(
+         f, "touchdowns", season=2023, offense="BAL", play="run",
+         red_zone=True, down=1))},
 
     # multi-turn follow-ups (history is text context, not replayed tool state)
     {"q": "What about 2022?",

@@ -388,7 +388,7 @@ def build_returner_stats(plays):
 PLAYS_KEEP_COLUMNS = [
     'play_id', 'game_id', 'home_team', 'away_team', 'season_type', 'week',
     'posteam', 'posteam_type', 'defteam', 'yardline_100', 'game_seconds_remaining', 'drive',
-    'sp', 'qtr', 'down', 'time', 'desc', 'play_type',
+    'sp', 'qtr', 'down', 'ydstogo', 'time', 'desc', 'play_type',
     'yards_gained', 'shotgun', 'no_huddle', 'qb_kneel', 'qb_spike', 'pass_length',
     'pass_location', 'air_yards', 'yards_after_catch', 'run_location', 'run_gap', 'field_goal_result',
     'kick_distance', 'extra_point_result', 'two_point_conv_result', 'timeout', 'td_team', 'td_player_id',
