@@ -3,7 +3,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.sql_baseline import SQLBaseline, SQLGuardError, connect_read_only, guard_select
+from tests.sql_baseline import (
+    SQLBaseline,
+    SQLGuardError,
+    _extract_sql,
+    connect_read_only,
+    guard_select,
+)
 
 
 class _StubMessages:
@@ -68,6 +74,42 @@ def test_guard_accepts_select_and_with_after_comment_stripping():
     assert guard_select("/* read only */ WITH x AS (SELECT 1 AS n) SELECT n FROM x") == (
         "WITH x AS (SELECT 1 AS n) SELECT n FROM x"
     )
+
+
+def test_fenced_select_executes():
+    client = _StubClient([
+        "```SQL\nSELECT 42 AS answer\n```",
+        "The answer is 42.",
+    ])
+    conn = _StubConnection()
+
+    result = SQLBaseline(client, conn, "schema").run("What is the answer?")
+
+    assert result.sql == "SELECT 42 AS answer"
+    assert conn.calls == ["SELECT 42 AS answer"]
+
+
+def test_fenced_not_answerable_short_circuits_database_execution():
+    client = _StubClient([
+        "```\nNOT_ANSWERABLE\n```",
+        "That data is not available.",
+    ])
+    conn = _StubConnection()
+
+    result = SQLBaseline(client, conn, "schema").run("Where should I get pizza?")
+
+    assert result.not_answerable is True
+    assert conn.calls == []
+
+
+def test_fenced_drop_is_still_rejected_by_guard():
+    with pytest.raises(SQLGuardError, match="must start with SELECT or WITH"):
+        guard_select(_extract_sql("```sql\nDROP TABLE plays\n```"))
+
+
+def test_extract_sql_leaves_unfenced_input_unchanged():
+    assert _extract_sql("  SELECT 1  ") == "SELECT 1"
+    assert _extract_sql("  NOT_ANSWERABLE  ") == "NOT_ANSWERABLE"
 
 
 def test_sql_error_gets_exactly_one_repair_round():

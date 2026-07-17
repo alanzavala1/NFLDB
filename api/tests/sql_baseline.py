@@ -37,6 +37,27 @@ class SQLGuardError(ValueError):
     """The generated statement is outside the read-only SELECT contract."""
 
 
+def _extract_sql(text: str) -> str:
+    """Return the first fenced block's contents, or stripped unfenced text."""
+    stripped = text.strip()
+    fence_start = stripped.find("```")
+    if fence_start < 0:
+        return stripped
+    content_start = fence_start + 3
+    fence_end = stripped.find("```", content_start)
+    if fence_end < 0:
+        return stripped
+
+    content = stripped[content_start:fence_end]
+    first_line, newline, remainder = content.partition("\n")
+    if newline and (
+        not first_line.strip()
+        or re.fullmatch(r"[A-Za-z0-9_.+-]+", first_line.strip())
+    ):
+        content = remainder
+    return content.strip()
+
+
 def _strip_sql_comments(sql: str) -> str:
     """Remove line/block comments while preserving quoted string contents."""
     out: list[str] = []
@@ -279,9 +300,9 @@ class SQLBaseline:
             "text": self.schema_prompt,
             "cache_control": {"type": "ephemeral"},
         }]
-        return self._model_call(
+        return _extract_sql(self._model_call(
             system=system, messages=messages, max_tokens=1200, usage=usage
-        )
+        ))
 
     def _execute(self, sql: str) -> tuple[str, list[dict]]:
         statement = guard_select(sql)
