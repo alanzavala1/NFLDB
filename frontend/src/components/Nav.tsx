@@ -9,7 +9,7 @@ const LINKS = [
   { label: 'Standings', to: '/standings', isActive: (p: string) => p.startsWith('/standings') },
   { label: 'Leaders',   to: '/leaders',   isActive: (p: string) => p.startsWith('/leaders') },
   { label: 'Splits',    to: '/splits',    isActive: (p: string) => p.startsWith('/splits') },
-  { label: 'Ask',       to: '/ask',       isActive: (p: string) => p.startsWith('/ask') },
+  { label: 'Ask NFLDB', to: '/ask',       isActive: (p: string) => p.startsWith('/ask') },
 ]
 
 function SearchModal({ onClose }: { onClose: () => void }) {

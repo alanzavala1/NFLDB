@@ -1441,8 +1441,9 @@ best answer) to record what was missing — this is how we find what to add next
 
 def run_ask(question: str, history: list[dict] | None = None) -> dict:
     """Run one question plus bounded text history through the tool-calling
-    loop and return {answer, data, tools_used}. Raises anthropic.* errors on
-    auth / upstream failures (the route maps them to HTTP statuses)."""
+    loop and return {answer, data, tools_used, usage}. Usage is internal eval
+    telemetry; the API response model excludes it. Raises anthropic.* errors
+    on auth / upstream failures (the route maps them to HTTP statuses)."""
     ctx = _Ctx()
     ctx.question = question
     tools = _build_tools(ctx)
@@ -1457,13 +1458,34 @@ def run_ask(question: str, history: list[dict] | None = None) -> dict:
     )
 
     answer = ""
+    usage = {
+        "uncached_input": 0,
+        "cache_creation_input": 0,
+        "cache_read_input": 0,
+        "output": 0,
+    }
     for message in runner:
+        message_usage = getattr(message, "usage", None)
+        if message_usage is not None:
+            usage["uncached_input"] += int(
+                getattr(message_usage, "input_tokens", 0) or 0
+            )
+            usage["cache_creation_input"] += int(
+                getattr(message_usage, "cache_creation_input_tokens", 0) or 0
+            )
+            usage["cache_read_input"] += int(
+                getattr(message_usage, "cache_read_input_tokens", 0) or 0
+            )
+            usage["output"] += int(
+                getattr(message_usage, "output_tokens", 0) or 0
+            )
         text = "".join(b.text for b in message.content if b.type == "text").strip()
         if text:
             answer = text  # the final assistant turn's text wins
 
     return {"answer": answer, "data": ctx.data,
-            "tools_used": [{"tool": c["tool"], "args": c["args"]} for c in ctx.calls]}
+            "tools_used": [{"tool": c["tool"], "args": c["args"]} for c in ctx.calls],
+            "usage": usage}
 
 
 def run_ask_stream(question: str, history: list[dict] | None = None):

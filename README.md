@@ -5,7 +5,7 @@ A full-stack NFL analytics platform built on nflfastR play-by-play — a
 engine** (EPA-based, percentile-calibrated across 27 seasons) rendered on a
 **matchup lineup field view**, a **situational splits engine** that conditions
 any player's or team's full stat line on one dimension at a time, and an
-**AI chat** that answers plain-English questions through the platform's own
+**Ask NFLDB** agent that answers plain-English questions through the platform's own
 typed queries. Every derived number is verified to reconcile with official
 NFL stats.
 
@@ -34,7 +34,7 @@ Most public stats sites show you a stat line. This shows you the *story behind i
   depth, pressure (clean vs hit), play-action, blitz, red zone, dome,
   *competitive-snaps-only*, vs each opponent, and more — with an auto-surfaced
   "where they stand out" panel. Works for offense and defense, players and teams.
-- **Ask in plain English.** A tool-calling AI agent answers questions through
+- **Ask NFLDB.** A tool-calling agent answers questions through
   the same typed endpoints the site uses — **no text-to-SQL, nothing made up** —
   and shows its chain of real database lookups under every answer.
 - **Accuracy verified to the play.** The play-by-play–derived splits reconcile
@@ -45,7 +45,7 @@ Most public stats sites show you a stat line. This shows you the *story behind i
   point-lookup indexes, per-request cursors for lock-free concurrent reads, and
   a pruned columnar store.
 
-| Splits explorer — head-to-head, then 18 dimensions at once | Ask — a chat over verified stats, with receipts |
+| Splits explorer — head-to-head, then 18 dimensions at once | Ask NFLDB — verified stats, with receipts |
 |---|---|
 | ![Splits explorer](docs/img/splits.png) | ![Ask](docs/img/ask.png) |
 
@@ -100,13 +100,6 @@ These are the parts I'm most proud of — and the ones worth a closer look.
   ids) at ~98%+ per game — PFR id → id-map table → normalized name+position —
   so lineups, snaps, and ratings agree on who's who.
 
-### The Ask agent
-- Plain-English Q&A over the database via **eight typed tools** (leaders,
-  player/team splits, standings, comparables…) — the model can only call the
-  same verified queries the site serves, **never generate SQL or invent
-  numbers**. The UI streams the tool chain live and prints a "how I got this"
-  receipt under every answer.
-
 ### The splits engine
 - **Long-format materialized tables** (`player_splits`, `defense_splits`,
   `team_splits`): one row per `(entity, season, category, dimension, value)`, so
@@ -120,6 +113,41 @@ These are the parts I'm most proud of — and the ones worth a closer look.
 - FastAPI + Pydantic → **OpenAPI → `openapi-typescript` codegen** → a fully typed
   React/TypeScript client. A schema change flows to the frontend types
   automatically; no hand-written, drift-prone interfaces.
+
+## Ask NFLDB — a verified-stats NFL agent
+
+Ask NFLDB is natural-language Q&A over the platform's reconciled statistics,
+implemented as an Anthropic tool-runner agent with ~16 typed tools. It
+supports text-context multi-turn follow-ups, SSE streaming, per-IP rate
+limiting, and a hard 10-tool-call budget per question.
+
+The product deliberately has **no free-form text-to-SQL path**. Definitions are
+enforced in code: official totals are reconciled regular-season-only numbers,
+while terms such as "pressure," "deep," and "success rate" use the platform's
+charted definitions. Typed tools expose only verified numbers, and
+`query_plays` composes SQL server-side from whitelisted filters and measures —
+the semantic-layer pattern. A vocabulary contract maps normal football phrasing
+onto exact split values, while `resolve_entity` supplies the IDs consumed by
+the data tools.
+
+The evaluation is a 56-question gold set whose truth is computed live from the
+same verified layer. It grades both tool routing and the written answer, and is
+opt-in because it makes billed model calls. It also caught a real regression:
+during the coverage-tools phase a broken tool chain scored 88%; after the fix,
+the complete set was re-verified at 100%.
+
+| Architecture | Accuracy | Avg latency | Tokens/question |
+|---|---:|---:|---:|
+| Typed tools + semantic layer | 56/56 (100%) | <LAT>s | <TOK> tok/q |
+| Text-to-SQL v2 (honest data dictionary) | 37/56 (66%) | 2.59s | ~8,200 |
+| Text-to-SQL v1 (raw schema) | 21/56 (38%) | 3.11s | ~7,800 |
+
+The text-to-SQL misses clustered into schema literacy (choosing the wrong
+table or column, or failing to join IDs back to names),
+instruction-vs-enforcement (playoff-inclusive sums despite the REG recipe in
+its prompt), metric identity confusion (TD% answered as success rate), and
+structural gaps (cross-dimension questions need play-level composition).
+Prose instructions can be ignored; compiled definitions cannot.
 
 ---
 
@@ -167,13 +195,13 @@ nfl-platform/
 │   ├── game_ratings_builder.py    # per-game player ratings (EPA → percentile curve)
 │   ├── power_rankings_builder.py  # weekly team power rankings (net EPA/play)
 │   ├── ol_grades_builder.py       # O-line unit grades (pressure + stuff rate)
-│   ├── routers/                   # schedule (incl. lineup/ratings), players, teams, leaders, assistant (Ask), meta
+│   ├── routers/                   # schedule (incl. lineup/ratings), players, teams, leaders, assistant (Ask NFLDB), meta
 │   ├── tests/                     # endpoints, invariants, data-reconciliation
 │   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
 └── frontend/src/
     ├── components/GameLineupView.tsx  # matchup field view, rating badges, popup charts
     ├── pages/SplitsPage.tsx       # the splits explorer
-    ├── pages/AskPage.tsx          # the AI chat
+    ├── pages/AskPage.tsx          # Ask NFLDB
     ├── pages/                     # Schedule, Game, Player, Team, Leaders, Standings
     ├── splits.ts                  # split metrics / dimensions config
     └── api.ts, types/             # typed client (codegen from OpenAPI)

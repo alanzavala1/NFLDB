@@ -220,8 +220,9 @@ function Welcome({ onAsk, disabled }: { onAsk: (q: string) => void; disabled: bo
       <Mark size="h-12 w-12 text-sm" />
       <h1 className="mt-5 text-3xl font-black tracking-tight text-ink">Ask NFLDB</h1>
       <p className="mt-3 max-w-md text-sm leading-relaxed text-ink-mid">
-        Plain-English answers from 27 seasons of play-by-play. Every number is
-        pulled through the site's own verified queries — never made up.
+        Ask about game results, careers, standings, power rankings, situational
+        splits, or granular play-by-play. Every number comes through the site's
+        own verified queries — never made up.
       </p>
 
       <div className="mt-9 grid w-full gap-2.5 text-left sm:grid-cols-2">

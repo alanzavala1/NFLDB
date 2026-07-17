@@ -24,10 +24,14 @@ The `-s` flag shows the per-question table and the final accuracy line.
 import json
 import os
 import re
+import time
+from datetime import datetime, timezone
 
 import pytest
 
 _DB = os.path.join(os.path.dirname(__file__), "..", "data", "nfl.duckdb")
+_OUT = os.path.join(os.path.dirname(__file__), "out", "ask_eval_runs.jsonl")
+_HARNESS_VERSION = 2
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("RUN_ASK_EVAL") or not os.path.exists(_DB),
@@ -543,7 +547,7 @@ def _args_match(actual: dict, expected: dict) -> bool:
 
 def test_ask_eval_accuracy():
     import anthropic
-    from llm import run_ask
+    from llm import MODEL, run_ask
 
     try:
         fns = _oracle()
@@ -555,10 +559,14 @@ def test_ask_eval_accuracy():
     total = len(GOLD)
     tool_hits = ans_hits = both_hits = 0
     rows = []
+    cases = []
 
     for g in GOLD:
+        started = time.perf_counter()
         res = run_ask(g["q"], history=g.get("history", []))
+        latency = time.perf_counter() - started
         used, answer = res["tools_used"], res["answer"]
+        usage = res.get("usage", {})
 
         expected_tools = g.get("tools")
         if expected_tools is None:
@@ -581,6 +589,24 @@ def test_ask_eval_accuracy():
         ans_hits += ans_ok
         both_hits += tool_ok and ans_ok
         rows.append((tool_ok, ans_ok, g["q"], answer.replace("\n", " ")[:90], used))
+        case_input = sum(int(usage.get(key, 0) or 0) for key in (
+            "uncached_input", "cache_creation_input", "cache_read_input"
+        ))
+        cases.append({
+            "question": g["q"],
+            "tool_ok": tool_ok,
+            "answer_ok": ans_ok,
+            "passed": bool(tool_ok and ans_ok),
+            "answer": answer,
+            "tools_used": used,
+            "latency_seconds": round(latency, 4),
+            "uncached_input_tokens": int(usage.get("uncached_input", 0) or 0),
+            "cache_creation_input_tokens": int(usage.get("cache_creation_input", 0) or 0),
+            "cache_read_input_tokens": int(usage.get("cache_read_input", 0) or 0),
+            "input_tokens": case_input,
+            "output_tokens": int(usage.get("output", 0) or 0),
+            "total_tokens": case_input + int(usage.get("output", 0) or 0),
+        })
 
     print("\n\n==================== /ask gold-set eval ====================")
     for tool_ok, ans_ok, q, ans, used in rows:
@@ -598,7 +624,41 @@ def test_ask_eval_accuracy():
     print(f" Tool routing accuracy : {tool_hits}/{total} = {tool_hits/total:.0%}")
     print(f" Answer accuracy       : {ans_hits}/{total} = {ans_hits/total:.0%}")
     print(f" Both correct          : {both_hits}/{total} = {both_hits/total:.0%}")
+    total_latency = sum(case["latency_seconds"] for case in cases)
+    total_tokens = sum(case["total_tokens"] for case in cases)
+    print(f" Telemetry average     : {total_latency/total:.2f}s | "
+          f"{total_tokens/total:,.0f} tokens/question")
     print("============================================================\n")
+
+    input_tokens = sum(case["input_tokens"] for case in cases)
+    output_tokens = sum(case["output_tokens"] for case in cases)
+    summary = {
+        "harness_version": _HARNESS_VERSION,
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "model": MODEL,
+        "questions": total,
+        "passed": both_hits,
+        "accuracy": both_hits / total,
+        "tool_hits": tool_hits,
+        "tool_accuracy": tool_hits / total,
+        "answer_hits": ans_hits,
+        "answer_accuracy": ans_hits / total,
+        "total_latency_seconds": round(total_latency, 4),
+        "avg_latency_seconds": round(total_latency / total, 4),
+        "uncached_input_tokens": sum(case["uncached_input_tokens"] for case in cases),
+        "cache_creation_input_tokens": sum(
+            case["cache_creation_input_tokens"] for case in cases
+        ),
+        "cache_read_input_tokens": sum(case["cache_read_input_tokens"] for case in cases),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
+        "avg_tokens_per_question": round((input_tokens + output_tokens) / total, 2),
+        "cases": cases,
+    }
+    os.makedirs(os.path.dirname(_OUT), exist_ok=True)
+    with open(_OUT, "a", encoding="utf-8") as output:
+        output.write(json.dumps(summary, ensure_ascii=True, separators=(",", ":")) + "\n")
 
     # A real but non-brittle gate. The printed numbers are the headline figure.
     assert ans_hits / total >= 0.7, f"answer accuracy {ans_hits/total:.0%} below 70% floor"

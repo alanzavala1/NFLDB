@@ -19,6 +19,7 @@ from tests.test_ask_eval import GOLD, _oracle
 
 _DB = os.path.join(os.path.dirname(__file__), "..", "data", "nfl.duckdb")
 _OUT = os.path.join(os.path.dirname(__file__), "out", "sql_baseline_runs.jsonl")
+_ASK_OUT = os.path.join(os.path.dirname(__file__), "out", "ask_eval_runs.jsonl")
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("RUN_SQL_BASELINE") or not os.path.exists(_DB),
@@ -30,13 +31,41 @@ def _ascii(value: object) -> str:
     return str(value).encode("ascii", "backslashreplace").decode("ascii")
 
 
-def _print_summary(summary: dict) -> None:
+def _latest_ask_summary(path: str = _ASK_OUT) -> dict | None:
+    try:
+        with open(path, encoding="utf-8") as source:
+            lines = source.readlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        try:
+            summary = json.loads(line)
+        except (TypeError, ValueError):
+            continue
+        if summary.get("questions") and summary.get("avg_latency_seconds") is not None:
+            return summary
+    return None
+
+
+def _print_summary(summary: dict, typed: dict | None = None) -> None:
     total = summary["questions"]
     passed = summary["passed"]
     print("\n================ text-to-SQL baseline eval ================")
     print("System       | Accuracy       | Avg latency | Input tok | Output tok | Total tok")
     print("-------------+----------------+-------------+-----------+------------+----------")
-    print(f"Typed tools  | {total}/{total} (100%) | TBD         | TBD       | TBD        | TBD")
+    if typed:
+        typed_questions = int(typed["questions"])
+        typed_passed = int(typed.get("passed", typed_questions))
+        typed_accuracy = float(typed.get("accuracy", typed_passed / typed_questions))
+        print(
+            f"Typed tools  | {typed_passed}/{typed_questions} ({typed_accuracy:.0%})"
+            f" | {float(typed['avg_latency_seconds']):.2f}s"
+            f"       | {int(typed.get('input_tokens', 0))}"
+            f"     | {int(typed.get('output_tokens', 0))}"
+            f"      | {int(typed.get('total_tokens', 0))}"
+        )
+    else:
+        print(f"Typed tools  | {total}/{total} (100%) | TBD         | TBD       | TBD        | TBD")
     print(
         f"SQL baseline | {passed}/{total} ({summary['accuracy']:.0%})"
         f" | {summary['avg_latency_seconds']:.2f}s"
@@ -124,7 +153,7 @@ def test_sql_baseline_against_gold(monkeypatch):
         "schema_prompt_tokens_estimate": round(len(baseline.schema_prompt) / 4),
         "cases": cases,
     }
-    _print_summary(summary)
+    _print_summary(summary, _latest_ask_summary())
     os.makedirs(os.path.dirname(_OUT), exist_ok=True)
     with open(_OUT, "a", encoding="utf-8") as output:
         output.write(json.dumps(summary, ensure_ascii=True, separators=(",", ":")) + "\n")
