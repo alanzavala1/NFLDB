@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import anthropic
 import pytest
 
-from tests.sql_baseline import MODEL, SQLBaseline
+from tests.sql_baseline import HARNESS_VERSION, MODEL, SQLBaseline
 from tests.test_ask_eval import GOLD, _oracle
 
 
@@ -103,6 +103,7 @@ def test_sql_baseline_against_gold(monkeypatch):
     passed = sum(case["passed"] for case in cases)
     total_latency = sum(case["latency_seconds"] for case in cases)
     summary = {
+        "harness_version": HARNESS_VERSION,
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model": MODEL,
         "questions": total,

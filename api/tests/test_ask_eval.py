@@ -23,6 +23,7 @@ The `-s` flag shows the per-question table and the final accuracy line.
 """
 import json
 import os
+import re
 
 import pytest
 
@@ -164,8 +165,27 @@ def text_in(answer, options):
     return any(o.lower() in a for o in options)
 
 
+def record_in(answer, record):
+    """Accept a W-L record or an equivalent wins/losses sentence."""
+    if text_in(answer, [record]):
+        return True
+    match = re.fullmatch(r"(\d+)-(\d+)", record)
+    if not match:
+        return False
+    wins, losses = match.groups()
+    normalized = _normalize_answer(answer).lower()
+    count_phrase = re.search(
+        rf"\b{wins}\s+wins?\s*(?:,\s*)?(?:and\s+)?{losses}\s+loss(?:es)?\b",
+        normalized,
+    )
+    verb_phrase = re.search(
+        rf"\bwon\s+{wins}\b[\s\S]*?\blost\s+{losses}\b",
+        normalized,
+    )
+    return bool(count_phrase or verb_phrase)
+
+
 def _lastname(name):
-    import re
     parts = [p for p in re.split(r"[.\s]+", name.strip()) if p]
     return parts[-1] if parts else name
 
@@ -270,11 +290,11 @@ GOLD = [
     # ── standings ──
     {"q": "What was the Cincinnati Bengals' record in 2021?",
      "tools": ["get_standings", "get_team_overview"], "args": {"season": 2021},
-     "grade": lambda a, f: text_in(a, [_standings_record(f, 2021, "CIN")])},
+     "grade": lambda a, f: record_in(a, _standings_record(f, 2021, "CIN"))},
 
     {"q": "What was the Detroit Lions' record in 2023?",
      "tools": ["get_standings", "get_team_overview"], "args": {"season": 2023},
-     "grade": lambda a, f: text_in(a, [_standings_record(f, 2023, "DET")])},
+     "grade": lambda a, f: record_in(a, _standings_record(f, 2023, "DET"))},
 
     # ── team splits ──
     {"q": "What was the Chiefs defense success rate in the red zone in 2023?",
@@ -377,11 +397,11 @@ GOLD = [
     # more standings
     {"q": "What was the Philadelphia Eagles' record in 2022?",
      "tools": ["get_standings", "get_team_overview"], "args": {"season": 2022},
-     "grade": lambda a, f: text_in(a, [_standings_record(f, 2022, "PHI")])},
+     "grade": lambda a, f: record_in(a, _standings_record(f, 2022, "PHI"))},
 
     {"q": "What was the San Francisco 49ers' record in 2023?",
      "tools": ["get_standings", "get_team_overview"], "args": {"season": 2023},
-     "grade": lambda a, f: text_in(a, [_standings_record(f, 2023, "SF")])},
+     "grade": lambda a, f: record_in(a, _standings_record(f, 2023, "SF"))},
 
     # more team splits
     {"q": "What was the Eagles offense success rate in the red zone in 2022?",
@@ -431,7 +451,7 @@ GOLD = [
 
     {"q": "What was the Ravens' record in 2023?",
      "tools": ["get_standings", "get_team_overview"], "args": {"season": 2023},
-     "grade": lambda a, f: text_in(a, [_team_overview_record(f, "BAL", 2023)])},
+     "grade": lambda a, f: record_in(a, _team_overview_record(f, "BAL", 2023))},
 
     {"q": "Where did the Chiefs rank in the 2023 power rankings?",
      "tool": "get_power_rankings", "args": {"season": 2023},

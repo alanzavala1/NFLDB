@@ -24,6 +24,8 @@ load_dotenv(os.path.join(_API_DIR, ".env"))
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
 NOT_ANSWERABLE = "NOT_ANSWERABLE"
+# Historical JSONL rows without a harness_version field are v1.
+HARNESS_VERSION = 2
 _MAX_ROWS = 50
 _INTERNAL_TABLE_PREFIXES = ("duckdb_", "sqlite_", "_")
 _FORBIDDEN_SQL = re.compile(
@@ -134,6 +136,54 @@ def _quote_identifier(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
 
+def _split_vocabulary_notes(conn: Any) -> list[str]:
+    """Compact split contracts derived from the three materialized tables."""
+    player_dims: dict[str, set[str]] = {}
+    team_dims: dict[str, set[str]] = {}
+    defense_dims: set[str] = set()
+    values: dict[str, set[str]] = {}
+
+    player_rows = conn.execute(
+        "SELECT DISTINCT category, split_dim, split_value FROM player_splits"
+    ).fetchall()
+    for category, dimension, value in player_rows:
+        player_dims.setdefault(category, set()).add(dimension)
+        values.setdefault(dimension, set()).add(value)
+
+    defense_rows = conn.execute(
+        "SELECT DISTINCT split_dim, split_value FROM defense_splits"
+    ).fetchall()
+    for dimension, value in defense_rows:
+        defense_dims.add(dimension)
+        values.setdefault(dimension, set()).add(value)
+
+    team_rows = conn.execute(
+        "SELECT DISTINCT side, split_dim, split_value FROM team_splits"
+    ).fetchall()
+    for side, dimension, value in team_rows:
+        team_dims.setdefault(side, set()).add(dimension)
+        values.setdefault(dimension, set()).add(value)
+
+    def grouped(mapping: dict[str, set[str]]) -> str:
+        return "; ".join(
+            f"{key}=[{','.join(sorted(items))}]"
+            for key, items in sorted(mapping.items())
+        )
+
+    value_text = "; ".join(
+        f"{dimension}=[{','.join(sorted(dimension_values))}]"
+        for dimension, dimension_values in sorted(values.items())
+    )
+    return [
+        f"player_splits category values=[{','.join(sorted(player_dims))}]; "
+        f"split_dim by category: {grouped(player_dims)}.",
+        f"defense_splits split_dim values=[{','.join(sorted(defense_dims))}].",
+        f"team_splits side values=[{','.join(sorted(team_dims))}]; "
+        f"split_dim by side: {grouped(team_dims)}.",
+        f"Split split_value vocabulary by split_dim: {value_text}.",
+    ]
+
+
 def build_schema_prompt(conn: Any) -> str:
     """Describe every user table once for the run's cacheable system prompt."""
     table_rows = conn.execute("SHOW TABLES").fetchall()
@@ -147,17 +197,62 @@ def build_schema_prompt(conn: Any) -> str:
         rendered = ", ".join(f"{row[0]} {row[1]}" for row in columns)
         schema_lines.append(f"- {table}({rendered})")
 
-    season_note = "unknown"
-    if "plays" in tables:
-        row = conn.execute(
-            "SELECT MIN(season), MAX(season) FROM plays WHERE season IS NOT NULL"
+    season_ranges = conn.execute(
+        """
+        SELECT 'plays', MIN(season), MAX(season) FROM plays
+        UNION ALL SELECT 'schedules', MIN(season), MAX(season) FROM schedules
+        UNION ALL SELECT 'player_game_stats', MIN(season), MAX(season)
+          FROM player_game_stats
+        """
+    ).fetchall()
+    coverage = "; ".join(
+        f"{table}={int(first)}-{int(last)}" for table, first, last in season_ranges
+    )
+    play_types = ",".join(
+        row[0] for row in conn.execute(
+            "SELECT DISTINCT season_type FROM plays ORDER BY season_type"
+        ).fetchall()
+    )
+    schedule_types = ",".join(
+        row[0] for row in conn.execute(
+            "SELECT DISTINCT game_type FROM schedules ORDER BY game_type"
+        ).fetchall()
+    )
+    pgs_types = ",".join(
+        row[0] for row in conn.execute(
+            """
+            SELECT DISTINCT schedules.game_type
+            FROM player_game_stats JOIN schedules USING (game_id)
+            ORDER BY schedules.game_type
+            """
+        ).fetchall()
+    )
+
+    ngs_ranges = []
+    for table in ("ngs_passing", "ngs_receiving", "ngs_rushing"):
+        first, last = conn.execute(
+            f"SELECT MIN(season), MAX(season) FROM {_quote_identifier(table)}"
         ).fetchone()
-        if row and row[0] is not None:
-            season_note = f"{int(row[0])}-{int(row[1])}"
+        ngs_ranges.append(f"{table}={int(first)}-{int(last)}")
+    ftn_first, ftn_last = conn.execute(
+        "SELECT MIN(season), MAX(season) FROM ftn_charting"
+    ).fetchone()
 
     from config import TEAM_NAMES
 
-    teams = ", ".join(f"{abbr}={name}" for abbr, name in sorted(TEAM_NAMES.items()))
+    team_codes = [
+        row[0] for row in conn.execute(
+            """
+            SELECT home_team AS team FROM schedules
+            UNION SELECT away_team FROM schedules
+            ORDER BY team
+            """
+        ).fetchall()
+    ]
+    team_names = dict(TEAM_NAMES)
+    team_names["JAX"] = team_names["JAC"]
+    teams = ", ".join(f"{abbr}={team_names[abbr]}" for abbr in team_codes)
+    split_notes = "\n".join(f"- {note}" for note in _split_vocabulary_notes(conn))
     schema = "\n".join(schema_lines)
     return f"""You are the SQL generation stage of an NFL statistics baseline.
 Return exactly one read-only DuckDB SELECT statement (a WITH...SELECT is also
@@ -170,10 +265,22 @@ SCHEMA:
 {schema}
 
 DATA NOTES:
-- Available seasons: {season_note}.
-- plays.season_type uses REG/POST. schedules.game_type uses REG/WC/DIV/CON/SB.
-- player_game_stats and player career totals are regular-season statistics.
-- NGS tracking tables begin in 2016; ftn_charting begins in 2022.
+- Season coverage: {coverage}.
+- plays.season_type values=[{play_types}]; schedules.game_type values=[{schedule_types}].
+- player_game_stats contains both regular-season and playoff rows (schedule
+  game types=[{pgs_types}]) but has no season-type or game-type column. For
+  official regular-season totals, JOIN schedules USING (game_id) and filter
+  schedules.game_type='REG'.
+- Resolve player names to ids with rosters(player_name,player_id), with
+  id_map(name,gsis_id) as a fallback. Filter player_game_stats.player_id and
+  plays role id columns (passer_player_id,receiver_player_id,rusher_player_id,
+  etc.); plays.*_player_name labels can be abbreviated and non-unique.
+- NGS coverage: {'; '.join(ngs_ranges)}. ngs_* rows are player/season_type/week
+  AGGREGATES, not plays; week=0 is a REG season aggregate. Do not sum them as
+  plays or combine week=0 with weekly rows.
+- ftn_charting covers {int(ftn_first)}-{int(ftn_last)} and has one row per charted
+  play; join plays USING (game_id,play_id).
+{split_notes}
 - Team abbreviations: {teams}
 """
 
