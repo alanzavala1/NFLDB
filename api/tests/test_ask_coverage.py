@@ -62,9 +62,10 @@ def test_find_games_filters_known_game_and_keeps_playoffs_in_capped_preview():
     preview = json.loads(preview_raw)
     assert preview["truncated"] is True
     assert len(preview["games"]) == 25
+    assert all(game.get("game_id") for game in preview["games"])
     assert any(game["game_type"] == "SB" and game["home_score"] == 35
                for game in preview["games"])
-    assert len(preview_raw) < 3000
+    assert len(preview_raw) < 4000
 
 
 def test_get_game_detail_trims_the_known_super_bowl_box_score():

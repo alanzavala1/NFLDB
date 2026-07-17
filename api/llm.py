@@ -17,6 +17,7 @@ and the test suite stays green.
 """
 import json
 import os
+import re
 import threading
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -287,11 +288,18 @@ def _nonzero(d: dict) -> dict:
 
 
 _RESULT_LIMIT = 25
+_PLAYER_ID_RE = re.compile(r"^\d{2}-\d{7}$")
+_PLAYER_ID_MSG = ("That is not a player id — call resolve_entity first and use "
+                  "the returned id.")
 _GAME_LINE_STATS = [
     "attempts", "completions", "pass_yards", "pass_tds", "interceptions_thrown",
     "sacks_taken", "carries", "rush_yards", "rush_tds", "targets", "receptions",
     "rec_yards", "rec_tds",
 ]
+
+
+def _valid_player_id(player_id: str) -> bool:
+    return isinstance(player_id, str) and _PLAYER_ID_RE.fullmatch(player_id) is not None
 
 
 def _season_stat_line(games: list[dict]) -> dict:
@@ -478,7 +486,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
                 matches,
                 key=lambda game: (game.get("game_type") == "REG", int(game.get("week", 0))),
             )
-            keys = ("week", "game_type", "away_team", "home_team", "away_score", "home_score")
+            keys = ("game_id", "week", "game_type", "away_team", "home_team",
+                    "away_score", "home_score")
         else:
             preview = matches
             keys = ("game_id", "week", "game_type", "gameday", "away_team",
@@ -495,7 +504,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
             "games": rows,
         }
         if truncated:
-            payload["note"] = "Showing 25 compact results; narrow by team and/or week to get game_ids."
+            payload["note"] = ("Showing 25 compact results; narrow by team and/or "
+                               "week for a complete result set.")
         ctx.record("find_games", args, rows)
         return _dumps(payload) if matches else f"No games found for those filters in {s}."
 
@@ -573,6 +583,9 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         """
         if ctx.over_budget():
             return _BUDGET_MSG
+        if not _valid_player_id(player_id):
+            ctx.record("get_player_game_log", {"player_id": player_id, "season": season})
+            return _PLAYER_ID_MSG
         s = int(season)
         args = {"player_id": player_id, "season": s}
         try:
@@ -613,6 +626,9 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         """
         if ctx.over_budget():
             return _BUDGET_MSG
+        if not _valid_player_id(player_id):
+            ctx.record("get_player_career", {"player_id": player_id})
+            return _PLAYER_ID_MSG
         args = {"player_id": player_id}
         try:
             profile = _player_profile(player_id)
@@ -774,6 +790,9 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         """
         if ctx.over_budget():
             return _BUDGET_MSG
+        if not _valid_player_id(player_id):
+            ctx.record("get_player_overview", {"player_id": player_id, "season": season})
+            return _PLAYER_ID_MSG
         try:
             prof = _player_profile(player_id)
         except HTTPException:
@@ -827,6 +846,10 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         dim = dimension.lower().strip()
         s = int(season)
         args = {"player_id": player_id, "season": s, "category": cat, "dimension": dim}
+
+        if not _valid_player_id(player_id):
+            ctx.record("get_player_splits", args)
+            return _PLAYER_ID_MSG
 
         if cat not in _DIMENSIONS:
             ctx.record("get_player_splits", args)
@@ -939,6 +962,9 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         """
         if ctx.over_budget():
             return _BUDGET_MSG
+        if not _valid_player_id(player_id):
+            ctx.record("get_comparables", {"player_id": player_id})
+            return _PLAYER_ID_MSG
         rows = comparables_builder.read_or_materialize(player_id, 8)
         out = [{"player": r.get("player_name"), "position": r.get("position"),
                 "team": r.get("team"), "similarity_pct": r.get("similarity"),

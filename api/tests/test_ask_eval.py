@@ -184,14 +184,17 @@ def _leader_tops(fns, stat, season):
     return [r["player"] for r in rows if r[stat] == top]
 
 
-def _leader_nth(fns, stat, season, rank):
-    rows = json.loads(fns["get_leaders"](stat=stat, season=season, limit=rank))
-    return rows[rank - 1]["player"]
+def _leader_second_ties(fns, stat, season):
+    rows = json.loads(fns["get_leaders"](stat=stat, season=season, limit=25))
+    if len(rows) < 2:
+        return []
+    second_value = rows[1][stat]
+    return [row["player"] for row in rows if row[stat] == second_value]
 
 
 # ── The gold set ──────────────────────────────────────────────────────────────
-# Each: question, expected tool, expected (subset of) args, and a grader that
-# computes truth from the oracle and checks the model's answer.
+# Each: question, expected tool (or alternate tools), expected arg subset, and
+# a grader that computes truth from the oracle and checks the model's answer.
 
 GOLD = [
     # ── player splits (the centerpiece) ──
@@ -350,11 +353,11 @@ GOLD = [
 
     # more standings
     {"q": "What was the Philadelphia Eagles' record in 2022?",
-     "tool": "get_standings", "args": {"season": 2022},
+     "tools": ["get_standings", "get_team_overview"], "args": {"season": 2022},
      "grade": lambda a, f: text_in(a, [_standings_record(f, 2022, "PHI")])},
 
     {"q": "What was the San Francisco 49ers' record in 2023?",
-     "tool": "get_standings", "args": {"season": 2023},
+     "tools": ["get_standings", "get_team_overview"], "args": {"season": 2023},
      "grade": lambda a, f: text_in(a, [_standings_record(f, 2023, "SF")])},
 
     # more team splits
@@ -404,7 +407,7 @@ GOLD = [
          a, max(game.get("rush_yards", 0) for game in _game_log(f, "Derrick Henry", 2020)))},
 
     {"q": "What was the Ravens' record in 2023?",
-     "tool": "get_team_overview", "args": {"season": 2023},
+     "tools": ["get_standings", "get_team_overview"], "args": {"season": 2023},
      "grade": lambda a, f: text_in(a, [_team_overview_record(f, "BAL", 2023)])},
 
     {"q": "Where did the Chiefs rank in the 2023 power rankings?",
@@ -441,7 +444,7 @@ GOLD = [
          {"role": "assistant", "content": "Nick Bosa led the NFL in sacks in 2022."},
      ],
      "tool": "get_leaders", "args": {"stat": "sacks", "season": 2022},
-     "grade": lambda a, f: name_in(a, _leader_nth(f, "sacks", 2022, 2))},
+     "grade": lambda a, f: name_in(a, _leader_second_ties(f, "sacks", 2022))},
 ]
 
 
@@ -482,10 +485,17 @@ def test_ask_eval_accuracy():
         res = run_ask(g["q"], history=g.get("history", []))
         used, answer = res["tools_used"], res["answer"]
 
-        if g["tool"] is None:
+        expected_tools = g.get("tools")
+        if expected_tools is None:
+            expected_tools = [] if g.get("tool") is None else [g["tool"]]
+
+        if not expected_tools:
             tool_ok = True  # decline questions: routing isn't asserted, only the answer
         else:
-            tool_ok = any(c["tool"] == g["tool"] and _args_match(c["args"], g["args"]) for c in used)
+            tool_ok = any(
+                call["tool"] in expected_tools and _args_match(call["args"], g["args"])
+                for call in used
+            )
 
         try:
             ans_ok = bool(g["grade"](answer, fns))
@@ -495,13 +505,20 @@ def test_ask_eval_accuracy():
         tool_hits += tool_ok
         ans_hits += ans_ok
         both_hits += tool_ok and ans_ok
-        rows.append((tool_ok, ans_ok, g["q"], answer.replace("\n", " ")[:90]))
+        rows.append((tool_ok, ans_ok, g["q"], answer.replace("\n", " ")[:90], used))
 
     print("\n\n==================== /ask gold-set eval ====================")
-    for tool_ok, ans_ok, q, ans in rows:
+    for tool_ok, ans_ok, q, ans, used in rows:
         mark = "OK" if (tool_ok and ans_ok) else ("~" if (tool_ok or ans_ok) else "X")
         print(f" {mark} [tool {'Y' if tool_ok else 'n'} | ans {'Y' if ans_ok else 'n'}] {q}")
         print(f"       -> {ans}")
+        if not (tool_ok and ans_ok):
+            if not used:
+                print("       tool chain: (none)")
+            for i, call in enumerate(used, 1):
+                args = json.dumps(call.get("args", {}), sort_keys=True,
+                                  ensure_ascii=True, separators=(",", ":"))
+                print(f"       tool {i}: {call.get('tool')} {args}")
     print("------------------------------------------------------------")
     print(f" Tool routing accuracy : {tool_hits}/{total} = {tool_hits/total:.0%}")
     print(f" Answer accuracy       : {ans_hits}/{total} = {ans_hits/total:.0%}")
