@@ -134,13 +134,21 @@ The evaluation is a 56-question gold set whose truth is computed live from the
 same verified layer. It grades both tool routing and the written answer, and is
 opt-in because it makes billed model calls. It also caught a real regression:
 during the coverage-tools phase a broken tool chain scored 88%; after the fix,
-the complete set was re-verified at 100%.
+the complete set was re-verified at 100%. Across three runs under the final
+graders the typed agent scored 56/56 twice and 55/56 once (one multi-step
+chain occasionally stops a call early) — reported below as a range, because a
+single flattering run isn't a measurement.
 
 | Architecture | Accuracy | Avg latency | Tokens/question |
 |---|---:|---:|---:|
-| Typed tools + semantic layer | 56/56 (100%) | <LAT>s | <TOK> tok/q |
+| Typed tools + semantic layer | 55–56/56 (98–100%) | 3.7s | ~18,200 tok/q |
 | Text-to-SQL v2 (honest data dictionary) | 37/56 (66%) | 2.59s | ~8,200 |
 | Text-to-SQL v1 (raw schema) | 21/56 (38%) | 3.11s | ~7,800 |
+
+All arms run claude-haiku-4-5 on identical questions and graders (~$0.50/run
+for the baseline, ~$0.27 for the typed agent — 88% of its input tokens are
+prompt-cache reads). The typed agent spends more tokens and latency per
+question on its tool loop; the trade buys the accuracy gap above.
 
 The text-to-SQL misses clustered into schema literacy (choosing the wrong
 table or column, or failing to join IDs back to names),
