@@ -42,10 +42,15 @@ def _tool(name):
 
 def test_find_games_filters_known_game_and_keeps_playoffs_in_capped_preview():
     find_games = _tool("find_games")
+    hint = (
+        "find_games returns only schedule info and scores; call "
+        "get_game_detail(game_id) for coaches, quarter scores, and top performers."
+    )
 
     filtered_raw = find_games(season=2023, team="BUF", week=14)
     filtered = json.loads(filtered_raw)
     assert filtered["matched"] == 1
+    assert filtered["hint"] == hint
     assert filtered["games"][0] == {
         "game_id": "2023_14_BUF_KC",
         "week": 14,
@@ -61,6 +66,7 @@ def test_find_games_filters_known_game_and_keeps_playoffs_in_capped_preview():
     preview_raw = _tool("find_games")(season=2022)
     preview = json.loads(preview_raw)
     assert preview["truncated"] is True
+    assert preview["hint"] == hint
     assert len(preview["games"]) == 25
     assert all(game.get("game_id") for game in preview["games"])
     assert any(game["game_type"] == "SB" and game["home_score"] == 35

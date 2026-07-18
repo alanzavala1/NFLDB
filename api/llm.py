@@ -768,9 +768,9 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
 
     @beta_tool
     def find_games(season: int, team: str = "", week: int = 0) -> str:
-        """Find regular-season or playoff game results and game_ids. Use the
-        game_id from a filtered result with get_game_detail when box-score
-        context is needed.
+        """Find regular-season or playoff game results and game_ids. This
+        returns ONLY schedule information and scores; coaches, quarter scores,
+        and top performers require get_game_detail(game_id).
 
         Args:
             season: The season year, e.g. 2023.
@@ -814,6 +814,11 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
             "season": s,
             "matched": len(matches),
             "truncated": truncated,
+            "hint": (
+                "find_games returns only schedule info and scores; call "
+                "get_game_detail(game_id) for coaches, quarter scores, and top "
+                "performers."
+            ),
             "games": rows,
         }
         if truncated:
@@ -1452,6 +1457,7 @@ def run_ask(question: str, history: list[dict] | None = None) -> dict:
     runner = client.beta.messages.tool_runner(
         model=MODEL,
         max_tokens=2048,
+        temperature=0,
         system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
         tools=tools,
         messages=_conversation_messages(question, history),
@@ -1518,6 +1524,7 @@ def run_ask_stream(question: str, history: list[dict] | None = None):
         with client.messages.stream(
             model=MODEL,
             max_tokens=2048,
+            temperature=0,
             system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
             tools=tool_params,
             messages=messages,
