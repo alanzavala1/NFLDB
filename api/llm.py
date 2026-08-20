@@ -34,6 +34,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 import comparables_builder
 import def_splits_builder
+import retrieval
 import splits_builder
 import team_splits_builder
 from config import CURRENT_SEASON, FIRST_SEASON, TEAM_NAMES
@@ -1318,6 +1319,44 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         return _dumps(meta)
 
     @beta_tool
+    def search_docs(query: str) -> str:
+        """Search this platform's own documentation for how something is
+        MEASURED, COMPUTED, or DEFINED — methodology, not statistics. Use it for
+        questions about how the platform works: how the power-rankings EPA model
+        is computed, how player game grades are graded and calibrated, how the
+        data reconciles with official NFL totals, what EPA means here, how the
+        splits tables are built, why a season or dimension isn't covered, or how
+        the agent is evaluated.
+
+        NEVER use this to look up a statistic, a player, a team, a season total,
+        a leaderboard, a ranking, or a game result — those come from the
+        database tools, and this tool cannot see the database. Returns
+        documentation passages with their source file and heading; quote and
+        attribute them.
+
+        Args:
+            query: The methodology question, e.g. "how are power rankings computed".
+        """
+        if ctx.over_budget():
+            return _BUDGET_MSG
+
+        ctx.record("search_docs", {"query": query})
+        try:
+            hits = retrieval.search(query, k=3)
+        except Exception as e:      # a missing model must not 500 the request
+            print(f"[ask] search_docs failed: {e}")
+            return ("Documentation search is unavailable right now. Answer from "
+                    "tool results only; do not describe methodology from memory.")
+
+        if not hits:
+            return ("No documentation passage matched that query. Say the "
+                    "platform's docs don't cover it; do not answer from memory.")
+
+        return "\n\n".join(
+            f"[{hit.citation}]\n{hit.text}" for hit in hits
+        )
+
+    @beta_tool
     def report_data_gap(topic: str, detail: str) -> str:
         """Record that the platform is MISSING data needed to fully answer the
         question. Call this (once) whenever you had to decline, fall back to a
@@ -1339,7 +1378,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
     return [resolve_entity, query_plays, find_games, get_game_detail, get_player_game_log,
             get_player_career, get_team_overview, get_power_rankings,
             get_player_overview, get_player_splits, get_team_splits, get_leaders,
-            get_standings, get_comparables, get_metadata, report_data_gap]
+            get_standings, get_comparables, get_metadata, search_docs,
+            report_data_gap]
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -1389,6 +1429,7 @@ DATA YOU CAN REACH (seasons {FIRST_SEASON}-{CURRENT_SEASON}):
 - get_standings: division standings for a season.
 - get_comparables: statistically similar players.
 - get_metadata: exact dimensions, values/synonyms, stats, and coverage limits.
+- search_docs: this platform's documentation on HOW things are computed (the EPA model, grade calibration, reconciliation, coverage) — methodology, not statistics.
 
 SPLIT DIMENSIONS (the `dimension` argument to get_player_splits):
 {_dim_lines()}
@@ -1435,8 +1476,12 @@ season's availability, call get_metadata.
 player/team, season, and the situation you pulled.
 4. If a tool returns no rows, say the data is not available for that combination \
 — do not fabricate.
-5. Politely decline questions that are not about NFL stats this platform covers.
-6. Whenever you had to decline, approximate, or note that a requested stat / \
+5. For questions about how a number is computed, measured, or defined, call \
+search_docs and base the explanation on the passages it returns, citing the \
+source — exactly as every figure must come from a tool result. Never describe \
+this platform's methodology from memory.
+6. Politely decline questions that are not about NFL stats this platform covers.
+7. Whenever you had to decline, approximate, or note that a requested stat / \
 split / season isn't available, call report_data_gap ONCE (after giving your \
 best answer) to record what was missing — this is how we find what to add next.
 """

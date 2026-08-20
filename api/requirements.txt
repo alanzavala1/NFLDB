@@ -1,3 +1,10 @@
+# Pull torch from PyTorch's CPU-only index. The default PyPI torch wheel drags
+# in nvidia-cudnn/nccl/cusparselt/nvshmem + triton (~954MB compressed) that a
+# CPU-only Cloud Run instance can never use, and is itself 502MB against 183MB
+# for the CPU build. The `+cpu` local version exists only on this index, so the
+# pin is what actually forces the CPU wheel — an extra index alone would not.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 fastapi
 uvicorn[standard]
 duckdb
@@ -9,3 +16,6 @@ httpx
 pytest
 python-dotenv
 anthropic
+# Embedding model behind the /ask agent's search_docs tool (see api/retrieval.py).
+sentence-transformers
+torch==2.13.0+cpu

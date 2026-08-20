@@ -524,7 +524,73 @@ GOLD = [
      ],
      "tool": "get_leaders", "args": {"stat": "sacks", "season": 2022},
      "grade": lambda a, f: name_in(a, _leader_second_ties(f, "sacks", 2022))},
+
+    # ── methodology (search_docs) ──
+    # These ask how a number is PRODUCED rather than what it is, so the answer
+    # has to come from a retrieved passage. Graded on whether the explanation
+    # contains the mechanism the docs actually state — a model answering from
+    # memory can name the topic but not the specifics (the +150 shrinkage
+    # prior, the 6.5 average grade, the exact coverage year).
+    #
+    # The first five are real questions taken from the data-gap log
+    # (llm.read_gaps()): users asked for data outside coverage, and "why isn't
+    # this available" is a documentation question, not a database one.
+
+    {"q": "Why can't I get completion percentage above expectation for Peyton Manning in 2004?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["2016"]) and text_in(a, ["next gen", "ngs", "tracking"])},
+
+    {"q": "Why is there no blitz rate data for Tom Brady in 2008?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["2022"]) and text_in(a, ["ftn", "charting"])},
+
+    {"q": "Why can't the platform tell me Aaron Rodgers' play-action EPA in 2015?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["2022"]) and text_in(a, ["ftn", "charting", "play action", "play-action"])},
+
+    {"q": "Why doesn't this platform have Jerry Rice's 1989 receiving yards?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["1999"]) and text_in(a, ["play-by-play", "play by play", "dataset", "data set"])},
+
+    {"q": "Why can't I get a split by pressure and down at the same time?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["single-dimension", "single dimension", "one dimension", "one at a time"])
+                           and text_in(a, ["cross-product", "cross product", "combinatorial", "explode", "sample"])},
+
+    # Core methodology the platform had no tool for before search_docs.
+
+    {"q": "How are the power rankings computed?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["epa"]) and text_in(a, ["150", "shrink", "prior"])},
+
+    {"q": "How does this platform calculate its player game grades?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["percentile"]) and text_in(a, ["epa", "position group"])},
+
+    {"q": "What does a 9.0 game grade actually mean?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["98", "2%", "top 2", "elite"])},
+
+    {"q": "How do you know your numbers match the official NFL stats?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["reconcile", "reconciliation"])
+                           and text_in(a, ["test", "official"])},
+
+    {"q": "Does this platform grade individual offensive linemen?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["no", "not", "unit", "as a unit"])
+                           and text_in(a, ["sack", "stuffed", "blocker", "public data", "play-by-play"])},
+
+    {"q": "Why does the ask agent use typed tools instead of writing SQL?",
+     "tool": "search_docs", "args": {},
+     "grade": lambda a, f: text_in(a, ["definition", "define", "reconcil"])
+                           and text_in(a, ["sql", "schema"])},
 ]
+
+# The original 56 questions, so a routing regression on the pre-existing set is
+# reported separately from the new methodology questions rather than being
+# averaged away by them.
+BASELINE_GOLD_COUNT = 56
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -624,6 +690,22 @@ def test_ask_eval_accuracy():
     print(f" Tool routing accuracy : {tool_hits}/{total} = {tool_hits/total:.0%}")
     print(f" Answer accuracy       : {ans_hits}/{total} = {ans_hits/total:.0%}")
     print(f" Both correct          : {both_hits}/{total} = {both_hits/total:.0%}")
+
+    # Adding a tool can pull routing away from the right database tool on
+    # questions that used to pass, so the pre-existing set is scored on its own.
+    # Averaging it together with the new questions would hide exactly that.
+    def _cohort(label, subset):
+        if not subset:
+            return
+        n = len(subset)
+        tool_n = sum(c["tool_ok"] for c in subset)
+        ans_n = sum(c["answer_ok"] for c in subset)
+        print(f" {label:<21}: tool {tool_n}/{n} = {tool_n/n:.0%} | "
+              f"answer {ans_n}/{n} = {ans_n/n:.0%}")
+
+    print("------------------------------------------------------------")
+    _cohort("Original 56", cases[:BASELINE_GOLD_COUNT])
+    _cohort("New methodology", cases[BASELINE_GOLD_COUNT:])
     total_latency = sum(case["latency_seconds"] for case in cases)
     total_tokens = sum(case["total_tokens"] for case in cases)
     print(f" Telemetry average     : {total_latency/total:.2f}s | "
@@ -654,6 +736,12 @@ def test_ask_eval_accuracy():
         "output_tokens": output_tokens,
         "total_tokens": input_tokens + output_tokens,
         "avg_tokens_per_question": round((input_tokens + output_tokens) / total, 2),
+        "baseline_questions": len(cases[:BASELINE_GOLD_COUNT]),
+        "baseline_tool_hits": sum(c["tool_ok"] for c in cases[:BASELINE_GOLD_COUNT]),
+        "baseline_answer_hits": sum(c["answer_ok"] for c in cases[:BASELINE_GOLD_COUNT]),
+        "methodology_questions": len(cases[BASELINE_GOLD_COUNT:]),
+        "methodology_tool_hits": sum(c["tool_ok"] for c in cases[BASELINE_GOLD_COUNT:]),
+        "methodology_answer_hits": sum(c["answer_ok"] for c in cases[BASELINE_GOLD_COUNT:]),
         "cases": cases,
     }
     os.makedirs(os.path.dirname(_OUT), exist_ok=True)
