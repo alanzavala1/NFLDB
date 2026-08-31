@@ -121,7 +121,7 @@ derived number is verified to reconcile with official NFL stats.
 
 Ask NFLDB answers natural-language questions about NFL statistics — "How many
 rushing yards did Derrick Henry have against stacked boxes in 2023?" — using
-only the platform's verified data. It is a Claude tool-calling agent with ~16
+only the platform's verified data. It is a Claude tool-calling agent with 17
 typed tools. To answer a question, the model first resolves any player or
 team name to a database ID (`resolve_entity`), then calls tools that return
 verified numbers: season and career stats, game logs and box scores,
@@ -140,17 +140,54 @@ platform's charted definitions; a vocabulary contract maps everyday football
 phrasing onto exact split values. The model can choose which tools to call,
 but it cannot redefine what a statistic means.
 
-The agent is evaluated on a 56-question gold set whose expected answers are
+### Methodology questions: retrieval, not recall
+
+The database tools can report what a number *is*, but not how it is produced.
+"How are the power rankings computed?" has no row to return, and the system
+prompt forbids answering it from memory — so the agent used to have nothing to
+say. A `search_docs` tool closes that gap with dense retrieval over the
+project's own documentation ([`api/docs/METHODOLOGY.md`](./api/docs/METHODOLOGY.md)):
+markdown is chunked on heading boundaries so every passage
+keeps its source file and heading path, embedded with `all-MiniLM-L6-v2`,
+L2-normalized so cosine similarity is one dot product, and cached to disk under
+a hash of the corpus text. The tool returns passages with their citation, and
+the prompt requires the explanation to come from those passages — an
+explanation recalled rather than retrieved is treated as wrong even when it
+happens to be accurate.
+
+The embedder sits behind a protocol and loads its weights lazily on first use,
+never at import, so API startup and the offline test suite don't pay for it,
+tests inject a deterministic stub, and a hosted embedding API can replace the
+local model without touching the tool or the prompt. Only reviewed, publishable
+docs are indexed — `/ask` is a public endpoint that returns retrieved text
+verbatim, so the corpus is exactly the one file the container ships. This README
+was in the index at first; measured on the eval's eleven methodology questions
+it made retrieval worse (correct passage in the top 3 for 8/11 versus 11/11
+without it), because summary prose about a topic outranks the section that
+actually explains it.
+
+### Evaluation, and a text-to-SQL baseline to compare against
+
+The agent is evaluated on a 67-question gold set whose expected answers are
 computed live from the same verified query layer. The eval grades both tool
 routing and the written answer, and is opt-in because it makes billed model
 calls. It has caught a real regression: during development, a broken tool
 chain scored 88%; the eval isolated the cause, and the fix was re-verified at
 100%.
 
+The set is scored as two cohorts rather than one average: the original 56
+statistical questions and the 11 methodology questions added with
+`search_docs`, five of them taken verbatim from the agent's own data-gap log.
+Reporting them separately is deliberate — a routing regression on the
+pre-existing questions cannot be hidden by gains on the new ones. Both cohorts
+currently answer 100% (56/56 and 11/11).
+
 To test whether the typed-tool design is actually necessary, the repository
 also contains a text-to-SQL baseline: the same model given the full database
 schema and asked to write SQL directly, evaluated on the identical questions
-and graders. It was measured twice — first with the raw schema, then again
+and graders. The comparison below runs on the 56 statistical questions both
+architectures can attempt; the methodology cohort has no SQL equivalent. It
+was measured twice — first with the raw schema, then again
 after adding an accurate data dictionary (table grain, join recipes, name
 formats, value vocabularies) to remove documentation gaps as an excuse.
 
@@ -183,6 +220,7 @@ stated in its prompt and not always followed.
 | Backend | Python, FastAPI, Pydantic, DuckDB |
 | Data | `nfl_data_py` / nflfastR (play-by-play, weekly stats, NGS, FTN charting, snaps, rosters) |
 | AI | Claude (tool-calling agent over the platform's typed queries — no text-to-SQL) |
+| Retrieval | sentence-transformers `all-MiniLM-L6-v2` + numpy dot-product search over the project's own docs |
 | Frontend | React, TypeScript, Vite, Tailwind CSS (custom card design system), Recharts |
 | Tests / CI | pytest (incl. data-reconciliation invariants), GitHub Actions |
 | Deploy | Docker, Google Cloud Run |
@@ -198,6 +236,7 @@ nfl_data_py ─► DuckDB (raw play-by-play, ~169 cols)
                     ▼
               FastAPI  (gzip · Cache-Control · per-request cursors)   ── /api/*
                     │                                    └── /api/ask (Claude agent → typed tools)
+                    │                                          └── search_docs → doc embeddings (api/docs/)
               OpenAPI ─► openapi-typescript ─► typed React/TS client  ── /
 ```
 
@@ -220,6 +259,8 @@ nfl-platform/
 │   ├── game_ratings_builder.py    # per-game player ratings (EPA → percentile curve)
 │   ├── power_rankings_builder.py  # weekly team power rankings (net EPA/play)
 │   ├── ol_grades_builder.py       # O-line unit grades (pressure + stuff rate)
+│   ├── retrieval.py               # doc chunking + embeddings behind the agent's search_docs tool
+│   ├── docs/METHODOLOGY.md        # the indexed methodology corpus (ships in the image)
 │   ├── routers/                   # schedule (incl. lineup/ratings), players, teams, leaders, assistant (Ask NFLDB), meta
 │   ├── tests/                     # endpoints, invariants, data-reconciliation
 │   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
@@ -267,6 +308,17 @@ Covers endpoint behavior, data-quality **invariants**, and
 **data-reconciliation** against the real database (splits ⇄ official stats, EPA
 consistency, defensive-sack reconciliation). The reconciliation suite skips
 cleanly when the DB isn't present (CI) and runs against the baked DB at deploy time.
+
+Two suites are opt-in because they cost something to run:
+
+```bash
+RUN_ASK_EVAL=1 pytest tests/test_ask_eval.py -s          # billed model calls
+RUN_RETRIEVAL_INTEGRATION=1 pytest tests/test_retrieval.py  # downloads the ~80MB embedding model
+```
+
+Retrieval's chunking, ranking, caching, and lazy-load behavior are all covered
+offline by default: the embedder is injected as a deterministic stub, so the
+default `pytest` run never imports torch.
 
 ## Deploy
 

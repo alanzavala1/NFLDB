@@ -26,15 +26,25 @@ gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
 docker build -t "$IMAGE" .
 docker push "$IMAGE"
 
-# deploy — public, 1 instance, 1GB RAM
+# deploy — public, 1 instance, 2GB RAM
 gcloud run deploy nfldb --image "$IMAGE" --region $REGION \
-  --allow-unauthenticated --memory 1Gi --cpu 1 --max-instances 1 --port 8080
+  --allow-unauthenticated --memory 2Gi --cpu 1 --max-instances 1 --port 8080
 ```
 
 `gcloud run deploy` prints the public URL. Share it with friends.
 
 > Even simpler: `gcloud run deploy nfldb --source . ...` lets Cloud Build build
 > the image for you (no local Docker needed), as long as the DB is in `api/data/`.
+
+**Why 2Gi, not 1Gi.** Three things share the instance: DuckDB (capped at
+`DUCKDB_MEMORY_LIMIT=1200MB` in the Dockerfile, because it sizes itself from the
+*host* otherwise and gets the instance OOM-killed), the embedding model behind
+the agent's `search_docs` tool (torch + `all-MiniLM-L6-v2`, measured at ~520MB
+resident once loaded), and the Python/FastAPI process itself. That is close to
+2Gi at peak. If you see OOM kills after a `search_docs` query, lower
+`DUCKDB_MEMORY_LIMIT` rather than raising it, or move to `--memory 4Gi`. The
+model loads lazily on the first methodology question, so an instance that never
+gets one never pays for it.
 
 ---
 
@@ -111,6 +121,20 @@ deployment once you trust it.
 Cloud Run scales to zero, so the first visit after idle takes ~10–30s. Point a
 free uptime monitor (UptimeRobot / cron-job.org) at `https://<url>/api/health`
 every few minutes and it stays warm. Or set `--min-instances 1` (small cost).
+
+The first `search_docs` question on a cold instance loads the embedding model:
+`sentence-transformers` fetches `all-MiniLM-L6-v2` (~80MB) from the Hugging Face
+hub, and Cloud Run's filesystem is ephemeral, so every cold start refetches it.
+The document vectors are not recomputed — `api/data/doc_index.npz` is built
+locally, baked into the image, and keyed by a hash of the corpus text, which
+matches because the indexed corpus (`api/docs/`) is identical locally and in the
+container. Rebuild it by running any `search_docs` query locally before you
+build the image.
+
+If the model fetch fails, `search_docs` returns an explicit "documentation search
+is unavailable" message and the agent answers from its database tools instead of
+guessing; it never 500s the request. To remove the dependency, pre-download the
+model into the image in the Dockerfile and set `HF_HUB_OFFLINE=1`.
 
 ## Updating the data
 
