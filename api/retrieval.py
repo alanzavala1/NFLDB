@@ -30,23 +30,31 @@ from typing import Protocol, Sequence, runtime_checkable
 import numpy as np
 
 _API_DIR = os.path.dirname(os.path.abspath(__file__))
-_REPO_DIR = os.path.dirname(_API_DIR)
 
-# The indexed corpus, in priority order.
+# The indexed corpus: api/docs/ and nothing else.
 #
-# api/docs/ is the corpus that actually ships: the Dockerfile copies `api/`, so
-# anything here reaches the deployed container. The repo-root README is indexed
-# too when present (local dev and the repo), but it is NOT copied into the
-# image, so METHODOLOGY.md is written to stand on its own. Missing files are
-# skipped rather than raising — a partial corpus is the normal deployed state.
+# The Dockerfile copies `api/`, so this is exactly what reaches the deployed
+# container — local retrieval and production retrieval see the same text, and
+# the eval therefore measures what actually ships.
 #
-# Deliberately excluded: notes/ is gitignored and .dockerignore'd because it
-# holds personal working notes, and it is a pre-build brief that no longer
-# matches the code. /ask is a public endpoint that returns retrieved text
-# verbatim, so only reviewed, current, publishable docs belong here.
+# The repo-root README was indexed here at first, on the theory that more
+# context is better. Measured against the eval's eleven methodology questions,
+# it was worse: the correct passage appeared in the top 3 for 8/11 questions
+# with the README indexed versus 11/11 without it. The README describes the same
+# topics in summary prose, and those chunks outrank the precise METHODOLOGY.md
+# sections that actually answer the question. It also broke the vector cache —
+# api/data/doc_index.npz is baked into the image, but a locally built cache that
+# included the README could never match the container's fingerprint, so it was
+# always discarded.
+#
+# Also excluded: notes/ is gitignored and .dockerignore'd because it holds
+# personal working notes, and it is a pre-build brief that no longer matches the
+# code. /ask is a public endpoint that returns retrieved text verbatim, so only
+# reviewed, current, publishable docs belong here.
+#
+# Missing files are skipped rather than raising.
 CORPUS_PATHS: tuple[str, ...] = (
     os.path.join(_API_DIR, "docs", "METHODOLOGY.md"),
-    os.path.join(_REPO_DIR, "README.md"),
 )
 
 # MiniLM truncates at 256 word pieces, so oversized sections are split on
