@@ -180,7 +180,19 @@ def main() -> int:
                     latency = None
                     if wallclock:
                         published = datetime.fromisoformat(wallclock.replace("Z", "+00:00"))
-                        latency = round((received - published).total_seconds(), 2)
+                        latency = (received - published).total_seconds()
+                        # ESPN stamps `wallclock` with the right time of day and
+                        # sometimes the wrong DATE — observed a clean +1 day on
+                        # 2026-09-11, which reads as a latency of minus 24 hours.
+                        # `modified` carries the correct date but only to the
+                        # minute. A play is reported seconds to minutes after it
+                        # happens, never hours, so any whole-day offset is an
+                        # artifact: fold it away rather than discard the sample.
+                        while latency < -43200:
+                            latency += 86400
+                        while latency > 43200:
+                            latency -= 86400
+                        latency = round(latency, 2)
                     row.update(
                         new_play=True,
                         play_wallclock=wallclock,

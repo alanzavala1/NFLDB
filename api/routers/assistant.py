@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 
 from llm import read_gaps, run_ask, run_ask_stream
 from rate_limit import RateLimiter
+from spend_guard import guard as spend_guard
 from schemas.assistant import AskHistoryMessage, AskRequest, AskResponse
 
 router = APIRouter()
@@ -65,11 +66,23 @@ def _guard(req: AskRequest, request: Request) -> tuple[str, list[dict[str, str]]
     ip = request.client.host if request.client else "unknown"
     if _limiter.limited(ip):
         raise HTTPException(status_code=429, detail="Too many questions — give it a minute.")
+    # The per-IP limit above is not a cost control: it is per key, so rotating
+    # IPs walks around it entirely. This is the actual ceiling on the day's
+    # spend, and it is checked before the model is called so a refused request
+    # costs nothing. Both /ask and /ask/stream reach it through this guard.
+    exceeded = spend_guard.exceeded()
+    if exceeded:
+        print(f"[ask] daily limit hit ({exceeded}) — refusing until the window rolls")
+        raise HTTPException(
+            status_code=503,
+            detail="The assistant has reached its daily limit. It'll be back within 24 hours.",
+        )
     question = (req.question or "").strip()
     if not question:
         raise HTTPException(status_code=400, detail="Ask a question first.")
     if len(question) > 500:
         raise HTTPException(status_code=400, detail="Question is too long (max 500 characters).")
+    spend_guard.record_request()
     return question, _normalize_history(req.history)
 
 

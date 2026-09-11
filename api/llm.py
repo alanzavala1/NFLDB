@@ -1444,6 +1444,31 @@ best answer) to record what was missing — this is how we find what to add next
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+def _message_usage(message) -> dict:
+    """The four token buckets off one API message, defensively."""
+    u = getattr(message, "usage", None)
+    if u is None:
+        return {}
+    return {
+        "uncached_input": int(getattr(u, "input_tokens", 0) or 0),
+        "cache_creation_input": int(getattr(u, "cache_creation_input_tokens", 0) or 0),
+        "cache_read_input": int(getattr(u, "cache_read_input_tokens", 0) or 0),
+        "output": int(getattr(u, "output_tokens", 0) or 0),
+    }
+
+
+def _record_spend(usage: dict) -> None:
+    """Report what a finished question cost to the daily ceiling.
+
+    Imported lazily and swallowing everything: a billing counter must never be
+    able to fail a request whose answer is already computed.
+    """
+    try:
+        from spend_guard import guard
+        guard.record_tokens(usage)
+    except Exception:
+        pass
+
 def run_ask(question: str, history: list[dict] | None = None) -> dict:
     """Run one question plus bounded text history through the tool-calling
     loop and return {answer, data, tools_used, usage}. Usage is internal eval
@@ -1489,6 +1514,7 @@ def run_ask(question: str, history: list[dict] | None = None) -> dict:
         if text:
             answer = text  # the final assistant turn's text wins
 
+    _record_spend(usage)
     return {"answer": answer, "data": ctx.data,
             "tools_used": [{"tool": c["tool"], "args": c["args"]} for c in ctx.calls],
             "usage": usage}
@@ -1535,6 +1561,12 @@ def run_ask_stream(question: str, history: list[dict] | None = None):
                 elif event.type == "content_block_delta" and getattr(event.delta, "type", None) == "text_delta":
                     yield {"type": "delta", "text": event.delta.text}
             final = stream.get_final_message()
+
+        # The streaming path runs the tool loop by hand and tracked no token
+        # usage at all — so the endpoint the UI actually uses was invisible to
+        # any spend accounting. Record each turn as it completes, not just the
+        # last, since a question that ends early still cost what it cost.
+        _record_spend(_message_usage(final))
 
         if final.stop_reason != "tool_use":
             answer = "".join(b.text for b in final.content if b.type == "text").strip()
