@@ -15,6 +15,7 @@ environment (an `ant auth login` subscription profile for local dev, or
 ANTHROPIC_API_KEY in deploy) — so importing this module needs no credentials
 and the test suite stays green.
 """
+import functools
 import json
 import os
 import re
@@ -458,6 +459,7 @@ class _Ctx:
     def __init__(self) -> None:
         self.calls: list[dict] = []
         self.data: list[dict] = []
+        self.raw_results: list[str] = []  # every tool result string, in order
         self.n_calls = 0
         self.question = ""
 
@@ -1336,10 +1338,29 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         ctx.record("report_data_gap", {"topic": topic.strip()})
         return "Logged the data gap for later review."
 
-    return [resolve_entity, query_plays, find_games, get_game_detail, get_player_game_log,
-            get_player_career, get_team_overview, get_power_rankings,
-            get_player_overview, get_player_splits, get_team_splits, get_leaders,
-            get_standings, get_comparables, get_metadata, report_data_gap]
+    tools = [resolve_entity, query_plays, find_games, get_game_detail, get_player_game_log,
+             get_player_career, get_team_overview, get_power_rankings,
+             get_player_overview, get_player_splits, get_team_splits, get_leaders,
+             get_standings, get_comparables, get_metadata, report_data_gap]
+    # Capture every tool result string on ctx for the provenance audit (the
+    # eval verifies each figure in an answer appears in some tool result).
+    # The SDK tool runner dispatches through `_func_with_validate` while our
+    # manual streaming loop calls `.func`, so both are wrapped — a unit test
+    # pins both paths against SDK changes.
+    for tool in tools:
+        tool.func = _capture_raw(ctx, tool.func)
+        tool._func_with_validate = _capture_raw(ctx, tool._func_with_validate)
+    return tools
+
+
+def _capture_raw(ctx: _Ctx, func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapped(*args: Any, **kwargs: Any):
+        out = func(*args, **kwargs)
+        if isinstance(out, str):
+            ctx.raw_results.append(out)
+        return out
+    return wrapped
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -1489,9 +1510,11 @@ def run_ask(question: str, history: list[dict] | None = None) -> dict:
         if text:
             answer = text  # the final assistant turn's text wins
 
+    # `usage` and `raw_results` are internal telemetry (the eval's cost report
+    # and provenance audit); the API response model excludes them both.
     return {"answer": answer, "data": ctx.data,
             "tools_used": [{"tool": c["tool"], "args": c["args"]} for c in ctx.calls],
-            "usage": usage}
+            "usage": usage, "raw_results": ctx.raw_results}
 
 
 def run_ask_stream(question: str, history: list[dict] | None = None):
