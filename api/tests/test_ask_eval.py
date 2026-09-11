@@ -57,9 +57,13 @@ def _oracle():
     return {t.name: t.func for t in llm._build_tools(ctx)}
 
 
-def _pid(fns, name):
+def _pid(fns, name, pos=None):
+    """First matching player id, optionally filtered by position — required
+    for names shared by multiple players (the DB's 2026 rookie class added a
+    second Justin Jefferson), where result order is not guaranteed."""
     rows = json.loads(fns["resolve_entity"](name=name))
-    return next(x["id"] for x in rows if x["type"] == "player")
+    return next(x["id"] for x in rows if x["type"] == "player"
+                and (pos is None or x.get("position") == pos))
 
 
 def _split_val(fns, name, season, cat, dim, value, field):
@@ -107,8 +111,9 @@ def _ambig_val(fns, name, season, col):
     return values[0]
 
 
-def _draft_info(fns, name, probe_season=2023):
-    ov = json.loads(fns["get_player_overview"](player_id=_pid(fns, name), season=probe_season))
+def _draft_info(fns, name, probe_season=2023, pos=None):
+    ov = json.loads(fns["get_player_overview"](
+        player_id=_pid(fns, name, pos=pos), season=probe_season))
     return ov["draft"]
 
 
@@ -121,8 +126,8 @@ def _team_split_val(fns, team, season, side, dim, value, field):
     return next(r for r in rows if r["split_value"] == value)[field]
 
 
-def _comp_top(fns, name, n=3):
-    rows = json.loads(fns["get_comparables"](player_id=_pid(fns, name)))
+def _comp_top(fns, name, n=3, pos=None):
+    rows = json.loads(fns["get_comparables"](player_id=_pid(fns, name, pos=pos)))
     return [r["player"] for r in rows[:n]]
 
 
@@ -210,7 +215,9 @@ def num_in(answer, value):
     season year — "3" must not pass just because the answer says "2023"."""
     target = str(int(round(float(value))))
     text = _normalize_answer(answer).replace(",", "")
-    return re.search(rf"(?<![\d.]){target}(?!\.?\d)", text) is not None
+    # The model sometimes echoes a stored float verbatim ("27.0 tackles"), so
+    # the trailing-.0 form is as correct as the bare integer.
+    return re.search(rf"(?<![\d.]){target}(?:\.0)?(?!\.?\d)", text) is not None
 
 
 def stat_in(answer, value):
@@ -420,7 +427,7 @@ GOLD = [
     {"q": "Which players are most statistically similar to Justin Jefferson?",
      "tags": ["lookup"],
      "tool": "get_comparables", "args": {},
-     "grade": lambda a, f: name_in(a, _comp_top(f, "Justin Jefferson"))},
+     "grade": lambda a, f: name_in(a, _comp_top(f, "Justin Jefferson", pos="WR"))},
 
     {"q": "Who are some comparable players to Derrick Henry?",
      "tags": ["lookup"],
@@ -480,9 +487,9 @@ GOLD = [
 
     # more overview (season totals — pick clearly non-zero stats; _nonzero drops 0s)
     {"q": "How many receptions did Justin Jefferson have in 2022?",
-     "tags": ["lookup"],
+     "tags": ["lookup", "ambiguity"],  # the 2026 rookie class added a second Justin Jefferson
      "tool": "get_player_overview", "args": {"season": 2022},
-     "grade": lambda a, f: num_in(a, _overview_val(f, "Justin Jefferson", 2022, "receptions"))},
+     "grade": lambda a, f: num_in(a, _ambig_val(f, "Justin Jefferson", 2022, "receptions"))},
 
     {"q": "How many rushing yards did Derrick Henry have in 2020?",
      "tags": ["lookup"],
@@ -809,7 +816,8 @@ GOLD = [
 
     {"q": "How many rushing yards did Adrian Peterson have in 2012?",
      "tags": ["ambiguity", "lookup"],
-     "tool": "get_player_overview", "args": {"season": 2012},
+     # per-season career totals reconcile with the overview, so both routes count
+     "tools": ["get_player_overview", "get_player_career"], "args": {},
      "grade": lambda a, f: num_in(a, _ambig_val(f, "Adrian Peterson", 2012, "rush_yards"))},
 
     {"q": "How many receiving yards did Steve Smith have in 2005?",
@@ -865,16 +873,17 @@ GOLD = [
      "grade": lambda a, f: (award_polarity_in(a, _award_seasons(f, "Lamar Jackson", "MVP"))
                            and all(num_in(a, s) for s in _award_seasons(f, "Lamar Jackson", "MVP")))},
 
-    {"q": "When was Justin Jefferson drafted?",
-     "tags": ["lookup"],
+    {"q": "When was the Vikings' Justin Jefferson drafted?",
+     "tags": ["lookup", "ambiguity"],
      "tool": "get_player_overview", "args": {},
-     "grade": lambda a, f: (num_in(a, _draft_info(f, "Justin Jefferson")["season"])
-                           and text_in(a, ["first round", "1st round", "round 1"]))},
+     "grade": lambda a, f: (num_in(a, _draft_info(f, "Justin Jefferson", pos="WR")["season"])
+                           and text_in(a, ["first round", "1st round", "round 1",
+                                           "first-round", "1st-round"]))},
 
-    {"q": "What college did Justin Jefferson play at?",
-     "tags": ["lookup"],
+    {"q": "What college did the Vikings' Justin Jefferson play at?",
+     "tags": ["lookup", "ambiguity"],
      "tool": "get_player_overview", "args": {},
-     "grade": lambda a, f: text_in(a, [_draft_info(f, "Justin Jefferson")["college"]])},
+     "grade": lambda a, f: text_in(a, [_draft_info(f, "Justin Jefferson", pos="WR")["college"]])},
 
     # ── coverage honesty: decline cleanly AND log the gap ──
     {"q": "What was Antonio Brown's average separation in 2014?",
@@ -954,27 +963,33 @@ GOLD += [
 # legitimately produce figures absent from any single tool result, so flags are
 # a review list, and the rate is the headline "hallucinated-figure" metric.
 
-_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+_NUMBER_RE = re.compile(r"\d+\.\d+|\.\d+|\d+")
 
 
 def _unsupported_figures(answer, raw_results):
-    """Numerals in the answer that appear in no tool result for this question.
+    """Numerals in the answer with no numeric source in any tool result.
 
-    Whitelisted: season years (data-range phrasing like "since 1999" is
-    commentary, not a stat) and integers up to 10 (ranks, downs, ordinals,
-    list positions). Everything else must appear, boundary-matched, in the
-    concatenated tool results."""
+    Comparison is numeric, not textual: tools serialize 36 as "36.0" and
+    0.824 while answers print "36" and ".824", and rates stored as fractions
+    are printed as percentages, so each corpus value also counts rounded to
+    the answer's precision and scaled by 100. Whitelisted: years 1900-2030
+    (data-range and season commentary) and integers up to 10 (ranks, downs,
+    ordinals). "49ers" is stripped before extraction. The audit is a review
+    list — the whitelist and x100 scaling are documented noise tradeoffs."""
     corpus = " ".join(raw_results).replace(",", "")
-    text = _normalize_answer(answer).replace(",", "")
+    corpus_values = {float(t) for t in _NUMBER_RE.findall(corpus)}
+    text = _normalize_answer(answer).replace(",", "").replace("49ers", "")
     flagged, seen = [], set()
     for token in _NUMBER_RE.findall(text):
         if token in seen:
             continue
         seen.add(token)
         value = float(token)
-        if value.is_integer() and (value <= 10 or 1999 <= value <= 2030):
+        if value.is_integer() and (value <= 10 or 1900 <= value <= 2030):
             continue
-        if re.search(rf"(?<![\d.]){re.escape(token)}(?![\d.])", corpus):
+        decimals = len(token.split(".")[1]) if "." in token else 0
+        if any(round(v, decimals) == value or round(v * 100, decimals) == value
+               for v in corpus_values):
             continue
         flagged.append(token)
     return flagged

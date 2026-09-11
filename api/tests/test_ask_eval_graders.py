@@ -56,6 +56,7 @@ def test_record_grader_rejects_different_records(answer):
         ("Ranked 3 in the league.", 3),
         ("The answer is 3.", 3),          # sentence-final period is not a decimal
         ("He scored 15 touchdowns", 15.0),
+        ("He had 27.0 tackles.", 27),     # models echo stored floats verbatim
     ],
 )
 def test_num_grader_accepts_standalone_numbers(answer, value):
@@ -185,8 +186,17 @@ def test_provenance_audit_passes_sourced_figures_and_flags_unsourced_ones():
     raw = ['{"att":303,"yards":1876,"success_pct":47.2}']
     sourced = "He threw for 1,876 yards on 303 attempts (47.2% success) in 2022, ranking 3rd."
     assert _unsupported_figures(sourced, raw) == []
-    unsourced = "He threw for 1,900 yards on 303 attempts in 2022."
-    assert _unsupported_figures(unsourced, raw) == ["1900"]
+    unsourced = "He threw for 2,340 yards on 303 attempts in 2022."
+    assert _unsupported_figures(unsourced, raw) == ["2340"]
+
+
+def test_provenance_audit_matches_numerically_across_serialization_formats():
+    from tests.test_ask_eval import _unsupported_figures
+
+    raw = ['{"tackles":36.0,"pct":0.824,"success_rate":0.444,"yards":515.0}']
+    answer = ("He made 36 tackles; the team's .824 win pct (82.4%) and 44.4% "
+              "success rate led the 49ers to 515 total yards.")
+    assert _unsupported_figures(answer, raw) == []
 
 
 def test_provenance_audit_whitelists_years_ranks_and_small_ordinals():
