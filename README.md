@@ -171,10 +171,21 @@ answer takes *and* reject wrong-but-plausible answers, so the headline number
 cannot be inflated by a grader that can't fail.
 
 Every run also performs a mechanical provenance audit: each numeral in each
-answer is checked against the tool results fetched for that question, and
-answers containing figures with no tool-result source are reported. This
-measures the project's core claim — the model never invents a number —
-directly, without an LLM judge.
+answer is checked (numerically, tolerating rounding and percent scaling)
+against the tool results fetched for that question, and answers containing
+figures with no tool-result source are reported. This measures the project's
+core claim — the model never invents a number — directly, without an LLM
+judge.
+
+Latest run (claude-haiku-4-5): **105/110 both-correct (95%), 109/110 answer
+accuracy (99%)**, 3.7s and ~18,800 tokens per question. The five imperfect
+cases are tracked model weaknesses, not grader noise — one wrong answer
+(an award question answered from a tool that carries no awards data) and
+four routing preferences (play-by-play fallback chosen over shaped split
+tools) — and the provenance audit flagged 15 answers: 14 legal derivations
+shown with their arithmetic, plus one true grounding violation (a figure
+repeated from conversation history instead of re-fetched) now on the fix
+list. Keeping these failures visible is the point of the matrix.
 
 To test whether the typed-tool design is actually necessary, the repository
 also contains a text-to-SQL baseline: the same model given the full database
