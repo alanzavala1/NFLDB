@@ -140,12 +140,41 @@ platform's charted definitions; a vocabulary contract maps everyday football
 phrasing onto exact split values. The model can choose which tools to call,
 but it cannot redefine what a statistic means.
 
-The agent is evaluated on a 56-question gold set whose expected answers are
+The agent is evaluated on a 110-question gold set whose expected answers are
 computed live from the same verified query layer. The eval grades both tool
 routing and the written answer, and is opt-in because it makes billed model
 calls. It has caught a real regression: during development, a broken tool
 chain scored 88%; the eval isolated the cause, and the fix was re-verified at
 100%.
+
+Rather than one blended score, the eval reports a per-category capability
+matrix, so weak areas are visible instead of averaged away:
+
+| Category | Cases | What it tests |
+|---|---:|---|
+| Season/career/award lookups | 32 | totals, awards (polarity-graded), draft |
+| Situational splits — offense | 24 | 15 of the 16 offensive split dimensions |
+| Situational splits — defense | 6 | defensive splits by play type, down, script |
+| League leaders | 18 | incl. kicking, punting, and defensive stats |
+| Teams & standings | 11 | records, team splits |
+| Phrasing robustness | 12 | terse/misspelled/nicknamed paraphrases of other cases |
+| Historical eras | 10 | 1999–2007 seasons, relocated-franchise codes (OAK/SD) |
+| Coverage honesty | 10 | declines outside data coverage + gap logging |
+| Games & box scores | 5 | scores, playoffs, coaches, quarter detail |
+| Play-by-play queries | 4 | granular structured filters |
+| Ambiguous names | 4 | two players sharing a name; context must pick one |
+| Multi-turn follow-ups | 4 | text-context carryover |
+
+(Categories overlap — a case can carry several tags.) Graders are themselves
+unit-tested in both directions: each must accept the phrasings a correct
+answer takes *and* reject wrong-but-plausible answers, so the headline number
+cannot be inflated by a grader that can't fail.
+
+Every run also performs a mechanical provenance audit: each numeral in each
+answer is checked against the tool results fetched for that question, and
+answers containing figures with no tool-result source are reported. This
+measures the project's core claim — the model never invents a number —
+directly, without an LLM judge.
 
 To test whether the typed-tool design is actually necessary, the repository
 also contains a text-to-SQL baseline: the same model given the full database
@@ -154,11 +183,14 @@ and graders. It was measured twice — first with the raw schema, then again
 after adding an accurate data dictionary (table grain, join recipes, name
 formats, value vocabularies) to remove documentation gaps as an excuse.
 
-| Architecture | Accuracy | Avg latency | Tokens/question |
+| Architecture | Accuracy* | Avg latency | Tokens/question |
 |---|---:|---:|---:|
 | Typed tools + semantic layer | 56/56 (100%) | 3.7s | ~18,100 |
 | Text-to-SQL v2 (with data dictionary) | 37/56 (66%) | 2.6s | ~8,200 |
 | Text-to-SQL v1 (raw schema) | 21/56 (38%) | 3.1s | ~7,800 |
+
+\* measured on the original 56-question set; the expanded 110-question matrix
+above supersedes it for tracking the typed agent.
 
 All arms run claude-haiku-4-5 (~$0.27 per eval run for the typed agent, with
 88% of its input tokens served from prompt cache; ~$0.50 for the baseline).
