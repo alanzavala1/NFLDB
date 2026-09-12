@@ -45,12 +45,28 @@ IDLE = None
 PRE = 60      # in the window, waiting for kickoff
 POST = 300    # everything in the window has finished; wind down
 
-# A game is being played. Measured against the source rather than guessed: ESPN
-# republishes roughly every 40 seconds, and its edge nodes can disagree for a
-# few seconds either side, so polling faster than this only re-fetches values
-# that haven't moved. 20s keeps us within half an update of the source while
-# asking three times a minute instead of four.
-LIVE = 20
+# A game is being played.
+#
+# The 40-second republish cadence this used to cite does not exist. It was wall
+# time *between plays* read as a publication rate. Measured over a full game
+# (SF@LA, 2026-09-10, 1157 samples across 129 plays, `jobs/sample_live_cadence.py`,
+# timing each play from its own wallclock to our receipt):
+#
+#   ESPN publish latency   p50 30s · p90 45s · p99 63s
+#   Wall time between plays p50 39s
+#   ESPN edge cache TTL     flat 10s (headers count down 10 -> 1)
+#
+# So the feed is not republished every 40 seconds; it is republished on a 10s
+# edge TTL, and 40 seconds is roughly how often there is something new in it.
+#
+# A viewer's staleness is ESPN's own publish latency, plus their edge (0-10s),
+# plus our cache, plus where the client happens to sit in its poll cycle. At
+# 20s/20s that was about 50 seconds — 1.3 plays behind, which matches the
+# reported symptom of the card showing the previous play as the next one was
+# being run. Ten seconds halves both of the stages we control, for about 40s
+# total, near the ~33s floor that ESPN's own 30s publish latency imposes. Below
+# 10s we would only be re-reading their edge cache before it refreshes.
+LIVE = 10
 
 
 def kickoff_utc(gameday: str | None, gametime: str | None) -> datetime | None:

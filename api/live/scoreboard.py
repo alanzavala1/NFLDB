@@ -131,7 +131,7 @@ def scoreboard(now: datetime | None = None) -> dict:
         return payload
 
     # Reuse the TTL the cached answer was built with, NOT a fresh state-blind
-    # estimate. `poll_interval` can only return LIVE (20s) when it is told a
+    # estimate. `poll_interval` can only return LIVE (10s) when it is told a
     # game is in progress, and it cannot be told that before the fetch — so
     # the value above is PRE (60s) during a live game. Using it as the cache
     # TTL meant the server replayed one snapshot for a minute while telling
