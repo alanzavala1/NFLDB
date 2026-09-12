@@ -15,6 +15,10 @@ class LineupPlayer(BaseModel):
     headshot_url: str | None
     rating: float | None
     raw_score: float | None
+    # How many plays the rating was computed from. A skill player needs three
+    # before a percentile means anything, so the difference between "one graded
+    # play" and "none at all" is the whole explanation for a missing rating.
+    plays_counted: int | None = None
     snaps: int
     snap_pct: float | None
     scored_td: bool = False

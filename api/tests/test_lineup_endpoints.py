@@ -134,3 +134,38 @@ def test_ol_unit_grades_builder_and_endpoint(client, seeded_conn):
         ).fetchone()
         assert team["ol_grade"] == (expected[0] if expected else None)
         assert "offense_avg" in team and "defense_avg" in team
+
+
+def test_lineup_carries_plays_counted_from_the_ratings_table(client, seeded_conn):
+    """The field explains a missing rating with this number.
+
+    A skill player with one or two touches is ungraded for a different reason
+    than one who never touched the ball, and only `plays_counted` separates
+    them. The column reaches the payload through three hops (builder → the
+    lineup query's outer SELECT → the response schema); it was dropped at the
+    middle one once, which silently turned every explanation into the wrong
+    one. Pin all three.
+    """
+    import game_ratings_builder
+
+    game_ratings_builder.materialize()
+    expected = dict(
+        seeded_conn.execute(
+            """
+            SELECT player_id, plays_counted
+            FROM player_game_ratings
+            WHERE game_id = '2024_01_DEN_KC'
+            """
+        ).fetchall()
+    )
+    assert expected, "fixture should materialize at least one rating row"
+
+    lineup = client.get("/api/games/2024_01_DEN_KC/lineup").json()
+    seen = 0
+    for team in lineup["teams"]:
+        for p in team["offense"] + team["defense"] + team["rotation"]:
+            assert "plays_counted" in p
+            if p["player_id"] in expected:
+                assert p["plays_counted"] == expected[p["player_id"]]
+                seen += 1
+    assert seen, "no lineup player matched a materialized ratings row"

@@ -514,6 +514,12 @@ export interface paths {
          * Gaps
          * @description Review the data gaps the assistant has logged — questions it couldn't
          *     fully answer because the platform is missing that stat/split/season.
+         *
+         *     Admin-only. The Ask box is free text typed by strangers, so this log is
+         *     visitor input; it was previously readable by any anonymous caller, which
+         *     made anything personal someone typed into Ask publicly retrievable the
+         *     moment the model couldn't fully answer it. Gated the same way the ingest
+         *     trigger is, and failing closed when no token is configured.
          */
         get: operations["gaps_api_gaps_get"];
         put?: never;
@@ -1162,6 +1168,8 @@ export interface components {
             rating: number | null;
             /** Raw Score */
             raw_score: number | null;
+            /** Plays Counted */
+            plays_counted?: number | null;
             /** Snaps */
             snaps: number;
             /** Snap Pct */
@@ -3187,7 +3195,9 @@ export interface operations {
             query?: {
                 limit?: number;
             };
-            header?: never;
+            header?: {
+                "x-admin-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

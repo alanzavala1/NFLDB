@@ -93,6 +93,7 @@ def _lineup_players(rows: list[dict], team: str, unit: str) -> list[dict]:
             "headshot_url": r.get("headshot_url"),
             "rating": r.get("rating"),
             "raw_score": r.get("raw_score"),
+            "plays_counted": r.get("plays_counted"),
             "snaps": int(r.get(snap_col) or 0),
             "snap_pct": r.get(pct_col),
             "scored_td": bool(r.get("scored_td")),
@@ -120,6 +121,7 @@ def _rotation_players(rows: list[dict], team: str, starters: set[str | None]) ->
             "headshot_url": r.get("headshot_url"),
             "rating": r.get("rating"),
             "raw_score": r.get("raw_score"),
+            "plays_counted": r.get("plays_counted"),
             "snaps": int(snaps),
             "snap_pct": pct,
             "scored_td": bool(r.get("scored_td")),
@@ -669,6 +671,7 @@ def get_game_lineup(game_id: str):
             gr.position_group,
             gr.rating,
             gr.raw_score,
+            gr.plays_counted,
             CASE WHEN td.player_id IS NOT NULL THEN 1 ELSE 0 END AS scored_td
         FROM joined j
         LEFT JOIN player_game_ratings gr
