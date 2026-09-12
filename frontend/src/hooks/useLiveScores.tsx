@@ -8,11 +8,17 @@
  *
  * One fetch feeds every card on the page: the provider holds the board, and
  * `useLiveGame(game_id)` picks a single game out of it.
+ *
+ * What the hook does decide is whether a response is worth rendering at all.
+ * The server's cache is per-instance and there is no session affinity, so
+ * successive polls can arrive out of order; see `liveOrdering` for why that is
+ * the client's problem and how far the guard goes.
  */
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { api } from '../api'
+import { isStaleResponse, mergeGames } from './liveOrdering'
 import type { LiveGameOut, Scoreboard } from '../types'
 
 type Board = {
@@ -28,6 +34,9 @@ const LiveScoresContext = createContext<Board>(EMPTY)
 export function LiveScoresProvider({ children }: { children: ReactNode }) {
   const [board, setBoard] = useState<Board>(EMPTY)
   const timer = useRef<number | undefined>(undefined)
+  // The newest `fetched_at` we have rendered. Kept in a ref, not state, so the
+  // comparison can't race a pending render.
+  const shownAt = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -37,9 +46,17 @@ export function LiveScoresProvider({ children }: { children: ReactNode }) {
         const data = await api.liveScoreboard()
         if (cancelled) return
 
-        const byGameId: Record<string, LiveGameOut> = {}
-        for (const g of data.games) if (g.game_id) byGameId[g.game_id] = g
-        setBoard({ byGameId, source: data.source, fetchedAt: data.fetched_at })
+        // An older snapshot than the one on screen is not an update. Drop it
+        // whole rather than merging it game by game — the pacing it carries is
+        // still good, so the next poll goes out on schedule either way.
+        if (!isStaleResponse(data.fetched_at, shownAt.current)) {
+          shownAt.current = data.fetched_at ?? shownAt.current
+          setBoard(prev => ({
+            byGameId: mergeGames(prev.byGameId, data.games),
+            source: data.source,
+            fetchedAt: data.fetched_at,
+          }))
+        }
 
         // null means there is nothing to watch — stop, don't fall back to a
         // default interval. An idle tab should cost nothing.
