@@ -34,6 +34,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 import comparables_builder
 import def_splits_builder
+import methodology
 import splits_builder
 import team_splits_builder
 from config import CURRENT_SEASON, FIRST_SEASON, TEAM_NAMES
@@ -1318,6 +1319,52 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         return _dumps(meta)
 
     @beta_tool
+    def get_methodology(topic: str = "") -> str:
+        """How this platform COMPUTES, MEASURES or DEFINES something — its own
+        methodology, not statistics. Use it for questions about how the platform
+        works: the power-rankings EPA model, how game grades are calibrated, how
+        the data reconciles with official NFL totals, what EPA means here, how
+        splits are built, what the O-line grade does and does not measure, why a
+        season or dimension is not covered, how the agent is evaluated, and why
+        it uses typed tools instead of SQL.
+
+        NEVER use this to look up a statistic, player, team, season total,
+        leaderboard, ranking or game result — it cannot see the database. Call it
+        with no topic to list what is documented. Quote the section it returns
+        and attribute it; never describe this platform's methodology from memory.
+
+        Args:
+            topic: One of power_rankings, player_grades, reconciliation, epa,
+                splits, coverage_limits, ol_grades, agent_evaluation,
+                typed_tools. Omit to list the available topics.
+        """
+        if ctx.over_budget():
+            return _BUDGET_MSG
+
+        topics = methodology.available()
+        if not topics:
+            ctx.record("get_methodology", {"topic": topic, "found": False})
+            return ("The methodology document is unavailable. Say the platform's "
+                    "docs don't cover it; do not answer from memory.")
+
+        listing = "Documented topics: " + ", ".join(topics) + "."
+        if not topic.strip():
+            ctx.record("get_methodology", {"topic": None})
+            return listing + " Call get_methodology again with one of them."
+
+        hit = methodology.lookup(topic)
+        if hit is None:
+            # A miss means the model invented a slug. Hand back the real list
+            # rather than guessing which section it meant — a confidently
+            # quoted wrong passage is worse than another turn.
+            ctx.record("get_methodology", {"topic": topic, "found": False})
+            return f"No documented topic named {topic!r}. " + listing
+
+        heading, body = hit
+        ctx.record("get_methodology", {"topic": topic.strip().lower()})
+        return f"[METHODOLOGY.md — {heading}]\n{body}"
+
+    @beta_tool
     def report_data_gap(topic: str, detail: str) -> str:
         """Record that the platform is MISSING data needed to fully answer the
         question. Call this (once) whenever you had to decline, fall back to a
@@ -1339,7 +1386,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
     return [resolve_entity, query_plays, find_games, get_game_detail, get_player_game_log,
             get_player_career, get_team_overview, get_power_rankings,
             get_player_overview, get_player_splits, get_team_splits, get_leaders,
-            get_standings, get_comparables, get_metadata, report_data_gap]
+            get_standings, get_comparables, get_metadata, get_methodology,
+            report_data_gap]
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -1369,7 +1417,9 @@ def _vocab_lines() -> str:
 
 SYSTEM_PROMPT = f"""You are the NFL stats assistant for this analytics platform. \
 You answer questions about NFL players and teams ONLY by calling the provided \
-tools, which read the platform's verified statistics database. You never invent, \
+tools, which read the platform's verified statistics database. You also answer \
+questions about this platform itself — how it works, how it computes things, and \
+what it does not cover — by calling get_methodology. You never invent, \
 estimate, or recall numbers from memory — every figure in your answer must come \
 from a tool result in this conversation.
 
@@ -1389,6 +1439,7 @@ DATA YOU CAN REACH (seasons {FIRST_SEASON}-{CURRENT_SEASON}):
 - get_standings: division standings for a season.
 - get_comparables: statistically similar players.
 - get_metadata: exact dimensions, values/synonyms, stats, and coverage limits.
+- get_methodology: this platform's documentation on HOW things are computed — methodology, not statistics. Topics: power_rankings, player_grades, reconciliation, epa, splits, coverage_limits, ol_grades, agent_evaluation, typed_tools.
 
 SPLIT DIMENSIONS (the `dimension` argument to get_player_splits):
 {_dim_lines()}
@@ -1435,8 +1486,17 @@ season's availability, call get_metadata.
 player/team, season, and the situation you pulled.
 4. If a tool returns no rows, say the data is not available for that combination \
 — do not fabricate.
-5. Politely decline questions that are not about NFL stats this platform covers.
-6. Whenever you had to decline, approximate, or note that a requested stat / \
+5. For how a number is computed, measured or defined, or WHY something is not \
+covered, call get_methodology and base the explanation on the section it \
+returns, citing it — exactly as every figure must come from a tool result. Never \
+describe this platform's methodology from memory: an explanation you recalled \
+rather than retrieved is wrong even when it happens to be accurate. \
+get_metadata gives the lists and coverage ranges; get_methodology gives the \
+reasons behind them.
+6. Politely decline questions that are not about NFL stats and not about this \
+platform. Questions about the platform's own design, methodology or limits ARE \
+in scope; answer those from get_methodology, never from memory.
+7. Whenever you had to decline, approximate, or note that a requested stat / \
 split / season isn't available, call report_data_gap ONCE (after giving your \
 best answer) to record what was missing — this is how we find what to add next.
 """

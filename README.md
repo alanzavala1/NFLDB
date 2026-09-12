@@ -121,7 +121,7 @@ derived number is verified to reconcile with official NFL stats.
 
 Ask NFLDB answers natural-language questions about NFL statistics — "How many
 rushing yards did Derrick Henry have against stacked boxes in 2023?" — using
-only the platform's verified data. It is a Claude tool-calling agent with ~16
+only the platform's verified data. It is a Claude tool-calling agent with 17
 typed tools. To answer a question, the model first resolves any player or
 team name to a database ID (`resolve_entity`), then calls tools that return
 verified numbers: season and career stats, game logs and box scores,
@@ -129,7 +129,11 @@ standings, leaders, situational splits, power rankings, and player
 comparables. A `query_plays` tool covers granular situations the shaped tools
 can't express (for example, a team's red-zone rushing touchdowns): the model
 submits structured filters and the server composes the SQL from a whitelist —
-the model never writes SQL itself. Answers stream over SSE, follow-up
+the model never writes SQL itself. A `get_methodology` tool answers questions
+about the platform itself — how grades are calibrated, what EPA means here, why
+a season is not covered — by returning a named section of the project's own
+methodology document, so an explanation is retrieved rather than recalled on the
+same terms as every figure. Answers stream over SSE, follow-up
 questions carry text context, sampling is disabled (temperature 0), and each
 question has a hard 10-tool-call budget and per-IP rate limiting.
 

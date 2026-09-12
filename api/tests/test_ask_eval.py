@@ -243,6 +243,13 @@ def _leader_second_ties(fns, stat, season):
 # Each: question, expected tool (or alternate tools), expected arg subset, and
 # a grader that computes truth from the oracle and checks the model's answer.
 
+# The gold set before get_methodology was added. Everything from this index on
+# is a methodology question; everything before it is a database question that
+# used to pass. Keeping the boundary explicit lets the summary score the two
+# separately, so a routing regression on the original set is reported rather
+# than averaged away by a new cohort that passes.
+BASELINE_GOLD_COUNT = 56
+
 GOLD = [
     # ── player splits (the centerpiece) ──
     {"q": "How many pass attempts did Josh Allen have under pressure in 2023?",
@@ -524,6 +531,86 @@ GOLD = [
      ],
      "tool": "get_leaders", "args": {"stat": "sacks", "season": 2022},
      "grade": lambda a, f: name_in(a, _leader_second_ties(f, "sacks", 2022))},
+
+    # ── methodology (get_methodology) ──
+    # These ask how a number is PRODUCED rather than what it is, so the answer
+    # has to come from the document rather than from the model. Graded on
+    # whether the explanation contains the mechanism the docs actually state —
+    # a model answering from memory can name the topic but not the specifics
+    # (the +150 shrinkage prior, the 6.5 average grade, the exact coverage year).
+    #
+    # Routing is graded on the TOPIC, not just the tool. The retrieval version
+    # of this feature could only assert that the model searched; it could not
+    # assert that the right passage came back, because ranking is not something
+    # a gold set can name. A closed vocabulary makes the retrieval itself
+    # gradeable, which is the point of the whole typed-tool design.
+    #
+    # The first five are real questions from the data-gap log (llm.read_gaps()):
+    # users asked for data outside coverage, and "why isn't this available" is a
+    # documentation question, not a database one.
+
+    {"q": "Why can't I get completion percentage above expectation for Peyton Manning in 2004?",
+     "tool": "get_methodology", "args": {"topic": "coverage_limits"},
+     "grade": lambda a, f: text_in(a, ["2016"]) and text_in(a, ["next gen", "ngs", "tracking"])},
+
+    {"q": "Why is there no blitz rate data for Tom Brady in 2008?",
+     "tool": "get_methodology", "args": {"topic": "coverage_limits"},
+     "grade": lambda a, f: text_in(a, ["2022"]) and text_in(a, ["ftn", "charting"])},
+
+    {"q": "Why can't the platform tell me Aaron Rodgers' play-action EPA in 2015?",
+     "tool": "get_methodology", "args": {"topic": "coverage_limits"},
+     "grade": lambda a, f: text_in(a, ["2022"]) and text_in(a, ["ftn", "charting", "play action", "play-action"])},
+
+    {"q": "Why doesn't this platform have Jerry Rice's 1989 receiving yards?",
+     "tool": "get_methodology", "args": {"topic": "coverage_limits"},
+     "grade": lambda a, f: text_in(a, ["1999"]) and text_in(a, ["play-by-play", "play by play", "dataset", "data set"])},
+
+    {"q": "Why can't I get a split by pressure and down at the same time?",
+     "tool": "get_methodology", "args": {"topic": "splits"},
+     "grade": lambda a, f: text_in(a, ["single-dimension", "single dimension", "one dimension", "one at a time"])
+                           and text_in(a, ["cross-product", "cross product", "combinatorial", "explode", "sample"])},
+
+    # Core methodology the platform had no tool for at all.
+
+    {"q": "How are the power rankings computed?",
+     "tool": "get_methodology", "args": {"topic": "power_rankings"},
+     "grade": lambda a, f: text_in(a, ["epa"]) and text_in(a, ["150", "shrink", "prior"])},
+
+    {"q": "How does this platform calculate its player game grades?",
+     "tool": "get_methodology", "args": {"topic": "player_grades"},
+     "grade": lambda a, f: text_in(a, ["percentile"]) and text_in(a, ["epa", "position group"])},
+
+    {"q": "What does a 9.0 game grade actually mean?",
+     "tool": "get_methodology", "args": {"topic": "player_grades"},
+     "grade": lambda a, f: text_in(a, ["98", "2%", "top 2", "elite"])},
+
+    {"q": "How do you know your numbers match the official NFL stats?",
+     "tool": "get_methodology", "args": {"topic": "reconciliation"},
+     "grade": lambda a, f: text_in(a, ["reconcile", "reconciliation"])
+                           and text_in(a, ["test", "official"])},
+
+    {"q": "Does this platform grade individual offensive linemen?",
+     "tool": "get_methodology", "args": {"topic": "ol_grades"},
+     "grade": lambda a, f: text_in(a, ["no", "not", "unit", "as a unit"])
+                           and text_in(a, ["sack", "stuffed", "blocker", "public data", "play-by-play"])},
+
+    {"q": "Why does the ask agent use typed tools instead of writing SQL?",
+     "tool": "get_methodology", "args": {"topic": "typed_tools"},
+     "grade": lambda a, f: text_in(a, ["definition", "define", "reconcil"])
+                           and text_in(a, ["sql", "schema"])},
+
+    # The remaining two topics, so every documented section has a question that
+    # would notice if it stopped being reachable.
+
+    {"q": "If I compare EPA here against another site and the numbers differ, is one of you wrong?",
+     "tool": "get_methodology", "args": {"topic": "epa"},
+     "grade": lambda a, f: text_in(a, ["definition", "defensible", "differ", "several"])
+                           and text_in(a, ["consistent", "same", "standard", "one number", "across"])},
+
+    {"q": "How do you measure whether the ask agent is actually any good?",
+     "tool": "get_methodology", "args": {"topic": "agent_evaluation"},
+     "grade": lambda a, f: text_in(a, ["gold", "eval"])
+                           and text_in(a, ["routing", "answer", "graded twice", "two"])},
 ]
 
 
@@ -624,6 +711,20 @@ def test_ask_eval_accuracy():
     print(f" Tool routing accuracy : {tool_hits}/{total} = {tool_hits/total:.0%}")
     print(f" Answer accuracy       : {ans_hits}/{total} = {ans_hits/total:.0%}")
     print(f" Both correct          : {both_hits}/{total} = {both_hits/total:.0%}")
+
+    # Adding a tool can pull routing away from the right database tool on
+    # questions that used to pass. Scoring the original set on its own is the
+    # only way that shows up; averaged in with the new questions it disappears.
+    def _cohort(label, subset):
+        if not subset:
+            return
+        n = len(subset)
+        t = sum(c["tool_ok"] for c in subset)
+        a = sum(c["answer_ok"] for c in subset)
+        print(f" {label:<21}: tool {t}/{n} = {t/n:.0%} | answer {a}/{n} = {a/n:.0%}")
+
+    _cohort(f"Original {BASELINE_GOLD_COUNT}", cases[:BASELINE_GOLD_COUNT])
+    _cohort("New methodology", cases[BASELINE_GOLD_COUNT:])
     total_latency = sum(case["latency_seconds"] for case in cases)
     total_tokens = sum(case["total_tokens"] for case in cases)
     print(f" Telemetry average     : {total_latency/total:.2f}s | "
