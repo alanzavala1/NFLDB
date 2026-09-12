@@ -24,3 +24,6 @@ gcp-*.json
 
 # Frontend build copied into the API image at build time
 api/static/
+
+# Local git worktrees (agent sandboxes) — never part of the repo
+.claude/worktrees/
