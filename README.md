@@ -144,17 +144,27 @@ platform's charted definitions; a vocabulary contract maps everyday football
 phrasing onto exact split values. The model can choose which tools to call,
 but it cannot redefine what a statistic means.
 
-The agent is evaluated on a 56-question gold set whose expected answers are
+The agent is evaluated on a 69-question gold set whose expected answers are
 computed live from the same verified query layer. The eval grades both tool
 routing and the written answer, and is opt-in because it makes billed model
 calls. It has caught a real regression: during development, a broken tool
 chain scored 88%; the eval isolated the cause, and the fix was re-verified at
 100%.
 
+The set is scored as two cohorts rather than one average: 56 statistical
+questions and 13 methodology questions routed to `get_methodology`, five of
+them taken verbatim from the agent's own data-gap log. Reporting them
+separately is deliberate — adding a tool can pull routing away from the right
+database tool, and a regression on the pre-existing questions must not be
+hidden by gains on the new ones. The methodology cohort has not been measured
+yet; the figures below are the 56 statistical questions.
+
 To test whether the typed-tool design is actually necessary, the repository
 also contains a text-to-SQL baseline: the same model given the full database
 schema and asked to write SQL directly, evaluated on the identical questions
-and graders. It was measured twice — first with the raw schema, then again
+and graders. The comparison runs on the 56 statistical questions both
+architectures can attempt — the methodology cohort has no SQL equivalent,
+because the answer is in a document rather than the database. It was measured twice — first with the raw schema, then again
 after adding an accurate data dictionary (table grain, join recipes, name
 formats, value vocabularies) to remove documentation gaps as an excuse.
 
