@@ -17,7 +17,13 @@ import pytest
 
 pytestmark = pytest.mark.invariant
 
-_DB = os.path.join(os.path.dirname(__file__), "..", "data", "nfl.duckdb")
+# Honours NFL_DB_PATH, the same override database.py reads, so the gate can be
+# pointed at a candidate database. Without it these tests could only ever check
+# the copy already in the tree — which silently made a migration look verified
+# when the run had in fact read the pre-migration data.
+_DB = os.environ.get(
+    "NFL_DB_PATH", os.path.join(os.path.dirname(__file__), "..", "data", "nfl.duckdb")
+)
 SEASON = 2023  # a complete season with full official weekly data
 
 

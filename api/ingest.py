@@ -8,7 +8,7 @@ import argparse
 import pandas as pd
 import nfl_data_py
 from collections import namedtuple
-from config import RELOCATIONS, era_team_case
+from config import FIRST_SEASON, RELOCATIONS, era_team_case
 from database import get_connection
 
 
@@ -478,13 +478,91 @@ def load_and_store_raw(conn, seasons: list[int], log=print):
     _upsert_by_season(conn, "rosters", rosters, seasons, log=log)
 
     log(f"Loading weekly player stats...")
-    try:
-        weekly = nfl_data_py.import_weekly_data(seasons)
-        _upsert_by_season(conn, "weekly_player_stats", weekly, seasons, log=log)
-    except Exception as e:
-        log(f"  weekly player stats unavailable: {e}")
+    load_weekly_player_stats(conn, seasons, log=log)
 
     return plays
+
+
+# nflverse retired the per-season `player_stats_{year}.parquet` assets after 2024
+# and moved weekly stats to the `stats_player` release. nfl_data_py still asks
+# for the old path, so `import_weekly_data` returned nothing from 2025 on. That
+# surfaced as a swallowed exception, an empty frame, and a silent fall back to
+# deriving offensive stats from play-by-play — for exactly the seasons people
+# are looking at. The fallback miscounts two-point conversion passes as passing
+# touchdowns: 12 quarterbacks were over-credited, +16 league-wide, in 2025.
+WEEKLY_STATS_URL = (
+    "https://github.com/nflverse/nflverse-data/releases/download/"
+    "stats_player/stats_player_week_{season}.parquet"
+)
+
+# Columns the offensive builder reads. Absence is a migration, not a gap, so it
+# must stop the ingest rather than quietly resolve to zero.
+WEEKLY_REQUIRED_COLUMNS = (
+    "player_id", "season", "week", "season_type", "team",
+    "completions", "attempts", "passing_yards", "passing_tds",
+    "passing_interceptions", "sacks_suffered",
+    "targets", "receptions", "receiving_yards", "receiving_tds",
+    "carries", "rushing_yards", "rushing_tds",
+)
+
+
+def _weekly_schema_is_legacy(conn) -> bool:
+    """True if the stored table predates the stats_player rename.
+
+    `recent_team` became `team`; its presence is the cheapest unambiguous marker.
+    """
+    try:
+        cols = {r[0] for r in conn.execute("DESCRIBE weekly_player_stats").fetchall()}
+    except Exception:
+        return False
+    return bool(cols) and "team" not in cols
+
+
+def load_weekly_player_stats(conn, seasons: list[int], log=print) -> None:
+    """Official weekly player stats, the source of truth counting stats reconcile to.
+
+    On the legacy schema this rebuilds every season rather than the requested
+    ones. `_upsert_by_season` inserts only columns common to the table and the
+    frame — right for season-to-season drift, wrong for a feed migration, where
+    it would keep the old 53-column table, drop all 102 new columns, and leave
+    the renamed ones NULL. Rebuilding means fetching the full history, because
+    dropping the table would otherwise discard the seasons not being ingested.
+    """
+    wanted = list(seasons)
+    if _weekly_schema_is_legacy(conn):
+        wanted = list(range(FIRST_SEASON, max(seasons) + 1))
+        log(f"  legacy weekly schema (pre-stats_player rename) — rebuilding "
+            f"{len(wanted)} seasons from the new feed")
+
+    frames, missing = [], []
+    for season in wanted:
+        try:
+            frames.append(pd.read_parquet(WEEKLY_STATS_URL.format(season=season)))
+        except Exception as e:
+            missing.append(season)
+            log(f"  {season}: not published yet ({type(e).__name__})")
+
+    if not frames:
+        # Loud on purpose. Silence here is what froze the table at 2024.
+        log(f"  WARNING: no official weekly stats for {seasons}. Offensive stats "
+            f"will be derived from play-by-play, which over-counts passing "
+            f"touchdowns on two-point conversions.")
+        return
+
+    weekly = pd.concat(frames, ignore_index=True)
+    absent = [c for c in WEEKLY_REQUIRED_COLUMNS if c not in weekly.columns]
+    if absent:
+        raise RuntimeError(
+            f"weekly feed is missing required columns {absent} — nflverse has "
+            f"changed the schema again; update WEEKLY_REQUIRED_COLUMNS and the "
+            f"column map in build_offensive_stats_from_weekly before ingesting."
+        )
+
+    if _weekly_schema_is_legacy(conn):
+        conn.execute("DROP TABLE weekly_player_stats")
+    _upsert_by_season(conn, "weekly_player_stats", weekly, wanted, log=log)
+    got = sorted(set(wanted) - set(missing))
+    log(f"  weekly_player_stats: {len(weekly):,} rows, seasons {got[0]}-{got[-1]}")
 
 
 def load_advanced_stats(conn, seasons: list[int], log=print):
@@ -745,14 +823,15 @@ def build_offensive_stats_from_weekly(conn, seasons: list[int], log=print) -> pd
                 else f'CAST({default} AS DOUBLE) AS {alias}')
 
     # game_id is present in modern nflverse weekly data; fall back to schedule join if absent.
-    # recent_team is the MODERN franchise abbreviation while schedules use the era one,
-    # so match on the era-mapped value — joining on recent_team directly silently dropped
+    # `team` (was `recent_team` before the stats_player rename) is the MODERN
+    # franchise abbreviation while schedules use the era one, so match on the
+    # era-mapped value — joining on it directly silently dropped
     # every pre-relocation OAK/SD/STL offensive row (the join found no game_id).
     if 'game_id' in cols:
         game_id_expr = 'w.game_id'
         join_clause  = ''
     else:
-        era_team     = era_team_case('w.recent_team', 'w.season')
+        era_team     = era_team_case('w.team', 'w.season')
         game_id_expr = 'sch.game_id'
         join_clause  = f"""
             LEFT JOIN schedules sch
@@ -767,15 +846,15 @@ def build_offensive_stats_from_weekly(conn, seasons: list[int], log=print) -> pd
             {game_id_expr}                                              AS game_id,
             w.player_id,
             w.{name_col}                                                AS player_name,
-            w.recent_team                                               AS team,
+            w.team                                                      AS team,
             w.season,
             w.week,
             {col('completions',                 'completions')},
             {col('attempts',                    'attempts')},
             {col('passing_yards',               'pass_yards')},
             {col('passing_tds',                 'pass_tds')},
-            {col('interceptions',               'interceptions_thrown')},
-            {col('sacks',                       'sacks_taken')},
+            {col('passing_interceptions',       'interceptions_thrown')},
+            {col('sacks_suffered',              'sacks_taken')},
             {col('passing_epa',                 'pass_epa')},
             {col('targets',                     'targets')},
             {col('receptions',                  'receptions')},
@@ -821,7 +900,12 @@ def build_player_game_stats(conn, plays: pd.DataFrame, seasons: list[int], log=p
     # Falls back to play-by-play derivation if weekly data isn't available.
     offensive = build_offensive_stats_from_weekly(conn, seasons, log=log)
     if offensive.empty:
-        log("  weekly_player_stats unavailable — falling back to play-by-play")
+        # Loud, and specific about the cost: this path miscounts two-point
+        # conversion passes as passing touchdowns. It is a degraded mode, not
+        # an equivalent one.
+        log("  WARNING: no official weekly stats for these seasons — deriving "
+            "offensive stats from play-by-play instead. Passing touchdowns will "
+            "be over-counted on two-point conversions.")
         offensive = merge_all_stats(
             build_passing_stats(conn, available, seasons),
             build_receiving_stats(conn, available, seasons),

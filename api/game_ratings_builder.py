@@ -154,7 +154,7 @@ def _defense_source_sql(pgs_cols: set[str], weekly_cols: set[str]) -> str:
 
     raw_expr = " + ".join(f"{weight} * {wcol(name)}" for name, weight in _DEF_COMPONENTS)
     count_expr = " + ".join(wcol(name) for name, _ in _DEF_COMPONENTS)
-    team_expr = era_team_case("w.recent_team", "w.season")
+    team_expr = era_team_case("w.team", "w.season")
     name_col = "player_display_name" if "player_display_name" in weekly_cols else "player_name"
     return f"""
     SELECT
