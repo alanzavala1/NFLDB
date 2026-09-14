@@ -149,10 +149,12 @@ class TestTheGoldSet:
         unasked = set(methodology.TOPICS) - asked
         assert not unasked, f"documented topics with no gold question: {unasked}"
 
-    def test_the_cohort_boundary_is_honest(self):
-        gold = self._gold()
-        n = gold.BASELINE_GOLD_COUNT
-        before = {g.get("tool") for g in gold.GOLD[:n]}
-        after = {g.get("tool") for g in gold.GOLD[n:]}
-        assert "get_methodology" not in before, "boundary is too late"
-        assert after == {"get_methodology"}, f"boundary is too early: {after}"
+    def test_every_methodology_case_is_tagged(self):
+        """The capability report card groups by tag, so an untagged case is a
+        case whose category silently reads as zero."""
+        untagged = [
+            g["q"] for g in self._gold().GOLD
+            if g.get("tool") == "get_methodology"
+            and "methodology" not in g.get("tags", [])
+        ]
+        assert not untagged, f"methodology cases missing their tag: {untagged}"
