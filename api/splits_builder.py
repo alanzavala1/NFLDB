@@ -139,7 +139,13 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
         # `qb_epa` — exactly reproducing the official weekly passing_epa that
         # Leaders/Player/Team show (SUM(qb_epa) over dropbacks ÷ attempts). All
         # counting metrics stay attempt-only (att = comp/incomp/int) via FILTER;
-        # sack/penalty rows contribute only their qb_epa to the EPA numerator.
+        # sack rows contribute only their qb_epa to the EPA numerator.
+        #
+        # Two-point conversion dropbacks carry no `down`, so every split
+        # dimension keyed on down excludes them by construction. That is not a
+        # bug, but it is the reason splits EPA is a subtotal rather than a
+        # season total — see test_passing_epa_matches_leaders_definition, which
+        # has to add them back to compare against the official weekly figure.
         base = f"""
             passer_player_id AS player_id, {_ERA_DEFTEAM} AS defteam,
             down, pass_length, pass_location, score_differential, qtr, shotgun,
