@@ -65,6 +65,10 @@ SCHEDULES_ONLY = "schedules-only"
 # would pull the 477MB database down nightly to fold in a practice-squad move.
 WATCHED_ASSETS = (
     ("pbp",           "pbp",           "play_by_play_{season}.parquet"),
+    # Official weekly stats — the table counting stats reconcile to. It was
+    # missing from this list, and unwatched is how it sat two seasons stale
+    # without anything noticing.
+    ("weekly",        "stats_player",  "stats_player_week_{season}.parquet"),
     ("snaps",         "snap_counts",   "snap_counts_{season}.parquet"),
     ("ftn",           "ftn_charting",  "ftn_charting_{season}.parquet"),
     ("pfr_pass",      "pfr_advstats",  "advstats_season_pass.parquet"),

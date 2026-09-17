@@ -17,7 +17,13 @@ import pytest
 
 pytestmark = pytest.mark.invariant
 
-_DB = os.path.join(os.path.dirname(__file__), "..", "data", "nfl.duckdb")
+# Honours NFL_DB_PATH, the same override database.py reads, so the gate can be
+# pointed at a candidate database. Without it these tests could only ever check
+# the copy already in the tree — which silently made a migration look verified
+# when the run had in fact read the pre-migration data.
+_DB = os.environ.get(
+    "NFL_DB_PATH", os.path.join(os.path.dirname(__file__), "..", "data", "nfl.duckdb")
+)
 SEASON = 2023  # a complete season with full official weekly data
 
 
@@ -79,20 +85,48 @@ def test_rush_rec_yards_within_lateral_credit_tolerance(db, cat, official, vol, 
 
 def test_passing_epa_matches_leaders_definition(db):
     """Splits passing EPA/att == official weekly passing_epa / attempts (the
-    standardized dropback-EPA definition the Leaders/Player pages use)."""
+    standardized dropback-EPA definition the Leaders/Player pages use).
+
+    Two-point conversion dropbacks are added back from `plays` before comparing.
+    They carry no `down`, so every down-keyed split excludes them and the splits
+    figure is a subtotal; the official weekly figure is a season total that
+    includes them. The old weekly feed excluded them too, which is the only
+    reason this held as a straight equality before nflverse moved to the
+    stats_player release — the identity was accidental, not designed. They are
+    not attempts on either side, so only the numerator gains them: 82 plays
+    worth +2.346 EPA league-wide in 2023, against ~19,000 dropbacks.
+    """
+    # The two feeds differ on this one point, so the check adapts to whichever
+    # database it is handed. Without this, merging the feed migration would fail
+    # the deploy gate on every image built before a refresh has run — blocking
+    # deploys for a reason that has nothing to do with the deploy. Delete the
+    # branch once no pre-migration database is in circulation.
+    new_feed = "sacks_suffered" in {
+        r[0] for r in db.execute("DESCRIBE weekly_player_stats").fetchall()
+    }
+    two_pt_term = "COALESCE(two_pt.epa, 0)" if new_feed else "0"
+
     bad = db.execute(f"""
         WITH sp AS (
-            SELECT player_id, SUM(epa * att) / NULLIF(SUM(att), 0) e
+            SELECT player_id, SUM(epa * att) epa, SUM(att) att
             FROM player_splits
             WHERE category = 'passing' AND split_dim = 'down' AND season = {SEASON}
+            GROUP BY 1),
+        two_pt AS (
+            SELECT passer_player_id AS player_id, SUM(qb_epa) epa
+            FROM plays
+            WHERE season = {SEASON} AND season_type = 'REG' AND down IS NULL
+              AND (pass_attempt = 1 OR COALESCE(sack, 0) = 1)
+              AND passer_player_id IS NOT NULL
             GROUP BY 1),
         off AS (
             SELECT player_id, SUM(passing_epa) / NULLIF(SUM(attempts), 0) e
             FROM weekly_player_stats
             WHERE season = {SEASON} AND season_type = 'REG' GROUP BY 1
             HAVING SUM(attempts) >= 100)
-        SELECT COUNT(*) FROM sp JOIN off USING (player_id)
-        WHERE ABS(sp.e - off.e) > 0.005
+        SELECT COUNT(*)
+        FROM sp JOIN off USING (player_id) LEFT JOIN two_pt USING (player_id)
+        WHERE ABS((sp.epa + {two_pt_term}) / NULLIF(sp.att, 0) - off.e) > 0.005
     """).fetchone()[0]
     assert bad == 0
 
