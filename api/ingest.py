@@ -572,6 +572,20 @@ def load_weekly_player_stats(conn, seasons: list[int], log=print) -> None:
             f"column map in build_offensive_stats_from_weekly before ingesting."
         )
 
+    # nflverse ships ~21 rows per season with no player_id and no player_name —
+    # a SEA week 1 2026 row with every stat zero is one. They carry nothing, and
+    # downstream they are poison: player_game_stats is keyed on player_id and
+    # inherits the NULL, then /leaders returns 500 because LeagueLeader.player_id
+    # is a required string. That is how it surfaced, on the current season, the
+    # first time a season's stats were rebuilt from this feed.
+    #
+    # Dropped here rather than filtered in each reader, because the stored table
+    # is the shared surface: splits, ratings and the offensive build all read it.
+    orphans = int(weekly["player_id"].isna().sum())
+    if orphans:
+        weekly = weekly[weekly["player_id"].notna()]
+        log(f"  dropped {orphans} rows with no player_id")
+
     # Replace only the seasons that came back. _upsert_by_season DELETEs every
     # season it is handed before inserting, so passing `wanted` here would drop
     # a season that failed to download and then not re-insert it — turning a
@@ -583,6 +597,17 @@ def load_weekly_player_stats(conn, seasons: list[int], log=print) -> None:
     if legacy:
         conn.execute("DROP TABLE weekly_player_stats")
     _upsert_by_season(conn, "weekly_player_stats", weekly, got, log=log)
+
+    # Purge orphans stored by earlier runs too, for the seasons this run did not
+    # touch. Without it the table keeps ~550 of them across its history and each
+    # one waits for its season to be rebuilt. Cheap and idempotent, so it costs
+    # nothing to leave in permanently.
+    stale = conn.execute(
+        "DELETE FROM weekly_player_stats WHERE player_id IS NULL RETURNING 1"
+    ).fetchall()
+    if stale:
+        log(f"  purged {len(stale)} stored rows with no player_id")
+
     log(f"  weekly_player_stats: {len(weekly):,} rows, seasons {got[0]}-{got[-1]}")
 
 
