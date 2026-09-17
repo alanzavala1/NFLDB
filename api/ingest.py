@@ -495,15 +495,28 @@ WEEKLY_STATS_URL = (
     "stats_player/stats_player_week_{season}.parquet"
 )
 
-# Columns the offensive builder reads. Absence is a migration, not a gap, so it
-# must stop the ingest rather than quietly resolve to zero.
-WEEKLY_REQUIRED_COLUMNS = (
-    "player_id", "season", "week", "season_type", "team",
+# Keys the offensive build joins and groups on, plus season_type, which the
+# splits and the reconciliation gate filter to REG.
+WEEKLY_KEY_COLUMNS = ("player_id", "season", "week", "season_type", "team")
+
+# Every stat column build_offensive_stats_from_weekly reads, exhaustively. Each
+# name here is interpolated straight into that SELECT, so a name MISSING from
+# this list is a column that can vanish upstream without anything failing. Five
+# were missing — the three EPA columns, air yards and YAC — which is exactly the
+# set that could have turned into a silent 0.00 on every page that shows them.
+# test_weekly_columns.py pins the two lists to each other so they cannot drift
+# apart again.
+WEEKLY_STAT_COLUMNS = (
     "completions", "attempts", "passing_yards", "passing_tds",
-    "passing_interceptions", "sacks_suffered",
+    "passing_interceptions", "sacks_suffered", "passing_epa",
     "targets", "receptions", "receiving_yards", "receiving_tds",
-    "carries", "rushing_yards", "rushing_tds",
+    "receiving_air_yards", "receiving_yards_after_catch", "receiving_epa",
+    "carries", "rushing_yards", "rushing_tds", "rushing_epa",
 )
+
+# Checked twice: against the downloaded frame when ingesting, and against the
+# stored table when reading. Absence is a migration, not a gap.
+WEEKLY_REQUIRED_COLUMNS = WEEKLY_KEY_COLUMNS + WEEKLY_STAT_COLUMNS
 
 
 def _weekly_schema_is_legacy(conn) -> bool:
@@ -816,11 +829,25 @@ def build_offensive_stats_from_weekly(conn, seasons: list[int], log=print) -> pd
     except Exception:
         return pd.DataFrame()
 
+    # An absent table means "no official data, use the fallback", which is a
+    # real state on a fresh database. A table that is PRESENT but missing
+    # columns is a half-finished migration, and resolving those to zero would
+    # publish wrong numbers under the official-data label — the exact failure
+    # this module was just rewritten to stop. So it raises instead.
+    absent = [c for c in WEEKLY_REQUIRED_COLUMNS if c not in cols]
+    if absent:
+        raise RuntimeError(
+            f"weekly_player_stats is missing {absent}. If those are the "
+            f"pre-stats_player names (recent_team / interceptions / sacks), "
+            f"re-run the ingest: load_weekly_player_stats rebuilds the table "
+            f"from the new feed. Otherwise nflverse has changed the schema "
+            f"again — update WEEKLY_STAT_COLUMNS and the SELECT below together."
+        )
+
     season_clause = ', '.join(str(s) for s in seasons)
 
-    def col(name, alias, default='0'):
-        return (f'COALESCE(w.{name}, {default}) AS {alias}' if name in cols
-                else f'CAST({default} AS DOUBLE) AS {alias}')
+    def col(name, alias):
+        return f'COALESCE(w.{name}, 0) AS {alias}'
 
     # game_id is present in modern nflverse weekly data; fall back to schedule join if absent.
     # `team` (was `recent_team` before the stats_player rename) is the MODERN
