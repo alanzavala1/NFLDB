@@ -116,3 +116,48 @@ def test_no_seasons_available_leaves_the_table_alone(monkeypatch):
     ingest.load_weekly_player_stats(conn, [2025], log=lambda *a, **k: None)
 
     assert conn.execute("SELECT COUNT(*) FROM weekly_player_stats").fetchone()[0] == 1
+
+
+def test_rows_with_no_player_id_are_dropped(monkeypatch):
+    """nflverse ships ~21 of these per season, all stats zero, no name.
+
+    player_game_stats is keyed on player_id, so a NULL one propagates into the
+    serving tables and /leaders answers 500 — LeagueLeader.player_id is a
+    required string. This surfaced on the current season the first day the new
+    feed was live.
+    """
+    conn = duckdb.connect()
+    frame = pd.concat([_feed_frame(2026), _feed_frame(2026, week=2)], ignore_index=True)
+    frame.loc[1, "player_id"] = None
+
+    monkeypatch.setattr(ingest.pd, "read_parquet", lambda url: frame)
+    ingest.load_weekly_player_stats(conn, [2026], log=lambda *a, **k: None)
+
+    assert conn.execute(
+        "SELECT COUNT(*) FROM weekly_player_stats WHERE player_id IS NULL"
+    ).fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM weekly_player_stats").fetchone()[0] == 1
+
+
+def test_orphans_stored_by_an_earlier_run_are_purged(monkeypatch):
+    """The seasons this run does not touch still need cleaning.
+
+    The rows are already in production for all 28 seasons, each waiting for its
+    season to be rebuilt. A filter on the incoming frame alone would never reach
+    them.
+    """
+    conn = duckdb.connect()
+    seed = pd.concat([_feed_frame(2024), _feed_frame(2024, week=2)], ignore_index=True)
+    seed.loc[1, "player_id"] = None
+    conn.register("seed", seed)
+    conn.execute("CREATE TABLE weekly_player_stats AS SELECT * FROM seed")
+
+    monkeypatch.setattr(ingest.pd, "read_parquet", lambda url: _feed_frame(2026))
+    ingest.load_weekly_player_stats(conn, [2026], log=lambda *a, **k: None)
+
+    assert conn.execute(
+        "SELECT COUNT(*) FROM weekly_player_stats WHERE player_id IS NULL"
+    ).fetchone()[0] == 0, "an untouched season's orphan survived"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM weekly_player_stats WHERE season = 2024"
+    ).fetchone()[0] == 1, "the untouched season's real row was collateral"
