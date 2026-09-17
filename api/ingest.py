@@ -541,8 +541,9 @@ def load_weekly_player_stats(conn, seasons: list[int], log=print) -> None:
     the renamed ones NULL. Rebuilding means fetching the full history, because
     dropping the table would otherwise discard the seasons not being ingested.
     """
+    legacy = _weekly_schema_is_legacy(conn)
     wanted = list(seasons)
-    if _weekly_schema_is_legacy(conn):
+    if legacy:
         wanted = list(range(FIRST_SEASON, max(seasons) + 1))
         log(f"  legacy weekly schema (pre-stats_player rename) — rebuilding "
             f"{len(wanted)} seasons from the new feed")
@@ -571,10 +572,17 @@ def load_weekly_player_stats(conn, seasons: list[int], log=print) -> None:
             f"column map in build_offensive_stats_from_weekly before ingesting."
         )
 
-    if _weekly_schema_is_legacy(conn):
-        conn.execute("DROP TABLE weekly_player_stats")
-    _upsert_by_season(conn, "weekly_player_stats", weekly, wanted, log=log)
+    # Replace only the seasons that came back. _upsert_by_season DELETEs every
+    # season it is handed before inserting, so passing `wanted` here would drop
+    # a season that failed to download and then not re-insert it — turning a
+    # transient 404 into deleted data. No caller can reach that today (the
+    # nightly job ingests one season, and the legacy path drops the table
+    # anyway), but that is a property of the callers, not of this function.
     got = sorted(set(wanted) - set(missing))
+
+    if legacy:
+        conn.execute("DROP TABLE weekly_player_stats")
+    _upsert_by_season(conn, "weekly_player_stats", weekly, got, log=log)
     log(f"  weekly_player_stats: {len(weekly):,} rows, seasons {got[0]}-{got[-1]}")
 
 

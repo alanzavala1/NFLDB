@@ -1,13 +1,14 @@
-"""The weekly feed's columns, and what happens when one of them goes away.
+"""The weekly feed loader: the columns it requires, and partial availability.
 
 nflverse renamed and moved the weekly stats feed once already. The cost was not
 the rename — it was that nothing failed when the data stopped arriving. These
-tests cover the two seams where that silence could come back.
+tests cover the seams where that silence could come back.
 """
 import re
 import inspect
 
 import duckdb
+import pandas as pd
 import pytest
 
 import ingest
@@ -65,3 +66,53 @@ def test_legacy_schema_raises_and_says_to_reingest():
 
     with pytest.raises(RuntimeError, match="re-run the ingest"):
         ingest.build_offensive_stats_from_weekly(conn, [2024], log=lambda *a: None)
+
+
+def _feed_frame(season: int, week: int = 1) -> pd.DataFrame:
+    """One row shaped like the stats_player feed, valid enough to be ingested."""
+    row = {c: 0.0 for c in ingest.WEEKLY_STAT_COLUMNS}
+    row.update(player_id=f"00-000{season}", season=season, week=week,
+               season_type="REG", team="KC")
+    return pd.DataFrame([row])
+
+
+def test_a_season_that_fails_to_download_is_not_deleted(monkeypatch):
+    """A 404 on one season must not take that season's stored rows with it.
+
+    _upsert_by_season DELETEs every season it is handed before inserting, so
+    handing it the requested seasons rather than the retrieved ones turns a
+    transient upstream gap into data loss. nflverse publishes a season as its
+    games are charted, so asking for one that is not up yet is routine.
+    """
+    conn = duckdb.connect()
+    seed = pd.concat([_feed_frame(2024), _feed_frame(2025)], ignore_index=True)
+    conn.register("seed", seed)
+    conn.execute("CREATE TABLE weekly_player_stats AS SELECT * FROM seed")
+
+    def only_2024(url):
+        if "2024" in url:
+            return _feed_frame(2024, week=2)
+        raise OSError("404 — not published yet")
+
+    monkeypatch.setattr(ingest.pd, "read_parquet", only_2024)
+    ingest.load_weekly_player_stats(conn, [2024, 2025], log=lambda *a, **k: None)
+
+    stored = dict(conn.execute(
+        "SELECT season, COUNT(*) FROM weekly_player_stats GROUP BY 1"
+    ).fetchall())
+    assert stored == {2024: 1, 2025: 1}, "the undownloaded season was dropped"
+    assert conn.execute(
+        "SELECT week FROM weekly_player_stats WHERE season = 2024"
+    ).fetchone()[0] == 2, "the downloaded season was not replaced"
+
+
+def test_no_seasons_available_leaves_the_table_alone(monkeypatch):
+    conn = duckdb.connect()
+    conn.register("seed", _feed_frame(2024))
+    conn.execute("CREATE TABLE weekly_player_stats AS SELECT * FROM seed")
+
+    monkeypatch.setattr(ingest.pd, "read_parquet",
+                        lambda url: (_ for _ in ()).throw(OSError("404")))
+    ingest.load_weekly_player_stats(conn, [2025], log=lambda *a, **k: None)
+
+    assert conn.execute("SELECT COUNT(*) FROM weekly_player_stats").fetchone()[0] == 1
