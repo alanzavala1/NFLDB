@@ -1,7 +1,7 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { seasonsQueryOptions } from '../../api/seasons'
-import { loadedSeasons } from '../../utils/seasons'
+import { loadedSeasons, selectedSeason } from '../../utils/seasons'
 import { useState } from 'react'
 import { teamQueryOptions } from '../../api/teams'
 import Nav from '../../components/Nav'
@@ -16,18 +16,24 @@ const INITIAL_SEASONS = 5
 
 export default function TeamPage() {
   const { teamAbbrev } = useParams<{ teamAbbrev: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const seasonsQuery = useQuery(seasonsQueryOptions())
   const availableYears = loadedSeasons(seasonsQuery.data ?? [])
   const [expandedYears, setExpandedYears] = useState<number[]>([])
-  const [requestedSeason, setRequestedSeason] = useState<number | null>(null)
-  const visibleYears = availableYears.filter((year, index) => index < INITIAL_SEASONS || expandedYears.includes(year))
-  const selectedSeason = requestedSeason !== null && visibleYears.includes(requestedSeason)
-    ? requestedSeason : visibleYears[0]
+  const season = selectedSeason(searchParams.get('season'), availableYears)
+  const visibleYears = availableYears.filter((year, index) => index < INITIAL_SEASONS || expandedYears.includes(year) || year === season)
   const nextYear = availableYears.find(year => !visibleYears.includes(year))
-  const profileQueries = useQueries({ queries: visibleYears.map(year => teamQueryOptions(teamAbbrev, year)) })
+  const profileQueries = useQueries({ queries: season === null ? [] : visibleYears.map(year => teamQueryOptions(teamAbbrev, year)) })
   const profiles = profileQueries.flatMap(query => query.data ? [query.data] : [])
-  const activeQuery = profileQueries[visibleYears.indexOf(selectedSeason)]
+  const activeQuery = season === null ? undefined : profileQueries[visibleYears.indexOf(season)]
   const activeProfile = activeQuery?.data
+
+  function setSeasonParam(year: number) {
+    if (searchParams.get('season') === String(year)) return
+    const next = new URLSearchParams(searchParams)
+    next.set('season', String(year))
+    setSearchParams(next)
+  }
 
   if (!teamAbbrev) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Team not found.</p></div>
   if (seasonsQuery.isPending) return (
@@ -65,10 +71,11 @@ export default function TeamPage() {
 
         {visibleYears.length > 0 && (
           <div className="flex flex-col lg:flex-row gap-4 lg:items-start">
-            <SeasonSidebar profiles={profiles} years={visibleYears} selected={selectedSeason}
-              onSelect={setRequestedSeason} nextYear={nextYear}
+            <SeasonSidebar profiles={profiles} years={visibleYears} selected={season}
+              onSelect={setSeasonParam} nextYear={nextYear}
               onShowOlder={year => setExpandedYears(previous => [...previous, year])} />
             <div className="flex-1 min-w-0 w-full">
+              {season === null && <p role="alert" className="text-sm text-ink-dim">That season is unavailable. Choose a published season from the sidebar.</p>}
               {activeQuery?.isPending && <QueryLoading>Loading team profile…</QueryLoading>}
               {activeProfile && <SeasonDetail key={`${teamAbbrev}-${activeProfile.season}`} profile={activeProfile} />}
             </div>

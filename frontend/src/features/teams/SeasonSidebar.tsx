@@ -4,7 +4,7 @@ import { computeRecord } from './selectors'
 export default function SeasonSidebar({ profiles, years, selected, onSelect, nextYear, onShowOlder }: {
   profiles: TeamProfile[]
   years: number[]
-  selected: number
+  selected: number | null
   onSelect: (season: number) => void
   nextYear: number | undefined
   onShowOlder: (year: number) => void

@@ -107,7 +107,7 @@ The selected detail is keyed by team/year so local UI state resets between profi
 There are no frontend season-loading callers; obsolete `api.loadSeason` is removed.
 Backend admin endpoints and generated contract types are unchanged.
 
-Team now lives in `src/features/teams/`. Its 80-line page coordinates publication
+Team now lives in `src/features/teams/`. Its small page coordinates publication
 metadata, dynamic profile queries, selected/revealed years, and the layout.
 `SeasonSidebar.tsx` and `SeasonDetail.tsx` compose the existing sections;
 summary, schedule/chart, leaders, analytics, situational splits, injury/lineup,
@@ -133,6 +133,16 @@ descending/ascending cycle. Section preparation retains the established tie orde
 Scrimmage/defense reveal limits apply after sorting; totals include every qualifying
 player regardless of visible row count. Existing Table code is shared in the
 production bundle; this migration adds no dependency.
+
+Team season selection now belongs to React Router's `season` search parameter,
+using the shared loaded-season validator. A bare URL selects the newest published
+year; a valid old-year bookmark also reveals that year beyond the initial five
+sidebar entries. Invalid or unpublished explicit years show an availability
+message and start no profile/section queries until a loaded year is chosen.
+Changing the year preserves unrelated query parameters and creates a history
+entry, so back/forward restores the view using Query's cache. Re-selecting the
+same explicit year does not create a duplicate entry. Revealed sidebar rows
+remain local UI state; there is no effect synchronizing a second selected year.
 
 ## Follow one request
 
