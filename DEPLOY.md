@@ -114,5 +114,9 @@ every few minutes and it stays warm. Or set `--min-instances 1` (small cost).
 
 ## Updating the data
 
-Re-ingest locally (`python -m ingest` or via the app), then re-upload the DB to
-the bucket (Path B) or rebuild/redeploy the image (Path A).
+The scheduled refresh uses `api/uv.lock`, the same dependency lockfile as the
+serving image and CI. Its `uv run --locked` commands refuse dependency drift.
+
+To rebuild locally, stop the API server, run `uv sync --locked` from `api/`, then
+run `uv run --locked python -m ingest --seasons 2024 2025` with the desired seasons.
+Re-upload the DB to the bucket (Path B) or rebuild/redeploy the image (Path A).

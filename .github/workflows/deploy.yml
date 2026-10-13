@@ -47,12 +47,17 @@ jobs:
           IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
         run: docker build --provenance=false -t "$IMAGE" .
 
-      # Gate the release on data integrity: run the reconciliation tests against
-      # the DB that's actually baked into the image we're about to ship.
-      - name: Verify data integrity in the image
+      # Test the DB and assistant against the dependencies actually shipped.
+      # The assistant checks use a fake provider: no credentials or billed calls.
+      - name: Verify data integrity and assistant compatibility in the image
         env:
           IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
-        run: docker run --rm "$IMAGE" python -m pytest tests/test_reconciliation.py -q
+        run: |
+          docker run --rm "$IMAGE" python -m pytest \
+            tests/test_reconciliation.py \
+            tests/test_ask_limits.py \
+            tests/test_ask_provenance.py \
+            tests/test_ask_telemetry.py -q
 
       - name: Push image
         env:

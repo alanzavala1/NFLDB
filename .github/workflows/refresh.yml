@@ -50,11 +50,17 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: api/requirements.txt
+          python-version-file: api/.python-version
 
-      - run: pip install -r api/requirements.txt
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.23"
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --project api --locked
 
       # Tiny object. Absent on the first ever run, which `check` treats as
       # "never ingested" rather than an error.
@@ -73,7 +79,7 @@ jobs:
           # GitHub API calls are rate-limited per IP and Actions runners share
           # theirs, so use the token the workflow already has.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python -m jobs.refresh check "$WATERMARKS"
+        run: uv run --locked python -m jobs.refresh check "$WATERMARKS"
 
       # Everything below runs only when something actually moved upstream.
 
@@ -87,14 +93,14 @@ jobs:
         env:
           REFRESH_SEASON: ${{ inputs.season }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python -m jobs.refresh ingest "$WATERMARKS"
+        run: uv run --locked python -m jobs.refresh ingest "$WATERMARKS"
 
       # Data integrity gate, same suite the deploy runs inside the image. A bad
       # ingest must not reach the bucket, because the bucket is what gets baked.
       - name: Verify the rebuilt database
         if: steps.check.outputs.changed == 'true'
         working-directory: api
-        run: python -m pytest tests/test_reconciliation.py -q
+        run: uv run --locked pytest tests/test_reconciliation.py -q
 
       - name: Upload rebuilt database
         if: steps.check.outputs.changed == 'true'

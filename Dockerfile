@@ -13,9 +13,13 @@ RUN npm run build            # -> /app/frontend/dist
 
 # ---- Stage 2: backend + static frontend + database ----
 FROM python:3.12-slim
+COPY --from=ghcr.io/astral-sh/uv:0.11.23 /uv /bin/uv
 WORKDIR /app/api
-COPY api/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+ENV UV_PYTHON_DOWNLOADS=never
+COPY api/pyproject.toml api/uv.lock api/.python-version ./
+# Keep the default dev group: the release checks run pytest inside this image.
+RUN uv sync --locked --no-install-project --no-cache
+ENV PATH="/app/api/.venv/bin:$PATH"
 # backend source + the baked DuckDB file (api/data/nfl.duckdb)
 COPY api/ ./
 # the built frontend, served by FastAPI at / (see main.py)
