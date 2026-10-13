@@ -64,7 +64,19 @@ errors and retries. Successful cached results stay visible on refresh failures,
 including cached empty comparables. Empty comparables have an explicit message;
 their loading message describes fetching rather than implying preparation runs
 in the browser. Rank context waits for the profile's latest regular-season year
-and shares the existing leaders cache. Player feature extraction remains pending.
+and shares the existing leaders cache.
+
+Player now lives in `src/features/players/`. `PlayerPage.tsx` coordinates route
+state, profile/rank queries, section navigation, and layout. `ProfileHeader.tsx`,
+`BackgroundCard.tsx`, `HighlightsBar.tsx`, `CareerTrajectory.tsx`, `CareerTable.tsx`,
+`TeamSplits.tsx`, `GameLog.tsx`, and `ComparablesSection.tsx` own their sections.
+`selectors.ts` groups returned games into regular-season, postseason, and game-log
+views. `stats.ts`, `rankings.ts`, and `careerColumns.ts` keep totals, formatting,
+rank qualifications, and column definitions separate from page composition.
+Components receive data through props; only Similar Players owns an additional
+query. `src/types/navigation.ts` describes the originating-game context shared by
+game/player navigation. These route-state types are separate from API schemas.
+The old Player page entry is removed; the router imports the feature page.
 
 ## Follow one request
 

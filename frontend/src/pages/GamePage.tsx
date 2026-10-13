@@ -9,9 +9,9 @@ import Card from '../components/Card'
 import LiveGameCard from '../components/LiveGameCard'
 import { LiveScoresProvider, useLiveGame } from '../hooks/useLiveScores'
 import type { LiveGameOut } from '../types'
+import type { GameOrigin as GameCtx } from '../types/navigation'
 import { teamLogoUrl, teamName, teamPrimaryColor } from '../utils/teams'
 
-interface GameCtx { gameId: string; season: number; week: number; awayTeam: string; homeTeam: string; fromWeek?: number }
 const GameContext = createContext<GameCtx | null>(null)
 
 function playerLink(playerId: string, ctx: GameCtx | null) {
