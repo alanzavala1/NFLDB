@@ -3,7 +3,7 @@ import type { SeasonStatus, TeamGame, TeamProfile, TeamAnalyticsRow, TeamSplit, 
 import { mockApi } from './scores'
 
 export const teamGame: TeamGame = {
-  game_id: '2023_01_BUF_MIA', season: 2023, week: 1,
+  game_id: '2023_01_BUF_MIA', season: 2023, game_type: 'REG', week: 1,
   gameday: '2023-09-10', gametime: '13:00', away_team: 'BUF', home_team: 'MIA',
   away_score: 24, home_score: 17, stadium: null, roof: null, surface: null,
   temp: null, wind: null, away_record: null, home_record: null,

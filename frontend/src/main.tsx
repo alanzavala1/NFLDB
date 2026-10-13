@@ -15,7 +15,7 @@ import './index.css'
 const routeImporters = {
   scores:    () => import('./features/scores/ScoresPage'),
   game:      () => import('./pages/GamePage'),
-  team:      () => import('./pages/TeamPage'),
+  team:      () => import('./features/teams/TeamPage'),
   player:    () => import('./features/players/PlayerPage'),
   leaders:   () => import('./features/leaders/LeadersPage'),
   standings: () => import('./features/standings/StandingsPage'),

@@ -126,6 +126,23 @@ def test_player_splits_endpoint_returns_typed_shape(client):
     assert isinstance(r.json(), list)
 
 
+def test_team_profile_preserves_regular_and_playoff_game_types(client, seeded_conn):
+    seeded_conn.execute(
+        """INSERT INTO schedules
+           (game_id, season, game_type, week, away_team, home_team, away_score, home_score)
+           VALUES ('2024_19_BUF_KC', 2024, 'WC', 19, 'BUF', 'KC', 20, 24)"""
+    )
+    try:
+        response = client.get("/api/teams/BUF?season=2024")
+        assert response.status_code == 200
+        games = response.json()["games"]
+        assert next(game for game in games if game["game_id"] == "2024_19_BUF_KC")["game_type"] == "WC"
+        assert all(game["game_type"] == "REG" for game in games if game["week"] < 19)
+    finally:
+        # The mini-league connection is shared across tests.
+        seeded_conn.execute("DELETE FROM schedules WHERE game_id = '2024_19_BUF_KC'")
+
+
 def test_team_splits_endpoint_returns_typed_shape(client):
     """No `plays` table in the fixture, so team splits can't materialize — the
     endpoint must still return an empty list, not error."""

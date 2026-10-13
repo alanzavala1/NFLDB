@@ -2078,6 +2078,8 @@ export interface components {
             game_id: string;
             /** Season */
             season: number;
+            /** Game Type */
+            game_type: string;
             /** Week */
             week: number;
             /** Gameday */

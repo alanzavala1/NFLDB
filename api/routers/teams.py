@@ -51,7 +51,7 @@ def get_team(team: str, season: int = Query(default=CURRENT_SEASON)):
     games = query_to_dict(
         """
         SELECT
-            game_id, season, week, gameday, gametime,
+            game_id, season, game_type, week, gameday, gametime,
             away_team, home_team, away_score, home_score,
             stadium, roof, surface, temp, wind
         FROM schedules

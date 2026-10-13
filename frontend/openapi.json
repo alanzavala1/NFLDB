@@ -157,7 +157,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "default": 2025,
+              "default": 2026,
               "title": "Season"
             }
           }
@@ -212,7 +212,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "default": 2025,
+              "default": 2026,
               "title": "Season"
             }
           }
@@ -615,7 +615,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "default": 2025,
+              "default": 2026,
               "title": "Season"
             }
           }
@@ -1107,7 +1107,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "default": 2025,
+              "default": 2026,
               "title": "Season"
             }
           },
@@ -7044,6 +7044,10 @@
             "type": "integer",
             "title": "Season"
           },
+          "game_type": {
+            "type": "string",
+            "title": "Game Type"
+          },
           "week": {
             "type": "integer",
             "title": "Week"
@@ -7182,6 +7186,7 @@
         "required": [
           "game_id",
           "season",
+          "game_type",
           "week",
           "gameday",
           "gametime",

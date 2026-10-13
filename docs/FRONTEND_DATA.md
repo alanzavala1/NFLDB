@@ -102,10 +102,26 @@ empty arrays or an analytics response with no matching team. The roster query
 mounts only while its modal is open; closing it cancels unfinished work, and fresh
 results are reused on reopening. Analytics derives the focal team from Query data
 instead of keeping fetched/loading state in an effect. Unknown roster positions
-remain visible under Other. The large Team file is still awaiting extraction.
+remain visible under Other.
 The selected detail is keyed by team/year so local UI state resets between profiles.
 There are no frontend season-loading callers; obsolete `api.loadSeason` is removed.
 Backend admin endpoints and generated contract types are unchanged.
+
+Team now lives in `src/features/teams/`. Its 80-line page coordinates publication
+metadata, dynamic profile queries, selected/revealed years, and the layout.
+`SeasonSidebar.tsx` and `SeasonDetail.tsx` compose the existing sections;
+summary, schedule/chart, leaders, analytics, situational splits, injury/lineup,
+and roster/full-stat modals each have focused components. `columns.ts`, `stats.ts`,
+`selectors.ts`, `analyticsMetrics.ts`, and `splitDefinitions.ts` own presentation
+definitions and calculations, while `types.ts` describes their local props/configs.
+The router imports this feature directly and the old large Team entry is removed.
+The largest feature file is the 210-line column definitions module.
+
+The team-game response now includes `game_type` from schedules, declared in the
+backend's TeamGame schema and regenerated frontend contract. Schedule/chart labels
+can name playoff rounds, and full-stat summaries count regular-season and playoff
+games separately. Previously the UI tried to read this missing field through
+untyped casts. The tooltip now uses the chart library's inferred parameter types.
 
 ## Follow one request
 

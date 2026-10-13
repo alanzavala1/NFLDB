@@ -16,6 +16,7 @@ class TeamGame(BaseModel):
     by attach_records() are required (always set on this endpoint)."""
     game_id: str
     season: int
+    game_type: str
     week: int
     gameday: str | None
     gametime: str | None
