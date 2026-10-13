@@ -28,7 +28,7 @@ async function searchTeam(page: Page, id: string) {
   await page.route('**/api/search?*', route => route.fulfill({ json: [{ type: 'team', id, name: id, position: null, team: id, headshot_url: null }] }))
   await page.getByRole('button', { name: /Search Ctrl K/ }).click()
   await page.getByPlaceholder('Search players or teams...').fill(id)
-  await page.getByRole('button', { name: id === 'BUF' ? /Buffalo Bills/ : /San Francisco 49ers/ }).click()
+  await page.getByRole('button', { name: id === 'BUF' ? /^Buffalo Bills/ : /^San Francisco 49ers/ }).click()
 }
 
 test('roster loads on demand and reuses fresh results when reopened', async ({ page }) => {

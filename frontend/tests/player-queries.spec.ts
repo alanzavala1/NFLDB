@@ -130,7 +130,7 @@ test('Splits and the profile page share fresh player records', async ({ page }) 
   const initialReads = profileReads
   await page.getByRole('button', { name: /Search Ctrl K/ }).click()
   await page.getByPlaceholder('Search players or teams...').fill('Test quarterback')
-  await page.getByRole('button', { name: /Test quarterback/ }).click()
+  await page.getByRole('button', { name: /^Test quarterback/ }).click()
   await expect(page).toHaveURL(/\/players\/test-player$/)
   await expect(page.getByText('Regular Season', { exact: true })).toBeVisible()
   await expect(page.getByText('Test quarterback', { exact: true })).toBeVisible()

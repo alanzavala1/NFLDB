@@ -19,6 +19,7 @@ import { gameQueryOptions } from './api/games'
 import { leadersQueryOptions } from './api/leaders'
 import { wpaLeadersQueryOptions } from './api/wpaLeaders'
 import { playerQueryOptions, playerComparablesQueryOptions } from './api/players'
+import { playerSplitsQueryOptions } from './api/playerSplits'
 import { teamQueryOptions, teamRosterQueryOptions, teamDepthChartQueryOptions, teamInjuriesQueryOptions, teamSplitsQueryOptions } from './api/teams'
 import { teamAnalyticsQueryOptions } from './api/teamAnalytics'
 import { standingsQueryOptions } from './features/standings/queries'
@@ -28,9 +29,6 @@ import type {
   ScheduleWeek, SearchResult, SeasonStatus, TeamAnalyticsResponse,
   TeamProfile, TeamSplit, WpaLeaders,
 } from './types'
-
-// Remaining legacy Player Splits policy; revisit when that resource migrates.
-const FOREVER = Number.POSITIVE_INFINITY
 
 type Options<T, Key extends QueryKey = QueryKey> = Omit<UseQueryOptions<T, Error, T, Key>, 'queryKey' | 'queryFn'>
 
@@ -78,13 +76,9 @@ export function usePlayerComparables(playerId: string | undefined, options?: Opt
   })
 }
 
-export function usePlayerSplits(playerId: string | undefined, options?: Options<PlayerSplit[]>) {
+export function usePlayerSplits(playerId: string | undefined, options?: Options<PlayerSplit[], readonly ['player-splits', string | undefined]>) {
   return useQuery({
-    queryKey: ['player-splits', playerId] as const,
-    queryFn: () => api.splits(playerId!),
-    enabled: !!playerId,
-    // Splits are materialized during ingest; stable between loads.
-    staleTime: FOREVER,
+    ...playerSplitsQueryOptions(playerId),
     ...options,
   })
 }

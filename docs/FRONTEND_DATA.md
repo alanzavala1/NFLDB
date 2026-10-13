@@ -193,6 +193,37 @@ maps, and modal closing. Eight desktop/mobile captures match their pre-move
 screenshots pixel for pixel; a source audit also verifies unchanged calculations,
 constants, and CSS.
 
+Splits now uses `src/api/playerSplits.ts` for typed offensive and defensive
+player-splits requests and their canonical query options. Offensive categories
+share `['player-splits', playerId]` because that response contains every offensive
+category and season; the page filters and aggregates returned rows locally.
+Defense uses `['player-def-splits', playerId]`, a separate dataset and cache.
+Compatibility API methods and `usePlayerSplits` delegate to the same definitions.
+The former permanent freshness override is removed; normal five-minute freshness
+and thirty-minute cache retention apply. Requests consume Query's abort signal.
+
+Only the active comparison mode observes data: player mode observes selected
+players' splits/profiles, while team mode observes selected team/season splits.
+Offense and defense observe only the selected dataset. Removing an entity,
+changing mode/category, or leaving the page cancels unneeded requests; separate
+cache keys isolate members and team seasons. Profiles and team splits reuse their
+previously migrated resource modules. Opponent ranks reuse league analytics only
+for a non-career offensive player comparison with at least one selected player.
+
+`src/features/splits/SplitQueryFeedback.tsx` shows independent failures/retries
+for each member's splits/profile and the optional rank context, with warnings
+that preserve successful cached data. Season and Opponent sections follow profile
+request state because their rows come from game logs; situation sections follow
+split request state. Pending requests, failures, and successful empty selections
+have different messages. A failed comparison member does not hide usable members
+or their game logs. Season and remove-member controls have accessible labels.
+
+This checkpoint preserves statistical definitions, sorting, game links, and
+comparison/aggregation behavior. The large Splits page/configuration files,
+manual search/example resolution, and existing calendar-based season/URL state
+remain follow-up work. The backend's current split endpoints can still materialize
+missing data on a GET; moving that work offline belongs to the backend milestone.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from

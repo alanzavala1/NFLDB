@@ -15,11 +15,13 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import { playerQueryOptions } from '../api/players'
+import { playerSplitsQueryOptions, defensiveSplitsQueryOptions } from '../api/playerSplits'
 import { teamSplitsQueryOptions } from '../api/teams'
 import { teamAnalyticsQueryOptions } from '../api/teamAnalytics'
 import type { PlayerSplit, TeamSplit, DefensiveSplit, SearchResult } from '../api'
 import Nav from '../components/Nav'
 import Card from '../components/Card'
+import { SplitQueryFeedback, EmptySplitState } from '../features/splits/SplitQueryFeedback'
 import { teamLogoUrl, teamName } from '../utils/teams'
 import {
   PLAYER_SPLIT_CONFIG, TEAM_SPLIT_CONFIG, DEFENSE_SPLIT_CONFIG,
@@ -141,7 +143,7 @@ function MatchupHeader({ entities, onRemove }: { entities: EntityCard[]; onRemov
             <div className="text-sm font-bold text-ink truncate leading-tight">{e.label}</div>
             {e.sub && <div className="text-[11px] text-ink-dim truncate">{e.sub}</div>}
           </div>
-          <button onClick={() => onRemove(e.key)} className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded text-ink-dim hover:text-data-loss hover:bg-surface-raise">×</button>
+          <button aria-label={`Remove ${e.label}`} onClick={() => onRemove(e.key)} className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded text-ink-dim hover:text-data-loss hover:bg-surface-raise">×</button>
           {i < entities.length - 1 && entities.length === 2 && <span className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-[10px] font-black text-ink-dim">VS</span>}
         </div>
       ))}
@@ -421,8 +423,12 @@ export default function SplitsPage() {
   }, [mode, players, teams, pCat, tSide, season, situation, setSearchParams])
 
   const isDefense = mode === 'players' && pCat === 'defense'
-  const playerResults = useQueries({ queries: players.map(p => ({ queryKey: ['player-splits', p.id, isDefense] as const, queryFn: () => isDefense ? api.defSplits(p.id) : api.splits(p.id), staleTime: Infinity })) })
-  const teamResults = useQueries({ queries: teams.map(t => teamSplitsQueryOptions(t, season)) })
+  const activePlayers = mode === 'players' ? players : []
+  const offenseResults = useQueries({ queries: isDefense ? [] : activePlayers.map(player => playerSplitsQueryOptions(player.id)) })
+  const defenseResults = useQueries({ queries: isDefense ? activePlayers.map(player => defensiveSplitsQueryOptions(player.id)) : [] })
+  const playerResults = isDefense ? defenseResults : offenseResults
+  const teamResults = useQueries({ queries: mode === 'teams' ? teams.map(team => teamSplitsQueryOptions(team, season)) : [] })
+  const splitResults = mode === 'players' ? playerResults : teamResults
 
   const config = mode === 'teams' ? TEAM_SPLIT_CONFIG[tSide] : isDefense ? DEFENSE_SPLIT_CONFIG : PLAYER_SPLIT_CONFIG[pCat as PlayerCategory]
   const metrics = config.metrics as Metric<Row>[]
@@ -449,7 +455,7 @@ export default function SplitsPage() {
   // Each player's official game log — source for Season/Opponent sections and
   // per-game drill-downs, so their totals match the game log exactly. Also
   // backfills name/headshot/sub for players that arrived via a shared URL (id only).
-  const playerProfiles = useQueries({ queries: players.map(p => playerQueryOptions(p.id)) })
+  const playerProfiles = useQueries({ queries: activePlayers.map(player => playerQueryOptions(player.id)) })
   const entityMeta: EntityCard[] = mode === 'players'
     ? players.map((p, i) => { const prof = playerProfiles[i]?.data; return { key: p.id, label: p.name || prof?.player_name || p.id, sub: p.sub || (prof ? [prof.position, prof.team].filter(Boolean).join(' · ') : undefined), headshot: p.headshot ?? prof?.headshot_url, color: colorOf(i) } })
     : teams.map((t, i) => ({ key: t, label: teamName(t), sub: t, logo: teamLogoUrl(t), color: colorOf(i) }))
@@ -469,7 +475,7 @@ export default function SplitsPage() {
 
   // Opponent defensive ranks for the season.
   const wantDef = mode === 'players' && !isCareer && !isDefense
-  const analytics = useQuery({ ...teamAnalyticsQueryOptions(season), enabled: wantDef })
+  const analytics = useQuery(teamAnalyticsQueryOptions(wantDef && activePlayers.length > 0 ? season : null))
   const defRank = useMemo(() => { const m = new Map<string, number>(); for (const t of analytics.data?.league ?? []) if (t.def_epa_play_rank != null) m.set(t.team, t.def_epa_play_rank); return m }, [analytics.data])
 
   // Summary row per entity (Overall, or the active situation).
@@ -621,7 +627,6 @@ export default function SplitsPage() {
   }
   const isOpen = (k: string) => openSections.has(k) || (!openSections.has(`!${k}`) && DEFAULT_OPEN.includes(k))
   const toggleOpen = (k: string) => setOpenSections(s => { const n = new Set(s); const open = isOpen(k); n.delete(k); n.delete(`!${k}`); n.add(open ? `!${k}` : k); return n })
-  const loading = mode === 'players' ? playerResults.some(r => r.isPending && r.fetchStatus !== 'idle') : teamResults.some(r => r.isPending && r.fetchStatus !== 'idle')
   const visibleDims = sectionDims.filter(d => !hidden.has(d.key))
 
   return (
@@ -644,7 +649,7 @@ export default function SplitsPage() {
                 {mode === 'players'
                   ? <Seg<PCat> value={pCat} options={[...(Object.keys(PLAYER_SPLIT_CONFIG) as PlayerCategory[]).map(c => ({ value: c as PCat, label: PLAYER_SPLIT_CONFIG[c].label })), { value: 'defense' as PCat, label: 'Defense' }]} onChange={c => { setPCat(c); setSituation(null) }} />
                   : <Seg<TeamSide> value={tSide} options={(Object.keys(TEAM_SPLIT_CONFIG) as TeamSide[]).map(s => ({ value: s, label: TEAM_SPLIT_CONFIG[s].label }))} onChange={s => { setTSide(s); setSituation(null) }} />}
-                <select value={season} onChange={e => setSeason(Number(e.target.value))} className={selectCls}>
+                <select aria-label="Season" value={season} onChange={e => setSeason(Number(e.target.value))} className={selectCls}>
                   {mode === 'players' && <option value={CAREER_SEASON}>Career</option>}
                   {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -658,6 +663,10 @@ export default function SplitsPage() {
             </p>
           )}
         </Card>
+
+        <SplitQueryFeedback entities={entityMeta} splits={splitResults} profiles={playerProfiles}
+          analytics={wantDef && activePlayers.length > 0 ? analytics : null}
+          splitKind={mode === 'teams' ? 'team' : isDefense ? 'defensive' : 'offensive'} />
 
         {entityCount === 0 ? (
           <Card title="Get started" className="mb-6">
@@ -699,7 +708,7 @@ export default function SplitsPage() {
                 {situations.map(s => <Chip key={s.label} active={situation?.label === s.label} onClick={() => setSituation(s)}>{s.label}</Chip>)}
               </div>
               {summaryRows.every(r => r.row == null)
-                ? <div className="py-8 text-center text-ink-dim text-sm border-t border-surface-line">{loading ? 'Loading…' : 'No data.'}</div>
+                ? <div className="py-8 text-center border-t border-surface-line"><EmptySplitState queries={splitResults} /></div>
                 : <div className="border-t border-surface-line"><StatTable firstCol={mode === 'players' ? 'Player' : 'Team'} rows={summaryRows} metrics={metrics} flip={flip} /></div>}
             </Card>
 
@@ -743,7 +752,9 @@ export default function SplitsPage() {
                   return (
                     <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
                       {rows.length === 0
-                        ? <div className="py-6 text-center text-ink-dim text-sm">{loading ? 'Loading…' : 'No data.'}</div>
+                        ? <div className="py-6 text-center"><EmptySplitState
+                            queries={gameBased ? playerProfiles.slice(0, 1) : splitResults.slice(0, 1)}
+                            resource={gameBased ? 'game records' : 'split statistics'} /></div>
                         : <StatTable firstCol={d.label} rows={rows} total={total} metrics={gameBased ? gameMetrics : metrics} flip={flip}
                             hasDefRk={d.key === 'opponent' && wantDef} naturalSort={!gameBased}
                             onToggleExpand={gameBased ? (k => setExpandedKeys(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })) : undefined} />}
@@ -768,7 +779,8 @@ export default function SplitsPage() {
                 return (
                   <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
                     {keys.length === 0
-                      ? <div className="py-6 text-center text-ink-dim text-sm">{loading ? 'Loading…' : 'No data.'}</div>
+                      ? <div className="py-6 text-center"><EmptySplitState queries={gameBased ? playerProfiles : splitResults}
+                          resource={gameBased ? 'game records' : 'split statistics'} /></div>
                       : <GroupedTable label={d.label} entities={entityMeta} metrics={m} keys={keys} keyLabel={keyLabel} sections={secs}
                           defRkFor={d.key === 'opponent' && wantDef ? (k => defRank.get(k)) : undefined}
                           expandable={gameBased} expandShowSeason={d.key === 'opponent'} expandedKeys={expandedKeys}

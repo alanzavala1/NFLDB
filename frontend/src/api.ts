@@ -4,6 +4,7 @@ import { fetchGame, fetchGameLineup, fetchPlayerChart } from './api/games'
 import { fetchLeaders } from './api/leaders'
 import { fetchWpaLeaders } from './api/wpaLeaders'
 import { fetchPlayer, fetchPlayerComparables } from './api/players'
+import { fetchPlayerSplits, fetchDefensiveSplits } from './api/playerSplits'
 import { fetchTeam, fetchTeamRoster, fetchTeamDepthChart, fetchTeamInjuries, fetchTeamSplits } from './api/teams'
 import { fetchTeamAnalytics } from './api/teamAnalytics'
 import { fetchStandings } from './features/standings/api'
@@ -88,8 +89,8 @@ export const api = {
   leaders:       fetchLeaders,
   wpaLeaders:    fetchWpaLeaders,
   comparables:   fetchPlayerComparables,
-  splits:        (playerId: string)            => get<PlayerSplit[]>(`/players/${playerId}/splits`),
-  defSplits:     (playerId: string)            => get<DefensiveSplit[]>(`/players/${playerId}/def-splits`),
+  splits:        fetchPlayerSplits,
+  defSplits:     fetchDefensiveSplits,
   search:        (q: string)                   => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
   ask:           (question: string, history: AskHistoryMessage[] = []) =>
     post<AskResponse>('/ask', { question, history } satisfies AskRequest),
