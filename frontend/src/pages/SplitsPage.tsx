@@ -15,6 +15,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
 import { playerQueryOptions } from '../api/players'
+import { teamSplitsQueryOptions } from '../api/teams'
+import { teamAnalyticsQueryOptions } from '../api/teamAnalytics'
 import type { PlayerSplit, TeamSplit, DefensiveSplit, SearchResult } from '../api'
 import Nav from '../components/Nav'
 import Card from '../components/Card'
@@ -420,7 +422,7 @@ export default function SplitsPage() {
 
   const isDefense = mode === 'players' && pCat === 'defense'
   const playerResults = useQueries({ queries: players.map(p => ({ queryKey: ['player-splits', p.id, isDefense] as const, queryFn: () => isDefense ? api.defSplits(p.id) : api.splits(p.id), staleTime: Infinity })) })
-  const teamResults = useQueries({ queries: teams.map(t => ({ queryKey: ['team-splits', t, season] as const, queryFn: () => api.teamSplits(t, season), staleTime: Infinity })) })
+  const teamResults = useQueries({ queries: teams.map(t => teamSplitsQueryOptions(t, season)) })
 
   const config = mode === 'teams' ? TEAM_SPLIT_CONFIG[tSide] : isDefense ? DEFENSE_SPLIT_CONFIG : PLAYER_SPLIT_CONFIG[pCat as PlayerCategory]
   const metrics = config.metrics as Metric<Row>[]
@@ -467,7 +469,7 @@ export default function SplitsPage() {
 
   // Opponent defensive ranks for the season.
   const wantDef = mode === 'players' && !isCareer && !isDefense
-  const analytics = useQuery({ queryKey: ['team-analytics', season] as const, queryFn: () => api.teamAnalytics(season), enabled: wantDef, staleTime: Infinity })
+  const analytics = useQuery({ ...teamAnalyticsQueryOptions(season), enabled: wantDef })
   const defRank = useMemo(() => { const m = new Map<string, number>(); for (const t of analytics.data?.league ?? []) if (t.def_epa_play_rank != null) m.set(t.team, t.def_epa_play_rank); return m }, [analytics.data])
 
   // Summary row per entity (Overall, or the active situation).

@@ -3,6 +3,8 @@ import { fetchSchedule } from './api/schedule'
 import { fetchLeaders } from './api/leaders'
 import { fetchWpaLeaders } from './api/wpaLeaders'
 import { fetchPlayer, fetchPlayerComparables } from './api/players'
+import { fetchTeam, fetchTeamRoster, fetchTeamDepthChart, fetchTeamInjuries, fetchTeamSplits } from './api/teams'
+import { fetchTeamAnalytics } from './api/teamAnalytics'
 import { fetchStandings } from './features/standings/api'
 
 /**
@@ -26,7 +28,7 @@ import type {
   GameDetail, GamePlayerStats, InjuryStatus, KickingStats, LeagueLeader, NgsStats,
   PlayerAdvStats, PlayerAward, PlayerComparable, PlayerGame, PlayerProfile, PlayerSplit, DefensiveSplit, PlayerWpa,
   RosterPlayer, ScheduleWeek, SearchResult, SeasonStatus, SituationalStats,
-  SnapTotals, StandingsRow, TeamAnalyticsResponse, TeamAnalyticsRow,
+  SnapTotals, StandingsRow, TeamAnalyticsRow,
   TeamGame, TeamLeader, TeamProfile, TeamSplit, TeamGameStats, ScoringPlay, WinProbPlay, WpaLeader, WpaLeaders,
   GameLineup, LineupPlayer, LineupTeam, LineupScoringEvent, PlayerChart, PlayerChartEvent,
   AskHistoryMessage, AskRequest, AskResponse, ToolCall,
@@ -75,14 +77,12 @@ export const api = {
   gameLineup:    (gameId: string)              => get<GameLineup>(`/games/${gameId}/lineup`),
   playerChart:   (gameId: string, playerId: string) => get<PlayerChart>(`/games/${gameId}/players/${playerId}/chart`),
   player:        fetchPlayer,
-  team:          (abbrev: string, season: number) => get<TeamProfile>(`/teams/${abbrev}?season=${season}`),
-  teamRoster:    (team: string, season: number) => get<RosterPlayer[]>(`/teams/${team}/roster?season=${season}`),
-  teamDepthChart: (team: string, season: number, week?: number) =>
-    get<DepthChartEntry[]>(`/teams/${team}/depth-chart?season=${season}${week != null ? `&week=${week}` : ''}`),
-  teamInjuries:  (team: string, season: number, week?: number) =>
-    get<InjuryStatus[]>(`/teams/${team}/injuries?season=${season}${week != null ? `&week=${week}` : ''}`),
-  teamAnalytics: (season: number)              => get<TeamAnalyticsResponse>(`/team-analytics?season=${season}`),
-  teamSplits:    (team: string, season: number) => get<TeamSplit[]>(`/teams/${team}/splits?season=${season}`),
+  team:          fetchTeam,
+  teamRoster:    fetchTeamRoster,
+  teamDepthChart: fetchTeamDepthChart,
+  teamInjuries:  fetchTeamInjuries,
+  teamAnalytics: fetchTeamAnalytics,
+  teamSplits:    fetchTeamSplits,
   standings:     fetchStandings,
   leaders:       fetchLeaders,
   wpaLeaders:    fetchWpaLeaders,

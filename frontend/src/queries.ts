@@ -11,13 +11,15 @@
  * The query keys are arrays starting with a stable string namespace so we
  * can later invalidate groups (e.g. `qc.invalidateQueries({ queryKey: ['players'] })`).
  */
-import { queryOptions, useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-query'
+import { useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-query'
 import { api } from './api'
 import { seasonsQueryOptions } from './api/seasons'
 import { scheduleQueryOptions } from './api/schedule'
 import { leadersQueryOptions } from './api/leaders'
 import { wpaLeadersQueryOptions } from './api/wpaLeaders'
 import { playerQueryOptions, playerComparablesQueryOptions } from './api/players'
+import { teamQueryOptions, teamRosterQueryOptions, teamDepthChartQueryOptions, teamInjuriesQueryOptions, teamSplitsQueryOptions } from './api/teams'
+import { teamAnalyticsQueryOptions } from './api/teamAnalytics'
 import { standingsQueryOptions } from './features/standings/queries'
 import type {
   DepthChartEntry, DivisionStandings, GameDetail, InjuryStatus,
@@ -94,19 +96,6 @@ export function usePlayerSplits(playerId: string | undefined, options?: Options<
 
 // ── Team ─────────────────────────────────────────────────────────────────────
 
-// Shared by the single-profile hook and Team's dynamic season list.
-// The transport moves to the typed client in the Team request checkpoint.
-export function teamQueryOptions(abbrev: string | undefined, season: number | null) {
-  return queryOptions({
-    queryKey: ['team', abbrev, season] as const,
-    queryFn: () => {
-      if (!abbrev || season === null) throw new Error('Select a team and season first.')
-      return api.team(abbrev, season)
-    },
-    enabled: !!abbrev && season != null,
-  })
-}
-
 export function useTeam(abbrev: string | undefined, season: number | null, options?: Options<TeamProfile, readonly ['team', string | undefined, number | null]>) {
   return useQuery({
     ...teamQueryOptions(abbrev, season),
@@ -114,11 +103,9 @@ export function useTeam(abbrev: string | undefined, season: number | null, optio
   })
 }
 
-export function useTeamRoster(abbrev: string | undefined, season: number | null, options?: Options<RosterPlayer[]>) {
+export function useTeamRoster(abbrev: string | undefined, season: number | null, options?: Options<RosterPlayer[], readonly ['team-roster', string | undefined, number | null]>) {
   return useQuery({
-    queryKey: ['team-roster', abbrev, season] as const,
-    queryFn: () => api.teamRoster(abbrev!, season!),
-    enabled: !!abbrev && season != null,
+    ...teamRosterQueryOptions(abbrev, season),
     ...options,
   })
 }
@@ -127,12 +114,10 @@ export function useTeamDepthChart(
   abbrev: string | undefined,
   season: number | null,
   week?: number,
-  options?: Options<DepthChartEntry[]>,
+  options?: Options<DepthChartEntry[], readonly ['team-depth-chart', string | undefined, number | null, number | undefined]>,
 ) {
   return useQuery({
-    queryKey: ['team-depth-chart', abbrev, season, week] as const,
-    queryFn: () => api.teamDepthChart(abbrev!, season!, week),
-    enabled: !!abbrev && season != null,
+    ...teamDepthChartQueryOptions(abbrev, season, week),
     ...options,
   })
 }
@@ -141,31 +126,24 @@ export function useTeamInjuries(
   abbrev: string | undefined,
   season: number | null,
   week?: number,
-  options?: Options<InjuryStatus[]>,
+  options?: Options<InjuryStatus[], readonly ['team-injuries', string | undefined, number | null, number | undefined]>,
 ) {
   return useQuery({
-    queryKey: ['team-injuries', abbrev, season, week] as const,
-    queryFn: () => api.teamInjuries(abbrev!, season!, week),
-    enabled: !!abbrev && season != null,
+    ...teamInjuriesQueryOptions(abbrev, season, week),
     ...options,
   })
 }
 
-export function useTeamAnalytics(season: number | null, options?: Options<TeamAnalyticsResponse>) {
+export function useTeamAnalytics(season: number | null, options?: Options<TeamAnalyticsResponse, readonly ['team-analytics', number | null]>) {
   return useQuery({
-    queryKey: ['team-analytics', season] as const,
-    queryFn: () => api.teamAnalytics(season!),
-    enabled: season != null,
+    ...teamAnalyticsQueryOptions(season),
     ...options,
   })
 }
 
-export function useTeamSplits(abbrev: string | undefined, season: number | null, options?: Options<TeamSplit[]>) {
+export function useTeamSplits(abbrev: string | undefined, season: number | null, options?: Options<TeamSplit[], readonly ['team-splits', string | undefined, number | null]>) {
   return useQuery({
-    queryKey: ['team-splits', abbrev, season] as const,
-    queryFn: () => api.teamSplits(abbrev!, season!),
-    enabled: !!abbrev && season != null,
-    staleTime: FOREVER,
+    ...teamSplitsQueryOptions(abbrev, season),
     ...options,
   })
 }

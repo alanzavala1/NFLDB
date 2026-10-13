@@ -86,14 +86,26 @@ retry feedback; a failed selected year never falls back to another year's detail
 Cached results stay visible with a warning if a refresh fails. Revealing an older
 year changes which profile queries are observed and only reads published data.
 
-Team's dynamic profile queries and existing `useTeam` hook share `teamQueryOptions`
-in `src/queries.ts`. Those profile queries still use the legacy team transport;
-typed transport/cancellation and the other Team section requests are the next
-checkpoint. Section components and roster/analytics effects remain in the large
-Team page until their focused migration. The selected detail is keyed by team and
-year so local modal/roster state resets between profiles. There are now no frontend
-season-loading callers, so the obsolete `api.loadSeason` method is removed. Backend
-admin endpoints and their generated contract types are unchanged.
+Team profile, roster, depth-chart, injury, and split requests/options now live in
+`src/api/teams.ts`. League-wide analytics live in `src/api/teamAnalytics.ts`.
+Each request uses the shared typed client and consumes an `AbortSignal`.
+Team-specific cache keys include team/year and, for depth/injuries, optional week.
+League analytics use one key per year because a response contains every team.
+Legacy methods/hooks delegate to these definitions. Team uses them directly;
+Splits reuses canonical team-split and analytics options. These resources inherit
+the normal five-minute freshness policy, replacing permanent freshness for splits
+and their duplicate Splits-page observers.
+
+Each section distinguishes pending, successful-empty, and failed requests and has
+its own retry. Failed refreshes preserve successful cached data and warn, including
+empty arrays or an analytics response with no matching team. The roster query
+mounts only while its modal is open; closing it cancels unfinished work, and fresh
+results are reused on reopening. Analytics derives the focal team from Query data
+instead of keeping fetched/loading state in an effect. Unknown roster positions
+remain visible under Other. The large Team file is still awaiting extraction.
+The selected detail is keyed by team/year so local UI state resets between profiles.
+There are no frontend season-loading callers; obsolete `api.loadSeason` is removed.
+Backend admin endpoints and generated contract types are unchanged.
 
 ## Follow one request
 

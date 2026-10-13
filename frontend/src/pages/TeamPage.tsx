@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, Tooltip, Cell, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { api } from '../api'
-import type { TeamProfile, TeamGame, TeamLeader, RosterPlayer, TeamAnalyticsTeam, TeamSplit } from '../api'
-import { useSeasons, teamQueryOptions, useTeamDepthChart, useTeamInjuries, useTeamSplits } from '../queries'
+import type { TeamProfile, TeamGame, TeamLeader, TeamAnalyticsRow, TeamSplit } from '../types'
+import { seasonsQueryOptions } from '../api/seasons'
+import { teamQueryOptions, teamRosterQueryOptions, teamDepthChartQueryOptions, teamInjuriesQueryOptions, teamSplitsQueryOptions } from '../api/teams'
+import { teamAnalyticsQueryOptions } from '../api/teamAnalytics'
 import Nav from '../components/Nav'
 import Card from '../components/Card'
 import { QueryFailure, QueryLoading } from '../components/QueryFeedback'
@@ -871,7 +872,9 @@ const ROSTER_GROUPS = [
 ]
 const ROSTER_MAPPED = new Set(ROSTER_GROUPS.flatMap(g => [...g.positions]))
 
-function RosterModal({ profile, roster, onClose }: { profile: TeamProfile; roster: RosterPlayer[]; onClose: () => void }) {
+function RosterModal({ profile, onClose }: { profile: TeamProfile; onClose: () => void }) {
+  const rosterQuery = useQuery(teamRosterQueryOptions(profile.team, profile.season))
+  const roster = rosterQuery.data ?? []
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -899,8 +902,9 @@ function RosterModal({ profile, roster, onClose }: { profile: TeamProfile; roste
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-6 py-6 max-w-5xl mx-auto w-full">
-        {grouped.length === 0
-          ? <p className="text-ink-dim">No roster data available for this season.</p>
+        <QueryFailure resource="roster" error={rosterQuery.error} hasData={rosterQuery.data !== undefined} onRetry={() => void rosterQuery.refetch()} />
+        {rosterQuery.isPending ? <QueryLoading>Loading roster…</QueryLoading> : !roster.length
+          ? !rosterQuery.error && <p className="text-ink-dim">No roster data available for this season.</p>
           : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...grouped, ...(other.length > 0 ? [{ label: 'Other', players: other }] : [])].map(g => (
@@ -995,7 +999,7 @@ function MetricPanel({ title, accent, metrics }: { title: string; accent: string
   )
 }
 
-function buildOffenseMetrics(t: TeamAnalyticsTeam): MetricSpec[] {
+function buildOffenseMetrics(t: TeamAnalyticsRow): MetricSpec[] {
   return [
     { key: 'ppg',    label: 'Points/Game',         hint: 'Avg points scored per game',                       value: t.ppg,                rank: t.ppg_rank,                fmt: fmtNum(1) },
     { key: 'ppd',    label: 'Points/Drive',        hint: 'Total points / total offensive drives',           value: t.pts_per_drive,      rank: t.pts_per_drive_rank,      fmt: fmtNum(2) },
@@ -1010,7 +1014,7 @@ function buildOffenseMetrics(t: TeamAnalyticsTeam): MetricSpec[] {
   ]
 }
 
-function buildDefenseMetrics(t: TeamAnalyticsTeam): MetricSpec[] {
+function buildDefenseMetrics(t: TeamAnalyticsRow): MetricSpec[] {
   return [
     { key: 'papg',   label: 'Points/G allowed',    hint: 'Opponent points per game',                        value: t.papg,                       rank: t.papg_rank,                      fmt: fmtNum(1) },
     { key: 'ppda',   label: 'Points/Drive allowed',hint: 'Opponent points per drive',                       value: t.pts_per_drive_allowed,      rank: t.pts_per_drive_allowed_rank,     fmt: fmtNum(2) },
@@ -1025,7 +1029,7 @@ function buildDefenseMetrics(t: TeamAnalyticsTeam): MetricSpec[] {
   ]
 }
 
-function buildOverallMetrics(t: TeamAnalyticsTeam): MetricSpec[] {
+function buildOverallMetrics(t: TeamAnalyticsRow): MetricSpec[] {
   return [
     { key: 'ptdiff', label: 'Point Diff / Game',   hint: '(PF − PA) / games',                               value: t.pt_diff_per_game,           rank: t.pt_diff_rank,                   fmt: fmtSigned(1) },
     { key: 'todiff', label: 'Turnover Diff / Game',hint: '(takeaways − giveaways) / games',                 value: t.turnover_diff_per_game,     rank: t.to_diff_rank,                   fmt: fmtSigned(2) },
@@ -1093,7 +1097,8 @@ function aggregateTeamSplit(rows: TeamSplit[]): TeamSplit | null {
 }
 
 function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
-  const { data: splits = [], isPending } = useTeamSplits(team, season)
+  const splitsQuery = useQuery(teamSplitsQueryOptions(team, season))
+  const { data: splits = [], isPending } = splitsQuery
   const [side, setSide] = useState<'offense' | 'defense'>('offense')
   const [dim, setDim] = useState('game_script')
 
@@ -1159,10 +1164,17 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
     </tr>
   )
 
-  if (isPending || splits.length === 0) return null
+  if (isPending) return <div className="mb-4"><QueryLoading>Loading situational splits…</QueryLoading></div>
+  if (splits.length === 0) return (
+    <div className="mb-4">
+      <QueryFailure resource="situational splits" error={splitsQuery.error} hasData={splitsQuery.data !== undefined} onRetry={() => void splitsQuery.refetch()} />
+      {!splitsQuery.error && <p className="text-sm text-ink-dim">No situational splits are available for this season.</p>}
+    </div>
+  )
 
   return (
     <div className="mb-4">
+      <QueryFailure resource="situational splits" error={splitsQuery.error} hasData onRetry={() => void splitsQuery.refetch()} />
       <div className="flex items-baseline justify-between gap-3 mb-2 px-1">
         <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Situational Splits</h3>
         {insight && (
@@ -1223,34 +1235,21 @@ function TeamSplitsPanel({ team, season }: { team: string; season: number }) {
 }
 
 function TeamAnalytics({ team, season }: { team: string; season: number }) {
-  const [focal, setFocal] = useState<TeamAnalyticsTeam | null>(null)
-  const [loading, setLoading] = useState(true)
+  const analyticsQuery = useQuery(teamAnalyticsQueryOptions(season))
+  const focal = analyticsQuery.data?.league.find(row => row.team === team)
 
-  useEffect(() => {
-    setLoading(true)
-    setFocal(null)
-    let cancelled = false
-    api.teamAnalytics(season)
-      .then(res => {
-        if (cancelled) return
-        setFocal(res.league.find(t => t.team === team) ?? null)
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [team, season])
-
-  if (loading) {
+  if (analyticsQuery.isPending) {
     return (
       <div className="mb-4 bg-surface-card border border-surface-line rounded-xl px-4 py-8 text-center text-ink-dim text-sm">
-        Loading analytics…
+        <QueryLoading>Loading analytics…</QueryLoading>
       </div>
     )
   }
   if (!focal) {
     return (
       <div className="mb-4 bg-surface-card border border-surface-line rounded-xl px-4 py-6 text-center text-ink-dim text-sm">
-        Analytics unavailable for this season.
+        <QueryFailure resource="team analytics" error={analyticsQuery.error} hasData={analyticsQuery.data !== undefined} onRetry={() => void analyticsQuery.refetch()} />
+        {analyticsQuery.data && <p>Analytics unavailable for this season.</p>}
       </div>
     )
   }
@@ -1261,6 +1260,7 @@ function TeamAnalytics({ team, season }: { team: string; season: number }) {
 
   return (
     <div className="mb-4">
+      <QueryFailure resource="team analytics" error={analyticsQuery.error} hasData onRetry={() => void analyticsQuery.refetch()} />
       <div className="flex items-end justify-between mb-2 px-1">
         <div>
           <h3 className="text-sm font-bold text-ink uppercase tracking-wider">Team Analytics</h3>
@@ -1306,15 +1306,22 @@ function injuryToneClasses(status: string | null | undefined): string {
 }
 
 function InjuryReportPanel({ team, season }: { team: string; season: number }) {
-  const { data: injuries = [], isPending } = useTeamInjuries(team, season)
-  if (isPending) return null
-  if (injuries.length === 0) return null
+  const injuriesQuery = useQuery(teamInjuriesQueryOptions(team, season))
+  const { data: injuries = [], isPending } = injuriesQuery
+  if (isPending) return <QueryLoading>Loading injury report…</QueryLoading>
+  if (injuries.length === 0) return (
+    <div>
+      <QueryFailure resource="injury report" error={injuriesQuery.error} hasData={injuriesQuery.data !== undefined} onRetry={() => void injuriesQuery.refetch()} />
+      {!injuriesQuery.error && <p className="text-sm text-ink-dim">No injury report is available for this season.</p>}
+    </div>
+  )
 
   // injuries are already ordered server-side by severity
   const headline = `Week ${injuries[0].week} Injury Report`
 
   return (
     <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+      <QueryFailure resource="injury report" error={injuriesQuery.error} hasData onRetry={() => void injuriesQuery.refetch()} />
       <div className="px-4 py-2.5 border-b border-surface-line flex items-center justify-between">
         <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{headline}</span>
         <span className="text-[10px] font-bold text-ink-dim uppercase tracking-widest">{injuries.length} listed</span>
@@ -1339,20 +1346,27 @@ function InjuryReportPanel({ team, season }: { team: string; season: number }) {
 }
 
 function StartingLineupPanel({ team, season }: { team: string; season: number }) {
-  const { data: depth = [], isPending } = useTeamDepthChart(team, season)
-  if (isPending) return null
+  const depthQuery = useQuery(teamDepthChartQueryOptions(team, season))
+  const { data: depth = [], isPending } = depthQuery
+  if (isPending) return <QueryLoading>Loading starting lineup…</QueryLoading>
 
   const starters = depth.filter(d => d.depth_team === '1')
   const offense = starters.filter(d => d.formation === 'Offense')
   const defense = starters.filter(d => d.formation === 'Defense')
 
-  if (offense.length === 0 && defense.length === 0) return null
+  if (offense.length === 0 && defense.length === 0) return (
+    <div>
+      <QueryFailure resource="starting lineup" error={depthQuery.error} hasData={depthQuery.data !== undefined} onRetry={() => void depthQuery.refetch()} />
+      {!depthQuery.error && <p className="text-sm text-ink-dim">No starting lineup is available for this season.</p>}
+    </div>
+  )
 
   const week = depth[0]?.week
   const headline = week ? `Week ${week} Starting Lineup` : 'Starting Lineup'
 
   return (
     <div className="bg-surface-card border border-surface-line rounded-xl overflow-hidden">
+      <QueryFailure resource="starting lineup" error={depthQuery.error} hasData onRetry={() => void depthQuery.refetch()} />
       <div className="px-4 py-2.5 border-b border-surface-line flex items-center justify-between">
         <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">{headline}</span>
       </div>
@@ -1387,18 +1401,13 @@ function LineupColumn({ label, rows }: { label: string; rows: { depth_position: 
 function SeasonDetail({ profile }: { profile: TeamProfile }) {
   const [statsOpen, setStatsOpen] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
-  const [roster, setRoster] = useState<RosterPlayer[]>([])
   const { w, l, t, label } = computeRecord(profile.games, profile.team)
   const played = w + l + t
-
-  useEffect(() => {
-    api.teamRoster(profile.team, profile.season).then(setRoster).catch(() => {})
-  }, [profile.team, profile.season])
 
   return (
     <>
       {statsOpen && <FullStatsModal profile={profile} onClose={() => setStatsOpen(false)} />}
-      {rosterOpen && <RosterModal profile={profile} roster={roster} onClose={() => setRosterOpen(false)} />}
+      {rosterOpen && <RosterModal profile={profile} onClose={() => setRosterOpen(false)} />}
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-ink font-bold text-xl">{profile.season} Season</div>
@@ -1494,7 +1503,7 @@ const INITIAL_SEASONS = 5
 
 export default function TeamPage() {
   const { teamAbbrev } = useParams<{ teamAbbrev: string }>()
-  const seasonsQuery = useSeasons()
+  const seasonsQuery = useQuery(seasonsQueryOptions())
   const availableYears = loadedSeasons(seasonsQuery.data ?? [])
   const [expandedYears, setExpandedYears] = useState<number[]>([])
   const [requestedSeason, setRequestedSeason] = useState<number | null>(null)
