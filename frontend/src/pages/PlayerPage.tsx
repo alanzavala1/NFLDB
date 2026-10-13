@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { api, CURRENT_NFL_SEASON } from '../api'
+import { CURRENT_NFL_SEASON } from '../api'
 import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, KickingStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader, CombineData, DepthChartEntry, InjuryStatus } from '../api'
-import { useLeaders, usePlayer, usePlayerComparables, useSeasons } from '../queries'
+import { useLeaders, usePlayer, usePlayerComparables } from '../queries'
 import Nav from '../components/Nav'
 import Card from '../components/Card'
+import { QueryFailure, QueryLoading } from '../components/QueryFeedback'
 import { teamLogoUrl, teamName } from '../utils/teams'
 import { AWARD_LABEL, type AwardKey } from '../utils/awards'
 
@@ -1299,7 +1299,6 @@ export default function PlayerPage() {
   const { playerId } = useParams<{ playerId: string }>()
   const location = useLocation()
   const fromGame = (location.state as any)?.fromGame
-  const qc = useQueryClient()
 
   const statsRef = useRef<HTMLDivElement>(null)
   const advRef   = useRef<HTMLDivElement>(null)
@@ -1310,20 +1309,8 @@ export default function PlayerPage() {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const { data: player, isPending: loading } = usePlayer(playerId)
-
-  // Poll seasons while any ingest is in-flight so the UI updates as
-  // seasons finish loading. TanStack handles dedup + cancellation.
-  const { data: seasonsList = [] } = useSeasons({
-    refetchInterval: (q): number | false => {
-      const d = q.state.data
-      return d?.some(s => s.status === 'loading' || s.status === 'queued') ? 4000 : false
-    },
-  })
-  const seasonMap = useMemo(
-    () => Object.fromEntries(seasonsList.map(s => [s.season, s.status])) as Record<number, string>,
-    [seasonsList],
-  )
+  const playerQuery = usePlayer(playerId)
+  const { data: player, isPending: loading } = playerQuery
 
   // Most recent regular season the player appears in -> drives the "5th in NFL" context
   const recentSeason = useMemo(() => {
@@ -1336,29 +1323,12 @@ export default function PlayerPage() {
   const recentLeaders: { season: number; leaders: LeagueLeader[] } | null =
     recentSeason != null && recentLeadersData ? { season: recentSeason, leaders: recentLeadersData } : null
 
-  // Fire-and-forget: queue any seasons we don't yet have for this player.
-  // The seasons poll above picks up the status changes; when newly-finished
-  // seasons would affect this player, we invalidate their query.
-  useEffect(() => {
-    if (!player || !player.entry_year) return
-    const loadedForPlayer = new Set(player.games.map(g => g.season))
-    for (let y = CURRENT_NFL_SEASON; y >= player.entry_year; y--) {
-      if (!loadedForPlayer.has(y) && seasonMap[y] === 'available') {
-        api.loadSeason(y)
-      }
-    }
-  }, [player?.player_id, player?.entry_year, seasonMap])
-
-  useEffect(() => {
-    if (!player) return
-    const loadedForPlayer = new Set(player.games.map(g => g.season))
-    const newlyDone = seasonsList.some(
-      s => s.status === 'loaded' && !loadedForPlayer.has(s.season) && s.season >= (player.entry_year ?? 0),
-    )
-    if (newlyDone) qc.invalidateQueries({ queryKey: ['player', playerId] })
-  }, [seasonsList, player, playerId, qc])
-
-  if (loading) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Loading...</p></div>
+  if (loading) return <div className="min-h-screen bg-surface-bg"><Nav /><div className="p-8"><QueryLoading>Loading player profile…</QueryLoading></div></div>
+  if (playerQuery.isError && !player) return (
+    <div className="min-h-screen bg-surface-bg"><Nav /><div className="p-8">
+      <QueryFailure resource="player profile" error={playerQuery.error} hasData={false} onRetry={() => void playerQuery.refetch()} />
+    </div></div>
+  )
   if (!player) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Player not found.</p></div>
 
   const regGames     = player.games.filter(g => g.game_type === 'REG')
@@ -1400,14 +1370,11 @@ export default function PlayerPage() {
     ? computeHighlightRanks(playerPos, player.player_id, recentLeaders.leaders, recentLeaders.season)
     : {}
 
-  const careerInFlight = player.entry_year != null
-    ? Object.entries(seasonMap).some(([y, s]) => Number(y) >= player.entry_year! && (s === 'loading' || s === 'queued'))
-    : false
-
   return (
     <div className="min-h-screen bg-surface-bg">
       <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
+        <QueryFailure resource="player profile" error={playerQuery.error} hasData onRetry={() => void playerQuery.refetch()} />
         {/* Profile header */}
         <Card title={player.player_name} className="mb-8"><div className="flex items-start gap-6 border-t border-surface-line p-5 flex-wrap">
           {player.headshot_url
@@ -1496,6 +1463,7 @@ export default function PlayerPage() {
 
         {/* Regular season — main stats */}
         <div ref={statsRef} className="scroll-mt-12" />
+        {!player.games.length && <p role="status" className="text-sm text-ink-dim mb-4">No game statistics are available for this player yet.</p>}
         <CareerTable
           title="Regular Season"
           seasons={seasons}
@@ -1510,13 +1478,6 @@ export default function PlayerPage() {
           onlyKinds={['trad', 'snap']}
           showGroupHeaders={true}
         />
-        {careerInFlight && (
-          <p className="text-xs text-ink-dim -mt-2 mb-4 pl-1 flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-ink-dim animate-pulse" />
-            Loading historical seasons — stats will update automatically.
-          </p>
-        )}
-
         {/* Regular season — advanced stats */}
         {hasAdvanced && seasons.length > 0 && (
           <>

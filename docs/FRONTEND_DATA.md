@@ -45,6 +45,13 @@ JavaScript across the production build. Browser checks preserve numeric sorting,
 ties, tab state, keyboard controls, and mobile scrolling; captured desktop,
 position-view, and mobile layouts match their pre-pilot screenshots exactly.
 
+Player profiles now read the returned profile without starting season ingestion,
+polling ingestion status, or invalidating the profile for years without games.
+A known player without game records keeps their biography and shows an empty
+state. Request failures show an error and retry; a failed refresh preserves the
+cached profile. Player requests still use their existing API methods and hooks;
+their typed-client migration and feature extraction are the next focused items.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from
