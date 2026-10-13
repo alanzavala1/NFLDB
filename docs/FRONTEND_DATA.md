@@ -1,4 +1,4 @@
-# Frontend data flow: the Standings pilot
+# Frontend data flow
 
 Standings is the first feature moved to the shared data pattern. Other pages
 are being migrated individually; some still use manual fetching.
@@ -165,8 +165,33 @@ overlays remain in place. The live provider still owns pacing and ordering.
 
 Ordinary game queries inherit the normal five-minute freshness policy. The
 compatibility API methods and `useGame` hook delegate to the new definitions;
-the hook no longer treats an uncharted game as permanently fresh. Game components
-and CSS remain in their existing large files for the next structural checkpoint.
+the hook no longer treats an uncharted game as permanently fresh.
+
+Games now lives in `src/features/games/`. `GamePage.tsx` is 107 lines and owns
+queries, route context, tab choice, and composition. Header, quarter scores,
+team box score, game leaders, player-stat sections, scoring summary, key plays,
+and win probability have separate components. `GameLineupView.tsx` coordinates
+the lineup's ball choice, rating help, and selected player; field rendering,
+player nodes/rotation, the chart modal, passing zones, rushing gaps, and the rail
+have their own files. The largest feature file is 183 lines.
+
+Components receive game data and navigation origin through explicit props; the
+former game context is removed. `selectors.ts` selects related schedule games
+and sums team statistics, `playSelection.ts` identifies key plays, and
+`lineupPlacement.ts` arranges players and explains missing grades. Formatting,
+chart stat labels, and existing lineup CSS have separate owners. The CSS is
+still installed by the Game page, preserving its existing scope and order.
+The router imports the feature directly; both former large files are removed.
+
+Nested stat bars, stat sections, player links, and leader sides are now stable
+module-level components. Independent request updates preserve keyboard focus
+instead of recreating those component types. The win-probability tooltip uses
+Recharts' existing types. All 29 former Game lint errors are resolved without
+suppressions or new dependencies. Browser checks preserve displayed statistics,
+qualification/order, ratios, plays, tooltips, formations/grades, role-specific
+maps, and modal closing. Eight desktop/mobile captures match their pre-move
+screenshots pixel for pixel; a source audit also verifies unchanged calculations,
+constants, and CSS.
 
 ## Follow one request
 

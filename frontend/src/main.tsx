@@ -14,7 +14,7 @@ import './index.css'
 // warming them up front is the biggest single win.
 const routeImporters = {
   scores:    () => import('./features/scores/ScoresPage'),
-  game:      () => import('./pages/GamePage'),
+  game:      () => import('./features/games/GamePage'),
   team:      () => import('./features/teams/TeamPage'),
   player:    () => import('./features/players/PlayerPage'),
   leaders:   () => import('./features/leaders/LeadersPage'),
