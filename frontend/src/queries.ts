@@ -16,6 +16,7 @@ import { api } from './api'
 import { seasonsQueryOptions } from './api/seasons'
 import { scheduleQueryOptions } from './api/schedule'
 import { leadersQueryOptions } from './api/leaders'
+import { wpaLeadersQueryOptions } from './api/wpaLeaders'
 import { standingsQueryOptions } from './features/standings/queries'
 import type {
   DepthChartEntry, DivisionStandings, GameDetail, InjuryStatus,
@@ -180,11 +181,9 @@ export function useLeaders(season: number | null, options?: Options<LeagueLeader
   })
 }
 
-export function useWpaLeaders(season: number | null, options?: Options<WpaLeaders>) {
+export function useWpaLeaders(season: number | null, options?: Options<WpaLeaders, readonly ['wpa-leaders', number | null]>) {
   return useQuery({
-    queryKey: ['wpa-leaders', season] as const,
-    queryFn: () => api.wpaLeaders(season!),
-    enabled: season != null,
+    ...wpaLeadersQueryOptions(season),
     ...options,
   })
 }

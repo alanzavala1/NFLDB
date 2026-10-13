@@ -1,4 +1,4 @@
-import type { SeasonStatus } from '../../types'
+import type { SeasonStatus } from '../types'
 
 export function loadedSeasons(seasons: SeasonStatus[]) {
   return seasons.filter(s => s.status === 'loaded').map(s => s.season).sort((a, b) => b - a)

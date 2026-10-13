@@ -1,6 +1,7 @@
 import { fetchSeasons } from './api/seasons'
 import { fetchSchedule } from './api/schedule'
 import { fetchLeaders } from './api/leaders'
+import { fetchWpaLeaders } from './api/wpaLeaders'
 import { fetchStandings } from './features/standings/api'
 
 /**
@@ -84,7 +85,7 @@ export const api = {
   teamSplits:    (team: string, season: number) => get<TeamSplit[]>(`/teams/${team}/splits?season=${season}`),
   standings:     fetchStandings,
   leaders:       fetchLeaders,
-  wpaLeaders:    (season: number)              => get<WpaLeaders>(`/wpa-leaders?season=${season}`),
+  wpaLeaders:    fetchWpaLeaders,
   comparables:   (playerId: string)            => get<PlayerComparable[]>(`/players/${playerId}/comparables`),
   splits:        (playerId: string)            => get<PlayerSplit[]>(`/players/${playerId}/splits`),
   defSplits:     (playerId: string)            => get<DefensiveSplit[]>(`/players/${playerId}/def-splits`),

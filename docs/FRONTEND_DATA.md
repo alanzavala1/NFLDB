@@ -19,11 +19,21 @@ week, featured game, and kickoff groups; `presentation.ts` contains shared label
 and formatting. Cards receive data and callbacks through props. Game-list rows
 also read the shared live provider, so moving them creates no additional pollers.
 
+Leaders now lives in `frontend/src/features/leaders/`. Its page coordinates
+metadata, player-stat queries, URL choices, and local sort state. Tables,
+column definitions, awards, the dashboard, and the podium have separate owners.
+`WpaPanel.tsx` mounts its query only when WPA is selected. Its typed resource
+module is `src/api/wpaLeaders.ts`; the existing API method and hook delegate it.
+Statistics and WPA failures have separate retries and retain successful cached
+results on refresh failures. Shared loaded-season selection is in
+`src/utils/seasons.ts`, used by both Standings and Leaders. Scores also permits
+scheduled seasons because published fixtures can precede statistics.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from
    the URL and asks TanStack Query for the loaded season list.
-2. `season.ts` selects the newest loaded season when the URL has no season.
+2. `src/utils/seasons.ts` selects the newest loaded season when the URL has no season.
    An explicit unavailable or malformed year shows a message rather than a
    different year's standings. No loaded seasons means no standings request.
 3. `queries.ts` describes the standings request: its cache key is

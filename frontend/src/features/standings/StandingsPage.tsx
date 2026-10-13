@@ -6,7 +6,7 @@ import Card from '../../components/Card'
 import { PlayoffBracket } from '../../components/PlayoffBracket'
 import { QueryError, QueryLoading } from '../../components/QueryFeedback'
 import { standingsQueryOptions } from './queries'
-import { loadedSeasons, selectedSeason } from './season'
+import { loadedSeasons, selectedSeason } from '../../utils/seasons'
 import { ConferenceSection } from './StandingsTable'
 
 export default function StandingsPage() {
