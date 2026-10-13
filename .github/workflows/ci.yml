@@ -56,7 +56,7 @@ jobs:
       - name: Install test browser
         run: npx playwright install --with-deps chromium
 
-      - name: Test Standings pilot
+      - name: Test frontend browser flows
         run: npm run test:e2e
 
       # eslint has ~65 pre-existing react-hooks errors that pre-date the

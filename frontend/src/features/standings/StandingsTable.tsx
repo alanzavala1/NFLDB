@@ -77,4 +77,3 @@ export function ConferenceSection({ divisions }: { divisions: DivisionStandings[
     </div>
   )
 }
-

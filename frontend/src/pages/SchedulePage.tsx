@@ -50,49 +50,6 @@ const LEADER_CATEGORIES: LeaderCategory[] = [
   { label: 'Defense',   unit: 'TKL', filter: p => p.solo_tackles + p.assist_tackles >= 10, value: p => p.solo_tackles + p.assist_tackles, display: p => (p.solo_tackles + p.assist_tackles).toString() },
 ]
 
-function IngestProgress({ season, onDone }: { season: number; onDone: () => void }) {
-  const [progress, setProgress] = useState<{ season: number; lines: string[] }>({ season, lines: [] })
-  const onDoneRef = useRef(onDone)
-  const lines = progress.season === season ? progress.lines : []
-
-  useEffect(() => { onDoneRef.current = onDone }, [onDone])
-
-  useEffect(() => {
-    const es = new EventSource(`/api/seasons/${season}/progress`)
-    es.onmessage = (e) => {
-      const text = e.data as string
-      if (text.startsWith('__DONE__')) {
-        es.close()
-        onDoneRef.current()
-      } else if (text.startsWith('__ERROR__')) {
-        const message = text.replace('__ERROR__ ', 'Error: ')
-        setProgress(prev => ({ season, lines: prev.season === season ? [...prev.lines, message] : [message] }))
-        es.close()
-      } else if (text.trim()) {
-        setProgress(prev => ({ season, lines: prev.season === season ? [...prev.lines, text] : [text] }))
-      }
-    }
-    return () => es.close()
-  }, [season])
-
-  return (
-    <div className="border-t border-surface-line px-4 py-4">
-      <div className="space-y-1.5">
-        {lines.map((line, index) => (
-          <p
-            key={`${line}-${index}`}
-            className="animate-fade-in font-mono text-sm text-ink-mid"
-            style={{ animationDelay: `${index * 30}ms`, opacity: 0, animationFillMode: 'forwards' }}
-          >
-            {line}
-          </p>
-        ))}
-        <p className="animate-pulse font-mono text-sm text-ink-dim">...</p>
-      </div>
-    </div>
-  )
-}
-
 function parseNumberParam(value: string | null): number | null {
   if (value === null || value.trim() === '') return null
   const parsed = Number(value)
@@ -106,10 +63,8 @@ function parseNumberParam(value: string | null): number | null {
 const SELECTABLE = new Set(['loaded', 'scheduled'])
 
 function defaultSeason(seasons: SeasonEntry[]): number | null {
-  if (!seasons.length) return null
   const selectable = seasons.filter(s => SELECTABLE.has(s.status))
-  const pool = selectable.length ? selectable : seasons
-  return [...pool].sort((a, b) => b.season - a.season)[0]?.season ?? null
+  return [...selectable].sort((a, b) => b.season - a.season)[0]?.season ?? null
 }
 
 function weekLabel(week: number, gameType?: string | null) {
@@ -346,7 +301,8 @@ function SeasonCard({
   season: number | null
   onSeasonChange: (season: number) => void
 }) {
-  const sorted = [...seasons].sort((a, b) => b.season - a.season)
+  const sorted = seasons.filter(entry => SELECTABLE.has(entry.status)).sort((a, b) => b.season - a.season)
+  const selected = sorted.find(entry => entry.season === season)
 
   return (
     <Card title="Season">
@@ -358,10 +314,12 @@ function SeasonCard({
         <select
           id="season-picker"
           aria-label="Season"
-          value={season ?? ''}
+          value={selected?.season ?? ''}
+          disabled={!sorted.length}
           onChange={e => onSeasonChange(Number(e.target.value))}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         >
+          {!selected && <option value="" disabled>Choose a season</option>}
           {sorted.map(entry => (
             <option key={entry.season} value={entry.season}>{entry.season}</option>
           ))}
@@ -998,7 +956,7 @@ function LoadingCard({ title, message }: { title: string; message: string }) {
 function SchedulePageBody() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [seasons, setSeasons] = useState<SeasonEntry[]>([])
-  const [loadingSeason, setLoadingSeason] = useState(false)
+  const [seasonListStatus, setSeasonListStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [scheduleState, setScheduleState] = useState<LoadState<WeekGroup[]>>({ season: null, data: [], error: false })
   const [standingsState, setStandingsState] = useState<LoadState<DivisionStandings[]>>({ season: null, data: [], error: false })
   const [leadersState, setLeadersState] = useState<LoadState<LeagueLeader[]>>({ season: null, data: [], error: false })
@@ -1008,13 +966,12 @@ function SchedulePageBody() {
   const season = seasonFromUrl ?? defaultSeason(seasons)
   const requestedWeek = parseNumberParam(searchParams.get('week'))
   const seasonEntry = season === null ? undefined : seasons.find(entry => entry.season === season)
-  const isSeasonLoading = seasonEntry?.status === 'loading' || seasonEntry?.status === 'queued'
-  const isSeasonAvailable = seasonEntry?.status === 'available'
+  const canReadSeason = seasonEntry !== undefined && SELECTABLE.has(seasonEntry.status)
   const schedule = season !== null && scheduleState.season === season ? scheduleState.data : []
   const standings = season !== null && standingsState.season === season ? standingsState.data : []
   const leaders = season !== null && leadersState.season === season ? leadersState.data : []
   const powerRankings = season !== null && powerState.season === season ? powerState.data : []
-  const scheduleLoading = season !== null && !isSeasonLoading && !isSeasonAvailable && scheduleState.season !== season
+  const scheduleLoading = canReadSeason && scheduleState.season !== season
   const standingsLoading = season !== null && standingsState.season !== season
   const leadersLoading = season !== null && leadersState.season !== season
   const powerLoading = season !== null && powerState.season !== season
@@ -1036,40 +993,44 @@ function SchedulePageBody() {
   useEffect(() => {
     let cancelled = false
     api.seasons()
-      .then(data => { if (!cancelled) setSeasons(data) })
-      .catch(() => { if (!cancelled) setSeasons([]) })
+      .then(data => {
+        if (!cancelled) { setSeasons(data); setSeasonListStatus('ready') }
+      })
+      .catch(() => {
+        if (!cancelled) { setSeasons([]); setSeasonListStatus('error') }
+      })
     return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
-    if (season === null || isSeasonLoading || isSeasonAvailable) return
+    if (season === null || !canReadSeason) return
     let cancelled = false
     api.schedule(season)
       .then(data => { if (!cancelled) setScheduleState({ season, data, error: false }) })
       .catch(() => { if (!cancelled) setScheduleState({ season, data: [], error: true }) })
     return () => { cancelled = true }
-  }, [season, isSeasonLoading, isSeasonAvailable])
+  }, [season, canReadSeason])
 
   useEffect(() => {
-    if (season === null || isSeasonLoading || isSeasonAvailable) return
+    if (season === null || !canReadSeason) return
     let cancelled = false
     api.standings(season)
       .then(data => { if (!cancelled) setStandingsState({ season, data, error: false }) })
       .catch(() => { if (!cancelled) setStandingsState({ season, data: [], error: true }) })
     return () => { cancelled = true }
-  }, [season, isSeasonLoading, isSeasonAvailable])
+  }, [season, canReadSeason])
 
   useEffect(() => {
-    if (season === null || isSeasonLoading || isSeasonAvailable) return
+    if (season === null || !canReadSeason) return
     let cancelled = false
     api.leaders(season)
       .then(data => { if (!cancelled) setLeadersState({ season, data, error: false }) })
       .catch(() => { if (!cancelled) setLeadersState({ season, data: [], error: true }) })
     return () => { cancelled = true }
-  }, [season, isSeasonLoading, isSeasonAvailable])
+  }, [season, canReadSeason])
 
   useEffect(() => {
-    if (season === null || isSeasonLoading || isSeasonAvailable) return
+    if (season === null || !canReadSeason) return
     let cancelled = false
     fetch(`/api/power-rankings?season=${season}`)
       .then(res => {
@@ -1079,7 +1040,7 @@ function SchedulePageBody() {
       .then(data => { if (!cancelled) setPowerState({ season, data, error: false }) })
       .catch(() => { if (!cancelled) setPowerState({ season, data: [], error: true }) })
     return () => { cancelled = true }
-  }, [season, isSeasonLoading, isSeasonAvailable])
+  }, [season, canReadSeason])
 
   function setSeasonParam(nextSeason: number) {
     const next = new URLSearchParams(searchParams)
@@ -1098,57 +1059,15 @@ function SchedulePageBody() {
     setSearchParams(next)
   }
 
-  function refreshSeasonData() {
-    api.seasons().then(setSeasons).catch(() => setSeasons([]))
-    if (season !== null) {
-      api.schedule(season)
-        .then(data => setScheduleState({ season, data, error: false }))
-        .catch(() => setScheduleState({ season, data: [], error: true }))
-      fetch(`/api/power-rankings?season=${season}`)
-        .then(res => {
-          if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-          return res.json() as Promise<PowerRankingRow[]>
-        })
-        .then(data => setPowerState({ season, data, error: false }))
-        .catch(() => setPowerState({ season, data: [], error: true }))
-    }
-  }
-
-  function requestSeasonLoad() {
-    if (season === null) return
-    setLoadingSeason(true)
-    api.loadSeason(season)
-      .then(() => api.seasons().then(setSeasons))
-      .finally(() => setLoadingSeason(false))
-  }
-
   let centerContent
-  if (season === null) {
+  if (seasonListStatus === 'loading') {
     centerContent = <LoadingCard title="Season" message="Loading seasons..." />
-  } else if (seasonEntry?.status === 'error') {
-    centerContent = <LoadingCard title="Season unavailable" message="This season failed to load." />
-  } else if (isSeasonAvailable) {
-    centerContent = (
-      <Card title={`${season} season`}>
-        <div className="border-t border-surface-line p-4">
-          <p className="text-sm text-ink-mid">This season is available but has not been loaded yet.</p>
-          <button
-            type="button"
-            onClick={requestSeasonLoad}
-            disabled={loadingSeason}
-            className="mt-3 rounded-lg bg-indigo-500 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loadingSeason ? 'Loading...' : 'Load season'}
-          </button>
-        </div>
-      </Card>
-    )
-  } else if (isSeasonLoading) {
-    centerContent = (
-      <Card title={`Loading ${season}`}>
-        <IngestProgress season={season} onDone={refreshSeasonData} />
-      </Card>
-    )
+  } else if (seasonListStatus === 'error') {
+    centerContent = <LoadingCard title="Season unavailable" message="Could not load the season list. Please reload the page to try again." />
+  } else if (season === null) {
+    centerContent = <LoadingCard title="Season unavailable" message="No seasons are available yet." />
+  } else if (!canReadSeason) {
+    centerContent = <LoadingCard title="Season unavailable" message="Scores for this season are not available yet." />
   } else if (scheduleLoading) {
     centerContent = <LoadingCard title={`${season} scores`} message="Loading schedule..." />
   } else if (scheduleState.error) {
@@ -1183,7 +1102,7 @@ function SchedulePageBody() {
             season={season}
             onSeasonChange={setSeasonParam}
           />
-          <TeamsCard rankings={powerRankings} loading={powerLoading} />
+          {canReadSeason && <TeamsCard rankings={powerRankings} loading={powerLoading} />}
         </aside>
 
         <section className="grid min-w-0 content-start gap-5">
@@ -1191,7 +1110,7 @@ function SchedulePageBody() {
         </section>
 
         <aside className="grid h-fit gap-5">
-          {season !== null && (
+          {season !== null && canReadSeason && (
             <>
               <ConferenceLeadersCard conference="AFC" standings={standings} season={season} loading={standingsLoading || standingsState.error} />
               <ConferenceLeadersCard conference="NFC" standings={standings} season={season} loading={standingsLoading || standingsState.error} />
