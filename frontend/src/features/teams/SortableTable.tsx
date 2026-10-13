@@ -1,8 +1,17 @@
-import type { SummaryBox, SectionKind, TCol, SortDir, SectionTotals } from './types'
+import type { SummaryBox, SectionKind, TCol, SectionTotals } from './types'
 import type { TeamLeader } from '../../types'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import {
+  createSortedRowModel, rowSortingFeature, sortFn_basic, tableFeatures, useTable,
+  type ColumnDef, type SortingState, type OnChangeFn,
+} from '@tanstack/react-table'
 import { buildSummary } from './stats'
 import { Link } from 'react-router-dom'
+
+const features = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+})
 
 function SectionStrip({ items }: { items: SummaryBox[] }) {
   return (
@@ -19,23 +28,35 @@ function SectionStrip({ items }: { items: SummaryBox[] }) {
   )
 }
 
-export default function SortableTable({ title, section, players, cols, sortKey, sortDir, onSort, onClose, defaultLimit, totals, games }: {
+export default function SortableTable({ title, section, players, cols, sorting, onSortingChange, onClose, defaultLimit, totals, games }: {
   title: string; section: SectionKind; players: TeamLeader[]; cols: TCol[]
-  sortKey: string; sortDir: SortDir; onSort: (k: string) => void; onClose: () => void
+  sorting: SortingState; onSortingChange: OnChangeFn<SortingState>; onClose: () => void
   defaultLimit?: number
   totals: SectionTotals
   games: number
 }) {
   const [expanded, setExpanded] = useState(false)
+  const columns = useMemo<ColumnDef<typeof features, TeamLeader>[]>(() => cols.map(column => ({
+    id: column.key,
+    header: column.label,
+    accessorFn: column.sortVal,
+    sortFn: sortFn_basic,
+  })), [cols])
+  const table = useTable({
+    features,
+    data: players,
+    columns,
+    getRowId: player => player.player_id,
+    state: { sorting },
+    onSortingChange,
+    sortDescFirst: true,
+    enableSortingRemoval: false,
+    enableMultiSort: false,
+  })
   if (!players.length) return null
   const tradCount = cols.filter(c => c.kind === 'trad').length
   const advCount  = cols.filter(c => c.kind === 'adv').length
-  const sorted = [...players].sort((a, b) => {
-    const col = cols.find(c => c.key === sortKey)
-    if (!col) return 0
-    const diff = col.sortVal(b) - col.sortVal(a)
-    return sortDir === 'desc' ? diff : -diff
-  })
+  const sorted = table.getRowModel().rows
   const visible = defaultLimit && !expanded ? sorted.slice(0, defaultLimit) : sorted
   const hiddenCount = sorted.length - (defaultLimit ?? sorted.length)
   const thBase = 'py-2 px-3 text-xs font-medium whitespace-nowrap text-right cursor-pointer select-none hover:text-ink transition-colors'
@@ -47,7 +68,7 @@ export default function SortableTable({ title, section, players, cols, sortKey, 
       </div>
       <SectionStrip items={buildSummary(section, totals, games)} />
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table aria-label={`${title} statistics`} className="w-full text-sm">
           <thead>
             <tr className="border-b border-surface-line/50">
               <th colSpan={3} />
@@ -58,52 +79,57 @@ export default function SortableTable({ title, section, players, cols, sortKey, 
               <th className="py-2 pl-4 pr-2 text-xs font-medium text-ink-dim text-left whitespace-nowrap">Player</th>
               <th className="py-2 px-2 text-xs font-medium text-ink-dim text-left whitespace-nowrap">Pos</th>
               <th className="py-2 px-3 text-xs font-medium text-ink-dim text-right whitespace-nowrap">G</th>
-              {cols.map((c, i) => {
-                const active = sortKey === c.key
+              {table.getHeaderGroups().flatMap(group => group.headers).map((header, i) => {
+                const c = cols[i]
+                const direction = header.column.getIsSorted()
+                const active = !!direction
                 const sep = i === 0 || cols[i - 1].kind !== c.kind
                 return (
-                  <th key={c.key} onClick={() => onSort(c.key)}
+                  <th key={header.id} aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
                     className={`${thBase} ${sep ? 'border-l border-surface-line/40' : ''}
                       ${c.kind === 'adv' ? 'bg-surface-raise/10 text-ink-dim hover:text-ink-mid' : active ? 'text-ink' : 'text-ink-dim'}`}>
-                    <span className="flex items-center justify-end gap-1">
-                      {c.label}
-                      <span className={`text-[10px] ${active ? 'opacity-100' : 'opacity-0'}`}>{sortDir === 'desc' ? '↓' : '↑'}</span>
-                    </span>
+                    <button type="button" onClick={header.column.getToggleSortingHandler()} className="flex w-full items-center justify-end gap-1 cursor-pointer">
+                      <table.FlexRender header={header} />
+                      <span aria-hidden="true" className={`text-[10px] ${active ? 'opacity-100' : 'opacity-0'}`}>{direction === 'asc' ? '↑' : '↓'}</span>
+                    </button>
                   </th>
                 )
               })}
             </tr>
           </thead>
           <tbody>
-            {visible.map(p => (
-              <tr key={p.player_id} className="border-t border-surface-line/60 hover:bg-surface-raise/30">
-                <td className="py-2 pl-4 pr-2 whitespace-nowrap">
-                  <Link to={`/players/${p.player_id}`} onClick={onClose} className="text-indigo-400 hover:underline font-medium text-sm">{p.player_name}</Link>
-                </td>
-                <td className="py-2 px-2 text-xs text-ink-dim whitespace-nowrap">{p.position ?? '—'}</td>
-                <td className="py-2 px-3 text-right tabular-nums text-ink-dim text-sm">{p.games_played}</td>
-                {cols.map((c, i) => {
-                  const sep = i === 0 || cols[i - 1].kind !== c.kind
-                  const val = c.render(p, totals)
-                  const isNull = val === null || val === undefined
-                  const str = isNull ? null : String(val)
-                  const isPos = !isNull && str!.startsWith('+')
-                  const isNeg = !isNull && str!.startsWith('-')
-                  const shareVal = c.share ? c.share(p, totals) : 0
-                  return (
-                    <td key={c.key} className={`relative py-2 px-3 text-right tabular-nums text-sm whitespace-nowrap
-                      ${sep ? 'border-l border-surface-line/30' : ''}
-                      ${c.kind === 'adv' ? 'bg-surface-raise/10' : ''}
-                      ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win font-semibold' : isNeg ? 'text-data-loss font-semibold' : c.highlight ? 'text-ink font-bold' : c.kind === 'adv' ? 'text-ink-mid/80' : c.dim ? 'text-ink-dim' : 'text-ink-mid'}`}>
-                      {c.share && shareVal > 0 && !isNull && (
-                        <div className="pointer-events-none absolute inset-y-0 left-0 bg-data-win/15" style={{ width: `${Math.min(100, shareVal * 100)}%` }} />
-                      )}
-                      <span className="relative">{isNull ? '—' : str}</span>
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
+            {visible.map(row => {
+              const p = row.original
+              return (
+                <tr key={row.id} className="border-t border-surface-line/60 hover:bg-surface-raise/30">
+                  <td className="py-2 pl-4 pr-2 whitespace-nowrap">
+                    <Link to={`/players/${p.player_id}`} onClick={onClose} className="text-indigo-400 hover:underline font-medium text-sm">{p.player_name}</Link>
+                  </td>
+                  <td className="py-2 px-2 text-xs text-ink-dim whitespace-nowrap">{p.position ?? '—'}</td>
+                  <td className="py-2 px-3 text-right tabular-nums text-ink-dim text-sm">{p.games_played}</td>
+                  {cols.map((c, i) => {
+                    const sep = i === 0 || cols[i - 1].kind !== c.kind
+                    const val = c.render(p, totals)
+                    const isNull = val === null || val === undefined
+                    const str = isNull ? null : String(val)
+                    const isPos = !isNull && str!.startsWith('+')
+                    const isNeg = !isNull && str!.startsWith('-')
+                    const shareVal = c.share ? c.share(p, totals) : 0
+                    return (
+                      <td key={c.key} className={`relative py-2 px-3 text-right tabular-nums text-sm whitespace-nowrap
+                        ${sep ? 'border-l border-surface-line/30' : ''}
+                        ${c.kind === 'adv' ? 'bg-surface-raise/10' : ''}
+                        ${isNull ? 'text-ink-dim' : isPos ? 'text-data-win font-semibold' : isNeg ? 'text-data-loss font-semibold' : c.highlight ? 'text-ink font-bold' : c.kind === 'adv' ? 'text-ink-mid/80' : c.dim ? 'text-ink-dim' : 'text-ink-mid'}`}>
+                        {c.share && shareVal > 0 && !isNull && (
+                          <div className="pointer-events-none absolute inset-y-0 left-0 bg-data-win/15" style={{ width: `${Math.min(100, shareVal * 100)}%` }} />
+                        )}
+                        <span className="relative">{isNull ? '—' : str}</span>
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-surface-line/80 bg-surface-raise/40">

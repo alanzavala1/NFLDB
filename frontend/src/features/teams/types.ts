@@ -1,10 +1,10 @@
 import type { TeamLeader, TeamSplit } from '../../types'
-
-export type SortDir = 'asc' | 'desc'
+import type { SortingState } from '@tanstack/react-table'
 
 type ColKind = 'trad' | 'adv'
 
 export type SectionKind = 'passing' | 'rushing' | 'receiving' | 'scrimmage' | 'defense'
+export type SectionSorting = Record<SectionKind, SortingState>
 
 export type TCol = {
   key: string; label: string; kind: ColKind

@@ -1,30 +1,30 @@
-import type { SortDir } from './types'
+import type { SectionKind, SectionSorting } from './types'
+import { functionalUpdate, type SortingState, type Updater } from '@tanstack/react-table'
 import type { TeamProfile } from '../../types'
 import { useState, useEffect } from 'react'
 import { countTeamGames } from './selectors'
 import { teamLogoUrl, teamName } from '../../utils/teams'
 import StatsSections from './StatsSections'
 
-const DEFAULT_SORTS = {
-  passing:   { key: 'yds', dir: 'desc' as SortDir },
-  rushing:   { key: 'yds', dir: 'desc' as SortDir },
-  receiving: { key: 'yds', dir: 'desc' as SortDir },
-  scrimmage: { key: 'scrim', dir: 'desc' as SortDir },
-  defense:   { key: 'tot', dir: 'desc' as SortDir },
+const DEFAULT_SORTING: SectionSorting = {
+  passing:   [{ id: 'yds', desc: true }],
+  rushing:   [{ id: 'yds', desc: true }],
+  receiving: [{ id: 'yds', desc: true }],
+  scrimmage: [{ id: 'scrim', desc: true }],
+  defense:   [{ id: 'tot', desc: true }],
 }
 
 export default function FullStatsModal({ profile, onClose }: { profile: TeamProfile; onClose: () => void }) {
   const hasPlayoffs = profile.playoff_leaders?.length > 0
-  const [regSorts, setRegSorts]  = useState({ ...DEFAULT_SORTS })
-  const [postSorts, setPostSorts] = useState({ ...DEFAULT_SORTS })
+  const [regSorting, setRegSorting] = useState(DEFAULT_SORTING)
+  const [postSorting, setPostSorting] = useState(DEFAULT_SORTING)
   const regGames = countTeamGames(profile, 'reg')
   const postGames = countTeamGames(profile, 'post')
 
-  function makeSort(setSorts: typeof setRegSorts) {
-    return (section: string, key: string) => setSorts(prev => {
-      const cur = prev[section as keyof typeof prev]
-      return { ...prev, [section]: { key, dir: cur.key === key && cur.dir === 'desc' ? 'asc' : 'desc' } }
-    })
+  function makeSortingChange(setSorting: typeof setRegSorting) {
+    return (section: SectionKind, updater: Updater<SortingState>) => setSorting(previous => ({
+      ...previous, [section]: functionalUpdate(updater, previous[section]),
+    }))
   }
 
   useEffect(() => {
@@ -53,12 +53,12 @@ export default function FullStatsModal({ profile, onClose }: { profile: TeamProf
 
       <div className="flex-1 overflow-y-auto px-6 py-6 max-w-6xl mx-auto w-full">
         <div className="text-xs font-bold text-ink-dim uppercase tracking-widest mb-5">Regular Season</div>
-        <StatsSections leaders={profile.leaders} sorts={regSorts} onSort={makeSort(setRegSorts)} onClose={onClose} games={regGames} />
+        <StatsSections leaders={profile.leaders} sorting={regSorting} onSortingChange={makeSortingChange(setRegSorting)} onClose={onClose} games={regGames} />
 
         {hasPlayoffs && (
           <>
             <div className="text-xs font-bold text-ink-dim uppercase tracking-widest mb-5 mt-4">Postseason</div>
-            <StatsSections leaders={profile.playoff_leaders} sorts={postSorts} onSort={makeSort(setPostSorts)} onClose={onClose} games={postGames} />
+            <StatsSections leaders={profile.playoff_leaders} sorting={postSorting} onSortingChange={makeSortingChange(setPostSorting)} onClose={onClose} games={postGames} />
           </>
         )}
       </div>

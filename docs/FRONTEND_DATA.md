@@ -123,6 +123,17 @@ can name playoff rounds, and full-stat summaries count regular-season and playof
 games separately. Previously the UI tried to read this missing field through
 untyped casts. The tooltip now uses the chart library's inferred parameter types.
 
+Team's full-stat tables now use TanStack Table 9 for interactive sorting, matching
+Leaders. The existing numeric `sortVal` functions become column accessors; display
+formatting, share bars, summary strips, and team-total footers remain application
+code. The modal keeps independent controlled sorting state for every section in
+regular season and postseason. Header buttons support keyboard activation and
+expose direction through `aria-sort`, with one column sorted at a time and a
+descending/ascending cycle. Section preparation retains the established tie order.
+Scrimmage/defense reveal limits apply after sorting; totals include every qualifying
+player regardless of visible row count. Existing Table code is shared in the
+production bundle; this migration adds no dependency.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from
