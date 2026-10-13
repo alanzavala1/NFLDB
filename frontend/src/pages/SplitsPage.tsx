@@ -14,6 +14,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api, CURRENT_NFL_SEASON } from '../api'
+import { playerQueryOptions } from '../api/players'
 import type { PlayerSplit, TeamSplit, DefensiveSplit, SearchResult } from '../api'
 import Nav from '../components/Nav'
 import Card from '../components/Card'
@@ -446,7 +447,7 @@ export default function SplitsPage() {
   // Each player's official game log — source for Season/Opponent sections and
   // per-game drill-downs, so their totals match the game log exactly. Also
   // backfills name/headshot/sub for players that arrived via a shared URL (id only).
-  const playerProfiles = useQueries({ queries: players.map(p => ({ queryKey: ['player', p.id] as const, queryFn: () => api.player(p.id), staleTime: Infinity })) })
+  const playerProfiles = useQueries({ queries: players.map(p => playerQueryOptions(p.id)) })
   const entityMeta: EntityCard[] = mode === 'players'
     ? players.map((p, i) => { const prof = playerProfiles[i]?.data; return { key: p.id, label: p.name || prof?.player_name || p.id, sub: p.sub || (prof ? [prof.position, prof.team].filter(Boolean).join(' · ') : undefined), headshot: p.headshot ?? prof?.headshot_url, color: colorOf(i) } })
     : teams.map((t, i) => ({ key: t, label: teamName(t), sub: t, logo: teamLogoUrl(t), color: colorOf(i) }))

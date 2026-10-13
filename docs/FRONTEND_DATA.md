@@ -49,8 +49,22 @@ Player profiles now read the returned profile without starting season ingestion,
 polling ingestion status, or invalidating the profile for years without games.
 A known player without game records keeps their biography and shows an empty
 state. Request failures show an error and retry; a failed refresh preserves the
-cached profile. Player requests still use their existing API methods and hooks;
-their typed-client migration and feature extraction are the next focused items.
+cached profile.
+
+Profile and similar-player requests now live in `src/api/players.ts`, using the
+shared typed client and canonical query options. Cache keys include the player
+ID, and each request consumes Query's cancellation signal. The Player page uses
+these options directly; Splits uses the same profile options for its dynamic
+queries. Legacy API methods/hooks delegate to the same definitions. Both profile
+and comparables now inherit the normal five-minute freshness policy instead of
+keeping comparables or Splits profiles permanently fresh.
+
+The profile, league-rank context, and similar-player section have independent
+errors and retries. Successful cached results stay visible on refresh failures,
+including cached empty comparables. Empty comparables have an explicit message;
+their loading message describes fetching rather than implying preparation runs
+in the browser. Rank context waits for the profile's latest regular-season year
+and shares the existing leaders cache. Player feature extraction remains pending.
 
 ## Follow one request
 

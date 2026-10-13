@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import { CURRENT_NFL_SEASON } from '../api'
 import type { PlayerProfile, PlayerGame, NgsStats, SnapTotals, SituationalStats, KickingStats, PlayerWpa, PlayerAdvStats, PlayerComparable, LeagueLeader, CombineData, DepthChartEntry, InjuryStatus } from '../api'
-import { useLeaders, usePlayer, usePlayerComparables } from '../queries'
+import { leadersQueryOptions } from '../api/leaders'
+import { playerQueryOptions, playerComparablesQueryOptions } from '../api/players'
 import Nav from '../components/Nav'
 import Card from '../components/Card'
 import { QueryFailure, QueryLoading } from '../components/QueryFeedback'
@@ -1033,22 +1035,23 @@ function ComparableCard({ p, pos }: { p: PlayerComparable; pos: string }) {
 }
 
 function ComparablesSection({ playerId, pos }: { playerId: string; pos: string }) {
-  const { data: comps = [], isPending: loading } = usePlayerComparables(playerId)
+  const comparablesQuery = useQuery(playerComparablesQueryOptions(playerId))
+  const { data: comps = [], isPending: loading } = comparablesQuery
 
   if (loading) return (
     <div className="mt-8">
       <div className="text-xs font-bold text-ink-dim uppercase tracking-widest mb-3">Similar Players</div>
-      <p className="text-xs text-ink-dim pl-1">Computing comparables…</p>
+      <QueryLoading>Loading similar players…</QueryLoading>
     </div>
   )
-  if (comps.length === 0) return null
-
   return (
     <div className="mt-8">
       <div className="flex items-center gap-3 mb-3">
         <span className="text-xs font-bold text-ink-dim uppercase tracking-widest">Similar Players</span>
         <span className="text-xs text-ink-dim">Cosine similarity on career rate stats · same position group</span>
       </div>
+      <QueryFailure resource="similar players" error={comparablesQuery.error} hasData={comparablesQuery.data !== undefined} onRetry={() => void comparablesQuery.refetch()} />
+      {!comps.length && !comparablesQuery.error && <p className="text-sm text-ink-dim">No similar players are available.</p>}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {comps.map(p => <ComparableCard key={p.player_id} p={p} pos={pos} />)}
       </div>
@@ -1309,7 +1312,7 @@ export default function PlayerPage() {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const playerQuery = usePlayer(playerId)
+  const playerQuery = useQuery(playerQueryOptions(playerId))
   const { data: player, isPending: loading } = playerQuery
 
   // Most recent regular season the player appears in -> drives the "5th in NFL" context
@@ -1319,7 +1322,8 @@ export default function PlayerPage() {
     return regSeasons.length === 0 ? null : Math.max(...regSeasons)
   }, [player])
 
-  const { data: recentLeadersData } = useLeaders(recentSeason)
+  const recentLeadersQuery = useQuery(leadersQueryOptions(recentSeason))
+  const { data: recentLeadersData } = recentLeadersQuery
   const recentLeaders: { season: number; leaders: LeagueLeader[] } | null =
     recentSeason != null && recentLeadersData ? { season: recentSeason, leaders: recentLeadersData } : null
 
@@ -1375,6 +1379,7 @@ export default function PlayerPage() {
       <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
         <QueryFailure resource="player profile" error={playerQuery.error} hasData onRetry={() => void playerQuery.refetch()} />
+        <QueryFailure resource="league rank context" error={recentLeadersQuery.error} hasData={recentLeadersData !== undefined} onRetry={() => void recentLeadersQuery.refetch()} />
         {/* Profile header */}
         <Card title={player.player_name} className="mb-8"><div className="flex items-start gap-6 border-t border-surface-line p-5 flex-wrap">
           {player.headshot_url

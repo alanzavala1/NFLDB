@@ -2,6 +2,7 @@ import { fetchSeasons } from './api/seasons'
 import { fetchSchedule } from './api/schedule'
 import { fetchLeaders } from './api/leaders'
 import { fetchWpaLeaders } from './api/wpaLeaders'
+import { fetchPlayer, fetchPlayerComparables } from './api/players'
 import { fetchStandings } from './features/standings/api'
 
 /**
@@ -74,7 +75,7 @@ export const api = {
   game:          (gameId: string)              => get<GameDetail>(`/games/${gameId}`),
   gameLineup:    (gameId: string)              => get<GameLineup>(`/games/${gameId}/lineup`),
   playerChart:   (gameId: string, playerId: string) => get<PlayerChart>(`/games/${gameId}/players/${playerId}/chart`),
-  player:        (playerId: string)            => get<PlayerProfile>(`/players/${playerId}`),
+  player:        fetchPlayer,
   team:          (abbrev: string, season: number) => get<TeamProfile>(`/teams/${abbrev}?season=${season}`),
   teamRoster:    (team: string, season: number) => get<RosterPlayer[]>(`/teams/${team}/roster?season=${season}`),
   teamDepthChart: (team: string, season: number, week?: number) =>
@@ -86,7 +87,7 @@ export const api = {
   standings:     fetchStandings,
   leaders:       fetchLeaders,
   wpaLeaders:    fetchWpaLeaders,
-  comparables:   (playerId: string)            => get<PlayerComparable[]>(`/players/${playerId}/comparables`),
+  comparables:   fetchPlayerComparables,
   splits:        (playerId: string)            => get<PlayerSplit[]>(`/players/${playerId}/splits`),
   defSplits:     (playerId: string)            => get<DefensiveSplit[]>(`/players/${playerId}/def-splits`),
   search:        (q: string)                   => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),

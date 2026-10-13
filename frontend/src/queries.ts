@@ -17,6 +17,7 @@ import { seasonsQueryOptions } from './api/seasons'
 import { scheduleQueryOptions } from './api/schedule'
 import { leadersQueryOptions } from './api/leaders'
 import { wpaLeadersQueryOptions } from './api/wpaLeaders'
+import { playerQueryOptions, playerComparablesQueryOptions } from './api/players'
 import { standingsQueryOptions } from './features/standings/queries'
 import type {
   DepthChartEntry, DivisionStandings, GameDetail, InjuryStatus,
@@ -65,22 +66,16 @@ export function useGame(gameId: string | undefined, options?: Options<GameDetail
 
 // ── Player ───────────────────────────────────────────────────────────────────
 
-export function usePlayer(playerId: string | undefined, options?: Options<PlayerProfile>) {
+export function usePlayer(playerId: string | undefined, options?: Options<PlayerProfile, readonly ['player', string | undefined]>) {
   return useQuery({
-    queryKey: ['player', playerId] as const,
-    queryFn: () => api.player(playerId!),
-    enabled: !!playerId,
+    ...playerQueryOptions(playerId),
     ...options,
   })
 }
 
-export function usePlayerComparables(playerId: string | undefined, options?: Options<PlayerComparable[]>) {
+export function usePlayerComparables(playerId: string | undefined, options?: Options<PlayerComparable[], readonly ['player-comparables', string | undefined]>) {
   return useQuery({
-    queryKey: ['player-comparables', playerId] as const,
-    queryFn: () => api.comparables(playerId!),
-    enabled: !!playerId,
-    // Comparables rebuild during ingest but are otherwise stable.
-    staleTime: FOREVER,
+    ...playerComparablesQueryOptions(playerId),
     ...options,
   })
 }

@@ -1,17 +1,6 @@
-import { expect, type Page } from '@playwright/test'
-import type { PlayerProfile } from '../src/types'
-import { test, mockApi } from './fixtures/scores'
-import { playerGame, playerProfile } from './fixtures/playerProfile'
-
-async function mockProfile(page: Page, profile: PlayerProfile = playerProfile) {
-  await mockApi(page, [
-    { season: 2026, status: 'loading' }, { season: 2025, status: 'available' },
-    { season: 2024, status: 'loaded' }, { season: 2023, status: 'loaded' },
-  ])
-  await page.route('**/api/leaders?*', route => route.fulfill({ json: [] }))
-  await page.route('**/api/players/*', route => route.fulfill({ json: profile }))
-  await page.route('**/api/players/*/comparables', route => route.fulfill({ json: [] }))
-}
+import { expect } from '@playwright/test'
+import { test } from './fixtures/scores'
+import { mockProfile, playerGame, playerProfile } from './fixtures/playerProfile'
 
 test('opening a partial career reads the profile without seasonal preparation or polling', async ({ page }) => {
   await page.clock.install()
