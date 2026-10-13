@@ -1,3 +1,31 @@
+[project]
+name = "nfldb-api"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+# Start from the versions verified with the assistant compatibility repair.
+# uv.lock also records their transitive dependencies and platform-specific files.
+dependencies = [
+    "anthropic==1.13.0",
+    "duckdb==1.5.6",
+    "fastapi==0.143.0",
+    "httpx==0.28.1",
+    "nfl-data-py==0.3.2",
+    "numpy==2.5.4",
+    "pandas==3.0.6",
+    "pydantic==2.14.0",
+    "python-dotenv==1.2.4",
+    "tzdata==2026.5",
+    "uvicorn[standard]==0.54.0",
+]
+
+[dependency-groups]
+dev = ["pytest==9.1.1"]
+
+[tool.uv]
+# This application runs from api/; it is not an installable Python package.
+package = false
+required-version = "==0.11.23"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

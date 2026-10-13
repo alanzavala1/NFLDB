@@ -4,10 +4,15 @@
 
 # Virtualenvs (the real one + the stray empty one at api/ root)
 api/venv/
+api/.venv/
 api/Scripts/
 api/Lib/
 api/Include/
 api/pyvenv.cfg
+
+# Local environment files can contain credentials. Supply secrets at runtime.
+**/.env
+**/.env.*
 
 # DuckDB transient + backups/exports (keep only api/data/nfl.duckdb)
 api/data/*.wal

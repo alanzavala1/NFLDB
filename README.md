@@ -135,7 +135,11 @@ a season is not covered — by returning a named section of the project's own
 methodology document, so an explanation is retrieved rather than recalled on the
 same terms as every figure. Answers stream over SSE, follow-up
 questions carry text context, sampling is disabled (temperature 0), and each
-question has a hard 10-tool-call budget and per-IP rate limiting.
+question has a hard 10-tool-execution budget and per-IP rate limiting. Both
+assistant paths also stop after at most 11 model turns, even if the model keeps
+requesting tools after a denial or repeatedly supplies invalid calls. If it
+still requests tools on the last turn, the assistant returns a retry message
+instead of presenting intermediate text as a completed answer.
 
 The design constraint throughout is that statistical definitions live in
 code, not in the prompt. Official totals are reconciled regular-season-only
@@ -293,12 +297,25 @@ nfl-platform/
 ## Setup
 
 **Backend**
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) version
+`0.11.23` once (`python -m pip install uv==0.11.23`), then:
+
 ```bash
 cd api
-python -m venv venv && venv\Scripts\activate     # Windows
-pip install -r requirements.txt
-uvicorn main:app --reload                         # :8000 (API under /api)
+uv sync --locked
+uv run --locked uvicorn main:app --reload         # :8000 (API under /api)
 ```
+
+uv creates `api/.venv` using Python 3.12, selected by `api/.python-version`.
+`api/pyproject.toml` declares dependencies; `api/uv.lock` records their exact
+versions and transitive dependencies. `--locked` refuses an out-of-date lockfile
+instead of silently changing versions. CI, offline refresh, and Docker use this
+same lockfile. Existing `api/venv` environments are no longer used by these commands.
+
+To deliberately update a dependency, change its version in `api/pyproject.toml`,
+run `uv lock` and `uv sync --locked` from `api/`, then run the tests and review both
+files together. Commit `uv.lock`; never commit `.venv`.
 
 **Frontend**
 ```bash
@@ -307,8 +324,10 @@ npm install
 npm run dev                                        # :5173 (proxies /api → :8000)
 ```
 
-On first boot the API auto-loads recent seasons (a few minutes each, downloads
-play-by-play). For a full historical build, run the ingest for the seasons you want.
+The API expects a prepared `api/data/nfl.duckdb`; startup does not download NFL
+data. Production data refresh runs offline in GitHub Actions (see [DEPLOY.md](./DEPLOY.md)).
+For a local historical build, stop the API server and run
+`uv run --locked python -m ingest --seasons 2024 2025` from `api/`.
 
 > **Run a single process.** DuckDB is an embedded, single-writer database, so the
 > API runs as one worker — concurrency is handled inside the process (each request
@@ -318,7 +337,8 @@ play-by-play). For a full historical build, run the ingest for the seasons you w
 ## Tests
 
 ```bash
-cd api && pytest
+cd api
+uv run --locked pytest
 ```
 
 Covers endpoint behavior, data-quality **invariants**, and

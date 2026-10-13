@@ -57,9 +57,12 @@ from routers.teams import get_team_injuries as _team_injuries_query
 # Set ANTHROPIC_MODEL=claude-opus-4-8 for the best tool-routing when you want it.
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
 
-# Hard ceiling on tool executions per question, so one prompt can't loop
-# expensively. When exceeded, tools tell the model to finalize.
+# Bound tool work separately from model turns: a model can ignore a budget
+# denial or repeatedly request unknown tools / invalid arguments.
 _MAX_TOOL_CALLS = 10
+# Allow ten single-tool turns plus a final answer; enforce in both API paths.
+_MAX_MODEL_TURNS = _MAX_TOOL_CALLS + 1
+_LIMIT_ANSWER = "I couldn't complete that answer. Please try a more specific question."
 
 _client: anthropic.Anthropic | None = None
 
@@ -1563,7 +1566,9 @@ def run_ask(question: str, history: list[dict] | None = None) -> dict:
     runner = client.beta.messages.tool_runner(
         model=MODEL,
         max_tokens=2048,
-        temperature=0,
+        max_iterations=_MAX_MODEL_TURNS,
+        # Haiku 4.5 still accepts temperature; SDK 1.x takes it via extra_body.
+        extra_body={"temperature": 0},
         system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
         tools=tools,
         messages=_conversation_messages(question, history),
@@ -1576,7 +1581,7 @@ def run_ask(question: str, history: list[dict] | None = None) -> dict:
         "cache_read_input": 0,
         "output": 0,
     }
-    for message in runner:
+    for turn, message in enumerate(runner, start=1):
         message_usage = getattr(message, "usage", None)
         if message_usage is not None:
             usage["uncached_input"] += int(
@@ -1594,6 +1599,11 @@ def run_ask(question: str, history: list[dict] | None = None) -> dict:
         text = "".join(b.text for b in message.content if b.type == "text").strip()
         if text:
             answer = text  # the final assistant turn's text wins
+        if turn >= _MAX_MODEL_TURNS and getattr(message, "stop_reason", None) == "tool_use":
+            # The SDK dispatches requested tools when iteration resumes. Stop
+            # here so the last turn cannot execute tools without an answer turn.
+            answer = _LIMIT_ANSWER
+            break
 
     _record_spend(usage)
     # `usage` and `raw_results` are internal telemetry (the eval's cost report
@@ -1629,11 +1639,11 @@ def run_ask_stream(question: str, history: list[dict] | None = None):
     messages = _conversation_messages(question, history)
     answer = ""
 
-    while True:
+    for turn in range(_MAX_MODEL_TURNS):
         with client.messages.stream(
             model=MODEL,
             max_tokens=2048,
-            temperature=0,
+            extra_body={"temperature": 0},
             system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
             tools=tool_params,
             messages=messages,
@@ -1653,6 +1663,9 @@ def run_ask_stream(question: str, history: list[dict] | None = None):
 
         if final.stop_reason != "tool_use":
             answer = "".join(b.text for b in final.content if b.type == "text").strip()
+            break
+        if turn == _MAX_MODEL_TURNS - 1:
+            answer = _LIMIT_ANSWER
             break
 
         # Feed the requested tools' results back, then loop for the next turn.
