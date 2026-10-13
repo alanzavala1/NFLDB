@@ -11,3 +11,7 @@ export interface GameOrigin {
 export interface PlayerLocationState {
   fromGame?: GameOrigin
 }
+
+export interface GameLocationState {
+  fromWeek?: number
+}

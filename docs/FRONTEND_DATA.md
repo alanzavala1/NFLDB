@@ -144,6 +144,30 @@ entry, so back/forward restores the view using Query's cache. Re-selecting the
 same explicit year does not create a duplicate entry. Revealed sidebar rows
 remain local UI state; there is no effect synchronizing a second selected year.
 
+Games now uses the shared typed client and canonical definitions in
+`src/api/games.ts` for detail, lineup, and player charts. Its season schedule
+uses the existing `src/api/schedule.ts` definition, sharing the same cache as
+Scores and Standings. Detail and lineup start independently; schedule waits for
+the detail response's season, and a chart starts only when a player is selected.
+Chart keys include both game ID and player ID, so one player's different games
+cannot share a chart result. Requests consume Query's cancellation signal;
+an in-flight shared schedule can remain needed by another observer, while a gap
+between observers can cancel and restart it. Fresh completed results are reused.
+
+All four resources expose pending, error, and retry states. Cached successful
+results remain visible on refresh failures, including empty lineups, schedules,
+and charts. Empty data is distinguished from pending requests; a lineup failure
+no longer displays permanent loading, and a missing canonical player ID starts
+no chart request. Switching game routes resets the local tab and selected player
+while separate query keys prevent late responses from replacing the new game.
+Existing game/player origin state, statistical formatting, and live score
+overlays remain in place. The live provider still owns pacing and ordering.
+
+Ordinary game queries inherit the normal five-minute freshness policy. The
+compatibility API methods and `useGame` hook delegate to the new definitions;
+the hook no longer treats an uncharted game as permanently fresh. Game components
+and CSS remain in their existing large files for the next structural checkpoint.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from
@@ -191,7 +215,8 @@ refresh keeps the last successful result visible with a warning and retry button
 ## Migration boundary
 
 Shared season and schedule requests live in `src/api/seasons.ts` and
-`src/api/schedule.ts`; leaders and power rankings have matching resource modules.
+`src/api/schedule.ts`; games, players, teams, leaders, and power rankings have
+matching resource modules.
 Standings-specific requests and queries live with the
 Standings feature. Existing `src/api.ts` methods and `src/queries.ts` hooks
 delegate migrated resources to the new implementations so there are no

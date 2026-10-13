@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { api } from '../api'
-import type { GameDetail, GameLineup, LineupPlayer, LineupScoringEvent, LineupTeam, PlayerChart } from '../api'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { playerChartQueryOptions } from '../api/games'
+import { QueryFailure, QueryLoading } from './QueryFeedback'
+import type { Game, GameDetail, GameLineup, LineupPlayer, LineupScoringEvent, LineupTeam, PlayerChart } from '../api'
 import { teamName, teamPrimaryColor } from '../utils/teams'
 
 type Unit = 'offense' | 'defense'
@@ -317,7 +319,7 @@ function statColor(key: string, value: unknown) {
   return Number(value) >= 0 ? 'var(--win)' : 'var(--rate-bad)'
 }
 
-export function GameRail({ game, lineup, sameRound }: { game: GameDetail; lineup: GameLineup; sameRound: GameDetail[] }) {
+export function GameRail({ game, lineup, sameRound, scheduleFeedback }: { game: GameDetail; lineup: GameLineup; sameRound: Game[]; scheduleFeedback?: ReactNode }) {
   const yt = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${lineup.away_team} vs ${lineup.home_team} ${lineup.season} week ${lineup.week} highlights`)}`
   return <aside className="rail">
     <section className="card"><div className="card-h">Highlights <a className="micro act" href={yt} target="_blank" rel="noreferrer">YouTube ↗</a></div><a className="thumb" href={yt} target="_blank" rel="noreferrer"><span className="play"><i>▶</i></span><span className="tl">{lineup.away_team} vs {lineup.home_team} Game Highlights</span></a></section>
@@ -328,7 +330,7 @@ export function GameRail({ game, lineup, sameRound }: { game: GameDetail; lineup
       {(game.temp != null || game.wind != null) && <div className="vrow"><span className="glyph">◌</span><span className="lab">Weather</span><span className="val">{game.temp != null ? `${game.temp}°F` : '-'}<small>{game.wind != null ? `wind ${game.wind} mph` : ''}</small></span></div>}
       {(game.spread_line != null || game.total_line != null) && <div className="vrow"><span className="glyph">⌁</span><span className="lab">Closing line</span><span className="val">{spreadLabel(game)}<small>{game.total_line != null ? `O/U ${game.total_line} · via nflverse` : 'via nflverse'}</small></span></div>}
     </section>
-    <section className="card"><div className="card-h">{roundTitle(game)}</div>{sameRound.map(g => <div className={`row pg ${g.game_id === game.game_id ? 'cur' : ''}`} key={g.game_id} style={{ display: 'grid' }}><span className="lbl">{roundLabel(g.game_type)}</span><span className="m"><span className={`tline ${(g.away_score ?? 0) < (g.home_score ?? 0) ? 'dim' : ''}`}><span className="chip" style={{ background: teamPrimaryColor(g.away_team) }}>{g.away_team}</span>{teamNickname(g.away_team)}<span className="scr">{g.away_score ?? '-'}</span></span><span className={`tline ${(g.home_score ?? 0) < (g.away_score ?? 0) ? 'dim' : ''}`}><span className="chip" style={{ background: teamPrimaryColor(g.home_team) }}>{g.home_team}</span>{teamNickname(g.home_team)}<span className="scr">{g.home_score ?? '-'}</span></span></span><span className="ft">FT</span></div>)}</section>
+    <section className="card"><div className="card-h">{roundTitle(game)}</div>{scheduleFeedback}{sameRound.map(g => <div className={`row pg ${g.game_id === game.game_id ? 'cur' : ''}`} key={g.game_id} style={{ display: 'grid' }}><span className="lbl">{roundLabel(g.game_type)}</span><span className="m"><span className={`tline ${(g.away_score ?? 0) < (g.home_score ?? 0) ? 'dim' : ''}`}><span className="chip" style={{ background: teamPrimaryColor(g.away_team) }}>{g.away_team}</span>{teamNickname(g.away_team)}<span className="scr">{g.away_score ?? '-'}</span></span><span className={`tline ${(g.home_score ?? 0) < (g.away_score ?? 0) ? 'dim' : ''}`}><span className="chip" style={{ background: teamPrimaryColor(g.home_team) }}>{g.home_team}</span>{teamNickname(g.home_team)}<span className="scr">{g.home_score ?? '-'}</span></span></span><span className="ft">FT</span></div>)}</section>
   </aside>
 }
 
@@ -548,13 +550,8 @@ function avgDepthOfTarget(events: PlayerChart['events']) {
 }
 
 function Popup({ game, player, onClose }: { game: GameDetail; player: LineupPlayer | null; onClose: () => void }) {
-  const [chart, setChart] = useState<PlayerChart | null>(null)
-  useEffect(() => {
-    if (!player?.player_id) return
-    let cancelled = false
-    api.playerChart(game.game_id, player.player_id).then(d => { if (!cancelled) setChart(d) })
-    return () => { cancelled = true }
-  }, [game.game_id, player?.player_id])
+  const chartQuery = useQuery(playerChartQueryOptions(game.game_id, player?.player_id ?? undefined))
+  const chart = chartQuery.data
   useEffect(() => {
     if (!player) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -587,10 +584,16 @@ function Popup({ game, player, onClose }: { game: GameDetail; player: LineupPlay
       ? "From nflverse play-by-play: lane = recorded pass direction (left/middle/right), band = air yards. Cells show completions/attempts and yards — exact counts, drawn at the data's real resolution."
       : 'From nflverse play-by-play and official game stats.'
   const ungraded = ungradedReason(player)
-  return <div className="lineup-overlay" onClick={onClose}><div className="lineup-modal" onClick={e => e.stopPropagation()}>
-    <div className="modal-head"><div className="modal-avatar" style={{ background: teamPrimaryColor(player.team) }}>{player.headshot_url ? <img src={player.headshot_url} alt="" /> : initials(player.player_name)}</div><div><div className="modal-name">{player.player_name}</div><div className="modal-sub">{player.position} · {player.team} · {gameLabel(game)} · {pct(player.snap_pct)} of snaps</div>{ungraded && <div className="modal-sub ungraded">Not graded — {ungraded}</div>}</div>{player.rating != null && <span className={`rbadge ${ratingClass(player.rating)} modal-rating`}>{player.rating.toFixed(1)}{player.rating >= 8.5 ? ' ✦' : ''}</span>}{ungraded && <span className="rbadge b-none modal-rating" title={`Not graded — ${ungraded}`}>–</span>}<button className="modal-close" onClick={onClose}>✕</button></div>
+  return <div className="lineup-overlay" onClick={onClose}><div className="lineup-modal" role="dialog" aria-modal="true" aria-label={`${player.player_name} game chart`} onClick={e => e.stopPropagation()}>
+    <div className="modal-head"><div className="modal-avatar" style={{ background: teamPrimaryColor(player.team) }}>{player.headshot_url ? <img src={player.headshot_url} alt="" /> : initials(player.player_name)}</div><div><div className="modal-name">{player.player_name}</div><div className="modal-sub">{player.position} · {player.team} · {gameLabel(game)} · {pct(player.snap_pct)} of snaps</div>{ungraded && <div className="modal-sub ungraded">Not graded — {ungraded}</div>}</div>{player.rating != null && <span className={`rbadge ${ratingClass(player.rating)} modal-rating`}>{player.rating.toFixed(1)}{player.rating >= 8.5 ? ' ✦' : ''}</span>}{ungraded && <span className="rbadge b-none modal-rating" title={`Not graded — ${ungraded}`}>–</span>}<button className="modal-close" aria-label="Close player chart" onClick={onClose}>✕</button></div>
+    <QueryFailure resource="player chart" error={chartQuery.error} hasData={chart !== undefined} onRetry={() => void chartQuery.refetch()} />
+    {player.player_id && chartQuery.isPending && <QueryLoading>Loading player chart…</QueryLoading>}
+    {!player.player_id && <p className="micro">No chart is available for this player.</p>}
+    {chart && events.length === 0 && stats.length === 0 && secondary.length === 0 && <p className="micro">No chart data is available for this player in this game.</p>}
+    {chart && <>
     <div className={`modal-grid ${role === 'defender' ? 'single' : ''}`}><div><div className="micro popup-title">{title}</div>{stats.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}{adot != null && <div className="rrow"><span>Average depth of target</span><b style={{ marginLeft: 'auto' }}>{adot.toFixed(1)}</b></div>}{secondary.map(fam => <div key={fam.title}><div className="micro popup-title">{fam.title}</div>{fam.rows.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}</div>)}</div>{showZones && <div className="target-map"><TargetMap events={events} role={role} /><ZoneGrid events={events} /></div>}{showRush && <div className="target-map"><RunMap events={events} /><GapStrip events={events} /></div>}</div>
     <div className="modal-foot">{footer}</div>
+    </>}
   </div></div>
 }
 
@@ -601,7 +604,7 @@ export default function GameLineupView({ game, lineup }: { game: GameDetail; lin
 
   const away = useMemo(() => lineup?.teams.find(t => t.team === game.away_team), [lineup, game.away_team])
   const home = useMemo(() => lineup?.teams.find(t => t.team === game.home_team), [lineup, game.home_team])
-  if (!lineup || !away || !home) return <div className="lineup-card card loading">Loading lineup…</div>
+  if (!lineup || !away || !home) return <div className="lineup-card card">No lineup data is available for this game.</div>
   // Matchup view: the possessing team's offense on the bottom half, the
   // opposing defense mirrored on top — one real football situation at a time.
   const off = ball === 'away' ? away : home

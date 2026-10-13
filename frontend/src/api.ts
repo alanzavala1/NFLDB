@@ -1,5 +1,6 @@
 import { fetchSeasons } from './api/seasons'
 import { fetchSchedule } from './api/schedule'
+import { fetchGame, fetchGameLineup, fetchPlayerChart } from './api/games'
 import { fetchLeaders } from './api/leaders'
 import { fetchWpaLeaders } from './api/wpaLeaders'
 import { fetchPlayer, fetchPlayerComparables } from './api/players'
@@ -73,9 +74,9 @@ export const api = {
   seasons:       fetchSeasons,
   schedule:      fetchSchedule,
   liveScoreboard: ()                           => get<Scoreboard>('/live/scoreboard'),
-  game:          (gameId: string)              => get<GameDetail>(`/games/${gameId}`),
-  gameLineup:    (gameId: string)              => get<GameLineup>(`/games/${gameId}/lineup`),
-  playerChart:   (gameId: string, playerId: string) => get<PlayerChart>(`/games/${gameId}/players/${playerId}/chart`),
+  game:          fetchGame,
+  gameLineup:    fetchGameLineup,
+  playerChart:   fetchPlayerChart,
   player:        fetchPlayer,
   team:          fetchTeam,
   teamRoster:    fetchTeamRoster,

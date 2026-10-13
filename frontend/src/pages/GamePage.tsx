@@ -1,15 +1,18 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import { AreaChart, Area, Line, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { api } from '../api'
-import type { GameDetail, GameLineup, PlayerStats, WeekGroup, WinProbPlay } from '../api'
+import type { GameDetail, GameLineup, PlayerStats, WinProbPlay } from '../api'
+import { gameQueryOptions, gameLineupQueryOptions } from '../api/games'
+import { scheduleQueryOptions } from '../api/schedule'
+import { QueryFailure, QueryLoading } from '../components/QueryFeedback'
 import Nav from '../components/Nav'
 import GameLineupView, { GameRail, GameScorers, LINEUP_CSS } from '../components/GameLineupView'
 import Card from '../components/Card'
 import LiveGameCard from '../components/LiveGameCard'
 import { LiveScoresProvider, useLiveGame } from '../hooks/useLiveScores'
 import type { LiveGameOut } from '../types'
-import type { GameOrigin as GameCtx } from '../types/navigation'
+import type { GameOrigin as GameCtx, GameLocationState } from '../types/navigation'
 import { teamLogoUrl, teamName, teamPrimaryColor } from '../utils/teams'
 
 const GameContext = createContext<GameCtx | null>(null)
@@ -743,33 +746,30 @@ function GamePageBody() {
   const { gameId } = useParams<{ gameId: string }>()
   const live = useLiveGame(gameId)
   const location = useLocation()
-  const fromWeek: number | undefined = (location.state as any)?.fromWeek
-  const [game, setGame] = useState<GameDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  const fromWeek = (location.state as GameLocationState | null)?.fromWeek
+  const gameQuery = useQuery(gameQueryOptions(gameId))
+  const { data: game } = gameQuery
   const [tab, setTab] = useState<GameTab>('overview')
-  const [lineup, setLineup] = useState<GameLineup | null>(null)
-  const [weeks, setWeeks] = useState<WeekGroup[]>([])
-  const season = game?.season
+  const lineupQuery = useQuery(gameLineupQueryOptions(gameId))
+  const lineup = lineupQuery.data ?? null
+  const scheduleQuery = useQuery(scheduleQueryOptions(game?.season ?? null))
+  const weeks = scheduleQuery.data
   // Show the live card only while there is nothing charted to replace it.
   const showLiveCard = !!live && live.state !== 'pre' && !!game && game.away.length === 0 && game.home.length === 0
 
-  useEffect(() => {
-    if (!gameId) return
-    api.game(gameId).then(setGame).finally(() => setLoading(false))
-  }, [gameId])
-  useEffect(() => { if (gameId) api.gameLineup(gameId).then(setLineup).catch(() => setLineup(null)) }, [gameId])
-  useEffect(() => { if (season) api.schedule(season).then(setWeeks).catch(() => setWeeks([])) }, [season])
-
   const sameRound = useMemo(() => {
     if (!game) return []
-    const all = weeks.flatMap(w => w.games) as unknown as GameDetail[]
+    const all = (weeks ?? []).flatMap(w => w.games)
     if (game.game_type === 'REG') return all.filter(g => g.week === game.week)
     const teams = new Set([game.away_team, game.home_team])
     return all.filter(g => g.game_type !== 'REG' && g.away_score != null && g.home_score != null)
       .filter(g => teams.has(g.away_team) || teams.has(g.home_team) || g.game_id === game.game_id)
   }, [weeks, game])
 
-  if (loading) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Loading...</p></div>
+  if (gameQuery.isPending) return <div className="min-h-screen bg-surface-bg"><Nav /><div className="p-8"><QueryLoading>Loading game…</QueryLoading></div></div>
+  if (gameQuery.isError && !game) return <div className="min-h-screen bg-surface-bg"><Nav /><div className="p-8">
+    <QueryFailure resource="game" error={gameQuery.error} hasData={false} onRetry={() => void gameQuery.refetch()} />
+  </div></div>
   if (!game) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Game not found.</p></div>
 
   return (
@@ -778,6 +778,10 @@ function GamePageBody() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <GameContext.Provider value={{ gameId: game.game_id, season: game.season, week: game.week, awayTeam: game.away_team, homeTeam: game.home_team, fromWeek }}>
           <style>{LINEUP_CSS}</style>
+          <QueryFailure resource="game" error={gameQuery.error} hasData onRetry={() => void gameQuery.refetch()} />
+          <QueryFailure resource="lineup" error={lineupQuery.error} hasData={lineupQuery.data !== undefined} onRetry={() => void lineupQuery.refetch()} />
+          {lineupQuery.isPending && <QueryLoading>Loading lineup…</QueryLoading>}
+          <QueryFailure resource="game schedule" error={scheduleQuery.error} hasData={weeks !== undefined} onRetry={() => void scheduleQuery.refetch()} />
           <GameHeader game={game} lineup={lineup} tab={tab} onTab={setTab} live={live} />
           <div className="lineup-page">
           <main className="feed">
@@ -792,7 +796,7 @@ function GamePageBody() {
               <BoxScore game={game} />
             </>
           )}
-          {tab === 'lineup' && <GameLineupView game={game} lineup={lineup} />}
+          {tab === 'lineup' && lineup && <GameLineupView game={game} lineup={lineup} />}
           {tab === 'stats' && (
             <>
               <BoxScore game={game} />
@@ -807,7 +811,10 @@ function GamePageBody() {
             </>
           )}
           </main>
-          {lineup && <GameRail game={game} lineup={lineup} sameRound={sameRound} />}
+          {lineup && <GameRail game={game} lineup={lineup} sameRound={sameRound} scheduleFeedback={
+            scheduleQuery.isPending ? <QueryLoading>Loading game schedule…</QueryLoading>
+              : weeks !== undefined && sameRound.length === 0 ? <p className="micro">No other game results are available for this round.</p> : null
+          } />}
           </div>
         </GameContext.Provider>
 
@@ -818,9 +825,10 @@ function GamePageBody() {
 
 
 export default function GamePage() {
+  const { gameId } = useParams<{ gameId: string }>()
   return (
     <LiveScoresProvider>
-      <GamePageBody />
+      <GamePageBody key={gameId} />
     </LiveScoresProvider>
   )
 }

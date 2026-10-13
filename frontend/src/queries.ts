@@ -15,6 +15,7 @@ import { useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-q
 import { api } from './api'
 import { seasonsQueryOptions } from './api/seasons'
 import { scheduleQueryOptions } from './api/schedule'
+import { gameQueryOptions } from './api/games'
 import { leadersQueryOptions } from './api/leaders'
 import { wpaLeadersQueryOptions } from './api/wpaLeaders'
 import { playerQueryOptions, playerComparablesQueryOptions } from './api/players'
@@ -28,8 +29,7 @@ import type {
   TeamProfile, TeamSplit, WpaLeaders,
 } from './types'
 
-// Past-season data is immutable, so override the global 5-minute staleTime
-// and tell the cache it never goes stale.
+// Remaining legacy Player Splits policy; revisit when that resource migrates.
 const FOREVER = Number.POSITIVE_INFINITY
 
 type Options<T, Key extends QueryKey = QueryKey> = Omit<UseQueryOptions<T, Error, T, Key>, 'queryKey' | 'queryFn'>
@@ -54,13 +54,9 @@ export function useSchedule(season: number | null, options?: Options<ScheduleWee
   })
 }
 
-export function useGame(gameId: string | undefined, options?: Options<GameDetail>) {
+export function useGame(gameId: string | undefined, options?: Options<GameDetail, readonly ['game', string | undefined]>) {
   return useQuery({
-    queryKey: ['game', gameId] as const,
-    queryFn: () => api.game(gameId!),
-    enabled: !!gameId,
-    // A single game's data is immutable once finished — keep it forever.
-    staleTime: FOREVER,
+    ...gameQueryOptions(gameId),
     ...options,
   })
 }
