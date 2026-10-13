@@ -12,3 +12,18 @@ export function QueryError({ message, onRetry }: { message: string; onRetry: () 
     </div>
   )
 }
+
+export type QueryFailureProps = {
+  resource: string
+  error: Error | null
+  hasData: boolean
+  onRetry: () => void
+}
+
+export function QueryFailure({ resource, error, hasData, onRetry }: QueryFailureProps) {
+  if (!error) return null
+  const message = hasData
+    ? `Could not refresh ${resource}. Showing the last successful result.`
+    : `Could not load ${resource}. ${error.message}`
+  return <QueryError message={message} onRetry={onRetry} />
+}

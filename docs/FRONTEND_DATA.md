@@ -3,6 +3,14 @@
 Standings is the first feature moved to the shared data pattern. Other pages
 are being migrated individually; some still use manual fetching.
 
+Scores/Schedule now uses this pattern for seasons, schedule, standings, league
+leaders, and power rankings. It waits for metadata to confirm a readable season,
+then starts the four season-specific queries independently. Loaded and scheduled
+seasons are readable here; standings selection still requires loaded statistics.
+Each section has its own error/retry state. Cached results stay visible with a
+warning when a background refresh fails. The live scoreboard continues using
+its existing provider and polling/ordering safeguards.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from
@@ -50,9 +58,10 @@ refresh keeps the last successful result visible with a warning and retry button
 ## Migration boundary
 
 Shared season and schedule requests live in `src/api/seasons.ts` and
-`src/api/schedule.ts`. Standings-specific requests and queries live with the
+`src/api/schedule.ts`; leaders and power rankings have matching resource modules.
+Standings-specific requests and queries live with the
 Standings feature. Existing `src/api.ts` methods and `src/queries.ts` hooks
-delegate these three resources to the new implementations so there are no
+delegate migrated resources to the new implementations so there are no
 duplicate endpoint implementations or cache-key definitions for them.
 Other endpoints keep their current implementation until their feature migrates.
 Remove the compatibility entry points after their remaining callers move.

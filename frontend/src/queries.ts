@@ -15,6 +15,7 @@ import { useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-q
 import { api } from './api'
 import { seasonsQueryOptions } from './api/seasons'
 import { scheduleQueryOptions } from './api/schedule'
+import { leadersQueryOptions } from './api/leaders'
 import { standingsQueryOptions } from './features/standings/queries'
 import type {
   DepthChartEntry, DivisionStandings, GameDetail, InjuryStatus,
@@ -172,11 +173,9 @@ export function useStandings(season: number | null, options?: Options<DivisionSt
   })
 }
 
-export function useLeaders(season: number | null, options?: Options<LeagueLeader[]>) {
+export function useLeaders(season: number | null, options?: Options<LeagueLeader[], readonly ['leaders', number | null]>) {
   return useQuery({
-    queryKey: ['leaders', season] as const,
-    queryFn: () => api.leaders(season!),
-    enabled: season != null,
+    ...leadersQueryOptions(season),
     ...options,
   })
 }

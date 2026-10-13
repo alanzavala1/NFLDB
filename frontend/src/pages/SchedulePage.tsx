@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { api } from '../api'
-import type { DivisionStandings, Game, LeagueLeader, SeasonEntry, StandingsTeam, WeekGroup } from '../api'
-import type { LiveGameOut } from '../types'
+import { useQuery } from '@tanstack/react-query'
+import { seasonsQueryOptions } from '../api/seasons'
+import { scheduleQueryOptions } from '../api/schedule'
+import { leadersQueryOptions } from '../api/leaders'
+import { powerRankingsQueryOptions } from '../api/powerRankings'
+import { standingsQueryOptions } from '../features/standings/queries'
+import { QueryFailure } from '../components/QueryFeedback'
+import type {
+  DivisionStandings, Game, LeagueLeader, LiveGameOut, PowerRankingRow,
+  SeasonStatus, StandingsRow, ScheduleWeek,
+} from '../types'
 import { LiveScoresProvider, useLiveGame } from '../hooks/useLiveScores'
 import Card, { CardRow } from '../components/Card'
 import Nav from '../components/Nav'
@@ -11,13 +19,8 @@ import { teamLogoUrl, teamName, teamNickname } from '../utils/teams'
 
 const GAME_TYPE_LABELS: Record<string, string> = { WC: 'Wild Card', DIV: 'Divisional', CON: 'Conference', SB: 'Super Bowl' }
 const GAME_TYPE_PRIORITY: Record<string, number> = { SB: 4, CON: 3, DIV: 2, WC: 1, REG: 0 }
+const EMPTY_SCHEDULE: ScheduleWeek[] = []
 const MICRO = 'text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim'
-
-type LoadState<T> = {
-  season: number | null
-  data: T
-  error: boolean
-}
 
 type Storyline = {
   tag: string
@@ -27,20 +30,18 @@ type Storyline = {
   logoTeam: string
 }
 
+type SectionRequestState = {
+  loading: boolean
+  error: Error | null
+  onRetry: () => void
+}
+
 type LeaderCategory = {
   label: string
   unit: string
   filter: (leader: LeagueLeader) => boolean
   value: (leader: LeagueLeader) => number
   display: (leader: LeagueLeader) => string
-}
-
-type PowerRankingRow = {
-  rank: number
-  team: string
-  record: string
-  net_epa_play: number | null
-  movement: number | null
 }
 
 const LEADER_CATEGORIES: LeaderCategory[] = [
@@ -62,7 +63,7 @@ function parseNumberParam(value: string | null): number | null {
 // where the live scores are.
 const SELECTABLE = new Set(['loaded', 'scheduled'])
 
-function defaultSeason(seasons: SeasonEntry[]): number | null {
+function defaultSeason(seasons: SeasonStatus[]): number | null {
   const selectable = seasons.filter(s => SELECTABLE.has(s.status))
   return [...selectable].sort((a, b) => b.season - a.season)[0]?.season ?? null
 }
@@ -171,7 +172,7 @@ function pickFeaturedGame(games: Game[]): Game | null {
   })[0] ?? null
 }
 
-function findCurrentWeek(schedule: WeekGroup[]): number | null {
+function findCurrentWeek(schedule: ScheduleWeek[]): number | null {
   const inProgress = schedule.find(w =>
     w.games.some(g => isFinished(g)) &&
     w.games.some(g => !isFinished(g))
@@ -197,7 +198,7 @@ function leaderInitials(name: string) {
     .toUpperCase()
 }
 
-function formatRecord(row: StandingsTeam) {
+function formatRecord(row: StandingsRow) {
   return `${row.w}-${row.l}${row.t ? `-${row.t}` : ''}`
 }
 
@@ -212,11 +213,11 @@ function movementMeta(movement: number | null | undefined) {
   return { text: `▼ ${Math.abs(movement)}`, className: 'text-data-loss' }
 }
 
-function pointDiff(row: StandingsTeam) {
+function pointDiff(row: StandingsRow) {
   return row.pf - row.pa
 }
 
-function formatPointDiff(row: StandingsTeam) {
+function formatPointDiff(row: StandingsRow) {
   const diff = pointDiff(row)
   return `${diff > 0 ? '+' : ''}${diff}`
 }
@@ -297,7 +298,7 @@ function SeasonCard({
   season,
   onSeasonChange,
 }: {
-  seasons: SeasonEntry[]
+  seasons: SeasonStatus[]
   season: number | null
   onSeasonChange: (season: number) => void
 }) {
@@ -329,11 +330,12 @@ function SeasonCard({
   )
 }
 
-function TeamsCard({ rankings, loading }: { rankings: PowerRankingRow[]; loading: boolean }) {
-  const topTeams = rankings.slice(0, 10)
+function TeamsCard({ rankings, loading, error, onRetry }: { rankings: PowerRankingRow[] | undefined } & SectionRequestState) {
+  const topTeams = rankings?.slice(0, 10) ?? []
 
   return (
     <Card title="Power rankings" action={<span className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim">EPA</span>}>
+      <QueryFailure resource="power rankings" error={error} hasData={rankings !== undefined} onRetry={onRetry} />
       {topTeams.length ? topTeams.map(team => {
         const movement = movementMeta(team.movement)
         return (
@@ -350,7 +352,7 @@ function TeamsCard({ rankings, loading }: { rankings: PowerRankingRow[]; loading
           </span>
         </CardRow>
         )
-      }) : (
+      }) : error && rankings === undefined ? null : (
         <CardRow className="text-sm text-ink-dim">{loading ? 'Power rankings loading...' : 'No rankings found'}</CardRow>
       )}
       {topTeams.length > 0 && (
@@ -368,7 +370,7 @@ function WeekNavigator({
   season,
   onWeekChange,
 }: {
-  schedule: WeekGroup[]
+  schedule: ScheduleWeek[]
   activeWeek: number | null
   season: number
   onWeekChange: (week: number) => void
@@ -849,17 +851,18 @@ function ConferenceLeadersCard({
   standings,
   season,
   loading,
+  error,
+  onRetry,
 }: {
   conference: 'AFC' | 'NFC'
-  standings: DivisionStandings[]
+  standings: DivisionStandings[] | undefined
   season: number
-  loading: boolean
-}) {
-  const leaders = standings
+} & SectionRequestState) {
+  const leaders = (standings ?? [])
     .filter(group => group.division.startsWith(conference))
     .sort((a, b) => divisionSort(a.division) - divisionSort(b.division))
     .map(group => ({ division: group.division.replace(`${conference} `, ''), team: group.teams[0] }))
-    .filter((entry): entry is { division: string; team: StandingsTeam } => Boolean(entry.team))
+    .filter((entry): entry is { division: string; team: StandingsRow } => Boolean(entry.team))
 
   const tagClass = conference === 'AFC' ? 'bg-surface-raise' : 'bg-surface-raise'
 
@@ -873,6 +876,7 @@ function ConferenceLeadersCard({
       }
       action={{ label: 'Full standings', to: `/standings?season=${season}` }}
     >
+      <QueryFailure resource="standings" error={error} hasData={standings !== undefined} onRetry={onRetry} />
       {leaders.length ? (
         <>
           <div className={`${MICRO} grid grid-cols-[42px_minmax(0,1fr)_40px_44px] gap-2 border-t border-surface-line px-4 py-2`}>
@@ -899,7 +903,7 @@ function ConferenceLeadersCard({
             </CardRow>
           ))}
         </>
-      ) : (
+      ) : error && standings === undefined ? null : (
         <CardRow className="text-sm text-ink-dim">{loading ? 'Standings loading...' : 'No leaders found'}</CardRow>
       )}
     </Card>
@@ -917,13 +921,14 @@ function LeaderFace({ leader }: { leader: LeagueLeader }) {
   )
 }
 
-function LeagueLeadersCard({ season, leaders, loading }: { season: number; leaders: LeagueLeader[]; loading: boolean }) {
+function LeagueLeadersCard({ season, leaders, loading, error, onRetry }: { season: number; leaders: LeagueLeader[] | undefined } & SectionRequestState) {
   const tops = LEADER_CATEGORIES
-    .map(category => ({ category, leader: leaders.filter(category.filter).sort((a, b) => category.value(b) - category.value(a))[0] }))
+    .map(category => ({ category, leader: (leaders ?? []).filter(category.filter).sort((a, b) => category.value(b) - category.value(a))[0] }))
     .filter((entry): entry is { category: LeaderCategory; leader: LeagueLeader } => Boolean(entry.leader))
 
   return (
     <Card title="League leaders" action={{ label: 'All leaders', to: `/leaders?season=${season}` }}>
+      <QueryFailure resource="league leaders" error={error} hasData={leaders !== undefined} onRetry={onRetry} />
       {tops.length ? tops.map(({ category, leader }) => (
         <CardRow key={category.label} to={`/players/${leader.player_id}`} className="justify-between">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -938,14 +943,14 @@ function LeagueLeadersCard({ season, leaders, loading }: { season: number; leade
             <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-dim">{category.unit}</div>
           </div>
         </CardRow>
-      )) : (
+      )) : error && leaders === undefined ? null : (
         <CardRow className="text-sm text-ink-dim">{loading ? 'Leaders loading...' : 'No leaders found'}</CardRow>
       )}
     </Card>
   )
 }
 
-function LoadingCard({ title, message }: { title: string; message: string }) {
+function StatusCard({ title, message }: { title: string; message: ReactNode }) {
   return (
     <Card title={title}>
       <CardRow className="text-sm text-ink-dim">{message}</CardRow>
@@ -955,26 +960,19 @@ function LoadingCard({ title, message }: { title: string; message: string }) {
 
 function SchedulePageBody() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [seasons, setSeasons] = useState<SeasonEntry[]>([])
-  const [seasonListStatus, setSeasonListStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [scheduleState, setScheduleState] = useState<LoadState<WeekGroup[]>>({ season: null, data: [], error: false })
-  const [standingsState, setStandingsState] = useState<LoadState<DivisionStandings[]>>({ season: null, data: [], error: false })
-  const [leadersState, setLeadersState] = useState<LoadState<LeagueLeader[]>>({ season: null, data: [], error: false })
-  const [powerState, setPowerState] = useState<LoadState<PowerRankingRow[]>>({ season: null, data: [], error: false })
-
+  const seasonsQuery = useQuery(seasonsQueryOptions())
+  const seasons = seasonsQuery.data ?? []
   const seasonFromUrl = parseNumberParam(searchParams.get('season'))
   const season = seasonFromUrl ?? defaultSeason(seasons)
   const requestedWeek = parseNumberParam(searchParams.get('week'))
-  const seasonEntry = season === null ? undefined : seasons.find(entry => entry.season === season)
+  const seasonEntry = seasons.find(entry => entry.season === season)
   const canReadSeason = seasonEntry !== undefined && SELECTABLE.has(seasonEntry.status)
-  const schedule = season !== null && scheduleState.season === season ? scheduleState.data : []
-  const standings = season !== null && standingsState.season === season ? standingsState.data : []
-  const leaders = season !== null && leadersState.season === season ? leadersState.data : []
-  const powerRankings = season !== null && powerState.season === season ? powerState.data : []
-  const scheduleLoading = canReadSeason && scheduleState.season !== season
-  const standingsLoading = season !== null && standingsState.season !== season
-  const leadersLoading = season !== null && leadersState.season !== season
-  const powerLoading = season !== null && powerState.season !== season
+  const querySeason = canReadSeason ? season : null
+  const scheduleQuery = useQuery(scheduleQueryOptions(querySeason))
+  const standingsQuery = useQuery(standingsQueryOptions(querySeason))
+  const leadersQuery = useQuery(leadersQueryOptions(querySeason))
+  const powerQuery = useQuery(powerRankingsQueryOptions(querySeason))
+  const schedule = scheduleQuery.data ?? EMPTY_SCHEDULE
   const seasonGames = useMemo(() => schedule.flatMap(group => group.games), [schedule])
   const defaultWeek = useMemo(() => findCurrentWeek(schedule), [schedule])
   const activeGroup = schedule.find(group => group.week === (requestedWeek ?? defaultWeek))
@@ -989,58 +987,6 @@ function SchedulePageBody() {
   const kickoffSlots = groupKickoffSlots(slotGames)
   const seasonFinished = seasonGames.filter(isFinished).length
   const showRecap = season !== null && seasonFinished < 3
-
-  useEffect(() => {
-    let cancelled = false
-    api.seasons()
-      .then(data => {
-        if (!cancelled) { setSeasons(data); setSeasonListStatus('ready') }
-      })
-      .catch(() => {
-        if (!cancelled) { setSeasons([]); setSeasonListStatus('error') }
-      })
-    return () => { cancelled = true }
-  }, [])
-
-  useEffect(() => {
-    if (season === null || !canReadSeason) return
-    let cancelled = false
-    api.schedule(season)
-      .then(data => { if (!cancelled) setScheduleState({ season, data, error: false }) })
-      .catch(() => { if (!cancelled) setScheduleState({ season, data: [], error: true }) })
-    return () => { cancelled = true }
-  }, [season, canReadSeason])
-
-  useEffect(() => {
-    if (season === null || !canReadSeason) return
-    let cancelled = false
-    api.standings(season)
-      .then(data => { if (!cancelled) setStandingsState({ season, data, error: false }) })
-      .catch(() => { if (!cancelled) setStandingsState({ season, data: [], error: true }) })
-    return () => { cancelled = true }
-  }, [season, canReadSeason])
-
-  useEffect(() => {
-    if (season === null || !canReadSeason) return
-    let cancelled = false
-    api.leaders(season)
-      .then(data => { if (!cancelled) setLeadersState({ season, data, error: false }) })
-      .catch(() => { if (!cancelled) setLeadersState({ season, data: [], error: true }) })
-    return () => { cancelled = true }
-  }, [season, canReadSeason])
-
-  useEffect(() => {
-    if (season === null || !canReadSeason) return
-    let cancelled = false
-    fetch(`/api/power-rankings?season=${season}`)
-      .then(res => {
-        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-        return res.json() as Promise<PowerRankingRow[]>
-      })
-      .then(data => { if (!cancelled) setPowerState({ season, data, error: false }) })
-      .catch(() => { if (!cancelled) setPowerState({ season, data: [], error: true }) })
-    return () => { cancelled = true }
-  }, [season, canReadSeason])
 
   function setSeasonParam(nextSeason: number) {
     const next = new URLSearchParams(searchParams)
@@ -1060,20 +1006,20 @@ function SchedulePageBody() {
   }
 
   let centerContent
-  if (seasonListStatus === 'loading') {
-    centerContent = <LoadingCard title="Season" message="Loading seasons..." />
-  } else if (seasonListStatus === 'error') {
-    centerContent = <LoadingCard title="Season unavailable" message="Could not load the season list. Please reload the page to try again." />
+  if (seasonsQuery.isPending) {
+    centerContent = <StatusCard title="Season" message="Loading seasons..." />
+  } else if (seasonsQuery.isError && !seasonsQuery.data) {
+    centerContent = <StatusCard title="Season unavailable" message={<QueryFailure resource="seasons" error={seasonsQuery.error} hasData={false} onRetry={() => void seasonsQuery.refetch()} />} />
   } else if (season === null) {
-    centerContent = <LoadingCard title="Season unavailable" message="No seasons are available yet." />
+    centerContent = <StatusCard title="Season unavailable" message="No seasons are available yet." />
   } else if (!canReadSeason) {
-    centerContent = <LoadingCard title="Season unavailable" message="Scores for this season are not available yet." />
-  } else if (scheduleLoading) {
-    centerContent = <LoadingCard title={`${season} scores`} message="Loading schedule..." />
-  } else if (scheduleState.error) {
-    centerContent = <LoadingCard title={`${season} scores`} message="Schedule unavailable." />
+    centerContent = <StatusCard title="Season unavailable" message="Scores for this season are not available yet." />
+  } else if (scheduleQuery.isPending) {
+    centerContent = <StatusCard title={`${season} scores`} message="Loading schedule..." />
+  } else if (scheduleQuery.isError && !scheduleQuery.data) {
+    centerContent = <StatusCard title={`${season} scores`} message={<QueryFailure resource="schedule" error={scheduleQuery.error} hasData={false} onRetry={() => void scheduleQuery.refetch()} />} />
   } else if (!schedule.length) {
-    centerContent = <LoadingCard title={`${season} scores`} message="No games found." />
+    centerContent = <StatusCard title={`${season} scores`} message="No games found." />
   } else {
     centerContent = (
       <>
@@ -1102,19 +1048,21 @@ function SchedulePageBody() {
             season={season}
             onSeasonChange={setSeasonParam}
           />
-          {canReadSeason && <TeamsCard rankings={powerRankings} loading={powerLoading} />}
+          {canReadSeason && <TeamsCard rankings={powerQuery.data} loading={powerQuery.isPending} error={powerQuery.error} onRetry={() => void powerQuery.refetch()} />}
         </aside>
 
         <section className="grid min-w-0 content-start gap-5">
+          {seasonsQuery.data !== undefined && <QueryFailure resource="seasons" error={seasonsQuery.error} hasData onRetry={() => void seasonsQuery.refetch()} />}
+          {scheduleQuery.data !== undefined && <QueryFailure resource="schedule" error={scheduleQuery.error} hasData onRetry={() => void scheduleQuery.refetch()} />}
           {centerContent}
         </section>
 
         <aside className="grid h-fit gap-5">
           {season !== null && canReadSeason && (
             <>
-              <ConferenceLeadersCard conference="AFC" standings={standings} season={season} loading={standingsLoading || standingsState.error} />
-              <ConferenceLeadersCard conference="NFC" standings={standings} season={season} loading={standingsLoading || standingsState.error} />
-              <LeagueLeadersCard season={season} leaders={leaders} loading={leadersLoading || leadersState.error} />
+              <ConferenceLeadersCard conference="AFC" standings={standingsQuery.data} season={season} loading={standingsQuery.isPending} error={standingsQuery.error} onRetry={() => void standingsQuery.refetch()} />
+              <ConferenceLeadersCard conference="NFC" standings={standingsQuery.data} season={season} loading={standingsQuery.isPending} error={standingsQuery.error} onRetry={() => void standingsQuery.refetch()} />
+              <LeagueLeadersCard season={season} leaders={leadersQuery.data} loading={leadersQuery.isPending} error={leadersQuery.error} onRetry={() => void leadersQuery.refetch()} />
             </>
           )}
         </aside>

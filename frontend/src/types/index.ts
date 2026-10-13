@@ -46,6 +46,7 @@ export type TeamProfile      = Schemas['TeamProfile']
 // Standings
 export type StandingsRow         = Schemas['StandingsRow']
 export type DivisionStandings    = Schemas['DivisionStandings']
+export type PowerRankingRow      = Schemas['PowerRankingRow']
 
 // Leaders
 export type LeagueLeader     = Schemas['LeagueLeader']
