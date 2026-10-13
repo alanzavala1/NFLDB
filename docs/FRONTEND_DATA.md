@@ -11,6 +11,14 @@ Each section has its own error/retry state. Cached results stay visible with a
 warning when a background refresh fails. The live scoreboard continues using
 its existing provider and polling/ordering safeguards.
 
+Scores lives in `frontend/src/features/scores/`. `ScoresPage.tsx` owns query
+state, season/week URL choices, and layout. `WeekNavigator.tsx`, `SeasonCard.tsx`,
+`FeaturedGame.tsx`, `GameList.tsx`, `SidebarPanels.tsx`, `Storylines.tsx`, and
+`SeasonRecap.tsx` own their visible sections. `selectors.ts` chooses the displayed
+week, featured game, and kickoff groups; `presentation.ts` contains shared labels
+and formatting. Cards receive data and callbacks through props. Game-list rows
+also read the shared live provider, so moving them creates no additional pollers.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from

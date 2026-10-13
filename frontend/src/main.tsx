@@ -13,7 +13,7 @@ import './index.css'
 // chart pages (Game/Team/Player) also pull the large Recharts chunk, so
 // warming them up front is the biggest single win.
 const routeImporters = {
-  schedule:  () => import('./pages/SchedulePage'),
+  scores:    () => import('./features/scores/ScoresPage'),
   game:      () => import('./pages/GamePage'),
   team:      () => import('./pages/TeamPage'),
   player:    () => import('./pages/PlayerPage'),
@@ -23,7 +23,7 @@ const routeImporters = {
   ask:       () => import('./pages/AskPage'),
 }
 
-const SchedulePage  = lazy(routeImporters.schedule)
+const ScoresPage    = lazy(routeImporters.scores)
 const GamePage      = lazy(routeImporters.game)
 const TeamPage      = lazy(routeImporters.team)
 const PlayerPage    = lazy(routeImporters.player)
@@ -76,7 +76,7 @@ createRoot(document.getElementById('root')!).render(
         <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="/teams/:teamAbbrev"  element={<TeamPage />} />
-            <Route path="/"                   element={<SchedulePage />} />
+            <Route path="/"                   element={<ScoresPage />} />
             <Route path="/games/:gameId"      element={<GamePage />} />
             <Route path="/players/:playerId"  element={<PlayerPage />} />
             <Route path="/leaders"            element={<LeadersPage />} />
