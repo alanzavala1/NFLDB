@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
+import { useQueries } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, Tooltip, Cell, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { api } from '../api'
-import type { TeamProfile, TeamGame, TeamLeader, SeasonEntry, RosterPlayer, TeamAnalyticsTeam, TeamSplit } from '../api'
-import { useTeamDepthChart, useTeamInjuries, useTeamSplits } from '../queries'
+import type { TeamProfile, TeamGame, TeamLeader, RosterPlayer, TeamAnalyticsTeam, TeamSplit } from '../api'
+import { useSeasons, teamQueryOptions, useTeamDepthChart, useTeamInjuries, useTeamSplits } from '../queries'
 import Nav from '../components/Nav'
 import Card from '../components/Card'
+import { QueryFailure, QueryLoading } from '../components/QueryFeedback'
 import { teamLogoUrl, teamName } from '../utils/teams'
+import { loadedSeasons } from '../utils/seasons'
 
 const GAME_TYPE_LABELS: Record<string, string> = { WC: 'Wild Card', DIV: 'Divisional', CON: 'Conference', SB: 'Super Bowl' }
 function weekLabel(week: number, gameType?: string | null) {
@@ -1444,86 +1447,41 @@ function SeasonDetail({ profile }: { profile: TeamProfile }) {
 
 // ── Season sidebar ───────────────────────────────────────────────────────────
 
-type SeasonStatus = SeasonEntry['status']
-
-function StatusDot({ status }: { status: SeasonStatus }) {
-  if (status === 'loading')
-    return <span className="inline-block w-1.5 h-1.5 rounded-full bg-ink-dim animate-pulse shrink-0" />
-  if (status === 'queued')
-    return <span className="inline-block w-1.5 h-1.5 rounded-full bg-surface-raise animate-pulse shrink-0" />
-  return null
-}
-
-function SeasonSidebar({
-  profiles, selected, onSelect, seasonStatuses, onQueueSeason,
-}: {
+function SeasonSidebar({ profiles, years, selected, onSelect, nextYear, onShowOlder }: {
   profiles: TeamProfile[]
+  years: number[]
   selected: number
   onSelect: (season: number) => void
-  seasonStatuses: Record<number, SeasonStatus>
-  onQueueSeason: (year: number) => void
+  nextYear: number | undefined
+  onShowOlder: (year: number) => void
 }) {
-  const team = profiles[0]?.team ?? ''
   const profileMap = Object.fromEntries(profiles.map(p => [p.season, p]))
-
-  // Seasons to show: all loaded + queued/loading, sorted newest first
-  const inFlight = Object.entries(seasonStatuses)
-    .filter(([, s]) => s === 'loading' || s === 'queued')
-    .map(([y]) => Number(y))
-  const loadedYears = profiles.map(p => p.season)
-  const visibleYears = [...new Set([...loadedYears, ...inFlight])].sort((a, b) => b - a)
-
-  // Next year to surface — either the next un-fetched loaded season or the next available one
-  const oldest = Math.min(...loadedYears, ...inFlight)
-  const nextAvailable = oldest > 1999 ? oldest - 1 : null
-  const nextStatus = nextAvailable ? seasonStatuses[nextAvailable] : null
-  const nextHasProfile = nextAvailable ? !!profileMap[nextAvailable] : false
-  const canLoadMore = nextAvailable && (
-    !nextStatus || nextStatus === 'available' || nextStatus === 'error' ||
-    (nextStatus === 'loaded' && !nextHasProfile)
-  )
-
   return (
     <div className="flex flex-col border border-surface-line rounded-xl overflow-hidden bg-surface-card shrink-0 lg:w-40">
       <div className="px-4 py-2.5 border-b border-surface-line bg-surface-raise/40">
         <span className="text-xs font-bold text-ink-dim uppercase tracking-wider">Seasons</span>
       </div>
       <div className="overflow-y-auto">
-        {visibleYears.map(year => {
+        {years.map(year => {
           const profile = profileMap[year]
-          const status = seasonStatuses[year] ?? (profile ? 'loaded' : 'available')
           const active = year === selected
-          const inProgress = status === 'loading' || status === 'queued'
-          const rec = profile ? computeRecord(profile.games, team) : null
-
+          const rec = profile ? computeRecord(profile.games, profile.team) : null
           return (
-            <button
-              key={year}
-              onClick={() => profile ? onSelect(year) : undefined}
-              disabled={inProgress && !profile}
+            <button key={year} onClick={() => onSelect(year)} aria-pressed={active}
               className={`w-full text-left px-4 py-3 border-b border-surface-line/60 transition-colors
-                ${active ? 'bg-indigo-900/30 border-l-2 border-l-indigo-500' : 'hover:bg-surface-raise/60'}
-                ${inProgress && !profile ? 'cursor-default' : ''}`}
-            >
+                ${active ? 'bg-indigo-900/30 border-l-2 border-l-indigo-500' : 'hover:bg-surface-raise/60'}`}>
               <div className="flex items-center gap-1.5">
-                <StatusDot status={status} />
-                <span className={`text-sm font-bold ${active ? 'text-indigo-300' : inProgress ? 'text-ink-mid' : 'text-ink-mid'}`}>
-                  {year}
-                </span>
+                <span className={`text-sm font-bold ${active ? 'text-indigo-300' : 'text-ink-mid'}`}>{year}</span>
               </div>
-              <div className="text-xs text-ink-dim mt-0.5">
-                {inProgress ? (status === 'loading' ? 'Loading…' : 'Queued') : rec ? rec.label : ''}
-              </div>
+              <div className="text-xs text-ink-dim mt-0.5">{rec?.label ?? ''}</div>
             </button>
           )
         })}
       </div>
-      {canLoadMore && (
-        <button
-          onClick={() => onQueueSeason(nextAvailable!)}
-          className="text-xs text-ink-dim hover:text-ink-mid py-2.5 border-t border-surface-line transition-colors"
-        >
-          + {nextAvailable}
+      {nextYear !== undefined && (
+        <button onClick={() => onShowOlder(nextYear)}
+          className="text-xs text-ink-dim hover:text-ink-mid py-2.5 border-t border-surface-line transition-colors">
+          Show {nextYear}
         </button>
       )}
     </div>
@@ -1532,159 +1490,68 @@ function SeasonSidebar({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-import { CURRENT_NFL_SEASON } from '../api'
-const CURRENT_SEASON = CURRENT_NFL_SEASON
-const AUTO_SEASONS = 5  // fetch/queue this many recent seasons automatically
+const INITIAL_SEASONS = 5
 
 export default function TeamPage() {
   const { teamAbbrev } = useParams<{ teamAbbrev: string }>()
-  const [profiles, setProfiles] = useState<TeamProfile[]>([])
-  const [selectedSeason, setSelectedSeason] = useState<number>(CURRENT_SEASON)
-  const [initialLoading, setInitialLoading] = useState(true)
-  const [seasonStatuses, setSeasonStatuses] = useState<Record<number, SeasonStatus>>({})
+  const seasonsQuery = useSeasons()
+  const availableYears = loadedSeasons(seasonsQuery.data ?? [])
+  const [expandedYears, setExpandedYears] = useState<number[]>([])
+  const [requestedSeason, setRequestedSeason] = useState<number | null>(null)
+  const visibleYears = availableYears.filter((year, index) => index < INITIAL_SEASONS || expandedYears.includes(year))
+  const selectedSeason = requestedSeason !== null && visibleYears.includes(requestedSeason)
+    ? requestedSeason : visibleYears[0]
+  const nextYear = availableYears.find(year => !visibleYears.includes(year))
+  const profileQueries = useQueries({ queries: visibleYears.map(year => teamQueryOptions(teamAbbrev, year)) })
+  const profiles = profileQueries.flatMap(query => query.data ? [query.data] : [])
+  const activeQuery = profileQueries[visibleYears.indexOf(selectedSeason)]
+  const activeProfile = activeQuery?.data
 
-  // On mount: get season list, fetch loaded profiles, queue missing ones
-  useEffect(() => {
-    if (!teamAbbrev) return
-    let cancelled = false
-    setProfiles([])
-    setInitialLoading(true)
-
-    const years = Array.from({ length: AUTO_SEASONS }, (_, i) => CURRENT_SEASON - i)
-
-    api.seasons().then(allSeasons => {
-      if (cancelled) return
-      const statuses = Object.fromEntries(allSeasons.map(s => [s.season, s.status])) as Record<number, SeasonStatus>
-      setSeasonStatuses(statuses)
-      setInitialLoading(false)
-
-      const toFetch = years.filter(y => statuses[y] === 'loaded')
-      const toQueue = years.filter(y => statuses[y] === 'available' || statuses[y] === 'error')
-
-      if (toFetch.length > 0) {
-        Promise.all(toFetch.map(y => api.team(teamAbbrev, y).catch(() => null))).then(results => {
-          if (cancelled) return
-          const fetched = results.filter(Boolean) as TeamProfile[]
-          setProfiles(fetched.sort((a, b) => b.season - a.season))
-          if (fetched.length > 0) setSelectedSeason(fetched[0].season)
-        })
-      }
-
-      if (toQueue.length > 0) {
-        toQueue.forEach(y => api.loadSeason(y))
-        const next = { ...statuses }
-        toQueue.forEach(y => { next[y] = 'queued' })
-        setSeasonStatuses(next)
-      }
-    })
-
-    return () => { cancelled = true }
-  }, [teamAbbrev])
-
-  // Poll while any season is in-flight; fetch team profile when one completes
-  useEffect(() => {
-    const anyInFlight = Object.values(seasonStatuses).some(s => s === 'loading' || s === 'queued')
-    if (!anyInFlight || !teamAbbrev) return
-
-    const loadedYears = new Set(profiles.map(p => p.season))
-
-    const interval = setInterval(async () => {
-      const allSeasons = await api.seasons().catch(() => [] as SeasonEntry[])
-      const updated = Object.fromEntries(allSeasons.map(s => [s.season, s.status])) as Record<number, SeasonStatus>
-      setSeasonStatuses(updated)
-
-      // Fetch team profile for any season that just finished loading
-      const newlyLoaded = allSeasons.filter(s => !loadedYears.has(s.season) && s.status === 'loaded')
-      for (const s of newlyLoaded) {
-        api.team(teamAbbrev, s.season)
-          .then(p => setProfiles(prev => [...prev.filter(x => x.season !== p.season), p].sort((a, b) => b.season - a.season)))
-          .catch(() => {})
-      }
-
-      if (!allSeasons.some(s => s.status === 'loading' || s.status === 'queued')) {
-        clearInterval(interval)
-      }
-    }, 4000)
-
-    return () => clearInterval(interval)
-  }, [teamAbbrev, seasonStatuses])
-
-  // Auto-select the newest available season when profiles first arrive
-  useEffect(() => {
-    if (profiles.length > 0 && !profiles.find(p => p.season === selectedSeason)) {
-      setSelectedSeason(profiles[0].season)
-    }
-  }, [profiles])
-
-  function handleQueueSeason(year: number) {
-    if (seasonStatuses[year] === 'loaded') {
-      api.team(teamAbbrev!, year)
-        .then(p => setProfiles(prev => [...prev.filter(x => x.season !== p.season), p].sort((a, b) => b.season - a.season)))
-        .catch(() => {})
-    } else {
-      api.loadSeason(year).catch(() => {})
-      setSeasonStatuses(prev => ({ ...prev, [year]: 'queued' }))
-    }
-  }
-
-  if (initialLoading) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Loading...</p></div>
   if (!teamAbbrev) return <div className="min-h-screen bg-surface-bg"><Nav /><p className="p-8 text-ink-dim">Team not found.</p></div>
+  if (seasonsQuery.isPending) return (
+    <div className="min-h-screen bg-surface-bg"><Nav /><div className="p-8"><QueryLoading>Loading available seasons…</QueryLoading></div></div>
+  )
+  if (seasonsQuery.isError && !seasonsQuery.data) return (
+    <div className="min-h-screen bg-surface-bg"><Nav /><div className="p-8">
+      <QueryFailure resource="available seasons" error={seasonsQuery.error} hasData={false} onRetry={() => void seasonsQuery.refetch()} />
+    </div></div>
+  )
 
-  if (!profiles.length) {
-    const anyInFlight = Object.values(seasonStatuses).some(s => s === 'loading' || s === 'queued')
-    return (
-      <div className="min-h-screen bg-surface-bg">
-        <Nav />
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          <Card title={teamName(teamAbbrev)} className="mb-8"><div className="flex items-center gap-5 border-t border-surface-line p-5">
-            <img src={teamLogoUrl(teamAbbrev)} alt={teamAbbrev} className="w-20 h-20 object-contain shrink-0" />
-            <div>
-              {anyInFlight
-                ? <div className="text-ink-dim mt-1 flex items-center gap-2">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-ink-dim animate-pulse" />
-                    Loading season data — updates automatically…
-                  </div>
-                : <p className="text-ink-dim mt-1">No data available for this team.</p>
-              }
-            </div>
-          </div></Card>
-        </div>
-      </div>
-    )
-  }
-
-  const allGames = profiles.flatMap(p => p.games)
-  const allTime = computeRecord(allGames, teamAbbrev)
-  const activeProfile = profiles.find(p => p.season === selectedSeason) ?? profiles[0]
-
+  const allTime = computeRecord(profiles.flatMap(profile => profile.games), teamAbbrev)
   return (
     <div className="min-h-screen bg-surface-bg">
       <Nav />
       <div className="max-w-6xl mx-auto px-4 py-8">
+        <QueryFailure resource="available seasons" error={seasonsQuery.error} hasData onRetry={() => void seasonsQuery.refetch()} />
+        {profileQueries.map((query, index) => (
+          <QueryFailure key={visibleYears[index]} resource={`${visibleYears[index]} team profile`} error={query.error}
+            hasData={query.data !== undefined} onRetry={() => void query.refetch()} />
+        ))}
         <Card title={teamName(teamAbbrev)} className="mb-8"><div className="flex items-center gap-5 border-t border-surface-line p-5">
           <img src={teamLogoUrl(teamAbbrev)} alt={teamAbbrev} className="w-20 h-20 object-contain shrink-0" />
           <div>
-            <div className="text-ink-mid mt-1">
-              {profiles.length} season{profiles.length !== 1 ? 's' : ''} loaded ·{' '}
-              <span className="text-ink font-semibold">{allTime.label}</span>
-              <span className="text-ink-dim text-xs ml-2">{allTime.w + allTime.l + allTime.t} games</span>
-            </div>
+            {profiles.length > 0 && (
+              <div className="text-ink-mid mt-1">
+                {profiles.length} season{profiles.length !== 1 ? 's' : ''} loaded ·{' '}
+                <span className="text-ink font-semibold">{allTime.label}</span>
+                <span className="text-ink-dim text-xs ml-2">{allTime.w + allTime.l + allTime.t} games</span>
+              </div>
+            )}
+            {!availableYears.length && <p className="text-ink-dim mt-1">No published season statistics are available for this team.</p>}
           </div>
         </div></Card>
 
-        <div className="flex flex-col lg:flex-row gap-4 lg:items-start">
-          <SeasonSidebar
-            profiles={profiles}
-            selected={activeProfile.season}
-            onSelect={setSelectedSeason}
-            seasonStatuses={seasonStatuses}
-            onQueueSeason={handleQueueSeason}
-          />
-          <div className="flex-1 min-w-0 w-full">
-            <SeasonDetail profile={activeProfile} />
+        {visibleYears.length > 0 && (
+          <div className="flex flex-col lg:flex-row gap-4 lg:items-start">
+            <SeasonSidebar profiles={profiles} years={visibleYears} selected={selectedSeason}
+              onSelect={setRequestedSeason} nextYear={nextYear}
+              onShowOlder={year => setExpandedYears(previous => [...previous, year])} />
+            <div className="flex-1 min-w-0 w-full">
+              {activeQuery?.isPending && <QueryLoading>Loading team profile…</QueryLoading>}
+              {activeProfile && <SeasonDetail key={`${teamAbbrev}-${activeProfile.season}`} profile={activeProfile} />}
+            </div>
           </div>
-        </div>
-
+        )}
       </div>
     </div>
   )

@@ -78,6 +78,23 @@ query. `src/types/navigation.ts` describes the originating-game context shared b
 game/player navigation. These route-state types are separate from API schemas.
 The old Player page entry is removed; the router imports the feature page.
 
+Team now reads the five newest loaded seasons from server metadata, with controls
+to reveal older loaded years. It does not guess five calendar years, queue season
+jobs, poll preparation status, or show a preparation spinner. Empty publication
+lists have an explicit empty state. Each profile has independent pending/error/
+retry feedback; a failed selected year never falls back to another year's detail.
+Cached results stay visible with a warning if a refresh fails. Revealing an older
+year changes which profile queries are observed and only reads published data.
+
+Team's dynamic profile queries and existing `useTeam` hook share `teamQueryOptions`
+in `src/queries.ts`. Those profile queries still use the legacy team transport;
+typed transport/cancellation and the other Team section requests are the next
+checkpoint. Section components and roster/analytics effects remain in the large
+Team page until their focused migration. The selected detail is keyed by team and
+year so local modal/roster state resets between profiles. There are now no frontend
+season-loading callers, so the obsolete `api.loadSeason` method is removed. Backend
+admin endpoints and their generated contract types are unchanged.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from

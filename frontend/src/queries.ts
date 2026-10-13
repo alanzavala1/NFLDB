@@ -11,7 +11,7 @@
  * The query keys are arrays starting with a stable string namespace so we
  * can later invalidate groups (e.g. `qc.invalidateQueries({ queryKey: ['players'] })`).
  */
-import { useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-query'
+import { queryOptions, useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-query'
 import { api } from './api'
 import { seasonsQueryOptions } from './api/seasons'
 import { scheduleQueryOptions } from './api/schedule'
@@ -94,11 +94,22 @@ export function usePlayerSplits(playerId: string | undefined, options?: Options<
 
 // ── Team ─────────────────────────────────────────────────────────────────────
 
-export function useTeam(abbrev: string | undefined, season: number | null, options?: Options<TeamProfile>) {
-  return useQuery({
+// Shared by the single-profile hook and Team's dynamic season list.
+// The transport moves to the typed client in the Team request checkpoint.
+export function teamQueryOptions(abbrev: string | undefined, season: number | null) {
+  return queryOptions({
     queryKey: ['team', abbrev, season] as const,
-    queryFn: () => api.team(abbrev!, season!),
+    queryFn: () => {
+      if (!abbrev || season === null) throw new Error('Select a team and season first.')
+      return api.team(abbrev, season)
+    },
     enabled: !!abbrev && season != null,
+  })
+}
+
+export function useTeam(abbrev: string | undefined, season: number | null, options?: Options<TeamProfile, readonly ['team', string | undefined, number | null]>) {
+  return useQuery({
+    ...teamQueryOptions(abbrev, season),
     ...options,
   })
 }

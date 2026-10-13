@@ -69,7 +69,6 @@ export const api = {
   // Compatibility entry points: migrated resources have one implementation.
   // Remove these aliases when their remaining page callers migrate.
   seasons:       fetchSeasons,
-  loadSeason:    (year: number)                => fetch(`${BASE}/seasons/${year}/load?force=false`, { method: 'POST' }).then(r => r.json()),
   schedule:      fetchSchedule,
   liveScoreboard: ()                           => get<Scoreboard>('/live/scoreboard'),
   game:          (gameId: string)              => get<GameDetail>(`/games/${gameId}`),
