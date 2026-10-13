@@ -1,3 +1,7 @@
+import { fetchSeasons } from './api/seasons'
+import { fetchSchedule } from './api/schedule'
+import { fetchStandings } from './features/standings/api'
+
 /**
  * HTTP client + type re-exports.
  *
@@ -59,9 +63,11 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export const api = {
-  seasons:       ()                            => get<SeasonStatus[]>('/seasons'),
+  // Compatibility entry points: migrated resources have one implementation.
+  // Remove these aliases when their remaining page callers migrate.
+  seasons:       fetchSeasons,
   loadSeason:    (year: number)                => fetch(`${BASE}/seasons/${year}/load?force=false`, { method: 'POST' }).then(r => r.json()),
-  schedule:      (season: number)              => get<ScheduleWeek[]>(`/schedule?season=${season}`),
+  schedule:      fetchSchedule,
   liveScoreboard: ()                           => get<Scoreboard>('/live/scoreboard'),
   game:          (gameId: string)              => get<GameDetail>(`/games/${gameId}`),
   gameLineup:    (gameId: string)              => get<GameLineup>(`/games/${gameId}/lineup`),
@@ -75,7 +81,7 @@ export const api = {
     get<InjuryStatus[]>(`/teams/${team}/injuries?season=${season}${week != null ? `&week=${week}` : ''}`),
   teamAnalytics: (season: number)              => get<TeamAnalyticsResponse>(`/team-analytics?season=${season}`),
   teamSplits:    (team: string, season: number) => get<TeamSplit[]>(`/teams/${team}/splits?season=${season}`),
-  standings:     (season: number)              => get<DivisionStandings[]>(`/standings?season=${season}`),
+  standings:     fetchStandings,
   leaders:       (season: number)              => get<LeagueLeader[]>(`/leaders?season=${season}`),
   wpaLeaders:    (season: number)              => get<WpaLeaders>(`/wpa-leaders?season=${season}`),
   comparables:   (playerId: string)            => get<PlayerComparable[]>(`/players/${playerId}/comparables`),

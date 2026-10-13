@@ -11,8 +11,11 @@
  * The query keys are arrays starting with a stable string namespace so we
  * can later invalidate groups (e.g. `qc.invalidateQueries({ queryKey: ['players'] })`).
  */
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
+import { useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-query'
 import { api } from './api'
+import { seasonsQueryOptions } from './api/seasons'
+import { scheduleQueryOptions } from './api/schedule'
+import { standingsQueryOptions } from './features/standings/queries'
 import type {
   DepthChartEntry, DivisionStandings, GameDetail, InjuryStatus,
   LeagueLeader, PlayerComparable, PlayerProfile, PlayerSplit, RosterPlayer,
@@ -24,17 +27,14 @@ import type {
 // and tell the cache it never goes stale.
 const FOREVER = Number.POSITIVE_INFINITY
 
-type Options<T> = Omit<UseQueryOptions<T>, 'queryKey' | 'queryFn'>
+type Options<T, Key extends QueryKey = QueryKey> = Omit<UseQueryOptions<T, Error, T, Key>, 'queryKey' | 'queryFn'>
 
 
 // ── Meta ─────────────────────────────────────────────────────────────────────
 
-export function useSeasons(options?: Options<SeasonStatus[]>) {
+export function useSeasons(options?: Options<SeasonStatus[], readonly ['seasons']>) {
   return useQuery({
-    queryKey: ['seasons'] as const,
-    queryFn: api.seasons,
-    // Seasons status changes when an ingest finishes, so refresh on a short cadence.
-    staleTime: 30 * 1000,
+    ...seasonsQueryOptions(),
     ...options,
   })
 }
@@ -42,11 +42,9 @@ export function useSeasons(options?: Options<SeasonStatus[]>) {
 
 // ── Schedule / games ─────────────────────────────────────────────────────────
 
-export function useSchedule(season: number | null, options?: Options<ScheduleWeek[]>) {
+export function useSchedule(season: number | null, options?: Options<ScheduleWeek[], readonly ['schedule', number | null]>) {
   return useQuery({
-    queryKey: ['schedule', season] as const,
-    queryFn: () => api.schedule(season!),
-    enabled: season != null,
+    ...scheduleQueryOptions(season),
     ...options,
   })
 }
@@ -167,11 +165,9 @@ export function useTeamSplits(abbrev: string | undefined, season: number | null,
 
 // ── League ───────────────────────────────────────────────────────────────────
 
-export function useStandings(season: number | null, options?: Options<DivisionStandings[]>) {
+export function useStandings(season: number | null, options?: Options<DivisionStandings[], readonly ['standings', number | null]>) {
   return useQuery({
-    queryKey: ['standings', season] as const,
-    queryFn: () => api.standings(season!),
-    enabled: season != null,
+    ...standingsQueryOptions(season),
     ...options,
   })
 }

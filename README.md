@@ -320,7 +320,7 @@ files together. Commit `uv.lock`; never commit `.venv`.
 **Frontend**
 ```bash
 cd frontend
-npm install
+npm ci --legacy-peer-deps
 npm run dev                                        # :5173 (proxies /api → :8000)
 ```
 
@@ -345,6 +345,19 @@ Covers endpoint behavior, data-quality **invariants**, and
 **data-reconciliation** against the real database (splits ⇄ official stats, EPA
 consistency, defensive-sack reconciliation). The reconciliation suite skips
 cleanly when the DB isn't present (CI) and runs against the baked DB at deploy time.
+
+Frontend browser checks run with controlled API responses and do not need a database:
+
+```bash
+cd frontend
+npx playwright install chromium                     # first setup
+npm run test:e2e
+npm run build                                      # type check + production build
+```
+
+The Standings pilot uses TanStack Query and an OpenAPI-typed client. See the
+[frontend data walkthrough](docs/FRONTEND_DATA.md) for the request flow,
+responsibilities, and migration boundary.
 
 ## Deploy
 

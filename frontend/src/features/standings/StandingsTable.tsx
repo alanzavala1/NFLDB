@@ -1,15 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { api, CURRENT_NFL_SEASON } from '../api'
-import type { DivisionStandings, SeasonEntry, StandingsTeam } from '../api'
-import Nav from '../components/Nav'
-import Card from '../components/Card'
-import { teamLogoUrl } from '../utils/teams'
-import { PlayoffBracket } from '../components/PlayoffBracket'
+import { Link } from 'react-router-dom'
+import type { DivisionStandings, StandingsRow } from '../../types'
+import Card from '../../components/Card'
+import { teamLogoUrl } from '../../utils/teams'
 
-// ── Standings ───────────────────────────────────────────────────────────────
-
-function DivisionCard({ division, teams }: { division: string; teams: StandingsTeam[] }) {
+function DivisionCard({ division, teams }: { division: string; teams: StandingsRow[] }) {
   const anyTies = teams.some(t => t.t > 0)
   const leaderBorder = 'border-l-data-win'
   return (
@@ -72,7 +66,7 @@ function DivisionCard({ division, teams }: { division: string; teams: StandingsT
   )
 }
 
-function ConferenceSection({ divisions }: { divisions: DivisionStandings[] }) {
+export function ConferenceSection({ divisions }: { divisions: DivisionStandings[] }) {
   return (
     <div className="mb-4">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -84,59 +78,3 @@ function ConferenceSection({ divisions }: { divisions: DivisionStandings[] }) {
   )
 }
 
-// ── Page ────────────────────────────────────────────────────────────────────
-
-export default function StandingsPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [seasons, setSeasons] = useState<SeasonEntry[]>([])
-  const [standings, setStandings] = useState<DivisionStandings[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const season = Number(searchParams.get('season') ?? CURRENT_NFL_SEASON)
-
-  useEffect(() => {
-    api.seasons().then(all => setSeasons(all.filter(s => s.status === 'loaded')))
-  }, [])
-
-  useEffect(() => {
-    setLoading(true)
-    setStandings([])
-    api.standings(season).then(setStandings).finally(() => setLoading(false))
-  }, [season])
-
-  const afc = standings.filter(d => d.division.startsWith('AFC'))
-  const nfc = standings.filter(d => d.division.startsWith('NFC'))
-
-  return (
-    <div className="min-h-screen bg-surface-bg">
-      <Nav />
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <Card title="Standings" className="mb-5"><div className="flex items-center justify-between gap-4 border-t border-surface-line px-4 py-3">
-            <p className="text-ink-dim text-[10px] uppercase tracking-widest font-bold">{season} NFL Season</p>
-          <select
-            value={season}
-            onChange={e => setSearchParams({ season: e.target.value })}
-            className="bg-surface-raise border border-surface-line text-ink text-sm font-semibold rounded-lg px-4 py-2.5 focus:outline-none focus:border-indigo-500 cursor-pointer hover:border-surface-line transition-colors"
-          >
-            {seasons.map(s => (
-              <option key={s.season} value={s.season}>{s.season}</option>
-            ))}
-          </select>
-        </div></Card>
-
-        {loading ? (
-          <p className="text-ink-dim text-sm">Loading…</p>
-        ) : standings.length === 0 ? (
-          <p className="text-ink-dim text-sm">No data for {season}.</p>
-        ) : (
-          <>
-            <PlayoffBracket season={season} />
-            <ConferenceSection divisions={afc} />
-            <ConferenceSection divisions={nfc} />
-          </>
-        )}
-
-      </div>
-    </div>
-  )
-}

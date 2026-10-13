@@ -18,7 +18,7 @@ const routeImporters = {
   team:      () => import('./pages/TeamPage'),
   player:    () => import('./pages/PlayerPage'),
   leaders:   () => import('./pages/LeadersPage'),
-  standings: () => import('./pages/StandingsPage'),
+  standings: () => import('./features/standings/StandingsPage'),
   splits:    () => import('./pages/SplitsPage'),
   ask:       () => import('./pages/AskPage'),
 }

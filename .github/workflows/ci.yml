@@ -33,7 +33,7 @@ jobs:
         run: uv run --locked pytest
 
   frontend:
-    name: Frontend (tsc + eslint)
+    name: Frontend (tsc + browser tests + eslint)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -52,6 +52,12 @@ jobs:
 
       - name: Type check
         run: npx tsc -b
+
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Test Standings pilot
+        run: npm run test:e2e
 
       # eslint has ~65 pre-existing react-hooks errors that pre-date the
       # CI setup. Wire it up but don't block — we'll clean it as a
