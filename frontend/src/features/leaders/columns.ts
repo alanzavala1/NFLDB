@@ -1,8 +1,6 @@
 import type { LeagueLeader } from '../../types'
 import { passerRating, pct, ratio, sfmt } from './formatting'
 
-export type SortDir = 'asc' | 'desc'
-
 type ColKind = 'trad' | 'adv'
 
 export type LeaderCol = {

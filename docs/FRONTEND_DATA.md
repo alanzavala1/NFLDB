@@ -29,6 +29,22 @@ results on refresh failures. Shared loaded-season selection is in
 `src/utils/seasons.ts`, used by both Standings and Leaders. Scores also permits
 scheduled seasons because published fixtures can precede statistics.
 
+The two sortable Leaders views share `LeaderTable.tsx`, backed by TanStack
+Table 9. It receives the existing NFL column definitions and exposes their
+numeric accessors to the sorting engine. Formatting remains separate, so
+`5,000` displays with commas but sorts as `5000`. The page stores a controlled
+sorting state for each tab, preserving that tab's choice when switching views.
+Only row sorting and its numeric comparator are enabled. Header buttons support
+keyboard activation and expose their sort direction through `aria-sort`.
+Qualification rules, formulas, grouped labels, colors, and links remain
+application-owned. Simple Standings tables and the fixed WPA table remain HTML.
+
+The Table pilot replaced duplicated renderers and handwritten sorting with one
+138-line renderer. Its measured cost is roughly 10 KB of additional compressed
+JavaScript across the production build. Browser checks preserve numeric sorting,
+ties, tab state, keyboard controls, and mobile scrolling; captured desktop,
+position-view, and mobile layouts match their pre-pilot screenshots exactly.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from

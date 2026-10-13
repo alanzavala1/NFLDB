@@ -37,6 +37,7 @@ test('latest loaded season, qualified players, and sorting survive tab changes',
   const table = page.getByRole('table')
   await expect(table.locator('tbody tr').first()).toContainText('Alpha passer')
   await expect(table.getByText('Backup passer')).toHaveCount(0)
+  await page.screenshot({ path: test.info().outputPath('leaders-desktop.png'), fullPage: true })
   await table.getByRole('columnheader', { name: /^YDS/ }).click()
   await expect(table.locator('tbody tr').first()).toContainText('Charlie passer')
   await page.getByRole('button', { name: 'Rushing', exact: true }).click()
@@ -52,10 +53,58 @@ test('position views preserve looser qualifications and typed punting columns', 
   await page.goto('/leaders?season=2023&mode=positions&pos=qb')
   const table = page.getByRole('table')
   await expect(table.locator('tbody tr').first()).toContainText('Backup passer')
+  await page.screenshot({ path: test.info().outputPath('leaders-positions.png'), fullPage: true })
   await page.getByRole('button', { name: 'P', exact: true }).click()
   await expect(table.getByText('Test punter')).toBeVisible()
   await expect(table.getByRole('cell', { name: '45.0', exact: true })).toBeVisible()
   await expect(table.getByRole('link', { name: 'Test punter' })).toHaveAttribute('href', '/players/punter')
+})
+
+test('numeric sorting uses raw values and keyboard activation keeps a two-way cycle', async ({ page }) => {
+  await mockLeaders(page, [
+    { ...players[0], pass_yards: 9900 },
+    { ...players[1], pass_yards: 12000 },
+    { ...players[2], pass_yards: 900 },
+  ])
+  await page.goto('/leaders?season=2023')
+  const table = page.getByRole('table')
+  const header = table.getByRole('columnheader', { name: 'YDS', exact: true })
+  const button = header.getByRole('button', { name: 'YDS', exact: true })
+  await expect(header).toHaveAttribute('aria-sort', 'descending')
+  await expect(table.locator('tbody tr').first()).toContainText('Bravo passer')
+  await expect(table.getByRole('cell', { name: '12,000', exact: true })).toBeVisible()
+  await button.focus()
+  await button.press('Enter')
+  await expect(header).toHaveAttribute('aria-sort', 'ascending')
+  await expect(table.locator('tbody tr').first()).toContainText('Charlie passer')
+  await button.press('Space')
+  await expect(header).toHaveAttribute('aria-sort', 'descending')
+  await expect(table.locator('tbody tr').first()).toContainText('Bravo passer')
+  await button.press('Enter')
+  await expect(header).toHaveAttribute('aria-sort', 'ascending')
+})
+
+test('advanced values, ties, and single-column sorting preserve their meaning', async ({ page }) => {
+  await mockLeaders(page, [
+    { ...players[0], pass_yards: 5000, interceptions_thrown: 5, pass_epa: 100 },
+    { ...players[1], pass_yards: 5000, interceptions_thrown: 10, pass_epa: -50 },
+    { ...players[2], pass_yards: 5000, interceptions_thrown: 2, pass_epa: 0 },
+  ])
+  await page.goto('/leaders?season=2023')
+  const table = page.getByRole('table')
+  await expect(table.locator('tbody tr').first()).toContainText('Alpha passer')
+  await expect(table.getByRole('columnheader', { name: 'Stats', exact: true })).toHaveAttribute('colspan', '11')
+  await expect(table.getByRole('columnheader', { name: 'Advanced', exact: true })).toHaveAttribute('colspan', '2')
+  await expect(table.getByText('-0.086', { exact: true })).toHaveClass(/text-data-loss/)
+  await expect(table.getByText('+0.173', { exact: true })).toHaveClass(/text-data-win/)
+  await expect(table.getByRole('cell', { name: '—', exact: true }).first()).toBeVisible()
+  await table.getByRole('button', { name: 'INT', exact: true }).click()
+  await expect(table.locator('tbody tr').first()).toContainText('Bravo passer')
+  await table.getByRole('button', { name: 'EPA/Att', exact: true }).click({ modifiers: ['Shift'] })
+  await expect(table.locator('thead th[aria-sort="descending"]')).toHaveCount(1)
+  await expect(table.locator('tbody tr').first()).toContainText('Alpha passer')
+  await table.getByRole('button', { name: 'YDS', exact: true }).click()
+  await expect(table.locator('tbody tr').first()).toContainText('Alpha passer')
 })
 
 test('dashboard, podium, and historical awards retain their links and labels', async ({ page }) => {
