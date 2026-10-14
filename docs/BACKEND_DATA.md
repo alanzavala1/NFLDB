@@ -1,7 +1,7 @@
 # Backend data ownership
 
-Standings and search use shared services. This establishes a small pattern for
-the remaining backend work; other assistant tools still import route functions
+Standings, search and league leaders use shared services. This establishes a
+small pattern for the remaining backend work; other assistant tools still import route functions
 and will move one domain at a time.
 
 ## Standings
@@ -63,6 +63,29 @@ fallback was preserved during this structural move. Distinguishing expected
 data gaps from unexpected failures remains a later error-handling task; search
 does not yet have standings' error propagation behavior.
 
+## League leaders
+
+The `/api/leaders` route delegates to `api/services/leaders.py`. The route keeps
+its optional season parameter and `LeagueLeader` response validation. The
+assistant's `get_leaders` tool imports the same service directly; `llm.py` no
+longer imports any functions from `routers/leaders.py`.
+
+The service returns season totals from `player_game_stats` for games joined to
+regular-season schedules. It counts distinct game IDs and sums the existing
+passing, rushing, receiving, defensive, kicking and punting fields. The shared
+`ROSTER_CTE` chooses one roster row per player and season by latest week, then
+team, so the join does not multiply totals. Its left join keeps players without
+roster details, returning null position, team and headshot. An omitted season
+uses the existing current-season configuration; an explicit empty year stays
+empty. Unexpected query failures propagate.
+
+The service provides totals without choosing a ranking or qualification rule.
+The UI owns its tab-specific qualification and display choices. The assistant
+validates its stat name, sorts that stat descending, limits the result to between
+one and 25 rows, and records its existing compact result. These caller policies
+are preserved alongside the unchanged shared SQL. WPA leaders remain a separate
+query based on play-level data and have not moved in this checkpoint.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -77,7 +100,15 @@ and aliases, ranking, newest roster rows, result caps, empty inputs, parameter
 validation and the retained logged fallback. Existing vocabulary checks also
 exercise search against the local database when that snapshot is present.
 
-Both extractions compared the complete OpenAPI document before and after,
+League leaders' focused checks are `uv run --locked pytest
+tests/test_leaders_service.py tests/test_endpoints.py tests/test_reconciliation.py`.
+They cover service/HTTP parity, expected totals, season/game-type filtering,
+distinct game counting, duplicate/missing roster rows, deterministic roster
+selection, assistant ranking/limits/provenance, default/empty/invalid inputs and
+query failures. Reconciliation uses the local snapshot when available and does
+not establish current production freshness.
+
+These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
 frontend types needed regeneration. Data rebuilding, database write ownership,
 other domains and assistant execution remain separate milestones.

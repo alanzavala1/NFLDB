@@ -30,6 +30,12 @@ results on refresh failures. Shared loaded-season selection is in
 `src/utils/seasons.ts`, used by both Standings and Leaders. Scores also permits
 scheduled seasons because published fixtures can precede statistics.
 
+The ordinary leaders endpoint and the assistant now share season-total logic in
+`api/services/leaders.py`. The UI still owns tab-specific qualifications and
+sorting; the assistant chooses a requested stat and a bounded ranking. Both start
+with the same regular-season totals and roster join. See
+[backend data ownership](BACKEND_DATA.md).
+
 The two sortable Leaders views share `LeaderTable.tsx`, backed by TanStack
 Table 9. It receives the existing NFL column definitions and exposes their
 numeric accessors to the sorting engine. Formatting remains separate, so
