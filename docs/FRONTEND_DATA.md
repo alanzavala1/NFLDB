@@ -12,6 +12,11 @@ Each section has its own error/retry state. Cached results stay visible with a
 warning when a background refresh fails. Live scores use the shared query cache
 with server pacing and the existing ordering safeguards.
 
+Power-ranking response assembly now lives in `api/services/power_rankings.py`,
+shared by the HTTP route and assistant. Team records stop at the ranking's
+selected week; the builder's existing EPA calculation remains separate. See
+[backend data ownership](BACKEND_DATA.md).
+
 Scores lives in `frontend/src/features/scores/`. `ScoresPage.tsx` owns query
 state, season/week URL choices, and layout. `WeekNavigator.tsx`, `SeasonCard.tsx`,
 `FeaturedGame.tsx`, `GameList.tsx`, `SidebarPanels.tsx`, `Storylines.tsx`, and

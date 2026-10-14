@@ -44,7 +44,7 @@ from services.leaders import get_leaders as _leaders_query
 from services.standings import get_standings as _standings_query
 from services.search import search as _search_query
 from routers.players import get_player as _player_profile
-from routers.power_rankings import get_power_rankings as _power_rankings_query
+from services.power_rankings import get_power_rankings as _power_rankings_query
 from routers.schedule import get_game as _game_query
 from routers.schedule import get_schedule as _schedule_query
 from routers.teams import get_team as _team_query

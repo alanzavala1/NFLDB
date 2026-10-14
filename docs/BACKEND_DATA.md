@@ -1,8 +1,8 @@
 # Backend data ownership
 
-Standings, search, league leaders and WPA leaders use services. This establishes
-a small pattern for the remaining backend work; other assistant tools still
-import route functions and will move one domain at a time.
+Standings, search, league leaders, WPA leaders and power rankings use services.
+This establishes a small pattern for the remaining backend work; other assistant
+tools still import route functions and will move one domain at a time.
 
 ## Standings
 
@@ -115,6 +115,32 @@ empty results remains an explicit follow-up, as with search.
 With this extraction, `api/routers/leaders.py` contains only four HTTP wrappers;
 SQL and football-data assembly live in the services.
 
+## Power rankings
+
+`api/routers/power_rankings.py` delegates to `api/services/power_rankings.py`.
+The route retains its configured season default, optional week constrained to
+1–22, and `PowerRankingRow` response model. The assistant imports the same
+service directly. Its tool still uses week zero to mean the latest available
+ranking; the HTTP endpoint uses an omitted week for that choice.
+
+The existing builder owns EPA computation and stored weekly rankings. The
+service calls it, then adds team records through the week returned by the
+builder. These records count completed regular-season games only, including
+ties, and exclude future weeks and other seasons. A team with no counted games
+gets `0-0`. Rank, net EPA and movement come from the builder; nullable fields
+remain nullable in the HTTP response. An empty builder result returns an empty
+list without querying schedule records.
+
+The assistant keeps its existing compact projection, omits null fields, caps
+results at 25 and records provenance. Its tool definitions and execution are
+unchanged. Existing DB-backed coverage now calls the service for comparison.
+
+`power_rankings_builder.read_or_materialize` can still prepare missing rankings
+on demand. Its locks, computation, persistence and existing empty/error behavior
+are preserved. This extraction does not make serving read-only or change model
+definitions; those are separate pipeline/error-handling tasks. Errors from the
+service's schedule-record query continue to propagate.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -142,6 +168,15 @@ tests/test_endpoints.py`. Isolated play/roster fixtures check metric selection,
 rounding and null handling, inclusive thresholds, season/game-type filtering,
 incomplete-pass exclusion, roster joins, all three 30-player caps, HTTP volume
 fields, season defaults/validation and both whole/partial query fallbacks.
+
+Power rankings' focused checks are `uv run --locked pytest
+tests/test_power_rankings_service.py tests/test_ratings_power.py
+tests/test_ask_coverage.py`. Controlled ranking snapshots and in-memory schedules
+check selected-week records, ties/unfinished games, season/game-type filtering,
+null fields, empty results, defaults, HTTP week validation, assistant projection
+and provenance, and record-query failures. Existing builder tests still verify
+ranking computation and movement; local snapshot checks remain separate from
+production freshness and model-answer quality.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No

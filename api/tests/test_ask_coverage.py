@@ -132,7 +132,7 @@ def test_get_team_overview_returns_verified_past_standing_without_current_report
 
 
 def test_get_power_rankings_matches_platform_model_and_caps_rows():
-    from routers.power_rankings import get_power_rankings
+    from services.power_rankings import get_power_rankings
 
     expected = next(row for row in get_power_rankings(2023, None) if row["team"] == "KC")
     raw = _tool("get_power_rankings")(season=2023)
