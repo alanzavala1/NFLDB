@@ -1,7 +1,4 @@
-import { CURRENT_NFL_SEASON } from '../../api'
 import type { Example } from './types'
-
-export const SEASONS = Array.from({ length: CURRENT_NFL_SEASON - 1998 }, (_, i) => CURRENT_NFL_SEASON - i)
 
 export const PLAYER_EXAMPLES: Example[] = [
   { label: 'Allen vs Mahomes', names: ['Josh Allen', 'Patrick Mahomes'], cat: 'passing' },

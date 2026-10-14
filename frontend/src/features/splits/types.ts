@@ -50,6 +50,6 @@ export interface ComparisonSelection {
   teamSide: TeamSide
   players: PlayerEntity[]
   teams: string[]
-  season: number
+  season: number | null // null means availability is pending, empty, or invalid.
   situation: Situation | null
 }

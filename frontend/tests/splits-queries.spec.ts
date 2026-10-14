@@ -123,6 +123,7 @@ test('offensive categories and career/season filters reuse one resource while de
   await loaded(page)
   expect(reads).toHaveLength(initialReads)
   await page.getByRole('button', { name: 'Defense', exact: true }).click()
+  await expect.poll(() => reads.slice(initialReads)).toEqual([resources.defense.path])
   await loaded(page)
   expect(reads.slice(initialReads)).toEqual([resources.defense.path])
   const afterDefense = reads.length

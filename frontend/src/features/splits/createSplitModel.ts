@@ -65,7 +65,7 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
 
   const singleEntity = entityCount === 1
 
-  const showDefensiveRanks = mode === 'players' && !isCareer && !isDefense
+  const showDefensiveRanks = mode === 'players' && season !== null && !isCareer && !isDefense
 
   const defensiveRanks = (() => { const m = new Map<string, number>(); for (const t of analytics.data?.league ?? []) if (t.def_epa_play_rank != null) m.set(t.team, t.def_epa_play_rank); return m })()
 

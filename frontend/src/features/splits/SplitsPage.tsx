@@ -1,4 +1,8 @@
 import Nav from '../../components/Nav'
+import { useQuery } from '@tanstack/react-query'
+import { seasonsQueryOptions } from '../../api/seasons'
+import { loadedSeasons } from '../../utils/seasons'
+import { SeasonSelectionFeedback } from './SeasonSelectionFeedback'
 import { useComparisonState } from './useComparisonState'
 import { useSplitQueries } from './useSplitQueries'
 import { useSplitDisplay } from './useSplitDisplay'
@@ -13,7 +17,8 @@ import { StandoutSplits } from './StandoutSplits'
 import { SplitSections } from './SplitSections'
 
 export default function SplitsPage() {
-  const comparison = useComparisonState()
+  const seasonsQuery = useQuery(seasonsQueryOptions())
+  const comparison = useComparisonState(loadedSeasons(seasonsQuery.data ?? []))
   const queries = useSplitQueries(comparison)
   const model = createSplitModel(comparison, queries)
   const display = useSplitDisplay(model.defaultOpen)
@@ -24,13 +29,14 @@ export default function SplitsPage() {
       <Nav />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <ComparisonControls comparison={comparison} entities={model.entities} />
+        <SeasonSelectionFeedback query={seasonsQuery} availableYears={comparison.availableYears} season={comparison.season} mode={comparison.mode} />
         <SplitQueryFeedback entities={model.entities} splits={queries.splitResults} profiles={queries.playerProfiles}
           analytics={queries.rankQuery} splitKind={comparison.mode === 'teams' ? 'team' : model.isDefense ? 'defensive' : 'offensive'} />
-        {model.entityCount === 0 ? <GetStarted mode={comparison.mode} loadExample={comparison.loadExample} /> : <>
+        {comparison.season !== null && (model.entityCount === 0 ? <GetStarted mode={comparison.mode} loadExample={comparison.loadExample} /> : <>
           <HeadToHead model={model} comparison={comparison} splitResults={queries.splitResults} />
-          <StandoutSplits notable={notable} entityLabel={model.entities[0].label} isCareer={model.isCareer} season={model.season} />
+          <StandoutSplits notable={notable} entityLabel={model.entities[0].label} isCareer={model.isCareer} season={comparison.season} />
           <SplitSections model={model} selectors={selectors} display={display} queries={queries} />
-        </>}
+        </>)}
       </div>
     </div>
   )

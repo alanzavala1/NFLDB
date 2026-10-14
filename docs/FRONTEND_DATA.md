@@ -218,7 +218,7 @@ split request state. Pending requests, failures, and successful empty selections
 have different messages. A failed comparison member does not hide usable members
 or their game logs. Season and remove-member controls have accessible labels.
 
-Splits now lives in `src/features/splits/`. `SplitsPage.tsx` is 37 lines and
+Splits now lives in `src/features/splits/`. `SplitsPage.tsx` is a small entry point and
 connects comparison state, canonical queries, derived view data, and components.
 `ComparisonControls.tsx`, `MatchupHeader.tsx`, `GetStarted.tsx`, `HeadToHead.tsx`,
 `StandoutSplits.tsx`, and `SplitSections.tsx` own visible sections. `StatTable.tsx`
@@ -226,7 +226,7 @@ and `GroupedTable.tsx` retain the existing single/grouped renderers and sorting.
 Controls and sections receive related state/data/callbacks through explicit props.
 The router imports the feature directly; the former page/config files are removed.
 
-`useComparisonState.ts` owns selections and existing URL reflection;
+`useComparisonState.ts` reads selections from the URL and owns their transitions;
 `useSplitDisplay.ts` owns hidden/open sections, drilldowns, and metric density.
 `useSplitQueries.ts` observes requests. `createSplitModel.ts` derives selected
 rows, game records, entities, and the metric lens. `sectionData.tsx` prepares
@@ -235,9 +235,8 @@ Player, defender, and team definitions have separate config modules; aggregation
 formatting/rating helpers, labels, ranking, presets, and types have named owners.
 The largest feature file is 125 lines.
 
-All statistical definitions, weighted rates, sorting/highlighting, game links,
-and comparison behavior are preserved. Initial URL capture now uses lazy state
-instead of reading a ref during rendering. Empty search-result clearing belongs
+The feature extraction preserved statistical definitions, weighted rates,
+sorting/highlighting, game links, and comparison behavior. Empty search-result clearing belongs
 to the input event; its pending debounce timer is cleared when leaving. Section
 toggles use explicit set operations. All 17 former Splits lint errors are resolved
 without suppressions/dependencies. Regression checks preserve weighting, regular-
@@ -245,8 +244,8 @@ season game-log totals, situations/sorts, ties, defense winner direction, groupe
 expansion, visibility, search/examples, and timer cleanup. Seven desktop/mobile
 captures match their pre-move screenshots pixel for pixel.
 
-Manual search/example requests and existing calendar-based season/URL behavior
-remain separate follow-up work. The backend's current split endpoints can still
+Manual search/example requests remain separate follow-up work.
+The backend's current split endpoints can still
 materialize missing data on a GET; moving that work offline belongs to the backend
 milestone.
 
@@ -261,6 +260,27 @@ spaced panels; the empty view and data-source notes have clearer layouts.
 The existing query, URL, calculation, and comparison rules are preserved.
 Browser checks cover unclipped search selection at 320/390/1280 pixels, sticky
 phone labels, keyboard sorting, and six long names with usable removal controls.
+
+Splits now reads the shared published-season list and uses the shared strict
+season validator. Players default to Career (`season=0`); teams default to the
+newest published year when no season is supplied. Team links with `season=0`,
+malformed years, or unpublished years show an availability message and start no
+split/profile/rank queries. No publication data means no comparison requests.
+Season-list loading, errors, empty results, retry, and failed-refresh warnings
+have explicit feedback in `SeasonSelectionFeedback.tsx`. A failed refresh keeps
+cached availability; a successful refresh that withdraws the selected year hides
+its table while preserving the bookmark.
+
+Member IDs, mode, category, team side, year, and situation come directly from
+React Router search parameters. Controls update those parameters in one history
+entry, preserve unrelated fields and inactive-mode members, and skip no-op
+selections. Back/forward and reload restore the selected view; Query reuses the
+matching resource cache. Switching from player Career to Teams removes the
+Career parameter so the team uses publication metadata. Search display metadata
+and table display state remain local; neither holds a second selected view.
+Member lists are unique and limited to six. Examples resolve their members into
+one URL update and discard results if another selection or navigation intervenes.
+The calendar-derived Splits season list and URL-reflection effect are removed.
 
 ## Follow one request
 

@@ -27,6 +27,10 @@ export const splitAnalytics = { season: 2023, league: [{ ...analyticsRow, team: 
 
 export async function mockSplits(page: Page) {
   await mockProfile(page)
+  await page.route('**/api/seasons', route => route.fulfill({ json: [
+    { season: 2026, status: 'loading' }, { season: 2025, status: 'available' },
+    { season: 2024, status: 'loaded' }, { season: 2023, status: 'loaded' }, { season: 2022, status: 'loaded' },
+  ] }))
   await page.route(url => /^\/api\/players\/[^/]+$/.test(url.pathname), route => {
     const id = new URL(route.request().url()).pathname.split('/').at(-1)!
     return route.fulfill({ json: { ...playerProfile, player_id: id,
