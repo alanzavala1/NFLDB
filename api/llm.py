@@ -45,7 +45,7 @@ from services.standings import get_standings as _standings_query
 from services.search import search as _search_query
 from routers.players import get_player as _player_profile
 from services.power_rankings import get_power_rankings as _power_rankings_query
-from routers.schedule import get_game as _game_query
+from services.game_detail import get_game_detail as _game_query
 from services.schedule import get_schedule as _schedule_query
 from services.team_profile import get_team_profile as _team_query
 from services.team_depth_chart import get_team_depth_chart as _team_depth_query
@@ -845,9 +845,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         if ctx.over_budget():
             return _BUDGET_MSG
         args = {"game_id": game_id}
-        try:
-            game = _game_query(game_id)
-        except HTTPException:
+        game = _game_query(game_id)
+        if game is None:
             ctx.record("get_game_detail", args)
             return "No game found for that game_id."
 

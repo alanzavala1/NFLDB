@@ -190,6 +190,11 @@ cannot share a chart result. Requests consume Query's cancellation signal;
 an in-flight shared schedule can remain needed by another observer, while a gap
 between observers can cancel and restart it. Fresh completed results are reused.
 
+Backend detail assembly now lives in `api/services/game_detail.py`, called by
+both the HTTP route and assistant. The route retains its schema and missing-game
+404. Box-score/scoring calculations and optional play-data fallbacks are
+unchanged; lineup, ratings and chart assembly remain separate follow-up work.
+
 All four resources expose pending, error, and retry states. Cached successful
 results remain visible on refresh failures, including empty lineups, schedules,
 and charts. Empty data is distinguished from pending requests; a lineup failure

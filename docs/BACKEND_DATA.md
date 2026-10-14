@@ -216,7 +216,7 @@ is a later roster-consistency task.
 ## Pregame record annotations
 
 `api/services/schedule_records.py` owns the `attach_records(games)` helper.
-Schedule and team-profile services and the game-detail route import it directly;
+Schedule, team-profile and game-detail services import it directly;
 the team route no longer imports a helper from the schedule route. It requires only the
 supplied game dictionaries, without database or HTTP dependencies.
 
@@ -297,6 +297,37 @@ service result becomes the unchanged HTTP 404 message:
 `No games found for week {week}, season {season}`. Unexpected database failures
 propagate rather than being relabeled as missing games. This endpoint has no
 assistant consumer; season game search continues using `get_schedule`.
+
+## Game detail
+
+`api/services/game_detail.py` owns `get_game_detail(game_id)`: schedule metadata,
+pregame records, player box scores, quarter scores, win-probability plays, team
+statistics and scoring summary. It returns ordinary dictionaries, or `None` if
+the initial schedule lookup finds no game. Missing games stop before subsequent
+queries; scheduled games without stats or plays still form valid responses.
+
+The `/api/games/{game_id}` route maps `None` to the same HTTP 404 message,
+`Game {game_id} not found`, and validates the unchanged `GameDetail` schema.
+The assistant imports the service directly and maps absence to its existing
+no-game text and provenance. It retains selected metadata, at most five quarter
+rows and the top five players per team ranked by combined passing/rushing/
+receiving yards. Zero-volume players and zero statistic fields remain omitted;
+the full play chart, scoring summary and team box score stay outside its compact
+projection. `llm.py` no longer imports schedule route functions.
+
+The existing record query supplies earlier weeks of the same season, requiring
+an away score and retaining all game types. The record helper still requires
+both scores to count a result. Player selection keeps the existing roster join,
+team correction and one-row-per-player ranking; it does not introduce new stat
+aggregation. Quarter totals remain cumulative score differences. Scoring keeps
+defensive touchdown/safety attribution and folds extra-point/two-point score
+updates into the preceding scoring entry, preserving its description.
+
+Required schedule/history/player query failures propagate through both callers.
+Play-derived queries retain `safe_query`'s logged empty fallback; quarter assembly
+also retains its broad exception guard, including any rows already assembled.
+This structural move preserves those policies. Distinguishing genuine optional
+data gaps from unexpected query failures remains separate error-handling work.
 
 ## Verification
 
@@ -386,6 +417,16 @@ kickoff ordering across different dates, game types and nullable fields, absent
 domain records versus HTTP null records, week 22, exact empty-result 404 messages,
 configured defaults, required/range/type validation before SQL and database error
 propagation. These run entirely offline with controlled data.
+
+Game-detail checks are `uv run --locked pytest tests/test_game_detail_service.py
+tests/test_schedule_records.py tests/test_lineup_endpoints.py
+tests/test_ask_coverage.py`. Isolated mini-league fixtures check HTTP/service parity,
+record scope, roster/team selection, quarter deltas, defensive scoring and PAT
+folding, conversion rates/penalties/turnovers, win-probability filtering/rounding,
+assistant projection/ranking/provenance, missing-game messages, valid unplayed
+games, optional play-table fallback and failures at all three required queries.
+Existing historical snapshot coverage also checks a known Super Bowl without
+calling a model; it does not establish live freshness or model-answer quality.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
