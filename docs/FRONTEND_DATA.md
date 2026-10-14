@@ -218,11 +218,37 @@ split request state. Pending requests, failures, and successful empty selections
 have different messages. A failed comparison member does not hide usable members
 or their game logs. Season and remove-member controls have accessible labels.
 
-This checkpoint preserves statistical definitions, sorting, game links, and
-comparison/aggregation behavior. The large Splits page/configuration files,
-manual search/example resolution, and existing calendar-based season/URL state
-remain follow-up work. The backend's current split endpoints can still materialize
-missing data on a GET; moving that work offline belongs to the backend milestone.
+Splits now lives in `src/features/splits/`. `SplitsPage.tsx` is 37 lines and
+connects comparison state, canonical queries, derived view data, and components.
+`ComparisonControls.tsx`, `MatchupHeader.tsx`, `GetStarted.tsx`, `HeadToHead.tsx`,
+`StandoutSplits.tsx`, and `SplitSections.tsx` own visible sections. `StatTable.tsx`
+and `GroupedTable.tsx` retain the existing single/grouped renderers and sorting.
+Controls and sections receive related state/data/callbacks through explicit props.
+The router imports the feature directly; the former page/config files are removed.
+
+`useComparisonState.ts` owns selections and existing URL reflection;
+`useSplitDisplay.ts` owns hidden/open sections, drilldowns, and metric density.
+`useSplitQueries.ts` observes requests. `createSplitModel.ts` derives selected
+rows, game records, entities, and the metric lens. `sectionData.tsx` prepares
+display rows and game links; `standouts.tsx` selects meaningful efficiency swings.
+Player, defender, and team definitions have separate config modules; aggregation,
+formatting/rating helpers, labels, ranking, presets, and types have named owners.
+The largest feature file is 125 lines.
+
+All statistical definitions, weighted rates, sorting/highlighting, game links,
+and comparison behavior are preserved. Initial URL capture now uses lazy state
+instead of reading a ref during rendering. Empty search-result clearing belongs
+to the input event; its pending debounce timer is cleared when leaving. Section
+toggles use explicit set operations. All 17 former Splits lint errors are resolved
+without suppressions/dependencies. Regression checks preserve weighting, regular-
+season game-log totals, situations/sorts, ties, defense winner direction, grouped
+expansion, visibility, search/examples, and timer cleanup. Seven desktop/mobile
+captures match their pre-move screenshots pixel for pixel.
+
+Manual search/example requests and existing calendar-based season/URL behavior
+remain separate follow-up work. The backend's current split endpoints can still
+materialize missing data on a GET; moving that work offline belongs to the backend
+milestone.
 
 ## Follow one request
 
