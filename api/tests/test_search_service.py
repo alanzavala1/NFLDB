@@ -94,14 +94,12 @@ def test_http_keeps_required_nonempty_query_validation(client):
     assert client.get('/api/search', params={'q': '   '}).json() == []
 
 
-def test_existing_roster_failure_fallback_logs_and_keeps_team_matches(monkeypatch, caplog):
+def test_unexpected_roster_failure_propagates(monkeypatch):
     import sql_helpers
 
     def fail(*args, **kwargs):
         raise RuntimeError('roster query failed')
 
     monkeypatch.setattr(sql_helpers, 'query_to_dict', fail)
-    rows = search('Niners')
-    assert [row['id'] for row in rows] == ['SF']
-    assert all(row['type'] == 'team' for row in rows)
-    assert 'safe_query failed, returning []' in caplog.text
+    with pytest.raises(RuntimeError, match='roster query failed'):
+        search('Niners')

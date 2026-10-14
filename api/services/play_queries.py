@@ -1,9 +1,10 @@
 """Validated play filters and fixed SQL measures, independent of model execution."""
+from data_errors import is_missing_data_error
 from dataclasses import dataclass
 from typing import Any
 import re
 import threading
-from config import TEAM_NAMES
+from config import MODERN_TEAM_ALIASES, TEAM_NAMES
 from database import query_to_dict
 
 
@@ -55,8 +56,6 @@ _QUERY_PLAY_ENUMS = {
     "run_location": ("left", "middle", "right"),
     "run_gap": ("guard", "tackle", "end"),
 }
-
-_QUERY_PLAY_TEAM_ALIASES = {"OAK": "LV", "SD": "LAC", "STL": "LA", "JAC": "JAX"}
 
 _QUERY_PLAY_MEASURES = """
     COUNT(*) AS plays,
@@ -112,7 +111,9 @@ def _plays_metadata() -> tuple[frozenset[str], frozenset[int]]:
                 )
                 _plays_columns_cache = frozenset(row["column_name"] for row in columns)
                 _plays_seasons_cache = frozenset(int(row["season"]) for row in seasons)
-            except Exception:
+            except Exception as _data_error:
+                if not is_missing_data_error(_data_error):
+                    raise
                 _plays_columns_cache = frozenset()
                 _plays_seasons_cache = frozenset()
     return _plays_columns_cache, _plays_seasons_cache
@@ -279,10 +280,10 @@ def query_plays(season: int, season_type: str = "REG", offense: str = "",
 
     if teams["offense"]:
         conditions.append(f"{_QUERY_PLAY_FILTER_COLUMNS['offense']} = ?")
-        params.append(_QUERY_PLAY_TEAM_ALIASES.get(teams["offense"], teams["offense"]))
+        params.append(MODERN_TEAM_ALIASES.get(teams["offense"], teams["offense"]))
     if teams["defense"]:
         conditions.append(f"{_QUERY_PLAY_FILTER_COLUMNS['defense']} = ?")
-        params.append(_QUERY_PLAY_TEAM_ALIASES.get(teams["defense"], teams["defense"]))
+        params.append(MODERN_TEAM_ALIASES.get(teams["defense"], teams["defense"]))
     if enum_values["play"]:
         conditions.extend([
             f"{_QUERY_PLAY_FILTER_COLUMNS['play']} = ?",

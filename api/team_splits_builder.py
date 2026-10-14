@@ -6,6 +6,7 @@ the shared splits_core scaffolding. `side` ('offense' | 'defense') replaces the
 player table's `category`; metrics are team rate stats (EPA/play, success%,
 pass rate, yards/play, explosive%) over scrimmage plays.
 """
+from data_errors import is_missing_data_error
 import duckdb
 
 import splits_core as core
@@ -151,6 +152,8 @@ def _materialize_locked(s: int) -> int:
                 FROM ({sql})
             """)
         except Exception as e:
+            if not is_missing_data_error(e):
+                raise
             print(f"team_splits[{side}] materialize failed for season {s}: {e}")
 
     return conn.execute(
@@ -168,7 +171,9 @@ def read(team: str, season: int) -> list[dict]:
             WHERE team = ? AND season = ?
             ORDER BY side, split_dim, sort_order
         """, [team, int(season)])
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
 
 
@@ -177,7 +182,9 @@ def _season_built(season: int) -> bool:
         return query_to_dict(
             "SELECT 1 FROM team_splits WHERE season = ? LIMIT 1", [int(season)]
         ) != []
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return False
 
 

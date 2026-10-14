@@ -2,6 +2,8 @@
 import os
 from datetime import datetime
 
+from data_errors import is_missing_data_error
+
 FIRST_SEASON = 1999
 
 
@@ -20,7 +22,7 @@ def _calendar_season_guess() -> int:
 
 
 def _latest_scheduled_season() -> int | None:
-    """Newest season the schedule actually covers, or None if unreadable.
+    """Newest scheduled season, or None for an empty/missing schedule feed.
 
     `database` is imported lazily so this module stays importable without a
     database — tests seed their own connection, and tooling imports config
@@ -33,7 +35,9 @@ def _latest_scheduled_season() -> int | None:
         rows = query_to_dict("SELECT MAX(season) AS season FROM schedules")
         if rows and rows[0]["season"] is not None:
             return int(rows[0]["season"])
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         pass
     return None
 
@@ -76,6 +80,10 @@ RELOCATIONS: tuple[tuple[str, str, int], ...] = (
     ('LAC', 'SD',  2016),
     ('LA',  'STL', 2015),
 )
+
+# Raw plays use modern franchise codes; JAC is an alternate abbreviation,
+# rather than a relocation. Keep the season-sensitive reverse mapping above.
+MODERN_TEAM_ALIASES = {era: modern for modern, era, _ in RELOCATIONS} | {'JAC': 'JAX'}
 
 
 def era_team_case(team_expr: str, season_expr: str) -> str:

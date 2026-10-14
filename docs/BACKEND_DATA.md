@@ -1,8 +1,56 @@
 # Backend data ownership
 
-League queries, schedules, power rankings and several team views use services. This
-establishes a small pattern for the remaining backend work; other assistant
-tools still import route functions and will move one domain at a time.
+Core league, team, player and game data now have domain service owners. HTTP
+routes and assistant tools call the same ordinary Python functions. The assistant
+imports neither HTTP routes nor database query functions. Builders retain their
+analytics formulas; moving their writes offline is the next separate milestone.
+
+## Request flow and responsibilities
+
+```text
+React page → TanStack Query → typed HTTP client → FastAPI route
+                                                    ↓
+Assistant tool ──────────────────────────────→ domain service → DuckDB
+                                                    ↓
+                                       analytics builder when needed
+```
+
+A page displays information. TanStack Query manages loading, cached responses,
+refreshes and retries; the typed client sends the request. A route validates URL
+arguments, turns domain absence into HTTP status codes, and validates the response
+with Pydantic. A service chooses the football data and assembles plain dictionaries.
+DuckDB executes the SQL against a local snapshot. The assistant calls these same
+services inside the process, then selects a compact result and records its source.
+Live scores use their separate provider; Ask's streaming transport and model loop
+also retain their own responsibilities.
+
+For an interview, a player profile is a concrete example: the browser requests
+`/api/players/{id}`; the route calls `player_profile.get_player_profile`; that service
+combines biography, game logs, snaps, tracking and supplemental queries. The route
+returns a validated profile. The assistant's player tools reuse that composition
+without making an HTTP call back to the server. One owner for data selection means
+a fix can benefit both consumers, while their display choices remain independent.
+
+## Optional data and errors
+
+Required queries use `query_to_dict` and propagate database failures. Optional
+feed queries use `safe_query`: only absent relations or source fields registered
+in `api/data_errors.py` qualify for a logged empty result. The registry documents
+which older/cold snapshot gaps the application accepts. Unknown tables/columns,
+invalid SQL/functions/aliases, connection and I/O errors, and other unexpected
+failures propagate. Even a registered missing field is an error for a required
+query; the caller's contract determines whether a fallback is allowed.
+
+Builders use the same classification at their existing fallback points. Their
+locks, formulas and lazy preparation are retained, but unexpected read/build/write
+failures now propagate. Comparables rolls back its transaction before rethrowing
+a write failure. Moving all preparation out of requests remains future work.
+
+`services/seasons.py` reads played and scheduled coverage independently. Missing
+optional play data cannot erase an available schedule; an unexpected storage
+failure cannot masquerade as an unloaded season. Expected empty data and an absent
+entity remain distinct from execution failures. HTTP routes still own the existing
+404 responses; Ask's existing execution handler owns tool-failure reporting.
 
 ## Standings
 
@@ -57,11 +105,9 @@ name matches, substrings and compact spellings. Teams appear first; limits
 remain three team candidates, eight player candidates and ten combined results.
 Selection among roster rows tied on the newest season remains unchanged.
 
-The existing roster query uses `safe_query`: any query failure is logged and
-produces an empty player list, while team matches can still be returned. That
-fallback was preserved during this structural move. Distinguishing expected
-data gaps from unexpected failures remains a later error-handling task; search
-does not yet have standings' error propagation behavior.
+The optional roster query uses `safe_query`. Known missing roster schema produces
+a logged empty player list while team matches remain available. Unexpected query
+or storage errors propagate rather than becoming a successful search with no players.
 
 ## League leaders
 
@@ -106,11 +152,9 @@ before limiting results to 30. The same-season roster join uses `ROSTER_CTE`
 and preserves missing roster details. The HTTP schema still fills unused volume
 fields with null: a passing row has attempts plus null carries/receptions.
 
-Each category retains its existing `safe_query` fallback. A failed passing
-query returns an empty passing list while successful rushing/receiving lists
-remain available. Missing play data can produce three empty lists; failures are
-logged and still return HTTP success. Distinguishing such failures from valid
-empty results remains an explicit follow-up, as with search.
+Each category uses `safe_query`: known missing source fields can leave one category
+empty while other categories remain available. A missing optional plays table can
+produce three logged empty lists. Unexpected query or storage errors propagate.
 
 With this extraction, `api/routers/leaders.py` contains only four HTTP wrappers;
 SQL and football-data assembly live in the services.
@@ -136,10 +180,10 @@ results at 25 and records provenance. Its tool definitions and execution are
 unchanged. Existing DB-backed coverage now calls the service for comparison.
 
 `power_rankings_builder.read_or_materialize` can still prepare missing rankings
-on demand. Its locks, computation, persistence and existing empty/error behavior
-are preserved. This extraction does not make serving read-only or change model
-definitions; those are separate pipeline/error-handling tasks. Errors from the
-service's schedule-record query continue to propagate.
+on demand. Its locks, computation and persistence are preserved. Its fallback
+points now accept only known missing schema; unexpected builder errors propagate.
+Serving remains writable, and changing that is a separate pipeline milestone.
+Errors from the required schedule-record query also propagate.
 
 ## Team depth charts
 
@@ -165,8 +209,8 @@ separate player selection is unchanged in this checkpoint.
 
 The team-overview tool selects eligible offensive starters only for the current
 season. Its arguments, five-starter cap, output and provenance are unchanged.
-The query retains `safe_query`'s logged empty fallback for database failures;
-distinguishing such failures from valid missing data remains a follow-up.
+The optional query retains a logged empty fallback for known missing feed schema;
+unexpected failures propagate.
 
 ## Team injury reports
 
@@ -190,8 +234,8 @@ The assistant includes reports only in current-season overviews. It preserves
 the first 20 service rows, selects its existing compact fields, omits null
 values and records provenance. Historical overviews do not request current
 injuries. The separate player-profile injury selection is unchanged.
-`safe_query`'s existing logged empty-list fallback on query failure is retained
-and remains part of the later error-handling work.
+Known missing optional injury schema produces a logged empty list through
+`safe_query`; unexpected query and storage failures propagate.
 
 ## Team rosters
 
@@ -324,10 +368,9 @@ defensive touchdown/safety attribution and folds extra-point/two-point score
 updates into the preceding scoring entry, preserving its description.
 
 Required schedule/history/player query failures propagate through both callers.
-Play-derived queries retain `safe_query`'s logged empty fallback; quarter assembly
-also retains its broad exception guard, including any rows already assembled.
-This structural move preserves those policies. Distinguishing genuine optional
-data gaps from unexpected query failures remains separate error-handling work.
+Optional play-derived queries use the known-schema fallback described above.
+Quarter assembly explicitly skips null quarter identifiers; unexpected query or
+conversion failures propagate rather than silently returning a partial chart.
 
 ## Game ratings and shared player-game totals
 
@@ -354,8 +397,8 @@ shared numeric stat columns with nulls treated as zero, and uses the existing
 remains unspecified. Moving the fragment preserves its SQL and all consumers.
 
 The builder still reads or materializes missing ratings with its existing lock,
-global calibration and empty-result fallback policies. Serving is not yet
-read-only. Unexpected service-query failures and uncaught builder failures
+global calibration and known-schema fallback policies. Serving is not yet
+read-only. Unexpected service-query failures and builder failures
 propagate rather than becoming 404 or successful empty ratings.
 
 ## Game player selection
@@ -413,8 +456,9 @@ that required query rather than merely removing scoring events. Unexpected
 schedule/snap failures and uncaught builder failures propagate.
 
 Player ratings and O-line grades still use the existing read-or-materialize
-builders. Their writes, locks, formulas and internal fallback policies are
-preserved; moving them into an offline pipeline remains separate work.
+builders. Their writes, locks and formulas are preserved; known missing schema
+retains the fallback while unexpected failures propagate. Moving preparation into
+an offline pipeline remains separate work.
 
 ## Game player charts
 
@@ -431,7 +475,7 @@ the profile. Metadata prefers stats where present; roster position comes from
 the latest week with the existing team tiebreaker. A roster-only player remains
 valid even without participation in that game. Missing values become the same
 zero stat totals; tackles still combine solo and assisted tackles. The existing
-ratings builder retains on-demand preparation and its internal fallback rules.
+ratings builder retains on-demand preparation and known-schema fallback rules.
 
 Role selection counts all matching passer, receiver and rusher plays. Ties
 prefer passer, then receiver, then rusher. With no matching plays, the shared
@@ -441,8 +485,8 @@ Events retain their role/lane/yard/outcome rules, nullable fields and the first
 The role comes from all plays, rather than just that capped event list.
 
 Snap percentage retains the PFR/roster join, same-team preference before latest
-week, and maximum percentage across units. Its `safe_query` fallback logs failures
-and returns null snap percentage without discarding the chart. Schedule,
+week, and maximum percentage across units. Known missing optional snap schema is
+logged and returns null snap percentage without discarding the chart. Schedule,
 profile, role-count and event queries remain required; unexpected failures and
 uncaught builder errors propagate instead of becoming a missing-game/player 404.
 
@@ -463,8 +507,9 @@ PFR/name identity, season snap totals and snap-first OL/kicker/punter game logs;
 `player_tracking.py` owns NGS tracking and the play-derived CPOE fallback;
 `player_advanced.py` owns play-derived statistic families and target shares;
 `player_supplemental.py` owns draft/combine, injury, awards and depth lookups.
-Their existing queries, sorting, qualification and optional-data policies are
-preserved. Identity still uses independent MAX values; roster/snap scope and
+Their queries, sorting and qualification are preserved; optional-data failures
+now use the shared classification above. Identity still uses independent MAX
+values; roster/snap scope and
 NGS precedence are unchanged. Regular totals exclude playoffs while logs retain
 them. Comparables/splits already delegate builders and need no extra wrapper.
 
@@ -477,6 +522,17 @@ or validation/no-match message. The assistant tool only applies its budget,
 records provenance and serializes that result. It no longer owns SQL or imports
 database query functions. Existing filter vocabulary, grouping limit and
 small-sample note are preserved. Player-ID validation has the same shared owner.
+A storage error during metadata discovery propagates without caching a false empty
+schema. Team aliases come from `config.MODERN_TEAM_ALIASES`, derived from the
+relocation definitions plus the JAC/JAX spelling alias. `era_team_case` retains
+its separate season-sensitive reverse mapping for historical display.
+
+Identity rules intentionally differ by data source: profile snaps use PFR/name
+lookup, roster projections choose same-season rows, and game lineups constrain
+identity to the relevant game/team. They are documented rather than collapsed
+into one rule that would change existing football results. Completed regular-season
+record calculation belongs to `services/schedule_records.py`; the assistant's
+fallback record now imports that helper.
 
 ## Verification
 
@@ -527,8 +583,8 @@ tests/test_team_injuries_service.py tests/test_team_depth_chart_service.py
 tests/test_ask_coverage.py`. Isolated injury tables check latest team/season
 selection, explicit/missing weeks, default seasons, ordering and nullable
 response fields, service/HTTP parity, input validation, assistant current versus
-historical behavior, projection/provenance, its 20-entry cap, and logged query
-failure fallback.
+historical behavior, projection/provenance, its 20-entry cap, known-schema fallback
+and unexpected-error propagation.
 
 Team roster checks are `uv run --locked pytest tests/test_team_roster_service.py
 tests/test_endpoints.py`. They cover seeded and isolated service/HTTP parity,
@@ -611,5 +667,10 @@ required query and the builder. No model runs or production-freshness claims.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
-frontend types needed regeneration. Data rebuilding, database write ownership,
-other domains and assistant execution remain separate milestones.
+frontend types needed regeneration. The intentional error-policy changes have
+separate coverage in `test_optional_data_errors.py`: known missing data, invalid
+SQL/aliases/functions, runtime failures, independent season feeds, all builder
+reads, metadata-cache recovery, quarter-query errors and transaction rollback.
+Profile and granular-play service tests verify shared caller results and provenance.
+Data rebuilding, database write ownership and assistant execution remain separate
+milestones. Model-free tests do not establish live freshness or answer quality.

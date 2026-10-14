@@ -1,5 +1,5 @@
 """Pregame-record behavior with supplied data and no database access."""
-from services.schedule_records import attach_records
+from services.schedule_records import attach_records, regular_record
 
 
 def _game(week, away, home, a_sc, h_sc):
@@ -72,3 +72,16 @@ def test_same_week_rows_use_records_before_any_results_from_that_week():
     attach_records(games)
     assert games[1]["away_record"] == games[2]["away_record"] == "0-0"
     assert games[0]["away_record"] == "2-0"
+
+
+def test_regular_record_counts_home_away_ties_and_ignores_playoffs_and_partial_scores():
+    games = [
+        {**_game(1, 'BUF', 'MIA', 24, 7), 'game_type': 'REG'},
+        {**_game(2, 'KC', 'BUF', 30, 14), 'game_type': 'REG'},
+        {**_game(3, 'BUF', 'MIA', 21, 21), 'game_type': 'REG'},
+        {**_game(4, 'KC', 'BUF', None, 14), 'game_type': 'REG'},
+        {**_game(5, 'BUF', 'MIA', 7, 24), 'game_type': 'POST'},
+    ]
+    assert regular_record(games, 'BUF') == '1-1-1'
+    assert regular_record(games[:2], 'BUF') == '1-1'
+    assert regular_record([], 'BUF') == '0-0'

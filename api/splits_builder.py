@@ -18,6 +18,7 @@ Three categories share one table via the `category` column:
 The metric columns are shared and category-overloaded (att = attempts /
 carries / targets; cmp = completions / receptions; NULL where N/A).
 """
+from data_errors import is_missing_data_error
 import duckdb
 
 import splits_core as core
@@ -218,7 +219,9 @@ def _ftn_available(conn) -> bool:
     """True if the FTN charting table exists (so the builder can join it)."""
     try:
         return any(r[0] == "ftn_charting" for r in conn.execute("SHOW TABLES").fetchall())
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return False
 
 
@@ -264,7 +267,9 @@ def _materialize_locked(s: int) -> int:
 
     try:
         available = {r[0] for r in conn.execute("DESCRIBE plays").fetchall()}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         available = set()
     has_ftn = _ftn_available(conn)
 
@@ -282,6 +287,8 @@ def _materialize_locked(s: int) -> int:
                 FROM ({sql})
             """)
         except Exception as e:
+            if not is_missing_data_error(e):
+                raise
             print(f"player_splits[{category}] materialize failed for season {s}: {e}")
 
     return conn.execute(
@@ -300,7 +307,9 @@ def read(player_id: str) -> list[dict]:
             WHERE player_id = ?
             ORDER BY season DESC, category, split_dim, sort_order
         """, [player_id])
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
 
 
@@ -325,7 +334,9 @@ def read_or_materialize(player_id: str) -> list[dict]:
             SELECT DISTINCT season FROM plays
             WHERE passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?
         """, [player_id, player_id, player_id])}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         seasons = set()
     if not seasons:
         return []
@@ -338,7 +349,9 @@ def read_or_materialize(player_id: str) -> list[dict]:
         try:
             built = {r["season"] for r in query_to_dict(
                 "SELECT DISTINCT season FROM player_splits")}
-        except Exception:
+        except Exception as _data_error:
+            if not is_missing_data_error(_data_error):
+                raise
             built = set()
         for s in sorted(seasons - built, reverse=True):
             materialize(s)

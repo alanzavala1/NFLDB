@@ -13,6 +13,7 @@ Perspective is the defense's: game script is flipped (defender leads when the
 offense trails), home/away is the offense's flipped, and "opponent" is the
 offense faced (posteam).
 """
+from data_errors import is_missing_data_error
 import duckdb
 
 import splits_core as core
@@ -197,6 +198,8 @@ def _materialize_locked(s: int) -> int:
             FROM ({_season_sql(s)})
         """)
     except Exception as e:
+        if not is_missing_data_error(e):
+            raise
         print(f"defense_splits materialize failed for season {s}: {e}")
     return conn.execute("SELECT COUNT(*) FROM defense_splits WHERE season = ?", [s]).fetchone()[0]
 
@@ -211,7 +214,9 @@ def read(player_id: str) -> list[dict]:
             WHERE player_id = ?
             ORDER BY season DESC, split_dim, sort_order
         """, [player_id])
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
 
 
@@ -227,7 +232,9 @@ def read_or_materialize(player_id: str) -> list[dict]:
             "WHERE solo_tackle_1_player_id = ? OR assist_tackle_1_player_id = ? "
             "OR sack_player_id = ? OR interception_player_id = ?",
             [player_id, player_id, player_id, player_id])}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         seasons = set()
     if not seasons:
         return []
@@ -240,7 +247,9 @@ def read_or_materialize(player_id: str) -> list[dict]:
         try:
             built = {r["season"] for r in query_to_dict(
                 "SELECT DISTINCT season FROM defense_splits")}
-        except Exception:
+        except Exception as _data_error:
+            if not is_missing_data_error(_data_error):
+                raise
             built = set()
         for s in sorted(seasons - built, reverse=True):
             materialize(s)

@@ -137,14 +137,13 @@ def test_invalid_http_integer_is_rejected_before_querying(client, monkeypatch, p
     assert client.get('/api/teams/KC/injuries', params={parameter: 'banana'}).status_code == 422
 
 
-def test_query_failure_retains_logged_empty_fallback(client, injury_data, monkeypatch, caplog):
+def test_unexpected_query_failure_propagates(client, injury_data, monkeypatch):
     import sql_helpers
 
     def fail(*args, **kwargs):
         raise RuntimeError('injury storage failed')
     monkeypatch.setattr(sql_helpers, 'query_to_dict', fail)
-    assert team_injuries.get_team_injuries('KC', 2024) == []
-    response = client.get('/api/teams/KC/injuries?season=2024')
-    assert response.status_code == 200
-    assert response.json() == []
-    assert 'safe_query failed, returning []' in caplog.text
+    with pytest.raises(RuntimeError, match='injury storage failed'):
+        team_injuries.get_team_injuries('KC', 2024)
+    with pytest.raises(RuntimeError, match='injury storage failed'):
+        client.get('/api/teams/KC/injuries?season=2024')

@@ -8,6 +8,7 @@ player_game_ratings, so a 6.5 line is league-average and 9+ is a top-2% game.
 """
 from __future__ import annotations
 
+from data_errors import is_missing_data_error
 import duckdb
 
 from config import era_team_case
@@ -66,7 +67,9 @@ def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
 def _has_column(conn: duckdb.DuckDBPyConnection, table: str, col: str) -> bool:
     try:
         return col in {r[0] for r in conn.execute(f"DESCRIBE {table}").fetchall()}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return False
 
 
@@ -145,6 +148,8 @@ def materialize(season: int | None = None) -> int:
                 FROM ({sql})
             """)
         except Exception as e:
+            if not is_missing_data_error(e):
+                raise
             print(f"team_game_ol_grades materialize failed: {e}")
             return 0
         return conn.execute("SELECT COUNT(*) FROM team_game_ol_grades").fetchone()[0]
@@ -157,7 +162,9 @@ def read(game_id: str) -> dict[str, dict]:
             "SELECT * FROM team_game_ol_grades WHERE game_id = ?", [game_id]
         )
         return {r["team"]: r for r in rows}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return {}
 
 

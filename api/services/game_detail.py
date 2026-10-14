@@ -71,32 +71,31 @@ def get_game_detail(game_id: str) -> dict | None:
 
     # Quarter-by-quarter scores from play-by-play
     quarter_scores = []
-    try:
-        # total_away_score / total_home_score are the running scores *after* each
-        # play, so MAX per quarter is the true end-of-quarter score. (posteam_score
-        # / defteam_score are pre-snap scores — a score on a quarter's final play
-        # would leak into the next quarter's delta.)
-        q_rows = safe_query(
-            """
-            SELECT
-                qtr,
-                MAX(total_away_score) AS away_cumul,
-                MAX(total_home_score) AS home_cumul
-            FROM plays
-            WHERE game_id = ?
-            GROUP BY qtr
-            ORDER BY qtr
-            """,
-            [game_id],
-        )
-        away_prev = home_prev = 0
-        for row in q_rows:
-            ac = int(row["away_cumul"] or 0)
-            hc = int(row["home_cumul"] or 0)
-            quarter_scores.append({"qtr": int(row["qtr"]), "away": ac - away_prev, "home": hc - home_prev})
-            away_prev, home_prev = ac, hc
-    except Exception:
-        pass
+    # total_away_score / total_home_score are the running scores *after* each
+    # play, so MAX per quarter is the true end-of-quarter score. (posteam_score
+    # / defteam_score are pre-snap scores — a score on a quarter's final play
+    # would leak into the next quarter's delta.)
+    q_rows = safe_query(
+        """
+        SELECT
+            qtr,
+            MAX(total_away_score) AS away_cumul,
+            MAX(total_home_score) AS home_cumul
+        FROM plays
+        WHERE game_id = ?
+        GROUP BY qtr
+        ORDER BY qtr
+        """,
+        [game_id],
+    )
+    away_prev = home_prev = 0
+    for row in q_rows:
+        if row["qtr"] is None:
+            continue
+        ac = int(row["away_cumul"] or 0)
+        hc = int(row["home_cumul"] or 0)
+        quarter_scores.append({"qtr": int(row["qtr"]), "away": ac - away_prev, "home": hc - home_prev})
+        away_prev, home_prev = ac, hc
 
     win_prob = safe_query(
         """

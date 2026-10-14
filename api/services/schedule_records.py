@@ -36,3 +36,23 @@ def attach_records(games: list[dict]) -> list[dict]:
                 team_records[h] = (hw, hl, ht + 1)
 
     return games
+
+
+def regular_record(games: list[dict], team: str) -> str:
+    """Fallback record from the team service's completed regular-season games."""
+    wins = losses = ties = 0
+    for game in games:
+        if game.get("game_type") != "REG":
+            continue
+        away_score, home_score = game.get("away_score"), game.get("home_score")
+        if away_score is None or home_score is None:
+            continue
+        team_score = home_score if game.get("home_team") == team else away_score
+        opp_score = away_score if game.get("home_team") == team else home_score
+        if team_score > opp_score:
+            wins += 1
+        elif team_score < opp_score:
+            losses += 1
+        else:
+            ties += 1
+    return f"{wins}-{losses}-{ties}" if ties else f"{wins}-{losses}"

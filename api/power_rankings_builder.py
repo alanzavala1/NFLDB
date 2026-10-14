@@ -1,6 +1,7 @@
 """Materialized weekly EPA team power rankings."""
 from __future__ import annotations
 
+from data_errors import is_missing_data_error
 import duckdb
 
 from config import era_team_case
@@ -36,7 +37,9 @@ def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
 def _columns(conn: duckdb.DuckDBPyConnection, table: str) -> set[str]:
     try:
         return {r[0] for r in conn.execute(f"DESCRIBE {table}").fetchall()}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return set()
 
 
@@ -201,6 +204,8 @@ def materialize(season: int) -> int:
                 FROM ({sql})
             """)
         except Exception as e:
+            if not is_missing_data_error(e):
+                raise
             print(f"team_power_rankings materialize failed for season {s}: {e}")
             return 0
         return conn.execute(
@@ -215,7 +220,9 @@ def latest_week(season: int) -> int | None:
             [int(season)],
         )[0]
         return row["week"]
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return None
 
 
@@ -235,7 +242,9 @@ def read(season: int, week: int | None = None) -> list[dict]:
             """,
             [s, w],
         )
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
 
 

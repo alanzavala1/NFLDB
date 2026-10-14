@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from config import CURRENT_SEASON, FIRST_SEASON
-from database import query_to_dict
+from services.seasons import get_season_coverage
 from ingest_queue import ingest_logs, queue_season, season_status
 from rate_limit import RateLimiter
 from schemas.meta import HealthResponse, LoadSeasonResponse, SeasonStatus
@@ -32,11 +32,7 @@ def get_seasons(response: Response):
     # snap, so rows in `schedules` alone mean only that the fixtures are known —
     # calling that loaded sends people to empty leaders and standings. Both
     # DISTINCTs are single-column scans DuckDB answers in a few ms.
-    try:
-        played = {r["season"] for r in query_to_dict("SELECT DISTINCT season FROM plays")}
-        scheduled = {r["season"] for r in query_to_dict("SELECT DISTINCT season FROM schedules")}
-    except Exception:
-        played, scheduled = set(), set()
+    played, scheduled = get_season_coverage()
 
     def _state(year: int) -> str:
         if year in played:

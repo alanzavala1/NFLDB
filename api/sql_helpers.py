@@ -2,6 +2,7 @@
 import logging
 
 from database import query_to_dict
+from data_errors import is_missing_data_error
 
 logger = logging.getLogger(__name__)
 
@@ -104,9 +105,11 @@ CASE
 
 
 def safe_query(sql: str, params: list = None) -> list[dict]:
-    """Wrapper around query_to_dict that returns [] on any failure (missing table, etc)."""
+    """Optional feed query: missing source schema returns []; other errors propagate."""
     try:
         return query_to_dict(sql, params or [])
-    except Exception:
+    except Exception as error:
+        if not is_missing_data_error(error):
+            raise
         logger.warning("safe_query failed, returning []", exc_info=True)
         return []

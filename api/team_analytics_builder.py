@@ -11,6 +11,7 @@ Design:
   - The ingest pipeline calls `materialize()` after a season finishes so
     freshly-loaded data is query-fast from the first request.
 """
+from data_errors import is_missing_data_error
 import duckdb
 
 from config import era_team_case
@@ -76,7 +77,9 @@ def _analytics_sql(conn: duckdb.DuckDBPyConnection, season: int) -> str:
     """
     try:
         available = {r[0] for r in conn.execute("DESCRIBE plays").fetchall()}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         available = set()
 
     has_success   = "success"           in available
@@ -347,6 +350,8 @@ def _materialize_locked(s: int) -> int:
             f"INSERT INTO team_season_analytics SELECT {s} AS season, * FROM ({sql})"
         )
     except Exception as e:
+        if not is_missing_data_error(e):
+            raise
         print(f"team-analytics materialize failed for season {s}: {e}")
         return 0
 
@@ -362,7 +367,9 @@ def read(season: int) -> list[dict]:
             "SELECT * EXCLUDE (season) FROM team_season_analytics WHERE season = ? ORDER BY team",
             [int(season)],
         )
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
 
 

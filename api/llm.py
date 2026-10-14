@@ -50,6 +50,7 @@ from services.player_profile import get_player_profile as _player_profile
 from services.power_rankings import get_power_rankings as _power_rankings_query
 from services.game_detail import get_game_detail as _game_query
 from services.schedule import get_schedule as _schedule_query
+from services.schedule_records import regular_record as _regular_record
 from services.team_profile import get_team_profile as _team_query
 from services.team_depth_chart import get_team_depth_chart as _team_depth_query
 from services.team_injuries import get_team_injuries as _team_injuries_query
@@ -310,26 +311,6 @@ def _season_stat_line(games: list[dict]) -> dict:
     """Sum the profile page's reconciled per-game columns into one compact line."""
     totals = {col: round(sum(g.get(col) or 0 for g in games), 2) for col in STAT_COLS}
     return _nonzero(totals)
-
-
-def _regular_record(games: list[dict], team: str) -> str:
-    """Fallback record from the team router's completed regular-season games."""
-    wins = losses = ties = 0
-    for game in games:
-        if game.get("game_type") != "REG":
-            continue
-        away_score, home_score = game.get("away_score"), game.get("home_score")
-        if away_score is None or home_score is None:
-            continue
-        team_score = home_score if game.get("home_team") == team else away_score
-        opp_score = away_score if game.get("home_team") == team else home_score
-        if team_score > opp_score:
-            wins += 1
-        elif team_score < opp_score:
-            losses += 1
-        else:
-            ties += 1
-    return f"{wins}-{losses}-{ties}" if ties else f"{wins}-{losses}"
 
 
 def _conversation_messages(question: str, history: list[dict] | None = None) -> list[dict]:
