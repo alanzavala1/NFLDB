@@ -287,6 +287,8 @@ Search now uses the typed request and canonical query options in
 defaults, and requests that consume Query's abort signal. Empty text makes no
 request; one-character searches remain supported. Player/team filtering belongs
 to the picker, so it never replaces the shared all-entity cache with filtered data.
+The HTTP search route and the assistant's entity resolver now share the matching
+logic in `api/services/search.py`; see [backend data ownership](BACKEND_DATA.md).
 
 `src/features/search/useEntitySearch.ts` owns the shared 300-ms typing delay.
 The input's query key changes immediately when its trimmed text changes, hiding

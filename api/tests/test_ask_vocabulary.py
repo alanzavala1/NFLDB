@@ -74,7 +74,7 @@ def test_split_vocabulary_values_exist_in_materialized_tables():
 
 def test_search_accepts_conservative_aliases_and_normalized_names(monkeypatch):
     import database
-    from routers.leaders import search
+    from services.search import search
 
     conn = duckdb.connect(_DB, read_only=True)
     monkeypatch.setattr(database, "_conn", conn)
