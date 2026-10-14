@@ -8,7 +8,6 @@ import { leadersQueryOptions } from '../../api/leaders'
 import { powerRankingsQueryOptions } from '../../api/powerRankings'
 import { standingsQueryOptions } from '../standings/queries'
 import { QueryFailure } from '../../components/QueryFeedback'
-import { LiveScoresProvider } from '../../hooks/useLiveScores'
 import Card, { CardRow } from '../../components/Card'
 import Nav from '../../components/Nav'
 import { SeasonCard } from './SeasonCard'
@@ -31,7 +30,7 @@ function StatusCard({ title, message }: { title: string; message: ReactNode }) {
   )
 }
 
-function ScoresPageBody() {
+export default function ScoresPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const seasonsQuery = useQuery(seasonsQueryOptions())
   const seasons = seasonsQuery.data ?? []
@@ -141,14 +140,5 @@ function ScoresPageBody() {
         </aside>
       </main>
     </>
-  )
-}
-
-export default function ScoresPage() {
-  // One poll feeds every card on the page.
-  return (
-    <LiveScoresProvider>
-      <ScoresPageBody />
-    </LiveScoresProvider>
   )
 }

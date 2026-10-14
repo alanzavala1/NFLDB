@@ -335,7 +335,7 @@ test('the existing live overlay supplies scores while ordinary detail data is un
       state: 'in', away_score: 10, home_score: 14, period: 2, clock: '5:00', possession: 'BUF', detail: 'Live',
       away_periods: [7, 3], home_periods: [7, 7], down_distance: null, red_zone: false,
       last_play: null, away_timeouts: 3, home_timeouts: 2, leaders: [], }],
-    source: 'espn', poll_after: null, fetched_at: '2026-10-13T12:00:00Z',
+    source: 'live', poll_after: null, fetched_at: '2026-10-13T12:00:00Z',
   } }))
   await page.goto(gameUrl)
   await expect(page.getByText('Q2 · 5:00', { exact: true }).first()).toBeVisible()

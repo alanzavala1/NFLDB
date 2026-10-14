@@ -1,6 +1,6 @@
 import type { Game, LiveGameOut } from '../../types'
 import Card, { CardRow } from '../../components/Card'
-import { useLiveGame } from '../../hooks/useLiveScores'
+import { useLiveGame } from '../live-scores/useLiveGame'
 import { teamLogoUrl, teamNickname } from '../../utils/teams'
 import {
   MICRO, recordText, isFinished, gameWinner, formatTimeShort, formatMonthDay,

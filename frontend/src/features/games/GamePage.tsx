@@ -6,7 +6,7 @@ import { scheduleQueryOptions } from '../../api/schedule'
 import { QueryFailure, QueryLoading } from '../../components/QueryFeedback'
 import Nav from '../../components/Nav'
 import LiveGameCard from '../../components/LiveGameCard'
-import { LiveScoresProvider, useLiveGame } from '../../hooks/useLiveScores'
+import { useLiveGame } from '../live-scores/useLiveGame'
 import type { GameOrigin, GameLocationState } from '../../types/navigation'
 import { GameHeader, type GameTab } from './GameHeader'
 import { QuarterScore } from './QuarterScore'
@@ -99,9 +99,5 @@ function GamePageBody() {
 
 export default function GamePage() {
   const { gameId } = useParams<{ gameId: string }>()
-  return (
-    <LiveScoresProvider>
-      <GamePageBody key={gameId} />
-    </LiveScoresProvider>
-  )
+  return <GamePageBody key={gameId} />
 }

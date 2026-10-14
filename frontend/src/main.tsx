@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components -- app entry point; fast-refresh component-export rules don't apply here */
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
+import { LiveScoresProvider } from './features/live-scores/LiveScoresProvider'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 
@@ -76,8 +77,10 @@ createRoot(document.getElementById('root')!).render(
         <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="/teams/:teamAbbrev"  element={<TeamPage />} />
-            <Route path="/"                   element={<ScoresPage />} />
-            <Route path="/games/:gameId"      element={<GamePage />} />
+            <Route element={<LiveScoresProvider><Outlet /></LiveScoresProvider>}>
+              <Route path="/"              element={<ScoresPage />} />
+              <Route path="/games/:gameId" element={<GamePage />} />
+            </Route>
             <Route path="/players/:playerId"  element={<PlayerPage />} />
             <Route path="/leaders"            element={<LeadersPage />} />
             <Route path="/standings"          element={<StandingsPage />} />

@@ -1,13 +1,9 @@
 /**
  * Keep the live board moving forwards.
  *
- * The server's scoreboard cache is a module-level singleton, so it is per
- * process, and the service runs up to three instances with no session
- * affinity. Two successive polls from one viewer can therefore land on two
- * instances holding snapshots of different ages, and nothing upstream orders
- * them: the score and the clock can run backwards on screen. That is the exact
- * failure used to argue against interpolating a ticking clock, and it shipped
- * anyway on the real thing.
+ * Serving processes and upstream edge nodes can hold snapshots of different
+ * ages. Schedule fallback can also lag a game already in progress. The client
+ * keeps previously reported values rather than inventing a score or clock.
  *
  * The client is the only place that sees the sequence, so the ordering is
  * enforced here, in two layers:
@@ -26,7 +22,7 @@
  * Nothing here invents a value. Both layers only ever decide to keep showing
  * something the server already sent.
  */
-import type { LiveGameOut } from '../types'
+import type { LiveGameOut, Scoreboard } from '../../types'
 
 /** "12:34" → 754 seconds. Null when absent or unparseable — which callers must
  *  treat as "unknown", never as zero. */
@@ -56,8 +52,8 @@ export function isBehind(prev: LiveGameOut, next: LiveGameOut): boolean {
   if (now < was) return true      // a game that has finished does not restart
   if (now > was) return false     // and moving on is not a regression
 
-  // Football scores do not fall. A null where we had a number is the same
-  // regression wearing different clothes.
+  // Keep the last reported score on a decrease, including corrections until
+  // later data catches up. Replacing a known score with null is also held.
   if (score(next.away_score) < score(prev.away_score)) return true
   if (score(next.home_score) < score(prev.home_score)) return true
 
@@ -104,4 +100,13 @@ export function isStaleResponse(fetchedAt: string | null | undefined, shownAt: s
   const shown = Date.parse(shownAt)
   if (Number.isNaN(next) || Number.isNaN(shown)) return false
   return next < shown
+}
+
+/** Keep ordering in the shared cache, but always honor the latest reply's pacing. */
+export function reconcileScoreboard(previous: Scoreboard | undefined, incoming: Scoreboard): Scoreboard {
+  if (previous && isStaleResponse(incoming.fetched_at, previous.fetched_at)) {
+    return { ...previous, poll_after: incoming.poll_after }
+  }
+  const games = Object.fromEntries((previous?.games ?? []).flatMap(game => game.game_id ? [[game.game_id, game] as const] : []))
+  return { ...incoming, games: Object.values(mergeGames(games, incoming.games)) }
 }

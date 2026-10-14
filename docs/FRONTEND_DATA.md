@@ -1,15 +1,16 @@
 # Frontend data flow
 
-Standings is the first feature moved to the shared data pattern. Other pages
-are being migrated individually; some still use manual fetching.
+The analytics pages use shared typed requests and TanStack Query. Standings
+established this pattern; each feature owns its layout and specialized query
+policies. Ask's conversation and streaming client remain a separate migration.
 
 Scores/Schedule now uses this pattern for seasons, schedule, standings, league
 leaders, and power rankings. It waits for metadata to confirm a readable season,
 then starts the four season-specific queries independently. Loaded and scheduled
 seasons are readable here; standings selection still requires loaded statistics.
 Each section has its own error/retry state. Cached results stay visible with a
-warning when a background refresh fails. The live scoreboard continues using
-its existing provider and polling/ordering safeguards.
+warning when a background refresh fails. Live scores use the shared query cache
+with server pacing and the existing ordering safeguards.
 
 Scores lives in `frontend/src/features/scores/`. `ScoresPage.tsx` owns query
 state, season/week URL choices, and layout. `WeekNavigator.tsx`, `SeasonCard.tsx`,
@@ -161,13 +162,14 @@ no longer displays permanent loading, and a missing canonical player ID starts
 no chart request. Switching game routes resets the local tab and selected player
 while separate query keys prevent late responses from replacing the new game.
 Existing game/player origin state, statistical formatting, and live score
-overlays remain in place. The live provider still owns pacing and ordering.
+overlays remain in place. The live query owns pacing and ordering; its provider
+distributes the selected games to consumers.
 
 Ordinary game queries inherit the normal five-minute freshness policy. The
 compatibility API methods and `useGame` hook delegate to the new definitions;
 the hook no longer treats an uncharted game as permanently fresh.
 
-Games now lives in `src/features/games/`. `GamePage.tsx` is 107 lines and owns
+Games now lives in `src/features/games/`. Its small `GamePage.tsx` owns
 queries, route context, tab choice, and composition. Header, quarter scores,
 team box score, game leaders, player-stat sections, scoring summary, key plays,
 and win probability have separate components. `GameLineupView.tsx` coordinates
@@ -309,6 +311,38 @@ Splits, or starting another example aborts its old resolution without affecting
 another field using that request. Examples keep best-effort name matching and
 commit their resolved members as one URL change. This avoids a second cache or
 unconditional cancellation of another consumer's shared request.
+
+Live scores use `src/api/liveScores.ts` for typed transport and
+`src/features/live-scores/queries.ts` for the canonical `['live-scoreboard']`
+query. This is a current scoreboard shared by games, not a season-specific
+statistics request. A route group in `main.tsx` keeps one LiveScoresProvider
+mounted across Scores/Game navigation and unmounts it on other pages. The
+provider selects a game-ID map from Query data; `useLiveGame` reads that map.
+The old fetching effect, timer, copied board/timestamp state, and unused
+`useAnyGameLive` hook are removed. The compatibility API method delegates to
+typed transport; its old generic GET helper is no longer needed.
+
+This query uses the server's `poll_after` rather than ordinary five-minute
+freshness. Each interval begins when the request finishes; a running request
+has no polling timer. A null interval stops background requests. HTTP failures
+wait sixty seconds instead of using the global immediate retry. Focus and
+reconnect events do not start extra refreshes, while background/offline attempts
+retain the prior paced behavior. Cached data and completion times preserve the
+remaining deadline on re-entry; an overdue result refreshes, and an idle board
+is checked again on a later mount. Leaving the route group stops the timer and
+cancels any unused request. Initial failure leaves ordinary schedule/details
+usable; later failure keeps the last successful live data while recovery runs.
+
+`ordering.ts` retains the existing snapshot and per-game guards. Reconciliation
+occurs before publishing to the shared cache, so navigation preserves the same
+ordered board. An older whole snapshot cannot replace it, but that reply's
+polling interval still applies. Newer snapshots retain game values that would
+rewind state, score, period, or clock. Quarter changes allow the clock reset;
+unknown clocks/timestamps are not evidence of regression. The incoming set of
+matched game IDs remains authoritative, including removal/empty results. These
+guards retain server-reported values; they do not interpolate time or invent
+statistics. As before, the score-decrease guard also holds downward corrections
+until later data catches up.
 
 ## Follow one request
 

@@ -8,6 +8,7 @@ import { fetchPlayerSplits, fetchDefensiveSplits } from './api/playerSplits'
 import { fetchTeam, fetchTeamRoster, fetchTeamDepthChart, fetchTeamInjuries, fetchTeamSplits } from './api/teams'
 import { fetchTeamAnalytics } from './api/teamAnalytics'
 import { fetchSearch } from './api/search'
+import { fetchLiveScoreboard } from './api/liveScores'
 import { fetchStandings } from './features/standings/api'
 
 /**
@@ -35,7 +36,6 @@ import type {
   TeamGame, TeamLeader, TeamProfile, TeamSplit, TeamGameStats, ScoringPlay, WinProbPlay, WpaLeader, WpaLeaders,
   GameLineup, LineupPlayer, LineupTeam, LineupScoringEvent, PlayerChart, PlayerChartEvent,
   AskHistoryMessage, AskRequest, AskResponse, ToolCall,
-  Scoreboard,
 } from './types'
 
 const BASE = '/api'
@@ -64,18 +64,12 @@ export type PlayerStats        = GamePlayerStats
 export type StandingsTeam      = StandingsRow
 export type TeamAnalyticsTeam  = TeamAnalyticsRow
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(BASE + path)
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json()
-}
-
 export const api = {
   // Compatibility entry points: migrated resources have one implementation.
   // Remove these aliases when their remaining page callers migrate.
   seasons:       fetchSeasons,
   schedule:      fetchSchedule,
-  liveScoreboard: ()                           => get<Scoreboard>('/live/scoreboard'),
+  liveScoreboard: fetchLiveScoreboard,
   game:          fetchGame,
   gameLineup:    fetchGameLineup,
   playerChart:   fetchPlayerChart,
