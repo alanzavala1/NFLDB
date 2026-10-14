@@ -353,6 +353,8 @@ until later data catches up.
 4. The feature's `api.ts` uses `frontend/src/api/client.ts` to request
    `/api/standings?season=2023`. The backend calculates and returns standings;
    the frontend only formats them.
+   The HTTP route now delegates to `api/services/standings.py`, which the
+   assistant also calls directly. See [backend data ownership](BACKEND_DATA.md).
 5. TanStack Query stores the response and exposes loading/error/data state.
    `StandingsTable.tsx` draws the division tables from the returned data.
 6. `PlayoffBracket.tsx` uses the same pattern for the season's schedule.

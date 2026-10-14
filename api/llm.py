@@ -41,7 +41,7 @@ import team_splits_builder
 from config import CURRENT_SEASON, FIRST_SEASON, TEAM_NAMES
 from database import query_to_dict
 from routers.leaders import get_leaders as _leaders_query
-from routers.leaders import get_standings as _standings_query
+from services.standings import get_standings as _standings_query
 from routers.leaders import search as _search_query
 from routers.players import get_player as _player_profile
 from routers.power_rankings import get_power_rankings as _power_rankings_query
