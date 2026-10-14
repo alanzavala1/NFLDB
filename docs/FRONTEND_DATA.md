@@ -103,6 +103,10 @@ year changes which profile queries are observed and only reads published data.
 Team profile, roster, depth-chart, injury, and split requests/options now live in
 `src/api/teams.ts`. League-wide analytics live in `src/api/teamAnalytics.ts`.
 Each request uses the shared typed client and consumes an `AbortSignal`.
+The team depth-chart route and assistant team overview now share snapshot
+selection in `api/services/team_depth_chart.py`. The feed has no weekly history;
+the existing snapshot/season rules are described in
+[backend data ownership](BACKEND_DATA.md).
 Team-specific cache keys include team/year and, for depth/injuries, optional week.
 League analytics use one key per year because a response contains every team.
 Team uses these definitions directly; Splits reuses canonical team-split and

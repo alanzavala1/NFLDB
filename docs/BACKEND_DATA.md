@@ -1,8 +1,9 @@
 # Backend data ownership
 
-Standings, search, league leaders, WPA leaders and power rankings use services.
-This establishes a small pattern for the remaining backend work; other assistant
-tools still import route functions and will move one domain at a time.
+Standings, search, league leaders, WPA leaders, power rankings and team depth
+charts use services. This establishes a small pattern for the remaining backend
+work; other assistant tools still import route functions and will move one
+domain at a time.
 
 ## Standings
 
@@ -141,6 +142,33 @@ are preserved. This extraction does not make serving read-only or change model
 definitions; those are separate pipeline/error-handling tasks. Errors from the
 service's schedule-record query continue to propagate.
 
+## Team depth charts
+
+The team depth-chart route delegates to `api/services/team_depth_chart.py`.
+The route retains its path, optional integer season/week parameters, description
+and `DepthChartEntry` response validation. The assistant's team-overview tool
+imports the service directly and preserves its current-season starter projection.
+
+The feed stores daily snapshots rather than weekly history. The query uses the
+newest timestamp across the entire feed, then filters that snapshot to the
+requested team. A team with only older rows stays empty; it does not silently
+fall back to its own older chart. Omitting the season accepts the snapshot's
+season without a calendar guess. Supplying a different season returns an empty
+list. The accepted week argument remains ignored, including integers outside
+the normal season-week range.
+
+The existing shared `DEPTH_CHART_SEL` projects vendor columns into the public
+shape. September–December dates use their calendar year; January–August dates
+use the previous year. Week and jersey number stay null, and depth rank becomes
+a string. Rows remain ordered offense, defense, special teams, then slot/rank.
+The player-profile depth query continues to use that same projection; its
+separate player selection is unchanged in this checkpoint.
+
+The team-overview tool selects eligible offensive starters only for the current
+season. Its arguments, five-starter cap, output and provenance are unchanged.
+The query retains `safe_query`'s logged empty fallback for database failures;
+distinguishing such failures from valid missing data remains a follow-up.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -177,6 +205,13 @@ null fields, empty results, defaults, HTTP week validation, assistant projection
 and provenance, and record-query failures. Existing builder tests still verify
 ranking computation and movement; local snapshot checks remain separate from
 production freshness and model-answer quality.
+
+Team depth-chart checks are `uv run --locked pytest
+tests/test_team_depth_chart_service.py tests/test_depth_charts.py`. They cover
+service/HTTP parity, snapshot scope, ordering/projection, January and September
+season boundaries, ignored weeks, empty/mismatched data, input validation,
+assistant current-versus-historical behavior and the retained logged fallback.
+Existing tests also verify player badges and selection among multiple slots.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
