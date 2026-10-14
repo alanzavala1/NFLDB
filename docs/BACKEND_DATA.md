@@ -450,6 +450,24 @@ All six endpoints in `api/routers/schedule.py` now delegate data assembly to
 services. The 68-line router owns HTTP parameters, schemas and missing-data
 responses, with no database queries or builder calls.
 
+## Player profiles
+
+`services/player_profile.py` composes biography, game logs and regular-season
+totals from shared queries. The route owns `PlayerProfile` validation and maps
+domain `None` to the original missing-player 404. All three assistant profile
+consumers use the service directly and retain their projections/messages.
+The assistant no longer imports any HTTP route module.
+
+The profile's supporting queries have focused owners: `player_snaps.py` owns
+PFR/name identity, season snap totals and snap-first OL/kicker/punter game logs;
+`player_tracking.py` owns NGS tracking and the play-derived CPOE fallback;
+`player_advanced.py` owns play-derived statistic families and target shares;
+`player_supplemental.py` owns draft/combine, injury, awards and depth lookups.
+Their existing queries, sorting, qualification and optional-data policies are
+preserved. Identity still uses independent MAX values; roster/snap scope and
+NGS precedence are unchanged. Regular totals exclude playoffs while logs retain
+them. Comparables/splits already delegate builders and need no extra wrapper.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py

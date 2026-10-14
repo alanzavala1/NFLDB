@@ -26,7 +26,6 @@ from typing import Any, Callable
 import anthropic
 from anthropic import beta_tool
 from dotenv import load_dotenv
-from fastapi import HTTPException
 
 # Load api/.env (if present) so ANTHROPIC_API_KEY / ANTHROPIC_MODEL can live in a
 # gitignored file for local dev. Resolved relative to this file so it works no
@@ -43,7 +42,7 @@ from database import query_to_dict
 from services.leaders import get_leaders as _leaders_query
 from services.standings import get_standings as _standings_query
 from services.search import search as _search_query
-from routers.players import get_player as _player_profile
+from services.player_profile import get_player_profile as _player_profile
 from services.power_rankings import get_power_rankings as _power_rankings_query
 from services.game_detail import get_game_detail as _game_query
 from services.schedule import get_schedule as _schedule_query
@@ -911,9 +910,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
             return _PLAYER_ID_MSG
         s = int(season)
         args = {"player_id": player_id, "season": s}
-        try:
-            profile = _player_profile(player_id)
-        except HTTPException:
+        profile = _player_profile(player_id)
+        if profile is None:
             ctx.record("get_player_game_log", args)
             return "No player found for that id."
         games = [
@@ -953,9 +951,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
             ctx.record("get_player_career", {"player_id": player_id})
             return _PLAYER_ID_MSG
         args = {"player_id": player_id}
-        try:
-            profile = _player_profile(player_id)
-        except HTTPException:
+        profile = _player_profile(player_id)
+        if profile is None:
             ctx.record("get_player_career", args)
             return "No player found for that id."
         regular = [game for game in profile.get("games", []) if game.get("game_type") == "REG"]
@@ -1115,9 +1112,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         if not _valid_player_id(player_id):
             ctx.record("get_player_overview", {"player_id": player_id, "season": season})
             return _PLAYER_ID_MSG
-        try:
-            prof = _player_profile(player_id)
-        except HTTPException:
+        prof = _player_profile(player_id)
+        if prof is None:
             ctx.record("get_player_overview", {"player_id": player_id, "season": season})
             return "No player found for that id."
 
