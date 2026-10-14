@@ -468,6 +468,16 @@ preserved. Identity still uses independent MAX values; roster/snap scope and
 NGS precedence are unchanged. Regular totals exclude playoffs while logs retain
 them. Comparables/splits already delegate builders and need no extra wrapper.
 
+## Granular play queries
+
+`services/play_queries.py` owns structured filter validation, schema/season
+availability, whitelisted SQL identifiers, fixed measures and bounded grouping.
+It returns a plain result containing normalized arguments, rows and a payload
+or validation/no-match message. The assistant tool only applies its budget,
+records provenance and serializes that result. It no longer owns SQL or imports
+database query functions. Existing filter vocabulary, grouping limit and
+small-sample note are preserved. Player-ID validation has the same shared owner.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py

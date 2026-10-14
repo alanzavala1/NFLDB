@@ -20,12 +20,12 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(autouse=True)
 def _read_only_database(monkeypatch):
     import database
-    import llm
+    import services.play_queries as play_queries
 
     conn = duckdb.connect(_DB, read_only=True)
     monkeypatch.setattr(database, "_conn", conn)
-    monkeypatch.setattr(llm, "_plays_columns_cache", None)
-    monkeypatch.setattr(llm, "_plays_seasons_cache", None)
+    monkeypatch.setattr(play_queries, "_plays_columns_cache", None)
+    monkeypatch.setattr(play_queries, "_plays_seasons_cache", None)
     try:
         yield
     finally:
@@ -33,19 +33,20 @@ def _read_only_database(monkeypatch):
 
 
 def _tool():
-    import llm
+    import services.play_queries as play_queries
 
+    import llm
     ctx = llm._Ctx()
     return next(tool.func for tool in llm._build_tools(ctx) if tool.name == "query_plays")
 
 
 def test_invalid_whitelist_values_never_reach_sql(monkeypatch):
-    import llm
+    import services.play_queries as play_queries
 
     def unexpected_query(*args, **kwargs):
         pytest.fail("invalid query_plays value reached SQL")
 
-    monkeypatch.setattr(llm, "query_to_dict", unexpected_query)
+    monkeypatch.setattr(play_queries, "query_to_dict", unexpected_query)
     query_plays = _tool()
 
     assert query_plays(
