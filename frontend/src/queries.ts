@@ -12,7 +12,6 @@
  * can later invalidate groups (e.g. `qc.invalidateQueries({ queryKey: ['players'] })`).
  */
 import { useQuery, type QueryKey, type UseQueryOptions } from '@tanstack/react-query'
-import { api } from './api'
 import { seasonsQueryOptions } from './api/seasons'
 import { scheduleQueryOptions } from './api/schedule'
 import { gameQueryOptions } from './api/games'
@@ -22,6 +21,7 @@ import { playerQueryOptions, playerComparablesQueryOptions } from './api/players
 import { playerSplitsQueryOptions } from './api/playerSplits'
 import { teamQueryOptions, teamRosterQueryOptions, teamDepthChartQueryOptions, teamInjuriesQueryOptions, teamSplitsQueryOptions } from './api/teams'
 import { teamAnalyticsQueryOptions } from './api/teamAnalytics'
+import { searchQueryOptions } from './api/search'
 import { standingsQueryOptions } from './features/standings/queries'
 import type {
   DepthChartEntry, DivisionStandings, GameDetail, InjuryStatus,
@@ -165,13 +165,9 @@ export function useWpaLeaders(season: number | null, options?: Options<WpaLeader
 
 // ── Search ───────────────────────────────────────────────────────────────────
 
-export function useSearch(q: string, options?: Options<SearchResult[]>) {
+export function useSearch(q: string, options?: Options<SearchResult[], readonly ['search', string]>) {
   return useQuery({
-    queryKey: ['search', q] as const,
-    queryFn: () => api.search(q),
-    enabled: q.length >= 2,
-    // Search results can be cached briefly to handle rapid typing without thrashing.
-    staleTime: 60 * 1000,
+    ...searchQueryOptions(q),
     ...options,
   })
 }

@@ -244,7 +244,6 @@ season game-log totals, situations/sorts, ties, defense winner direction, groupe
 expansion, visibility, search/examples, and timer cleanup. Seven desktop/mobile
 captures match their pre-move screenshots pixel for pixel.
 
-Manual search/example requests remain separate follow-up work.
 The backend's current split endpoints can still
 materialize missing data on a GET; moving that work offline belongs to the backend
 milestone.
@@ -281,6 +280,35 @@ and table display state remain local; neither holds a second selected view.
 Member lists are unique and limited to six. Examples resolve their members into
 one URL update and discard results if another selection or navigation intervenes.
 The calendar-derived Splits season list and URL-reflection effect are removed.
+
+Search now uses the typed request and canonical query options in
+`src/api/search.ts`. Navigation, the Splits picker, and player examples share
+`['search', trimmedText]`, with one-minute freshness, normal retention/retry
+defaults, and requests that consume Query's abort signal. Empty text makes no
+request; one-character searches remain supported. Player/team filtering belongs
+to the picker, so it never replaces the shared all-entity cache with filtered data.
+Compatibility `api.search` and `useSearch` delegate to this definition.
+
+`src/features/search/useEntitySearch.ts` owns the shared 300-ms typing delay.
+The input's query key changes immediately when its trimmed text changes, hiding
+old results and releasing old requests while the new text settles. Closing the
+picker releases its query too. `SearchResults.tsx` draws common results and
+distinct searching, successful-empty, first-error/retry, and cached-refresh
+warning states. Results remain usable after a failed background refresh,
+including a warning alongside cached empty results. Both fields retain only
+input/open UI state; neither stores a second copy of downloaded search results.
+`SearchModal.tsx` owns the navigation popup, keyboard closing, and profile/team
+navigation. Nav retains its shortcuts and restores trigger focus on close.
+
+Player examples use `useExampleSearch.ts` and `observeSearch.ts` to subscribe
+temporarily to the same query definitions with TanStack's public QueryObserver.
+Each subscription means that consumer still needs the result. Finishing or
+aborting an example releases its subscription; Query cancels the underlying
+request only after its final consumer leaves. Changing selections, leaving
+Splits, or starting another example aborts its old resolution without affecting
+another field using that request. Examples keep best-effort name matching and
+commit their resolved members as one URL change. This avoids a second cache or
+unconditional cancellation of another consumer's shared request.
 
 ## Follow one request
 

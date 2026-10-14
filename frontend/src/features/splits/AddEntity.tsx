@@ -1,45 +1,21 @@
-import { useState, useEffect, useRef } from 'react'
-import { api } from '../../api'
+import { useState } from 'react'
 import type { SearchResult } from '../../types'
 import type { ComparisonMode } from './types'
-import { teamLogoUrl, teamName } from '../../utils/teams'
+import { useEntitySearch } from '../search/useEntitySearch'
+import { SearchResults } from '../search/SearchResults'
 
 export function AddEntity({ mode, onAdd }: { mode: ComparisonMode; onAdd: (r: SearchResult) => void }) {
   const [q, setQ] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
   const [open, setOpen] = useState(false)
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    if (debounce.current) clearTimeout(debounce.current)
-    const trimmed = q.trim()
-    if (!trimmed) return
-    let cancelled = false
-    debounce.current = setTimeout(async () => {
-      try { const res = await api.search(trimmed); if (!cancelled) setResults(res.filter(r => mode === 'players' ? r.type === 'player' : r.type === 'team')) }
-      catch { if (!cancelled) setResults([]) }
-    }, 250)
-    return () => {
-      cancelled = true
-      if (debounce.current) clearTimeout(debounce.current)
-    }
-  }, [q, mode])
+  const search = useEntitySearch(q, open)
   return (
     <div className="relative min-w-0 flex-1 sm:min-w-44" onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false) }}>
-      <input aria-label={mode === 'players' ? 'Add player' : 'Add team'} value={q} onChange={e => { const value = e.target.value; setQ(value); if (!value.trim()) setResults([]); setOpen(true) }} onFocus={() => setOpen(true)} onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
+      <input aria-label={mode === 'players' ? 'Add player' : 'Add team'} value={q} onChange={e => { setQ(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onClick={() => setOpen(true)} onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
         placeholder={mode === 'players' ? '+ Add player…' : '+ Add team…'}
         className="min-h-10 w-full bg-surface-card border border-surface-line text-ink text-sm rounded-lg px-3 py-2 focus-visible:outline-2 focus-visible:outline-indigo-400 focus-visible:outline-offset-2 placeholder:text-ink-dim" />
-      {open && q.trim() && results.length > 0 && (
+      {open && search.term && (
         <div className="absolute left-0 right-0 z-30 mt-2 max-h-72 overflow-y-auto bg-surface-card border border-surface-line rounded-lg shadow-2xl">
-          {results.slice(0, 12).map(r => (
-            <button key={r.id} onMouseDown={e => e.preventDefault()} onClick={() => { onAdd(r); setQ(''); setResults([]); setOpen(false) }} className="w-full flex items-center gap-2.5 px-3 py-3 hover:bg-surface-raise focus-visible:bg-surface-raise focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-400 text-left">
-              {r.type === 'team' ? <img src={teamLogoUrl(r.id)} className="w-6 h-6 object-contain shrink-0" alt="" />
-                : r.headshot_url ? <img src={r.headshot_url} className="w-6 h-6 rounded-full object-cover object-top shrink-0 bg-surface-raise" alt="" /> : <div className="w-6 h-6 rounded-full bg-surface-raise shrink-0" />}
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-ink truncate">{r.type === 'team' ? teamName(r.id) : r.name}</div>
-                <div className="text-xs text-ink-dim truncate">{r.type === 'team' ? r.id : [r.position, r.team].filter(Boolean).join(' · ')}</div>
-              </div>
-            </button>
-          ))}
+          <SearchResults search={search} kind={mode === 'players' ? 'player' : 'team'} limit={12} onSelect={result => { onAdd(result); setQ(''); setOpen(false) }} />
         </div>
       )}
     </div>

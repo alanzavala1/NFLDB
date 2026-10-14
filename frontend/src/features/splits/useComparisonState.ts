@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api } from '../../api'
+import { useExampleSearch } from '../search/useExampleSearch'
 import { selectedSeason } from '../../utils/seasons'
 import type { SearchResult } from '../../types'
 import type { ComparisonMode, PlayerLens, PlayerEntity, TeamSide, Situation, Example } from './types'
@@ -21,7 +21,7 @@ export function useComparisonState(availableYears: number[]) {
   const [searchParams, setSearchParams] = useSearchParams()
   // Search supplies display metadata; selected IDs always come from the URL.
   const [details, setDetails] = useState<Record<string, PlayerEntity>>({})
-  const exampleRequest = useRef(0)
+  const resolveExamplePlayers = useExampleSearch(searchParams.toString())
   const mode: ComparisonMode = searchParams.get('mode') === 'teams' ? 'teams' : 'players'
   const category = searchParams.get('cat')
   const playerLens: PlayerLens = category === 'rushing' || category === 'receiving' || category === 'defense' ? category : 'passing'
@@ -34,9 +34,6 @@ export function useComparisonState(availableYears: number[]) {
       : selectedSeason(requestedSeason, availableYears)
   const situations = mode === 'teams' ? TEAM_SITUATIONS : playerLens === 'defense' ? DEFENSE_SITUATIONS : PLAYER_SITUATIONS[playerLens]
   const situation = situations.find(s => `${s.dim}:${s.value}` === searchParams.get('sit')) ?? null
-
-  // Ignore an example that finishes after navigation or another selection.
-  useEffect(() => () => { exampleRequest.current += 1 }, [searchParams])
 
   function updateParams(edit: (next: URLSearchParams) => void) {
     const next = new URLSearchParams(searchParams)
@@ -93,19 +90,12 @@ export function useComparisonState(availableYears: number[]) {
   }
 
   async function loadExample(example: Example) {
-    const request = ++exampleRequest.current
     if (example.teams) {
       updateParams(next => { next.set('t', [...new Set(example.teams)].slice(0, 6).join(',')); next.delete('sit') })
       return
     }
-    const results: SearchResult[] = []
-    for (const name of example.names ?? []) {
-      try {
-        const result = (await api.search(name)).find(item => item.type === 'player')
-        if (result) results.push(result)
-      } catch { /* Examples are best-effort; unavailable names are skipped. */ }
-      if (request !== exampleRequest.current) return
-    }
+    const results = await resolveExamplePlayers(example.names ?? [])
+    if (results === null) return
     setDetails(previous => ({ ...previous, ...Object.fromEntries(results.map(result => [result.id, playerDetails(result)])) }))
     updateParams(next => {
       next.delete('sit')

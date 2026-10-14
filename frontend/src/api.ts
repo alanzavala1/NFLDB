@@ -7,6 +7,7 @@ import { fetchPlayer, fetchPlayerComparables } from './api/players'
 import { fetchPlayerSplits, fetchDefensiveSplits } from './api/playerSplits'
 import { fetchTeam, fetchTeamRoster, fetchTeamDepthChart, fetchTeamInjuries, fetchTeamSplits } from './api/teams'
 import { fetchTeamAnalytics } from './api/teamAnalytics'
+import { fetchSearch } from './api/search'
 import { fetchStandings } from './features/standings/api'
 
 /**
@@ -91,7 +92,7 @@ export const api = {
   comparables:   fetchPlayerComparables,
   splits:        fetchPlayerSplits,
   defSplits:     fetchDefensiveSplits,
-  search:        (q: string)                   => get<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
+  search:        fetchSearch,
   ask:           (question: string, history: AskHistoryMessage[] = []) =>
     post<AskResponse>('/ask', { question, history } satisfies AskRequest),
 }
