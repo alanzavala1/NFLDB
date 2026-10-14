@@ -197,8 +197,10 @@ unchanged. Ratings now delegate to `api/services/game_ratings.py`, with their
 schema, missing-game 404 and existing on-demand builder preserved. Ratings,
 lineup and player charts share `PGS_GAME_CTE` in `api/sql_helpers.py`. Lineup
 assembly now lives in `api/services/game_lineup.py`, preserving its snap identity
-matches, scoring, averages, builder behavior and missing-game 404. Player-chart
-assembly remains follow-up work; field placement and styling stay frontend-owned.
+matches, scoring, averages, builder behavior and missing-game 404. Player charts
+now use `api/services/game_player_chart.py`, preserving stat totals, role/event
+rules, the 80-event cap, snap percentage and both missing-game/player responses.
+Field placement, styling and passing/rushing plots stay frontend-owned.
 
 All four resources expose pending, error, and retry states. Cached successful
 results remain visible on refresh failures, including empty lineups, schedules,

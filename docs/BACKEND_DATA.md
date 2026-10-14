@@ -346,8 +346,8 @@ and null ratings. Ordering remains rating descending with nulls last, then raw
 score descending with nulls last, then player name. The builder's stored metric
 values and qualification/calibration formulas are unchanged.
 
-`PGS_GAME_CTE` now lives in `api/sql_helpers.py`, imported by the rating/lineup
-services and the player-chart route. A CTE is a named intermediate SQL result;
+`PGS_GAME_CTE` now lives in `api/sql_helpers.py`, imported by the rating, lineup
+and player-chart services. A CTE is a named intermediate SQL result;
 this one filters to a supplied game ID, groups by player and game, sums all
 shared numeric stat columns with nulls treated as zero, and uses the existing
 `ANY_VALUE` metadata selections. Selection among differing metadata values
@@ -363,7 +363,7 @@ propagate rather than becoming 404 or successful empty ratings.
 `api/services/game_players.py` owns the existing lineup starter/rotation selection,
 personnel labels and position-group fallback shared with player charts. These
 functions use only supplied dictionaries: they have no database, HTTP or builder
-dependency. The lineup service and player-chart route import them; selection
+dependency. The lineup and player-chart services import them; selection
 bodies and the existing lineup/chart queries are unchanged.
 
 Starters filter to the requested team and positive snaps in the selected unit,
@@ -415,6 +415,40 @@ schedule/snap failures and uncaught builder failures propagate.
 Player ratings and O-line grades still use the existing read-or-materialize
 builders. Their writes, locks, formulas and internal fallback policies are
 preserved; moving them into an offline pipeline remains separate work.
+
+## Game player charts
+
+`api/services/game_player_chart.py` owns chart profile/stat aggregation, role
+selection, play events and optional snap percentage. It takes explicit game and
+player IDs and returns ordinary dictionaries. Two plain Python lookup errors
+distinguish an absent game from an absent player profile; the route translates
+them into the same separate HTTP 404 messages and validates `PlayerChart`.
+This endpoint has no assistant consumer, and its chart UI is unchanged.
+
+The shared player-game CTE sums numeric stats before the profile joins. A full
+outer join permits either same-season roster data or game statistics to form
+the profile. Metadata prefers stats where present; roster position comes from
+the latest week with the existing team tiebreaker. A roster-only player remains
+valid even without participation in that game. Missing values become the same
+zero stat totals; tackles still combine solo and assisted tackles. The existing
+ratings builder retains on-demand preparation and its internal fallback rules.
+
+Role selection counts all matching passer, receiver and rusher plays. Ties
+prefer passer, then receiver, then rusher. With no matching plays, the shared
+position helper selects defender or kicker; other positions remain `player`.
+Events retain their role/lane/yard/outcome rules, nullable fields and the first
+80 rows ordered by seconds remaining descending (nulls last), then play ID.
+The role comes from all plays, rather than just that capped event list.
+
+Snap percentage retains the PFR/roster join, same-team preference before latest
+week, and maximum percentage across units. Its `safe_query` fallback logs failures
+and returns null snap percentage without discarding the chart. Schedule,
+profile, role-count and event queries remain required; unexpected failures and
+uncaught builder errors propagate instead of becoming a missing-game/player 404.
+
+All six endpoints in `api/routers/schedule.py` now delegate data assembly to
+services. The 68-line router owns HTTP parameters, schemas and missing-data
+responses, with no database queries or builder calls.
 
 ## Verification
 
@@ -538,6 +572,14 @@ historical team mapping, scoring names/order, averages, empty snaps, exact 404s,
 optional scoring fallback and required query/builder failures. Parity comparisons
 normalize only adjacent rotation rows tied on every selection priority; ordering
 between distinct priorities and all other lists remains checked. No model runs.
+
+Player-chart checks are `uv run --locked pytest tests/test_game_player_chart_service.py
+tests/test_lineup_endpoints.py tests/test_game_players.py tests/test_ratings_power.py`.
+They cover actual lazy ratings, service/HTTP parity, duplicate-stat aggregation
+and roster priorities, negative EPA/tackles, role-count ties and fallback roles,
+event outcomes/lanes/order/caps, roster-only and stats-only profiles, both exact
+404 mappings and short-circuits, optional snap fallback and failures at each
+required query and the builder. No model runs or production-freshness claims.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
