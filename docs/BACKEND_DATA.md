@@ -5,6 +5,11 @@ routes and assistant tools call the same ordinary Python functions. The assistan
 imports neither HTTP routes nor database query functions. Builders retain their
 analytics formulas; moving their writes offline is the next separate milestone.
 
+Offline analytics preparation now has one orchestration function in
+`api/pipeline/analytics.py`, called after ingestion prepares its inputs. Serving
+still has startup and lazy writes. See [data preparation](DATA_PIPELINE.md) for
+the current boundaries and the remaining snapshot/read-only migration.
+
 ## Request flow and responsibilities
 
 ```text
