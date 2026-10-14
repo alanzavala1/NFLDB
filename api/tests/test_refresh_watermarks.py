@@ -12,6 +12,8 @@ import json
 import pytest
 
 from jobs import refresh
+from pipeline.source_results import SourceOutcome
+from pipeline.vendor_sources import WATCHED_VENDOR_SOURCES
 
 
 SEASON = 2026
@@ -38,6 +40,42 @@ def test_failed_required_feed_never_advances_watermarks(tmp_path, monkeypatch):
     with pytest.raises(SourceError, match='TimeoutError'):
         refresh.cmd_ingest(str(path))
     assert json.loads(path.read_text(encoding='utf-8')) == before
+
+
+@pytest.mark.parametrize('status', ['loaded', 'empty', 'failed', 'not_found', 'unsupported'])
+def test_vendor_watermarks_follow_observed_outcomes(tmp_path, monkeypatch, status):
+    import database
+    import ingest
+
+    path = tmp_path / 'watermarks.json'
+    before = _marks()
+    path.write_text(json.dumps(before), encoding='utf-8')
+    monkeypatch.setenv('REFRESH_SEASON', str(SEASON))
+    monkeypatch.setattr(refresh, 'remote_watermarks',
+                        lambda season: _remote(snaps=SNAPS, pfr_pass='unobserved-new'))
+    monkeypatch.setattr(database, 'get_connection', lambda: object())
+    monkeypatch.setattr(ingest, 'run_ingest', lambda *a, **k: [SourceOutcome('snap_counts', SEASON, status)])
+    assert refresh.cmd_ingest(str(path)) == 0
+    marks = json.loads(path.read_text(encoding='utf-8'))
+    assert marks[f'snaps:{SEASON}'] == (SNAPS if status in ('loaded', 'empty') else before[f'snaps:{SEASON}'])
+    # No outcome means no evidence that this other watched vendor was read.
+    assert marks[f'pfr_pass:{SEASON}'] == before[f'pfr_pass:{SEASON}']
+
+
+def test_watch_catalog_matches_the_assets_the_adapters_fetch():
+    watched = {key: (tag, asset) for key, tag, asset in refresh.WATCHED_ASSETS}
+    for key, spec in WATCHED_VENDOR_SOURCES.items():
+        assert watched[key] == (spec.release, spec.asset)
+
+
+def test_remote_gate_skips_assets_outside_declared_coverage(monkeypatch):
+    def releases(tag):
+        assert tag in ('pbp', 'stats_player'), 'unsupported vendor must not be fetched'
+        return {}
+
+    monkeypatch.setattr(refresh, '_release_assets', releases)
+    remote = refresh.remote_watermarks(1999)
+    assert all(remote[key] is None for key in WATCHED_VENDOR_SOURCES)
 
 
 def _remote(**overrides):

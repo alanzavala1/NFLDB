@@ -9,6 +9,10 @@ Offline analytics preparation now has one orchestration function in
 `api/pipeline/analytics.py`, called after ingestion prepares its inputs. Serving
 still has startup and lazy writes. See [data preparation](DATA_PIPELINE.md) for
 the current boundaries and the remaining snapshot/read-only migration.
+Core downloads live in `pipeline/sources.py`; optional vendors and their shared
+refresh asset catalog live in `pipeline/vendor_sources.py`. Their explicit source
+outcomes distinguish retained optional data from newly loaded rows. Pure vendor
+normalization is separate from storage and model execution.
 
 ## Request flow and responsibilities
 

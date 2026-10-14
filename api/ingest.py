@@ -12,8 +12,10 @@ from config import FIRST_SEASON, RELOCATIONS, era_team_case
 from database import get_connection
 from data_errors import is_missing_data_error
 from pipeline.analytics import prepare_analytics
+from pipeline.source_results import SourceError, SourceOutcome
+from pipeline.vendor_sources import ADVANCED_SOURCES, SUPPLEMENTAL_SOURCES, fetch_vendor
 from pipeline.sources import (
-    SourceError, PLAYS_KEEP_COLUMNS, WEEKLY_STAT_COLUMNS, WEEKLY_REQUIRED_COLUMNS,
+    PLAYS_KEEP_COLUMNS, WEEKLY_STAT_COLUMNS, WEEKLY_REQUIRED_COLUMNS,
     fetch_play_by_play, fetch_weekly_stats,
 )
 
@@ -68,7 +70,9 @@ def _upsert_by_season(conn, table: str, df: pd.DataFrame, seasons: list[int], lo
 
     try:
         existing_cols = [r[0] for r in conn.execute(f"DESCRIBE {table}").fetchall()]
-    except Exception:
+    except Exception as error:
+        if not is_missing_data_error(error):
+            raise
         existing_cols = None
 
     if existing_cols is None:
@@ -77,7 +81,9 @@ def _upsert_by_season(conn, table: str, df: pd.DataFrame, seasons: list[int], lo
         placeholders = ", ".join("?" * len(seasons))
         try:
             conn.execute(f"DELETE FROM {table} WHERE season IN ({placeholders})", seasons)
-        except Exception:
+        except Exception as error:
+            if not is_missing_data_error(error):
+                raise
             pass  # no season column in very old tables — safe to skip
 
         col_types = {r[0]: r[1] for r in conn.execute(f"DESCRIBE {table}").fetchall()}
@@ -505,66 +511,15 @@ def load_weekly_player_stats(
     log(f"  weekly_player_stats: {len(weekly):,} rows, seasons {got[0]}-{got[-1]}")
 
 
-def load_advanced_stats(conn, seasons: list[int], log=print):
-    """Pull PFR advanced stats, NGS, and snap counts into their own tables."""
-
-    # PFR advanced stats — season-level, ~2018+
-    for stat_type in ['pass', 'rush', 'rec', 'def']:
-        log(f"  PFR advanced ({stat_type})...")
-        try:
-            df = nfl_data_py.import_pfr_advstats(years=seasons, stat_type=stat_type)
-            if df is not None and not df.empty:
-                _upsert_by_season(conn, f"pfr_{stat_type}", df, seasons, log=log)
-                log(f"    columns: {sorted(df.columns.tolist())}")
-        except Exception as e:
-            log(f"    skipped: {e}")
-
-    # Next Gen Stats — weekly, ~2016+
-    for stat_type in ['passing', 'rushing', 'receiving']:
-        log(f"  NGS ({stat_type})...")
-        try:
-            df = nfl_data_py.import_ngs_data(years=seasons, stat_type=stat_type)
-            if df is not None and not df.empty:
-                _upsert_by_season(conn, f"ngs_{stat_type}", df, seasons, log=log)
-                log(f"    columns: {sorted(df.columns.tolist())}")
-        except Exception as e:
-            log(f"    skipped: {e}")
-
-    # Snap counts — per game, ~2012+
-    log("  Snap counts...")
-    try:
-        df = nfl_data_py.import_snap_counts(years=seasons)
-        if df is not None and not df.empty:
-            _upsert_by_season(conn, "snap_counts", df, seasons, log=log)
-            log(f"    columns: {sorted(df.columns.tolist())}")
-    except Exception as e:
-        log(f"    skipped: {e}")
-
-    load_ftn(conn, seasons, log=log)
-
-
-def load_ftn(conn, seasons: list[int], log=print) -> None:
-    """FTN charting (per-play, 2022+): play-action, screen, RPO, motion, QB
-    out of pocket, pass-rusher / blitzer counts, defenders in box. Stored in
-    its own `ftn_charting` table keyed by (game_id, play_id) and LEFT JOINed
-    to plays in splits_builder. Older seasons simply have no FTN rows."""
-    ftn_years = [s for s in seasons if s >= 2022]
-    if not ftn_years:
-        return
-    log(f"  FTN charting ({ftn_years})...")
-    try:
-        df = nfl_data_py.import_ftn_data(ftn_years)
-    except Exception as e:
-        log(f"    skipped: {e}")
-        return
-    keep = ["season", "nflverse_game_id", "nflverse_play_id", "is_play_action",
-            "is_rpo", "is_screen_pass", "is_motion", "is_qb_out_of_pocket",
-            "n_blitzers", "n_pass_rushers", "n_defense_box"]
-    df = df[[c for c in keep if c in df.columns]].rename(
-        columns={"nflverse_game_id": "game_id", "nflverse_play_id": "play_id"})
-    df["play_id"] = df["play_id"].astype("float64")  # match plays.play_id (FLOAT)
-    _upsert_by_season(conn, "ftn_charting", df, ftn_years, log=log)
-    log(f"    ftn_charting: {len(df):,} rows for {ftn_years}")
+def load_advanced_stats(conn, seasons: list[int], log=print) -> list[SourceOutcome]:
+    """Store validated vendor frames; missing/failed years keep their old rows."""
+    outcomes = []
+    for spec in ADVANCED_SOURCES:
+        feed = fetch_vendor(spec, seasons, log=log)
+        if feed.data is not None:
+            _upsert_by_season(conn, spec.name, feed.data, feed.loaded_seasons, log=log)
+        outcomes.extend(feed.outcomes)
+    return outcomes
 
 
 def _replace_table(conn, table: str, df: pd.DataFrame, log=print) -> None:
@@ -580,113 +535,22 @@ def _replace_table(conn, table: str, df: pd.DataFrame, log=print) -> None:
     log(f"    {table}: {count:,} rows")
 
 
-def load_supplemental_data(conn, seasons: list[int], log=print) -> None:
-    """Vendor data that augments the core stats: injuries, depth charts,
-    draft picks, combine results, cross-source ID mapping, QBR.
-
-    Season-partitioned sources (injuries, depth_charts) upsert by season so
-    re-ingesting one year doesn't disturb others.
-
-    Historical sources (draft_picks, combine_data, ids) are small and don't
-    partition by season — we full-replace them on every ingest to pick up
-    any vendor-side updates.
-
-    QBR is fetched for the requested seasons but the upstream feed is often
-    a year behind for the current season; nfl_data_py just returns 0 rows
-    when that happens. ESPN-direct fallback is a separate concern.
-    """
-    # ── Per-season sources ──────────────────────────────────────────────────
-    log("  Injuries...")
-    try:
-        df = nfl_data_py.import_injuries(seasons)
-        if df is not None and not df.empty:
-            _upsert_by_season(conn, "injuries", df, seasons, log=log)
-    except Exception as e:
-        log(f"    skipped: {e}")
-
-    log("  Depth charts...")
-    try:
-        df = nfl_data_py.import_depth_charts(seasons)
-        # The feed is now dt-stamped daily snapshots (ESPN-sourced) with no
-        # season column. Only the latest snapshot is ever served, so keep just
-        # that and full-replace: the old upsert path skipped its DELETE (no
-        # season column) and appended a snapshot per ingest — plus, for
-        # old-format frames, inserted rows that were NULL in every column the
-        # frames didn't share with the new table. Frames without dt (old
-        # seasons) are skipped rather than ingested as junk.
-        if df is not None and not df.empty and "dt" in df.columns:
-            df = df[df["dt"] == df["dt"].max()]
-            conn.register("depth_df", df)
-            conn.execute("DROP TABLE IF EXISTS depth_charts")
-            conn.execute("CREATE TABLE depth_charts AS SELECT * FROM depth_df")
-            log(f"    depth_charts: {len(df):,} rows (latest snapshot)")
-        else:
-            log("    skipped: empty or old-format frame (no dt column)")
-    except Exception as e:
-        log(f"    skipped: {e}")
-
-    log("  QBR (season)...")
-    try:
-        df = nfl_data_py.import_qbr(years=seasons, frequency="season")
-        if df is not None and not df.empty:
-            _upsert_by_season(conn, "qbr_season", df, seasons, log=log)
-        else:
-            log("    nothing returned (upstream feed not yet updated for these seasons)")
-    except Exception as e:
-        log(f"    skipped: {e}")
-
-    log("  QBR (weekly)...")
-    try:
-        df = nfl_data_py.import_qbr(years=seasons, frequency="weekly")
-        if df is not None and not df.empty:
-            _upsert_by_season(conn, "qbr_weekly", df, seasons, log=log)
-        else:
-            log("    nothing returned")
-    except Exception as e:
-        log(f"    skipped: {e}")
-
-    # ── Historical sources (full replace) ──────────────────────────────────
-    # Pull a wide fixed window, NOT tied to the current ingest's seasons.
-    # Earlier we used range(1999, max(seasons)+1), which silently truncated
-    # these tables when a user re-ingested an old season (e.g. re-loading
-    # 2009 would replace draft_picks with only 1999-2009). Now the
-    # historical tables are always rebuilt with the complete range
-    # regardless of which season triggered the ingest.
-    #
-    # Draft picks: vendor data starts at 1980, so go back that far to
-    # cover Brett Favre (1991), Peyton (1998), Randy Moss (1998), etc.
-    # Combine data: vendor data only starts at 2000; earlier years return
-    # empty, no harm in asking.
-    _HISTORICAL_RANGE = list(range(1980, 2030))  # 2030 is a comfortable
-                                                 # forward cap; the source
-                                                 # naturally caps at the
-                                                 # latest available draft.
-    log(f"  Draft picks ({_HISTORICAL_RANGE[0]}+)...")
-    try:
-        df = nfl_data_py.import_draft_picks(_HISTORICAL_RANGE)
-        _replace_table(conn, "draft_picks", df, log=log)
-    except Exception as e:
-        log(f"    skipped: {e}")
-
-    log(f"  Combine data ({_HISTORICAL_RANGE[0]}+)...")
-    try:
-        df = nfl_data_py.import_combine_data(_HISTORICAL_RANGE)
-        _replace_table(conn, "combine_data", df, log=log)
-    except Exception as e:
-        log(f"    skipped: {e}")
-
-    log("  Cross-source ID mapping...")
-    try:
-        df = nfl_data_py.import_ids()
-        _replace_table(conn, "id_map", df, log=log)
-    except Exception as e:
-        log(f"    skipped: {e}")
-
-    log("  Player awards (seed)...")
-    try:
-        _load_player_awards(conn, log=log)
-    except Exception as e:
-        log(f"    skipped: {e}")
+def load_supplemental_data(conn, seasons: list[int], log=print) -> list[SourceOutcome]:
+    """Store optional reference/snapshot feeds, then prepare the static awards seed."""
+    outcomes = []
+    for spec in SUPPLEMENTAL_SOURCES:
+        feed = fetch_vendor(spec, seasons, log=log)
+        if feed.data is not None:
+            if spec.scope in ('reference', 'snapshot'):
+                _replace_table(conn, spec.name, feed.data, log=log)
+            else:
+                _upsert_by_season(conn, spec.name, feed.data, feed.loaded_seasons, log=log)
+        outcomes.extend(feed.outcomes)
+    # This is local preparation, not an optional network feed. A seed/write
+    # failure must stop the pipeline rather than claim successful preparation.
+    log('  Player awards (seed)...')
+    _load_player_awards(conn, log=log)
+    return outcomes
 
 
 def _load_player_awards(conn, log=print) -> None:
@@ -908,7 +772,7 @@ def build_player_game_stats(conn, plays: pd.DataFrame, seasons: list[int], log=p
     log(f"  player_game_stats: {count:,} rows total")
 
 
-def run_ingest(seasons: list[int], log=print):
+def run_ingest(seasons: list[int], log=print) -> list[SourceOutcome]:
     """Load source feeds, build player stats, then prepare analytics for the batch."""
     conn = get_connection()
     plays = load_and_store_raw(conn, seasons, log=log)
@@ -920,7 +784,7 @@ def run_ingest(seasons: list[int], log=print):
         # publishes plays and this completes normally.
         log(f"\nNo play-by-play for {seasons} yet — schedules and rosters are "
             f"loaded; skipping derived stats until plays are published.")
-        return
+        return []
 
     # A multi-season request may include an unplayed season with no asset.
     # Restrict downstream replacements to seasons actually downloaded.
@@ -930,12 +794,13 @@ def run_ingest(seasons: list[int], log=print):
     build_player_game_stats(conn, plays, seasons, log=log)
 
     log(f"\nLoading advanced stats for {seasons}...")
-    load_advanced_stats(conn, seasons, log=log)
+    outcomes = load_advanced_stats(conn, seasons, log=log)
 
     log(f"\nLoading supplemental vendor data for {seasons}...")
-    load_supplemental_data(conn, seasons, log=log)
+    outcomes.extend(load_supplemental_data(conn, seasons, log=log))
 
     prepare_analytics(seasons, log=log)
+    return outcomes
 
 
 # ---------------------------------------------------------------------------

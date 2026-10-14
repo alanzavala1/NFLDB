@@ -8,6 +8,8 @@ from urllib.error import HTTPError
 
 import pandas as pd
 
+from pipeline.source_results import SourceError
+
 
 # nflfastR play-by-play ships ~396 columns; the app uses ~169. Storing only
 # these keeps the DuckDB file ~half the size with no loss of functionality
@@ -93,15 +95,6 @@ PBP_URL = (
     "https://github.com/nflverse/nflverse-data/releases/download/"
     "pbp/play_by_play_{season}.parquet"
 )
-
-
-class SourceError(RuntimeError):
-    """A feed failed or cannot supply data required by this refresh."""
-
-    def __init__(self, source: str, season: int, reason: str):
-        self.source = source
-        self.season = season
-        super().__init__(f'{source}[{season}]: {reason}')
 
 
 @dataclass

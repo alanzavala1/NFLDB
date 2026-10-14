@@ -85,6 +85,7 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
         def load(conn, seasons, log, name=name):
             assert conn is connection and seasons == [2024]
             calls.append(name)
+            return []
         monkeypatch.setattr(ingest, name, load)
 
     def prepare(seasons, log):

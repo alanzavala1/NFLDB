@@ -23,6 +23,10 @@ on every run just to discover there was nothing to do — and most runs have
 nothing to do, since nflverse republishes a season only as its games are
 charted.
 
+Vendor stamps acknowledge successfully observed versions: loaded rows or an
+explicit empty outcome. Failed/missing downloads keep their previous stamp and
+stored data, so an optional outage is not recorded as an up-to-date source.
+
 Exit status is always 0 on a clean run: "no new data" is a normal outcome, not
 a failure.
 """
@@ -34,6 +38,8 @@ import sys
 
 import httpx
 import pandas as pd
+
+from pipeline.vendor_sources import WATCHED_VENDOR_SOURCES
 
 RELEASE_API = "https://api.github.com/repos/nflverse/nflverse-data/releases/tags/{tag}"
 SCHEDULE_CSV = "http://www.habitatring.com/games.csv"
@@ -69,15 +75,9 @@ WATCHED_ASSETS = (
     # missing from this list, and unwatched is how it sat two seasons stale
     # without anything noticing.
     ("weekly",        "stats_player",  "stats_player_week_{season}.parquet"),
-    ("snaps",         "snap_counts",   "snap_counts_{season}.parquet"),
-    ("ftn",           "ftn_charting",  "ftn_charting_{season}.parquet"),
-    ("pfr_pass",      "pfr_advstats",  "advstats_season_pass.parquet"),
-    ("pfr_rush",      "pfr_advstats",  "advstats_season_rush.parquet"),
-    ("pfr_rec",       "pfr_advstats",  "advstats_season_rec.parquet"),
-    ("pfr_def",       "pfr_advstats",  "advstats_season_def.parquet"),
-    ("ngs_passing",   "nextgen_stats", "ngs_passing.parquet"),
-    ("ngs_rushing",   "nextgen_stats", "ngs_rushing.parquet"),
-    ("ngs_receiving", "nextgen_stats", "ngs_receiving.parquet"),
+    *((key, WATCHED_VENDOR_SOURCES[key].release, WATCHED_VENDOR_SOURCES[key].asset)
+      for key in ('snaps', 'ftn', 'pfr_pass', 'pfr_rush', 'pfr_rec', 'pfr_def',
+                  'ngs_passing', 'ngs_rushing', 'ngs_receiving')),
 )
 
 
@@ -122,13 +122,18 @@ def _release_assets(tag: str, _cache: dict[str, dict[str, str]] = {}) -> dict[st
 def remote_watermarks(season: int) -> dict[str, str | None]:
     """Upstream `updated_at` for every watched asset, keyed by watermark name.
 
-    A value of None means the asset isn't published yet. For play-by-play that
+    A value of None means the asset isn't published yet or is outside its
+    declared coverage. For play-by-play that
     is the normal state of a season before its first games are charted, not an
     error; for the rest it simply means there is nothing of theirs to be stale
     against.
     """
     out: dict[str, str | None] = {}
     for key, tag, name in WATCHED_ASSETS:
+        spec = WATCHED_VENDOR_SOURCES.get(key)
+        if spec and season < spec.first_season:
+            out[key] = None
+            continue
         out[key] = _release_assets(tag).get(name.format(season=season))
     return out
 
@@ -234,7 +239,7 @@ def cmd_ingest(watermarks_path: str) -> int:
     # contract. Nothing else is running here, but it keeps the invariant true
     # wherever run_ingest is called from.
     with write_lock:
-        run_ingest([season], log=_log)
+        outcomes = run_ingest([season], log=_log)
 
     marks = read_watermarks(watermarks_path)
     if remote["pbp"] is None:
@@ -244,6 +249,15 @@ def cmd_ingest(watermarks_path: str) -> int:
     else:
         for key, stamp in remote.items():
             if stamp is not None:
+                spec = WATCHED_VENDOR_SOURCES.get(key)
+                if spec and not any(
+                    o.source == spec.name and o.season == season
+                    and o.status in ('loaded', 'empty') for o in outcomes
+                ):
+                    # Optional failures retain stored data and their old stamp.
+                    # A successfully read empty asset acknowledges this version
+                    # without claiming rows were loaded; its outcome says empty.
+                    continue
                 marks[f"{key}:{season}"] = stamp
 
     write_watermarks(watermarks_path, marks)
