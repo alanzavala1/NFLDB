@@ -105,6 +105,9 @@ year changes which profile queries are observed and only reads published data.
 
 Team profile, roster, depth-chart, injury, and split requests/options now live in
 `src/api/teams.ts`. League-wide analytics live in `src/api/teamAnalytics.ts`.
+Backend profile assembly now lives in `api/services/team_profile.py`, shared by
+the HTTP route and assistant. The route keeps its existing missing-profile 404;
+scheduled games without player stats still return a valid profile.
 Each request uses the shared typed client and consumes an `AbortSignal`.
 The team depth-chart route and assistant team overview now share snapshot
 selection in `api/services/team_depth_chart.py`. The feed has no weekly history;

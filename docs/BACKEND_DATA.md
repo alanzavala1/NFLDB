@@ -232,6 +232,37 @@ then reads the updated current-game dictionary. Callers own the season,
 game-type and history scope of the supplied rows. The helper's extraction
 preserves that scope and the existing week-based calculation.
 
+## Team profiles
+
+`api/services/team_profile.py` owns profile assembly for an explicit team and
+season. It reads that team's schedule, applies the shared pregame-record helper,
+and returns regular and non-regular player-total lists with the existing roster
+join and aggregation columns. It returns `None` when there are no games.
+
+The `/teams/{team}` route supplies its configured season default, validates the
+`TeamProfile` response and maps `None` to the unchanged 404 message. The
+assistant imports the service directly and maps absence to its unchanged
+no-profile message and provenance record. Its remaining normalization,
+standing-based record, current supplemental data and output projection are
+preserved. `llm.py` no longer imports team route functions.
+
+Scheduled games with no player stats still form a valid profile with empty
+leader lists. Unexpected query errors propagate through the service and its
+callers instead of becoming missing profiles. The service has no HTTP exception
+or parameter dependency.
+
+The existing `playoff_leaders` field is computed from every non-`REG` game type,
+including preseason. Pregame annotations use the supplied team schedule history,
+also including those game types. Those scopes are preserved and remain part of
+later definition review. Regular totals still use only `REG`; game counts are
+distinct; the roster join uses the shared per-player/season selection; and
+missing roster fields remain null. The leader queries have no row-order
+guarantee, so the UI retains responsibility for their sorting.
+
+Team splits and league-wide team analytics already delegate to their builder
+modules; their preparation/write behavior remains pipeline work rather than
+requiring an additional pass-through service in this extraction.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -296,6 +327,14 @@ tests/test_helpers.py tests/test_endpoints.py tests/test_invariants.py`. The fiv
 existing record tests now live beside two additional checks for unsorted input,
 list/row identity, partial scores and same-week entry records. Existing route
 checks exercise the helper through schedule, game-detail and team endpoints.
+
+Team-profile checks are `uv run --locked pytest tests/test_team_profile_service.py
+tests/test_endpoints.py tests/test_ask_coverage.py`. They cover service/HTTP
+parity, schedule scope/order, regular/non-regular totals, distinct games,
+roster joins and nulls, assistant record/provenance, missing-profile mappings,
+scheduled-only profiles, defaults/validation, short-circuiting and failures at
+each query stage. Leader rows are compared by player ID; schedule order remains
+checked. Existing local-snapshot coverage verifies a historical team overview.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No

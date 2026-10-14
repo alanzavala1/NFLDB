@@ -283,7 +283,7 @@ nfl-platform/
 │   ├── power_rankings_builder.py  # weekly team power rankings (net EPA/play)
 │   ├── ol_grades_builder.py       # O-line unit grades (pressure + stuff rate)
 │   ├── routers/                   # schedule (incl. lineup/ratings), players, teams, leaders, assistant (Ask NFLDB), meta
-│   ├── services/                  # league/team queries, power rankings and shared pregame records
+│   ├── services/                  # league/team queries and profiles, power rankings, pregame records
 │   ├── tests/                     # endpoints, invariants, data-reconciliation
 │   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
 └── frontend/src/
@@ -360,7 +360,7 @@ The Standings pilot uses TanStack Query and an OpenAPI-typed client. See the
 [frontend data walkthrough](docs/FRONTEND_DATA.md) for the request flow,
 responsibilities, and migration boundary.
 
-Standings, search, league leaders and power rankings use shared services called directly
+Standings, search, league leaders, power rankings and team profiles use services called directly
 by their HTTP routes and assistant tools. See the [backend data walkthrough](docs/BACKEND_DATA.md)
 for that boundary and its focused checks.
 
