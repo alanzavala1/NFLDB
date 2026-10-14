@@ -283,7 +283,7 @@ nfl-platform/
 │   ├── power_rankings_builder.py  # weekly team power rankings (net EPA/play)
 │   ├── ol_grades_builder.py       # O-line unit grades (pressure + stuff rate)
 │   ├── routers/                   # schedule (incl. lineup/ratings), players, teams, leaders, assistant (Ask NFLDB), meta
-│   ├── services/                  # league/team queries, game details/ratings/player selection, schedules/rankings/records
+│   ├── services/                  # league/team queries, game details/lineups/ratings, player selection and schedule records
 │   ├── tests/                     # endpoints, invariants, data-reconciliation
 │   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
 └── frontend/src/

@@ -195,8 +195,10 @@ both the HTTP route and assistant. The route retains its schema and missing-game
 404. Box-score/scoring calculations and optional play-data fallbacks are
 unchanged. Ratings now delegate to `api/services/game_ratings.py`, with their
 schema, missing-game 404 and existing on-demand builder preserved. Ratings,
-lineup and player charts share `PGS_GAME_CTE` in `api/sql_helpers.py`; lineup
-and chart assembly remain follow-up work.
+lineup and player charts share `PGS_GAME_CTE` in `api/sql_helpers.py`. Lineup
+assembly now lives in `api/services/game_lineup.py`, preserving its snap identity
+matches, scoring, averages, builder behavior and missing-game 404. Player-chart
+assembly remains follow-up work; field placement and styling stay frontend-owned.
 
 All four resources expose pending, error, and retry states. Cached successful
 results remain visible on refresh failures, including empty lineups, schedules,

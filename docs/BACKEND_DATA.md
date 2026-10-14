@@ -346,8 +346,8 @@ and null ratings. Ordering remains rating descending with nulls last, then raw
 score descending with nulls last, then player name. The builder's stored metric
 values and qualification/calibration formulas are unchanged.
 
-`PGS_GAME_CTE` now lives in `api/sql_helpers.py`, imported by the rating service
-and the existing lineup/chart routes. A CTE is a named intermediate SQL result;
+`PGS_GAME_CTE` now lives in `api/sql_helpers.py`, imported by the rating/lineup
+services and the player-chart route. A CTE is a named intermediate SQL result;
 this one filters to a supplied game ID, groups by player and game, sums all
 shared numeric stat columns with nulls treated as zero, and uses the existing
 `ANY_VALUE` metadata selections. Selection among differing metadata values
@@ -363,7 +363,8 @@ propagate rather than becoming 404 or successful empty ratings.
 `api/services/game_players.py` owns the existing lineup starter/rotation selection,
 personnel labels and position-group fallback shared with player charts. These
 functions use only supplied dictionaries: they have no database, HTTP or builder
-dependency. The route imports them; its lineup/chart query bodies are unchanged.
+dependency. The lineup service and player-chart route import them; selection
+bodies and the existing lineup/chart queries are unchanged.
 
 Starters filter to the requested team and positive snaps in the selected unit,
 then sort by snaps, rating and name descending before keeping 11. Rotation
@@ -380,6 +381,40 @@ defenders to DEF, and leaves unsupported positions null. Its existing scope
 differs from the wider defensive-personnel vocabulary (for example NB);
 consolidating football definitions remains a separate step. Frontend placement
 is a display concern and does not change these selected players or ratings.
+
+## Game lineup assembly
+
+`api/services/game_lineup.py` owns `get_game_lineup(game_id)`: schedule lookup,
+snap-count identity joins, scoring events, O-line grades and team averages.
+It returns ordinary dictionaries, or `None` for an absent game. The
+`/api/games/{game_id}/lineup` route retains `GameLineup` response validation and
+maps absence to the unchanged `Game {game_id} not found` HTTP 404. This endpoint
+has no assistant consumer. The field UI and its placement rules are unchanged.
+
+Snap selection retains the same game/season/team filters and historical
+franchise mapping. Identity fields prefer a direct PFR roster match, then an
+ID-map match, then normalized name/position matching. Each lookup retains its
+existing team/week priorities. Unmatched snap rows keep their supplied name and
+position, with nullable roster/rating fields. `join_match_rate` is the rounded
+share of rows with a PFR ID that also resolved a player ID; rows without a PFR
+ID are excluded from that denominator. No eligible rows produce a null rate.
+
+The service uses shared starter/rotation helpers, keeps both team entries even
+without snaps, and computes rounded averages from available ratings. Exact
+rotation rating/snap ties retain unspecified ordering. Only known starter IDs
+are excluded from rotation, so an unresolved starter can also appear there;
+this existing identity behavior remains a separate consistency follow-up.
+
+Scoring retains touchdowns and made field goals, chronological ordering,
+defensive touchdown attribution and the existing player-name fallbacks. Its
+query uses `safe_query`'s logged empty-list fallback. The required snap join
+also reads plays for touchdown badges: a missing plays table therefore fails
+that required query rather than merely removing scoring events. Unexpected
+schedule/snap failures and uncaught builder failures propagate.
+
+Player ratings and O-line grades still use the existing read-or-materialize
+builders. Their writes, locks, formulas and internal fallback policies are
+preserved; moving them into an offline pipeline remains separate work.
 
 ## Verification
 
@@ -494,6 +529,15 @@ filtering/order/caps, rotation exclusion and volume/proportion choices, input
 immutability, personnel packages, nullable name/position projection, and the
 existing endpoint/builder/chart integration. The helper move preserves function
 bodies, and the complete OpenAPI schema is unchanged.
+
+Lineup-service checks are `uv run --locked pytest tests/test_game_lineup_service.py
+tests/test_lineup_endpoints.py tests/test_game_players.py tests/test_ratings_power.py`.
+Fresh mini-league fixtures check real lazy builders, service/HTTP parity, all
+identity paths and lookup priorities, game/year/team isolation, unmatched rows,
+historical team mapping, scoring names/order, averages, empty snaps, exact 404s,
+optional scoring fallback and required query/builder failures. Parity comparisons
+normalize only adjacent rotation rows tied on every selection priority; ordering
+between distinct priorities and all other lists remains checked. No model runs.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
