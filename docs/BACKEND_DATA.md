@@ -358,6 +358,29 @@ global calibration and empty-result fallback policies. Serving is not yet
 read-only. Unexpected service-query failures and uncaught builder failures
 propagate rather than becoming 404 or successful empty ratings.
 
+## Game player selection
+
+`api/services/game_players.py` owns the existing lineup starter/rotation selection,
+personnel labels and position-group fallback shared with player charts. These
+functions use only supplied dictionaries: they have no database, HTTP or builder
+dependency. The route imports them; its lineup/chart query bodies are unchanged.
+
+Starters filter to the requested team and positive snaps in the selected unit,
+then sort by snaps, rating and name descending before keeping 11. Rotation
+excludes starter IDs, keeps players with snaps in any unit, and sorts rated
+players first, then by rating and maximum unit snap count before keeping ten.
+Its snap percentage remains the independent maximum across units. Selection
+returns new output dictionaries without modifying input rows.
+
+Player-name fallback, nullable metadata, jersey/snaps integer conversion and
+touchdown flags are preserved. Offense personnel counts backs and tight ends;
+defense labels preserve the existing Nickel/Dime and front-count rules. The
+position fallback still normalizes case, maps backs to RB and supported
+defenders to DEF, and leaves unsupported positions null. Its existing scope
+differs from the wider defensive-personnel vocabulary (for example NB);
+consolidating football definitions remains a separate step. Frontend placement
+is a display concern and does not change these selected players or ratings.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -464,6 +487,13 @@ fallbacks, one-row joins despite duplicate stats, shared stat sums, actual lazy
 table creation, exact missing-game 404s, empty-builder short-circuiting and
 query/builder failure propagation. Existing tests verify builder mathematics
 and matching lineup/chart results. These checks run without a model.
+
+Player-selection checks are `uv run --locked pytest tests/test_game_players.py
+tests/test_lineup_endpoints.py tests/test_ratings_power.py`. They cover starter
+filtering/order/caps, rotation exclusion and volume/proportion choices, input
+immutability, personnel packages, nullable name/position projection, and the
+existing endpoint/builder/chart integration. The helper move preserves function
+bodies, and the complete OpenAPI schema is unchanged.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No

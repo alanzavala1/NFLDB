@@ -227,6 +227,25 @@ chart stat labels, and existing lineup CSS have separate owners. The CSS is
 still installed by the Game page, preserving its existing scope and order.
 The router imports the feature directly; both former large files are removed.
 
+The lineup field now uses separate schematic position rows. Groups spread across
+the available width, with at most five players per row; larger groups get another
+row. Field height grows to leave room between occupied rows. Player targets are
+at least 44 pixels wide and 50 pixels high, and names retain full accessible labels
+and chart access while long visible names truncate. Empty position rows preserve
+sparse-data placement; unidentified offense positions get separate overflow rows.
+Backend starter/rotation choices and rating values are unchanged.
+
+The O-line unit grade is above the field, and rating help expands in the page
+instead of covering players. Headers and controls wrap on phones. Field styles
+live in `lineupFieldStyles.ts`, composed into the Game page's existing stylesheet.
+Long chart names wrap, close controls have 44-pixel targets and stay visible
+while scrolling, and modal columns
+shrink without horizontal overflow; passing/rushing data and plot logic are
+unchanged. `tests/lineup-spacing.spec.ts` covers full standard/jumbo/spread units
+at 320, 390, 760 and 1280 pixels, both possession choices, separate contained
+targets and actual hit testing, unknown positions, keyboard opening, expandable
+help and narrow-phone passing/rushing charts.
+
 Nested stat bars, stat sections, player links, and leader sides are now stable
 module-level components. Independent request updates preserve keyboard focus
 instead of recreating those component types. The win-probability tooltip uses

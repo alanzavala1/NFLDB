@@ -2,7 +2,7 @@ import { teamPrimaryColor } from '../../utils/teams'
 
 export function LineupField({ awayTeam, homeTeam }: { awayTeam: string; homeTeam: string }) {
   return (
-    <svg className="turf" viewBox="0 0 500 860" aria-hidden="true">
+    <svg className="turf" viewBox="0 0 500 860" preserveAspectRatio="none" aria-hidden="true">
       <rect x="0" y="0" width="500" height="860" fill="#122a1d" />
       <rect x="0" y="0" width="500" height="860" fill="url(#vign-lineup)" />
       <defs>

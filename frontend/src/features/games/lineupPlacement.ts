@@ -4,22 +4,6 @@ type Unit = 'offense' | 'defense'
 
 export type Placed = LineupPlayer & { x: number; y: number; ol?: boolean }
 
-const OFF_COORDS = {
-  wr: [[8, 57], [92, 57], [22, 59.5], [78, 59.5], [32, 61.5]],
-  te: [[83, 60.5], [17, 60.5]],
-  ol: [[30, 62.5], [40, 66], [50, 62.5], [60, 66], [70, 62.5]],
-  qb: [[50, 75]],
-  rb: [[50, 85], [40, 83]],
-}
-
-// Defensive rows are count-aware: each row spreads its actual players evenly
-// so any package (4-3, nickel, dime…) lays out without nodes clashing.
-const DEF_ROWS: Record<string, { y: number; lo: number; hi: number }> = {
-  dl: { y: 56, lo: 28, hi: 72 },
-  lb: { y: 66, lo: 30, hi: 70 },
-  s: { y: 78, lo: 34, hi: 66 },
-}
-
 function spreadX(count: number, lo: number, hi: number): number[] {
   if (count <= 1) return [(lo + hi) / 2]
   return Array.from({ length: count }, (_, i) => lo + (i * (hi - lo)) / (count - 1))
@@ -40,56 +24,44 @@ function posKey(p: LineupPlayer) {
   if (['LB', 'ILB', 'OLB', 'MLB'].includes(pos)) return 'lb'
   if (['FS', 'SS', 'S'].includes(pos)) return 's'
   if (isOL(p)) return 'ol'
-  return 'lb'
+  return 'other'
 }
 
 export function placePlayers(players: LineupPlayer[], unit: Unit): Placed[] {
-  if (unit === 'defense') return placeDefense(players)
-  const buckets = new Map<string, number>()
-  const ordered = [...players].sort((a, b) => {
-    const order = ['wr', 'te', 'ol', 'qb', 'rb']
-    return order.indexOf(posKey(a)) - order.indexOf(posKey(b))
-  })
-  return ordered.map((p) => {
-    const key = posKey(p)
-    const idx = buckets.get(key) ?? 0
-    buckets.set(key, idx + 1)
-    const coords = OFF_COORDS[key as keyof typeof OFF_COORDS] ?? [[50, 68]]
-    let [x, y] = coords[Math.min(idx, coords.length - 1)]
-    // A group can exceed its template slots (e.g. a 6-OL jumbo set); fan
-    // extras horizontally off the last slot so nodes never stack.
-    const overflow = idx - (coords.length - 1)
-    if (overflow > 0) {
-      const step = Math.ceil(overflow / 2) * 14 * (overflow % 2 === 1 ? 1 : -1)
-      x = Math.min(93, Math.max(7, x + step))
-      y += 3.5
-    }
-    return { ...p, x, y, ol: key === 'ol' }
-  })
-}
-
-function placeDefense(players: LineupPlayer[]): Placed[] {
+  // Separate position rows keep labels and touch targets clear on small screens.
+  // Keep empty rows so sparse data doesn't move a QB or safety to the line.
+  const order = unit === 'offense' ? ['wr', 'te', 'ol', 'qb', 'rb'] : ['dl', 'cb', 'lb', 's']
   const groups = new Map<string, LineupPlayer[]>()
   for (const p of players) {
     const key = posKey(p)
-    const k = key === 'dl' || key === 'lb' || key === 's' ? key : 'cb'
+    const k = unit === 'offense' ? key : order.includes(key) ? key : 'lb'
     groups.set(k, [...(groups.get(k) ?? []), p])
   }
-  const placed: Placed[] = []
-  for (const key of ['dl', 'lb', 's'] as const) {
-    const row = groups.get(key) ?? []
-    const xs = spreadX(row.length, DEF_ROWS[key].lo, DEF_ROWS[key].hi)
-    row.forEach((p, i) => placed.push({ ...p, x: xs[i], y: DEF_ROWS[key].y }))
+  if (unit === 'offense') order.push(...[...groups.keys()].filter(key => !order.includes(key)))
+  const rows: { key: string; players: LineupPlayer[] }[] = []
+  for (const key of order) {
+    const group = groups.get(key) ?? []
+    for (let start = 0; start < Math.max(1, group.length); start += 5) {
+      rows.push({ key, players: group.slice(start, start + 5) })
+    }
   }
-  // Corners hold the edges; extra DBs slot inside on their own row.
-  const cbs = groups.get('cb') ?? []
-  const edges = [[8, 58.5], [92, 58.5]]
-  const slots = spreadX(Math.max(cbs.length - 2, 0), 20, 80)
-  cbs.forEach((p, i) => {
-    if (i < 2 && cbs.length >= 2) placed.push({ ...p, x: edges[i][0], y: edges[i][1] })
-    else placed.push({ ...p, x: slots[Math.max(i - 2, 0)] ?? 50, y: 62 })
+  return rows.flatMap((row, index) => {
+    const xs = spreadX(row.players.length, 10, 90)
+    const y = 56 + index * 32 / (rows.length - 1)
+    return row.players.map((p, i) => ({ ...p, x: xs[i], y, ol: unit === 'offense' && row.key === 'ol' }))
   })
-  return placed
+}
+
+export function fieldMinHeight(offense: Placed[], defense: Placed[]): number {
+  let height = 750
+  for (const unit of [offense, defense]) {
+    const ys = [...new Set(unit.map(p => p.y))].sort((a, b) => a - b)
+    for (let i = 1; i < ys.length; i++) {
+      // Each occupied row needs 56px for its targets, names and focus outlines.
+      height = Math.max(height, Math.ceil(5600 / (ys[i] - ys[i - 1])))
+    }
+  }
+  return height
 }
 
 // Why a player carries no rating. Two causes look identical on the field but

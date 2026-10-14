@@ -10,7 +10,7 @@ export function PlayerNode({ player, mirror, onSelect }: { player: Placed; mirro
   const reason = ungradedReason(player)
   const ungradedTitle = reason ? `${player.player_name} — not graded (${reason})` : player.player_name
   return (
-    <button type="button" className={`player ${player.ol ? 'ol' : ''}`} style={{ left: `${player.x}%`, top: `${top}%` }} title={ungradedTitle} onClick={() => onSelect(player)}>
+    <button type="button" className={`player ${player.ol ? 'ol' : ''}`} style={{ left: `${player.x}%`, top: `${top}%` }} title={ungradedTitle} aria-label={`${player.player_name}, ${player.position ?? 'player'}`} onClick={() => onSelect(player)}>
       <span className="pav" style={{ background: teamPrimaryColor(player.team) }}>
         {player.headshot_url ? <img src={player.headshot_url} alt="" /> : initials(player.player_name)}
         {player.scored_td && <span className="td-pip">◒</span>}
