@@ -46,7 +46,7 @@ from services.search import search as _search_query
 from routers.players import get_player as _player_profile
 from services.power_rankings import get_power_rankings as _power_rankings_query
 from routers.schedule import get_game as _game_query
-from routers.schedule import get_schedule as _schedule_query
+from services.schedule import get_schedule as _schedule_query
 from services.team_profile import get_team_profile as _team_query
 from services.team_depth_chart import get_team_depth_chart as _team_depth_query
 from services.team_injuries import get_team_injuries as _team_injuries_query

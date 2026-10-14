@@ -1,6 +1,6 @@
 # Backend data ownership
 
-League queries, power rankings and several team views use services. This
+League queries, schedules, power rankings and several team views use services. This
 establishes a small pattern for the remaining backend work; other assistant
 tools still import route functions and will move one domain at a time.
 
@@ -216,8 +216,8 @@ is a later roster-consistency task.
 ## Pregame record annotations
 
 `api/services/schedule_records.py` owns the `attach_records(games)` helper.
-Schedule, game-detail and team-profile routes import it directly; the team route
-no longer imports a helper from the schedule route. The helper requires only the
+Schedule and team-profile services and the game-detail route import it directly;
+the team route no longer imports a helper from the schedule route. It requires only the
 supplied game dictionaries, without database or HTTP dependencies.
 
 It groups rows by week and visits weeks in ascending order. All rows in a week
@@ -262,6 +262,26 @@ guarantee, so the UI retains responsibility for their sorting.
 Team splits and league-wide team analytics already delegate to their builder
 modules; their preparation/write behavior remains pipeline work rather than
 requiring an additional pass-through service in this extraction.
+
+## Schedule listing
+
+`api/services/schedule.py` owns season schedule selection, shared pregame-record
+annotations and grouping into weeks. It takes an explicit integer season and
+returns ordinary dictionaries. The `/api/schedule` route retains the configured
+season default, input validation and `ScheduleWeek` response schema.
+
+The query includes all game types and orders by week, then kickoff time. It
+does not add date sorting or a regular-season filter. Missing seasons return an
+empty list; nullable game fields remain nullable. Pregame records use the same
+supplied season history and shared helper as before. Unexpected query failures
+propagate through the service and its callers.
+
+The assistant's `find_games` tool and team-overview game-type fallback now import
+this service directly. Their behavior is unchanged: game search normalizes team
+input, supports week filtering, caps results at 25, and records provenance. A
+truncated preview prioritizes non-regular games, keeping postseason games
+discoverable, and returns the existing compact fields. The team-overview fallback
+uses the same schedule to identify game types missing from profile data.
 
 ## Verification
 
@@ -335,6 +355,14 @@ roster joins and nulls, assistant record/provenance, missing-profile mappings,
 scheduled-only profiles, defaults/validation, short-circuiting and failures at
 each query stage. Leader rows are compared by player ID; schedule order remains
 checked. Existing local-snapshot coverage verifies a historical team overview.
+
+Schedule checks are `uv run --locked pytest tests/test_schedule_service.py
+tests/test_schedule_records.py tests/test_endpoints.py tests/test_ask_coverage.py`.
+They cover service/HTTP parity, week grouping and kickoff ordering, all game
+types, pregame records, nullable fields, assistant filters/projection/provenance
+and its 25-game preview, team-overview fallback, defaults, invalid/empty seasons
+and failure propagation. Tool functions run without a model; existing historical
+snapshot checks do not establish production freshness or answer quality.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No

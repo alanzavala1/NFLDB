@@ -12,6 +12,10 @@ Each section has its own error/retry state. Cached results stay visible with a
 warning when a background refresh fails. Live scores use the shared query cache
 with server pacing and the existing ordering safeguards.
 
+Season schedule assembly now lives in `api/services/schedule.py`, shared by the
+HTTP route and assistant. Week grouping, kickoff ordering and pregame-record
+annotations are unchanged; the route still owns season defaults and validation.
+
 Power-ranking response assembly now lives in `api/services/power_rankings.py`,
 shared by the HTTP route and assistant. Team records stop at the ranking's
 selected week; the builder's existing EPA calculation remains separate. See

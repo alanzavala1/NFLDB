@@ -8,6 +8,7 @@ import ol_grades_builder
 from schemas.lineup import GameLineup, PlayerChart
 from schemas.ratings import GamePlayerRating
 from schemas.schedule import Game, GameDetail, ScheduleWeek
+from services.schedule import get_schedule as query_schedule
 from services.schedule_records import attach_records
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, STAT_COLS, safe_query, team_sql
 
@@ -133,25 +134,7 @@ def _rotation_players(rows: list[dict], team: str, starters: set[str | None]) ->
 
 @router.get("/schedule", response_model=list[ScheduleWeek])
 def get_schedule(season: int = Query(default=CURRENT_SEASON)):
-    rows = query_to_dict(
-        """
-        SELECT
-            game_id, season, game_type, week, gameday, gametime,
-            away_team, home_team, away_score, home_score,
-            away_qb_name, home_qb_name, spread_line, total_line,
-            roof, surface, temp, wind, stadium, overtime, div_game,
-            away_coach, home_coach
-        FROM schedules
-        WHERE season = ?
-        ORDER BY week, gametime
-        """,
-        [season],
-    )
-    attach_records(rows)
-    grouped: dict[int, list] = {}
-    for row in rows:
-        grouped.setdefault(row["week"], []).append(row)
-    return [{"week": w, "games": games} for w, games in sorted(grouped.items())]
+    return query_schedule(season)
 
 
 @router.get("/games", response_model=list[Game])
