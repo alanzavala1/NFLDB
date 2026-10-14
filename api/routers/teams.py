@@ -10,7 +10,8 @@ from schemas.analytics import TeamAnalyticsResponse, TeamSplit
 from schemas.supplemental import DepthChartEntry, InjuryStatus
 from schemas.teams import RosterPlayer, TeamProfile
 from services.team_depth_chart import get_team_depth_chart as query_team_depth_chart
-from sql_helpers import ROSTER_CTE, safe_query
+from services.team_injuries import get_team_injuries as query_team_injuries
+from sql_helpers import ROSTER_CTE
 
 router = APIRouter()
 
@@ -154,36 +155,7 @@ def get_team_splits(team: str, season: int = Query(default=None)):
 def get_team_injuries(team: str, season: int = Query(default=None), week: int | None = Query(default=None)):
     """Most recent injury report for the team. If `week` is omitted, returns
     the latest week we have data for in the given season."""
-    if season is None:
-        season = CURRENT_SEASON
-    params: list = [team, season]
-    week_clause = ""
-    if week is not None:
-        week_clause = " AND week = ?"
-        params.append(week)
-    rows = safe_query(f"""
-        WITH latest AS (
-            SELECT MAX(week) AS w FROM injuries
-            WHERE team = ? AND season = ?{week_clause}
-        )
-        SELECT
-            season, week, team,
-            report_primary_injury, report_secondary_injury, report_status,
-            practice_primary_injury, practice_status,
-            full_name, position, gsis_id
-        FROM injuries, latest
-        WHERE team = ? AND season = ? AND week = latest.w
-        ORDER BY
-            CASE report_status
-                WHEN 'Out'           THEN 0
-                WHEN 'Doubtful'      THEN 1
-                WHEN 'Questionable'  THEN 2
-                WHEN 'Probable'      THEN 3
-                ELSE 4
-            END,
-            full_name
-    """, params + [team, season])
-    return rows
+    return query_team_injuries(team, season, week)
 
 
 @router.get("/team-analytics", response_model=TeamAnalyticsResponse)

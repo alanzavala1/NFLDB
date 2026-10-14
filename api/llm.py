@@ -49,7 +49,7 @@ from routers.schedule import get_game as _game_query
 from routers.schedule import get_schedule as _schedule_query
 from routers.teams import get_team as _team_query
 from services.team_depth_chart import get_team_depth_chart as _team_depth_query
-from routers.teams import get_team_injuries as _team_injuries_query
+from services.team_injuries import get_team_injuries as _team_injuries_query
 
 # ── Model + client ────────────────────────────────────────────────────────────
 

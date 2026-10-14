@@ -107,6 +107,8 @@ The team depth-chart route and assistant team overview now share snapshot
 selection in `api/services/team_depth_chart.py`. The feed has no weekly history;
 the existing snapshot/season rules are described in
 [backend data ownership](BACKEND_DATA.md).
+Team injury reports similarly share `api/services/team_injuries.py`; they retain
+their weekly history, latest team/season selection and explicit-week behavior.
 Team-specific cache keys include team/year and, for depth/injuries, optional week.
 League analytics use one key per year because a response contains every team.
 Team uses these definitions directly; Splits reuses canonical team-split and

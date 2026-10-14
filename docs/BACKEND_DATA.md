@@ -1,8 +1,8 @@
 # Backend data ownership
 
-Standings, search, league leaders, WPA leaders, power rankings and team depth
-charts use services. This establishes a small pattern for the remaining backend
-work; other assistant tools still import route functions and will move one
+Standings, search, league leaders, WPA leaders, power rankings, team depth charts
+and team injury reports use services. This establishes a small pattern for the
+remaining backend work; other assistant tools still import route functions and will move one
 domain at a time.
 
 ## Standings
@@ -169,6 +169,31 @@ season. Its arguments, five-starter cap, output and provenance are unchanged.
 The query retains `safe_query`'s logged empty fallback for database failures;
 distinguishing such failures from valid missing data remains a follow-up.
 
+## Team injury reports
+
+The team injury-report route delegates to `api/services/team_injuries.py`.
+Its path, optional integer season/week parameters, description and `InjuryStatus`
+response model are unchanged. The assistant's team-overview tool imports this
+service directly alongside the depth-chart service.
+
+An omitted season uses the existing configured current season. An omitted week
+selects the latest report for that team and season; newer reports for another
+team or season cannot change it. An explicit week selects exactly that report.
+Missing weeks, teams or seasons return an empty list without falling back.
+Integer week parameters retain their existing unrestricted HTTP range.
+
+Ordering remains Out, Doubtful, Questionable, Probable, then other/null statuses,
+with names ordered within each group. The response preserves nullable report,
+practice, position and player-ID fields. The query selects the supplied report
+values.
+
+The assistant includes reports only in current-season overviews. It preserves
+the first 20 service rows, selects its existing compact fields, omits null
+values and records provenance. Historical overviews do not request current
+injuries. The separate player-profile injury selection is unchanged.
+`safe_query`'s existing logged empty-list fallback on query failure is retained
+and remains part of the later error-handling work.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -212,6 +237,14 @@ service/HTTP parity, snapshot scope, ordering/projection, January and September
 season boundaries, ignored weeks, empty/mismatched data, input validation,
 assistant current-versus-historical behavior and the retained logged fallback.
 Existing tests also verify player badges and selection among multiple slots.
+
+Team injury-report checks are `uv run --locked pytest
+tests/test_team_injuries_service.py tests/test_team_depth_chart_service.py
+tests/test_ask_coverage.py`. Isolated injury tables check latest team/season
+selection, explicit/missing weeks, default seasons, ordering and nullable
+response fields, service/HTTP parity, input validation, assistant current versus
+historical behavior, projection/provenance, its 20-entry cap, and logged query
+failure fallback.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
