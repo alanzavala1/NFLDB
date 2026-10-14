@@ -24,6 +24,23 @@ STAT_COLS = (
 # Prefixed for use inside CTEs where pgs alias is in scope.
 PGS_STAT_SEL = ", ".join(f"pgs.{c}" for c in STAT_COLS)
 
+# One player-game row for ratings, lineup totals and charts. Requires a game_id parameter.
+PGS_GAME_CTE = f"""
+        pgs_game AS (
+            SELECT
+                player_id,
+                game_id,
+                ANY_VALUE(player_name) AS player_name,
+                CAST(ANY_VALUE(season) AS INTEGER) AS season,
+                CAST(ANY_VALUE(week) AS INTEGER) AS week,
+                ANY_VALUE(team) AS team,
+                {", ".join(f"SUM(COALESCE({c}, 0)) AS {c}" for c in STAT_COLS)}
+            FROM player_game_stats
+            WHERE game_id = ?
+            GROUP BY player_id, game_id
+        )
+"""
+
 # De-duped roster: one row per player+season. For players who changed teams
 # mid-season (weekly roster snapshots), pick the latest week's row — i.e. the
 # team they finished the season on — with `team` as a final tiebreak so the

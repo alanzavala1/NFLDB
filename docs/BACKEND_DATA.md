@@ -329,6 +329,35 @@ also retains its broad exception guard, including any rows already assembled.
 This structural move preserves those policies. Distinguishing genuine optional
 data gaps from unexpected query failures remains separate error-handling work.
 
+## Game ratings and shared player-game totals
+
+`api/services/game_ratings.py` owns `get_game_ratings(game_id)`: checking whether
+the game exists, asking the existing builder for ratings, then joining stored
+ratings to player names and positions. An absent game returns `None`; an empty
+builder result returns an empty list without running the enrichment query.
+The `/api/games/{game_id}/ratings` route retains its `GamePlayerRating` schema
+and maps only `None` to the unchanged `Game {game_id} not found` HTTP 404.
+This endpoint has no assistant consumer.
+
+Response rows retain the rating table's team and position group. Names prefer
+player-game stats, then the same-season roster row selected by latest week and
+team; positions come from that roster row. Left joins preserve missing metadata
+and null ratings. Ordering remains rating descending with nulls last, then raw
+score descending with nulls last, then player name. The builder's stored metric
+values and qualification/calibration formulas are unchanged.
+
+`PGS_GAME_CTE` now lives in `api/sql_helpers.py`, imported by the rating service
+and the existing lineup/chart routes. A CTE is a named intermediate SQL result;
+this one filters to a supplied game ID, groups by player and game, sums all
+shared numeric stat columns with nulls treated as zero, and uses the existing
+`ANY_VALUE` metadata selections. Selection among differing metadata values
+remains unspecified. Moving the fragment preserves its SQL and all consumers.
+
+The builder still reads or materializes missing ratings with its existing lock,
+global calibration and empty-result fallback policies. Serving is not yet
+read-only. Unexpected service-query failures and uncaught builder failures
+propagate rather than becoming 404 or successful empty ratings.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -427,6 +456,14 @@ assistant projection/ranking/provenance, missing-game messages, valid unplayed
 games, optional play-table fallback and failures at all three required queries.
 Existing historical snapshot coverage also checks a known Super Bowl without
 calling a model; it does not establish live freshness or model-answer quality.
+
+Rating-service checks are `uv run --locked pytest tests/test_game_ratings_service.py
+tests/test_ratings_power.py tests/test_lineup_endpoints.py`. Controlled ratings
+and fresh mini-league databases check sorting, projection and nulls, name/roster
+fallbacks, one-row joins despite duplicate stats, shared stat sums, actual lazy
+table creation, exact missing-game 404s, empty-builder short-circuiting and
+query/builder failure propagation. Existing tests verify builder mathematics
+and matching lineup/chart results. These checks run without a model.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
