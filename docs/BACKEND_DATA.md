@@ -1,8 +1,8 @@
 # Backend data ownership
 
-Standings, search and league leaders use shared services. This establishes a
-small pattern for the remaining backend work; other assistant tools still import route functions
-and will move one domain at a time.
+Standings, search, league leaders and WPA leaders use services. This establishes
+a small pattern for the remaining backend work; other assistant tools still
+import route functions and will move one domain at a time.
 
 ## Standings
 
@@ -84,7 +84,36 @@ The UI owns its tab-specific qualification and display choices. The assistant
 validates its stat name, sorts that stat descending, limits the result to between
 one and 25 rows, and records its existing compact result. These caller policies
 are preserved alongside the unchanged shared SQL. WPA leaders remain a separate
-query based on play-level data and have not moved in this checkpoint.
+query based on play-level data.
+
+## WPA leaders
+
+The `/api/wpa-leaders` route now delegates to `api/services/wpa_leaders.py`.
+It retains the optional season parameter and `WpaLeaders` response validation.
+There is no assistant consumer for this endpoint; the extraction adds no tool.
+
+The service keeps three separate regular-season play queries:
+
+| List | Summed field | Qualification |
+|---|---|---|
+| Passing | `air_wpa` | At least 50 pass attempts |
+| Rushing | `wpa` | At least 50 carries |
+| Receiving | `yac_wpa` | At least 20 completed-pass receptions |
+
+Each query excludes missing player IDs, treats null WPA contributions as zero,
+rounds the sum to three decimals, counts distinct games and sorts descending
+before limiting results to 30. The same-season roster join uses `ROSTER_CTE`
+and preserves missing roster details. The HTTP schema still fills unused volume
+fields with null: a passing row has attempts plus null carries/receptions.
+
+Each category retains its existing `safe_query` fallback. A failed passing
+query returns an empty passing list while successful rushing/receiving lists
+remain available. Missing play data can produce three empty lists; failures are
+logged and still return HTTP success. Distinguishing such failures from valid
+empty results remains an explicit follow-up, as with search.
+
+With this extraction, `api/routers/leaders.py` contains only four HTTP wrappers;
+SQL and football-data assembly live in the services.
 
 ## Verification
 
@@ -107,6 +136,12 @@ distinct game counting, duplicate/missing roster rows, deterministic roster
 selection, assistant ranking/limits/provenance, default/empty/invalid inputs and
 query failures. Reconciliation uses the local snapshot when available and does
 not establish current production freshness.
+
+WPA's focused checks are `uv run --locked pytest tests/test_wpa_leaders_service.py
+tests/test_endpoints.py`. Isolated play/roster fixtures check metric selection,
+rounding and null handling, inclusive thresholds, season/game-type filtering,
+incomplete-pass exclusion, roster joins, all three 30-player caps, HTTP volume
+fields, season defaults/validation and both whole/partial query fallbacks.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No

@@ -25,6 +25,8 @@ metadata, player-stat queries, URL choices, and local sort state. Tables,
 column definitions, awards, the dashboard, and the podium have separate owners.
 `WpaPanel.tsx` mounts its query only when WPA is selected. Its typed resource
 module is `src/api/wpaLeaders.ts`; the panel uses its query options directly.
+The backend route delegates its three play-based queries to
+`api/services/wpa_leaders.py`, preserving qualification and response fields.
 Statistics and WPA failures have separate retries and retain successful cached
 results on refresh failures. Shared loaded-season selection is in
 `src/utils/seasons.ts`, used by both Standings and Leaders. Scores also permits
