@@ -19,6 +19,27 @@ PBP = "2026-09-11T04:00:00Z"
 SNAPS = "2026-09-11T06:30:00Z"
 
 
+def test_failed_required_feed_never_advances_watermarks(tmp_path, monkeypatch):
+    import database
+    import ingest
+    from pipeline.sources import SourceError
+
+    path = tmp_path / 'watermarks.json'
+    before = {f'pbp:{SEASON}': 'old-stamp'}
+    path.write_text(json.dumps(before), encoding='utf-8')
+    monkeypatch.setenv('REFRESH_SEASON', str(SEASON))
+    monkeypatch.setattr(refresh, 'remote_watermarks', lambda season: _remote())
+    monkeypatch.setattr(database, 'get_connection', lambda: object())
+
+    def fail(*args, **kwargs):
+        raise SourceError('weekly_player_stats', SEASON, 'download failed (TimeoutError)')
+
+    monkeypatch.setattr(ingest, 'run_ingest', fail)
+    with pytest.raises(SourceError, match='TimeoutError'):
+        refresh.cmd_ingest(str(path))
+    assert json.loads(path.read_text(encoding='utf-8')) == before
+
+
 def _remote(**overrides):
     """Upstream stamps with every watched asset published, unless overridden."""
     base = {key: PBP for key, _, _ in refresh.WATCHED_ASSETS}

@@ -10,7 +10,12 @@ import nfl_data_py
 from collections import namedtuple
 from config import FIRST_SEASON, RELOCATIONS, era_team_case
 from database import get_connection
+from data_errors import is_missing_data_error
 from pipeline.analytics import prepare_analytics
+from pipeline.sources import (
+    SourceError, PLAYS_KEEP_COLUMNS, WEEKLY_STAT_COLUMNS, WEEKLY_REQUIRED_COLUMNS,
+    fetch_play_by_play, fetch_weekly_stats,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -382,96 +387,29 @@ def build_returner_stats(plays):
 # Raw data loading
 # ---------------------------------------------------------------------------
 
-# nflfastR play-by-play ships ~396 columns; the app uses ~169. Storing only
-# these keeps the DuckDB file ~half the size with no loss of functionality
-# (verified: every builder + runtime query runs against this subset). Anything
-# not present in a given season's download is simply skipped.
-PLAYS_KEEP_COLUMNS = [
-    'play_id', 'game_id', 'home_team', 'away_team', 'season_type', 'week',
-    'posteam', 'posteam_type', 'defteam', 'yardline_100', 'game_seconds_remaining', 'drive',
-    'sp', 'qtr', 'down', 'ydstogo', 'time', 'desc', 'play_type',
-    'yards_gained', 'shotgun', 'no_huddle', 'qb_kneel', 'qb_spike', 'pass_length',
-    'pass_location', 'air_yards', 'yards_after_catch', 'run_location', 'run_gap', 'field_goal_result',
-    'kick_distance', 'extra_point_result', 'two_point_conv_result', 'timeout', 'td_team', 'td_player_id',
-    'total_home_score', 'total_away_score', 'posteam_score', 'defteam_score', 'score_differential', 'epa',
-    'wp', 'home_wp', 'wpa', 'air_wpa', 'yac_wpa', 'punt_blocked',
-    'first_down_rush', 'first_down_pass', 'third_down_converted', 'third_down_failed', 'fourth_down_converted', 'fourth_down_failed',
-    'incomplete_pass', 'touchback', 'interception', 'punt_inside_twenty', 'safety', 'penalty',
-    'fumble_lost', 'qb_hit', 'rush_attempt', 'pass_attempt', 'sack', 'touchdown',
-    'pass_touchdown', 'rush_touchdown', 'return_touchdown', 'extra_point_attempt', 'two_point_attempt', 'field_goal_attempt',
-    'punt_attempt', 'fumble', 'complete_pass', 'passer_player_id', 'passer_player_name', 'passing_yards',
-    'receiver_player_id', 'receiver_player_name', 'receiving_yards', 'rusher_player_id', 'rusher_player_name', 'rushing_yards',
-    'interception_player_id', 'interception_player_name', 'punt_returner_player_id', 'punt_returner_player_name', 'punter_player_id', 'punter_player_name',
-    'kicker_player_name', 'kicker_player_id', 'tackle_for_loss_1_player_id', 'tackle_for_loss_1_player_name', 'tackle_for_loss_2_player_id', 'tackle_for_loss_2_player_name',
-    'qb_hit_1_player_id', 'qb_hit_1_player_name', 'qb_hit_2_player_id', 'qb_hit_2_player_name', 'forced_fumble_player_1_player_id', 'forced_fumble_player_1_player_name',
-    'forced_fumble_player_2_player_id', 'forced_fumble_player_2_player_name', 'solo_tackle_1_player_id', 'solo_tackle_2_player_id', 'solo_tackle_1_player_name', 'solo_tackle_2_player_name',
-    'assist_tackle_1_player_id', 'assist_tackle_1_player_name', 'assist_tackle_2_player_id', 'assist_tackle_2_player_name', 'assist_tackle_3_player_id', 'assist_tackle_3_player_name',
-    'assist_tackle_4_player_id', 'assist_tackle_4_player_name', 'pass_defense_1_player_id', 'pass_defense_1_player_name', 'pass_defense_2_player_id', 'pass_defense_2_player_name',
-    'fumble_recovery_1_team', 'fumble_recovery_1_player_id', 'fumble_recovery_1_player_name', 'fumble_recovery_2_team', 'fumble_recovery_2_player_id', 'fumble_recovery_2_player_name',
-    'sack_player_id', 'sack_player_name', 'half_sack_1_player_id', 'half_sack_1_player_name', 'half_sack_2_player_id', 'half_sack_2_player_name',
-    'return_yards', 'penalty_team', 'penalty_player_id', 'penalty_yards', 'penalty_type', 'season',
-    'cpoe', 'stadium', 'away_score', 'home_score', 'location', 'result',
-    'total', 'spread_line', 'total_line', 'div_game', 'roof', 'surface',
-    'temp', 'wind', 'success', 'passer', 'rusher', 'receiver',
-    'pass', 'rush', 'first_down', 'special', 'play', 'name',
-    'jersey_number', 'id', 'qb_epa', 'xpass', 'pass_oe', 'nflverse_game_id',
-    'route',
-]
-
-
-# Listed in PLAYS_KEEP_COLUMNS but never present in the pbp parquet itself —
-# they arrive from other nflverse feeds (FTN charting, the game-id map) and are
-# joined in later. Parquet rejects the whole column list if one name is absent,
-# so these are dropped from the request; the post-fetch prune below still keeps
-# whatever did arrive.
-PBP_COLUMNS_FROM_OTHER_FEEDS = ("route", "nflverse_game_id")
-
-
-def _load_pbp(seasons: list[int], log=print):
-    """Fetch play-by-play pruned to the columns we keep, or None if the season
-    has no published plays yet.
-
-    Two wrinkles make this more than one call. Asking for `columns` up front is
-    what keeps the frame small — nflverse ships 372 columns and we keep 168,
-    measured at 155 MB against 328 MB for 2025 — and it is the unpruned frame
-    that has OOM-killed this container before. But older seasons predate some of
-    those columns and parquet raises on a missing one, so a rejected list falls
-    back to fetching everything and pruning afterwards: slower and heavier, but
-    correct for any season.
-
-    Separately, nflverse publishes a season's plays only once its first games
-    are played and charted, so an unplayed season's parquet 404s. nfl_data_py's
-    handler for exactly that case is broken upstream (`except Error` names an
-    undefined global, __init__.py:153), so the miss surfaces as NameError rather
-    than anything descriptive. Either way it means "no plays yet", not "broken".
-    """
-    pruned = [c for c in PLAYS_KEEP_COLUMNS if c not in PBP_COLUMNS_FROM_OTHER_FEEDS]
-    for columns in (pruned, None):
-        try:
-            return nfl_data_py.import_pbp_data(
-                seasons, columns=columns, include_participation=False
-            )
-        except Exception as e:
-            scope = "pruned" if columns else "full"
-            log(f"  pbp fetch ({scope}) failed: {type(e).__name__}: {e}")
-    return None
-
-
 def load_and_store_raw(conn, seasons: list[int], log=print):
     log(f"Loading play-by-play for {seasons}...")
-    plays = _load_pbp(seasons, log=log)
-    if plays is None:
-        # Not fatal: schedules and rosters are published months ahead of the
-        # first snap, so a season with no plays yet still has data worth having.
-        log(f"  no published play-by-play for {seasons} yet — continuing")
-    else:
-        keep = [c for c in PLAYS_KEEP_COLUMNS if c in plays.columns]
-        log(f"  keeping {len(keep)}/{len(plays.columns)} pbp columns")
-        plays = plays[keep]
-        _upsert_by_season(conn, "plays", plays, seasons, log=log)
+    feed = fetch_play_by_play(seasons, log=log)
+    plays = feed.data
 
-    log(f"Loading schedules...")
+    log("Loading schedules...")
     schedules = nfl_data_py.import_schedules(seasons)
+    # A 404 is only a legitimate schedules-only state while games remain
+    # unplayed. Do not call a completed season unpublished after an asset vanishes.
+    for season in feed.not_found_seasons:
+        completed = schedules[
+            schedules['season'].eq(season)
+            & schedules['away_score'].notna() & schedules['home_score'].notna()
+        ]
+        if not completed.empty:
+            raise SourceError('plays', season, 'asset not found for a season with completed games')
+
+    if plays is None:
+        log(f"  no play-by-play assets for unplayed seasons {seasons} — continuing")
+    else:
+        log(f"  keeping {len(plays.columns)}/{len(PLAYS_KEEP_COLUMNS)} pbp columns")
+        _upsert_by_season(conn, "plays", plays, feed.loaded_seasons, log=log)
+
     _upsert_by_season(conn, "schedules", schedules, seasons, log=log)
 
     log(f"Loading rosters...")
@@ -479,45 +417,9 @@ def load_and_store_raw(conn, seasons: list[int], log=print):
     _upsert_by_season(conn, "rosters", rosters, seasons, log=log)
 
     log(f"Loading weekly player stats...")
-    load_weekly_player_stats(conn, seasons, log=log)
+    load_weekly_player_stats(conn, seasons, log=log, required_seasons=feed.loaded_seasons)
 
     return plays
-
-
-# nflverse retired the per-season `player_stats_{year}.parquet` assets after 2024
-# and moved weekly stats to the `stats_player` release. nfl_data_py still asks
-# for the old path, so `import_weekly_data` returned nothing from 2025 on. That
-# surfaced as a swallowed exception, an empty frame, and a silent fall back to
-# deriving offensive stats from play-by-play — for exactly the seasons people
-# are looking at. The fallback miscounts two-point conversion passes as passing
-# touchdowns: 12 quarterbacks were over-credited, +16 league-wide, in 2025.
-WEEKLY_STATS_URL = (
-    "https://github.com/nflverse/nflverse-data/releases/download/"
-    "stats_player/stats_player_week_{season}.parquet"
-)
-
-# Keys the offensive build joins and groups on, plus season_type, which the
-# splits and the reconciliation gate filter to REG.
-WEEKLY_KEY_COLUMNS = ("player_id", "season", "week", "season_type", "team")
-
-# Every stat column build_offensive_stats_from_weekly reads, exhaustively. Each
-# name here is interpolated straight into that SELECT, so a name MISSING from
-# this list is a column that can vanish upstream without anything failing. Five
-# were missing — the three EPA columns, air yards and YAC — which is exactly the
-# set that could have turned into a silent 0.00 on every page that shows them.
-# test_weekly_columns.py pins the two lists to each other so they cannot drift
-# apart again.
-WEEKLY_STAT_COLUMNS = (
-    "completions", "attempts", "passing_yards", "passing_tds",
-    "passing_interceptions", "sacks_suffered", "passing_epa",
-    "targets", "receptions", "receiving_yards", "receiving_tds",
-    "receiving_air_yards", "receiving_yards_after_catch", "receiving_epa",
-    "carries", "rushing_yards", "rushing_tds", "rushing_epa",
-)
-
-# Checked twice: against the downloaded frame when ingesting, and against the
-# stored table when reading. Absence is a migration, not a gap.
-WEEKLY_REQUIRED_COLUMNS = WEEKLY_KEY_COLUMNS + WEEKLY_STAT_COLUMNS
 
 
 def _weekly_schema_is_legacy(conn) -> bool:
@@ -527,12 +429,16 @@ def _weekly_schema_is_legacy(conn) -> bool:
     """
     try:
         cols = {r[0] for r in conn.execute("DESCRIBE weekly_player_stats").fetchall()}
-    except Exception:
+    except Exception as error:
+        if not is_missing_data_error(error):
+            raise
         return False
     return bool(cols) and "team" not in cols
 
 
-def load_weekly_player_stats(conn, seasons: list[int], log=print) -> None:
+def load_weekly_player_stats(
+    conn, seasons: list[int], log=print, *, required_seasons: list[int] | None = None,
+) -> None:
     """Official weekly player stats, the source of truth counting stats reconcile to.
 
     On the legacy schema this rebuilds every season rather than the requested
@@ -549,29 +455,19 @@ def load_weekly_player_stats(conn, seasons: list[int], log=print) -> None:
         log(f"  legacy weekly schema (pre-stats_player rename) — rebuilding "
             f"{len(wanted)} seasons from the new feed")
 
-    frames, missing = [], []
-    for season in wanted:
-        try:
-            frames.append(pd.read_parquet(WEEKLY_STATS_URL.format(season=season)))
-        except Exception as e:
-            missing.append(season)
-            log(f"  {season}: not published yet ({type(e).__name__})")
+    feed = fetch_weekly_stats(wanted, log=log)
+    required_missing = sorted(set(required_seasons or []) - set(feed.loaded_seasons))
+    if required_missing:
+        raise SourceError('weekly_player_stats', required_missing[0],
+                          'official stats are required when play-by-play is available')
+    if legacy and feed.not_found_seasons:
+        raise SourceError('weekly_player_stats', feed.not_found_seasons[0],
+                          'legacy schema rebuild is incomplete; keeping the stored table')
 
-    if not frames:
-        # Loud on purpose. Silence here is what froze the table at 2024.
-        log(f"  WARNING: no official weekly stats for {seasons}. Offensive stats "
-            f"will be derived from play-by-play, which over-counts passing "
-            f"touchdowns on two-point conversions.")
+    weekly = feed.data
+    if weekly is None:
+        log(f"  no official weekly assets for {seasons}; leaving stored data unchanged")
         return
-
-    weekly = pd.concat(frames, ignore_index=True)
-    absent = [c for c in WEEKLY_REQUIRED_COLUMNS if c not in weekly.columns]
-    if absent:
-        raise RuntimeError(
-            f"weekly feed is missing required columns {absent} — nflverse has "
-            f"changed the schema again; update WEEKLY_REQUIRED_COLUMNS and the "
-            f"column map in build_offensive_stats_from_weekly before ingesting."
-        )
 
     # nflverse ships ~21 rows per season with no player_id and no player_name —
     # a SEA week 1 2026 row with every stat zero is one. They carry nothing, and
@@ -587,13 +483,10 @@ def load_weekly_player_stats(conn, seasons: list[int], log=print) -> None:
         weekly = weekly[weekly["player_id"].notna()]
         log(f"  dropped {orphans} rows with no player_id")
 
-    # Replace only the seasons that came back. _upsert_by_season DELETEs every
-    # season it is handed before inserting, so passing `wanted` here would drop
-    # a season that failed to download and then not re-insert it — turning a
-    # transient 404 into deleted data. No caller can reach that today (the
-    # nightly job ingests one season, and the legacy path drops the table
-    # anyway), but that is a property of the callers, not of this function.
-    got = sorted(set(wanted) - set(missing))
+    # Only replace seasons whose assets were retrieved and validated. A missing
+    # optional year must not delete its stored rows; a legacy replacement must
+    # have passed the complete-history check above before dropping the table.
+    got = sorted(feed.loaded_seasons)
 
     if legacy:
         conn.execute("DROP TABLE weekly_player_stats")
@@ -860,7 +753,9 @@ def build_offensive_stats_from_weekly(conn, seasons: list[int], log=print) -> pd
     """
     try:
         cols = {r[0] for r in conn.execute("DESCRIBE weekly_player_stats").fetchall()}
-    except Exception:
+    except Exception as error:
+        if not is_missing_data_error(error):
+            raise
         return pd.DataFrame()
 
     # An absent table means "no official data, use the fallback", which is a
@@ -1026,6 +921,10 @@ def run_ingest(seasons: list[int], log=print):
         log(f"\nNo play-by-play for {seasons} yet — schedules and rosters are "
             f"loaded; skipping derived stats until plays are published.")
         return
+
+    # A multi-season request may include an unplayed season with no asset.
+    # Restrict downstream replacements to seasons actually downloaded.
+    seasons = sorted(int(season) for season in plays['season'].unique())
 
     # Build stats only for the seasons being ingested — never touch other seasons.
     build_player_game_stats(conn, plays, seasons, log=log)

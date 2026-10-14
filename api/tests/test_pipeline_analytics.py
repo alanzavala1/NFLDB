@@ -1,6 +1,7 @@
 """Offline preparation preserves seasonal scope and global calibration order."""
 import importlib
 
+import pandas as pd
 import pytest
 
 from pipeline.analytics import prepare_analytics
@@ -60,15 +61,17 @@ def test_failed_build_stops_preparation_before_later_builds_and_success_log(
 
 
 @pytest.mark.parametrize('has_plays', [False, True])
-def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, has_plays):
+@pytest.mark.parametrize('requested', [[2024], [2024, 2027]])
+def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, has_plays, requested):
     import ingest
 
-    connection, plays = object(), object()
+    connection = object()
+    plays = pd.DataFrame({'season': [2024]})
     calls = []
     monkeypatch.setattr(ingest, 'get_connection', lambda: connection)
 
     def load_raw(conn, seasons, log):
-        assert conn is connection and seasons == [2024]
+        assert conn is connection and seasons == requested
         calls.append('raw')
         return plays if has_plays else None
 
@@ -89,6 +92,6 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
         calls.append('analytics')
 
     monkeypatch.setattr(ingest, 'prepare_analytics', prepare)
-    ingest.run_ingest([2024], log=lambda message: None)
+    ingest.run_ingest(requested, log=lambda message: None)
     assert calls == (['raw', 'player_stats', 'load_advanced_stats',
                       'load_supplemental_data', 'analytics'] if has_plays else ['raw'])

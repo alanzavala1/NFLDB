@@ -6,6 +6,7 @@ tests cover the seams where that silence could come back.
 """
 import re
 import inspect
+from urllib.error import HTTPError
 
 import duckdb
 import pandas as pd
@@ -92,7 +93,7 @@ def test_a_season_that_fails_to_download_is_not_deleted(monkeypatch):
     def only_2024(url):
         if "2024" in url:
             return _feed_frame(2024, week=2)
-        raise OSError("404 — not published yet")
+        raise HTTPError(url, 404, 'not published yet', None, None)
 
     monkeypatch.setattr(ingest.pd, "read_parquet", only_2024)
     ingest.load_weekly_player_stats(conn, [2024, 2025], log=lambda *a, **k: None)
@@ -112,7 +113,7 @@ def test_no_seasons_available_leaves_the_table_alone(monkeypatch):
     conn.execute("CREATE TABLE weekly_player_stats AS SELECT * FROM seed")
 
     monkeypatch.setattr(ingest.pd, "read_parquet",
-                        lambda url: (_ for _ in ()).throw(OSError("404")))
+                        lambda url: (_ for _ in ()).throw(HTTPError(url, 404, 'missing', None, None)))
     ingest.load_weekly_player_stats(conn, [2025], log=lambda *a, **k: None)
 
     assert conn.execute("SELECT COUNT(*) FROM weekly_player_stats").fetchone()[0] == 1
