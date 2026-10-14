@@ -24,6 +24,9 @@ state, season/week URL choices, and layout. `WeekNavigator.tsx`, `SeasonCard.tsx
 week, featured game, and kickoff groups; `presentation.ts` contains shared labels
 and formatting. Cards receive data and callbacks through props. Game-list rows
 also read the shared live provider, so moving them creates no additional pollers.
+Backend pregame record annotations for schedules, game details and team profiles
+now share `api/services/schedule_records.py`; their existing calculation and
+response fields are unchanged.
 
 Leaders now lives in `frontend/src/features/leaders/`. Its page coordinates
 metadata, player-stat queries, URL choices, and local sort state. Tables,

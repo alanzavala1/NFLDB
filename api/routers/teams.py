@@ -5,7 +5,7 @@ import team_analytics_builder
 import team_splits_builder
 from config import CURRENT_SEASON
 from database import query_to_dict
-from routers.schedule import attach_records
+from services.schedule_records import attach_records
 from schemas.analytics import TeamAnalyticsResponse, TeamSplit
 from schemas.supplemental import DepthChartEntry, InjuryStatus
 from schemas.teams import RosterPlayer, TeamProfile

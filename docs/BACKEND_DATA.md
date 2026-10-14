@@ -213,6 +213,25 @@ season, so it does not specify which weekly entry wins when their projected
 values differ. That ambiguity is preserved by this structural extraction and
 is a later roster-consistency task.
 
+## Pregame record annotations
+
+`api/services/schedule_records.py` owns the `attach_records(games)` helper.
+Schedule, game-detail and team-profile routes import it directly; the team route
+no longer imports a helper from the schedule route. The helper requires only the
+supplied game dictionaries, without database or HTTP dependencies.
+
+It groups rows by week and visits weeks in ascending order. All rows in a week
+receive `away_record` and `home_record` before any of that week's results are
+counted. Completed games update wins/losses/ties; either missing score leaves
+the counts unchanged. Ties appear as a third number only when nonzero.
+
+The input list and dictionaries are updated in place, and the same list is
+returned with its original row order intact. This matters for game detail,
+which passes a temporary list containing prior games and the current game,
+then reads the updated current-game dictionary. Callers own the season,
+game-type and history scope of the supplied rows. The helper's extraction
+preserves that scope and the existing week-based calculation.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -271,6 +290,12 @@ deduplication, ordering/projection, nullable fields, team/season isolation,
 explicit and default-season 404 messages, malformed season validation and
 database-failure propagation through both service and route. Duplicate test rows
 have identical projected values; the tests do not claim a latest-week rule.
+
+Record checks are `uv run --locked pytest tests/test_schedule_records.py
+tests/test_helpers.py tests/test_endpoints.py tests/test_invariants.py`. The five
+existing record tests now live beside two additional checks for unsorted input,
+list/row identity, partial scores and same-week entry records. Existing route
+checks exercise the helper through schedule, game-detail and team endpoints.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
