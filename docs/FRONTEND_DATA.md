@@ -250,6 +250,18 @@ remain separate follow-up work. The backend's current split endpoints can still
 materialize missing data on a GET; moving that work offline belongs to the backend
 milestone.
 
+The Splits visual cleanup groups comparison, stat-category, and season controls,
+fits selected members into a responsive grid, and wraps long headings. Its search
+card explicitly allows the dropdown to extend outside the card; other cards keep
+their existing clipping. Search results support mouse and keyboard selection.
+Numeric columns align right, row labels stay visible during horizontal scrolling,
+and sortable headers use keyboard-accessible buttons with `aria-sort`. Expanded
+game rows and section/filter controls expose their state. Loading/errors have
+spaced panels; the empty view and data-source notes have clearer layouts.
+The existing query, URL, calculation, and comparison rules are preserved.
+Browser checks cover unclipped search selection at 320/390/1280 pixels, sticky
+phone labels, keyboard sorting, and six long names with usable removal controls.
+
 ## Follow one request
 
 1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from

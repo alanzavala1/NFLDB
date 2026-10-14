@@ -21,7 +21,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
 }) {
   const sticky = 'sticky left-0 z-10 bg-surface-card'
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-400" tabIndex={0} role="region" aria-label={`${label} comparison statistics, scroll for more columns`}>
       <table className="min-w-full text-sm border-separate" style={{ borderSpacing: 0 }}>
         <thead>
           <tr>
@@ -37,7 +37,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
           </tr>
           <tr>
             {entities.map(e => metrics.map((m, mi) => (
-              <th key={e.key + m.key} className={`py-1.5 px-3 text-[10px] font-semibold text-ink-dim uppercase tracking-wider text-left whitespace-nowrap border-b-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line' : ''}`}>{m.label}</th>
+              <th key={e.key + m.key} className={`py-1.5 px-3 text-[10px] font-semibold text-ink-dim uppercase tracking-wider text-right whitespace-nowrap border-b-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line' : ''}`}>{m.label}</th>
             )))}
           </tr>
         </thead>
@@ -50,7 +50,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
                 <tr className="hover:bg-surface-raise/20">
                   <td className={`${sticky} py-2 pl-4 pr-3 whitespace-nowrap font-semibold text-ink border-t border-surface-line/50`}>
                     <span className="inline-flex items-center gap-1.5">
-                      {expandable && onToggleExpand && <button onClick={() => onToggleExpand(k)} className="text-ink-dim hover:text-ink w-3">{expandedKeys.has(k) ? '▾' : '▸'}</button>}
+                      {expandable && onToggleExpand && <button aria-expanded={expandedKeys.has(k)} onClick={() => onToggleExpand(k)} className="text-ink-dim hover:text-ink w-8 h-8 rounded focus-visible:outline-2 focus-visible:outline-indigo-400">{expandedKeys.has(k) ? '▾' : '▸'}</button>}
                       {keyLabel(k)}
                       {dr != null && <span className="text-ink-dim/70 text-[10px] font-bold">#{dr}</span>}
                     </span>
@@ -59,7 +59,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
                     const r = s.map.get(k)
                     return metrics.map((m, mi) => {
                       const v = r ? m.value(r) : null
-                      return <td key={si + m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums border-t border-surface-line/50 ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : bestByMetric[mi].has(si) ? 'text-data-win font-bold bg-data-win/15' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
+                      return <td key={si + m.key} className={`py-2 px-3 text-right whitespace-nowrap tabular-nums border-t border-surface-line/50 ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : bestByMetric[mi].has(si) ? 'text-data-win font-bold bg-data-win/15' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
                     })
                   })}
                 </tr>
@@ -81,7 +81,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
                         return metrics.map((m, mi) => {
                           const v = x ? m.value(x.r) : null
                           return (
-                            <td key={si + m.key} className={`py-1.5 px-3 whitespace-nowrap tabular-nums text-xs border-t border-surface-line/40 ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : 'text-ink-mid'}`}>
+                            <td key={si + m.key} className={`py-1.5 px-3 text-right whitespace-nowrap tabular-nums text-xs border-t border-surface-line/40 ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : 'text-ink-mid'}`}>
                               {mi === 0 && x ? (
                                 <div className="flex flex-col leading-tight">
                                   <span>{v == null ? '—' : m.fmt(v)}</span>
@@ -102,7 +102,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
             <td className={`${sticky} bg-surface-raise py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-ink-mid uppercase tracking-wider border-t-2 border-surface-line`}>Total</td>
             {sections.map((s, si) => metrics.map((m, mi) => {
               const v = s.total ? m.value(s.total) : null
-              return <td key={si + m.key} className={`py-2 px-3 whitespace-nowrap tabular-nums font-bold bg-surface-raise/40 border-t-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
+              return <td key={si + m.key} className={`py-2 px-3 text-right whitespace-nowrap tabular-nums font-bold bg-surface-raise/40 border-t-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
             }))}
           </tr>
         </tbody>

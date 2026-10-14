@@ -22,7 +22,7 @@ export function SplitSections({ model, selectors, display, queries }: {
   const { hidden, expandedKeys, keyStatsOnly, setKeyStatsOnly, isOpen, toggleOpen, toggleHidden, toggleExpanded } = display
   const { playerProfiles, splitResults } = queries
   const visibleDims = sectionDims.filter(d => !hidden.has(d.key))
-  return <><Card className="mb-3"
+  return <><Card className="mb-3" headerClassName="flex-wrap [&>div:first-child]:whitespace-normal"
     title={singleEntity ? <span>All splits · <span className="text-ink-mid">{entities[0].label}</span></span> : 'All splits · side-by-side'}
     action={!singleEntity ? <SegmentControl value={keyStatsOnly ? 'key' : 'all'} options={[{ value: 'key', label: 'Key stats' }, { value: 'all', label: 'All stats' }]} onChange={v => setKeyStatsOnly(v === 'key')} /> : undefined}>
     <div className="flex flex-wrap items-center gap-1.5 border-t border-surface-line px-4 py-3">
@@ -44,7 +44,7 @@ export function SplitSections({ model, selectors, display, queries }: {
                   resource={gameBased ? 'game records' : 'split statistics'} /></div>
                 : <StatTable firstCol={d.label} rows={rows} total={total} metrics={gameBased ? gameMetrics : metrics} flip={flip}
                   hasDefRk={d.key === 'opponent' && showDefensiveRanks} naturalSort={!gameBased}
-                  onToggleExpand={gameBased ? (k => toggleExpanded(k)) : undefined} />}
+                  onToggleExpand={gameBased ? (k => toggleExpanded(k)) : undefined} expandedKeys={expandedKeys} />}
             </Section>
           )
         }
@@ -77,7 +77,8 @@ export function SplitSections({ model, selectors, display, queries }: {
         )
       })}
     </div>
-    <p className="text-[11px] text-ink-dim mt-3 px-1">
-      {singleEntity ? 'Click a column to sort · ' : ''}▸ expands a season into its games (linked to the game page) · Season &amp; Opponent use official game-log totals; other splits are play-by-play · green = best{singleEntity ? ' in column' : ''} · regular season.
-    </p></>
+    <div className="text-xs leading-relaxed text-ink-dim mt-4 px-1 space-y-1">
+      <p>{singleEntity ? 'Select a stat heading to sort. ' : ''}Expand a season or opponent to see games. Green highlights the best{singleEntity ? ' in each column' : ' across the comparison'}.</p>
+      <p>Regular season only. Season and Opponent use official game-log totals; other splits use play-by-play data.</p>
+    </div></>
 }

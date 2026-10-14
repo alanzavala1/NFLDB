@@ -12,6 +12,7 @@ type CardProps = {
   children: ReactNode
   className?: string
   headerClassName?: string
+  allowOverflow?: boolean
 }
 
 type CardRowProps = {
@@ -42,9 +43,9 @@ function renderAction(action: CardProps['action']) {
   return <div className="ml-auto shrink-0">{action}</div>
 }
 
-export default function Card({ title, action, children, className = '', headerClassName = '' }: CardProps) {
+export default function Card({ title, action, children, className = '', headerClassName = '', allowOverflow = false }: CardProps) {
   return (
-    <section className={`overflow-hidden rounded-card bg-surface-card ${className}`}>
+    <section className={`${allowOverflow ? 'overflow-visible' : 'overflow-hidden'} rounded-card bg-surface-card ${className}`}>
       {(title || action) && (
         <div className={`flex items-center gap-2.5 px-4 py-[13px] text-[13px] font-bold text-ink ${headerClassName}`}>
           {title && <div className="min-w-0 truncate">{title}</div>}

@@ -24,14 +24,14 @@ export function AddEntity({ mode, onAdd }: { mode: ComparisonMode; onAdd: (r: Se
     }
   }, [q, mode])
   return (
-    <div className="relative">
-      <input value={q} onChange={e => { const value = e.target.value; setQ(value); if (!value.trim()) setResults([]); setOpen(true) }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+    <div className="relative min-w-0 flex-1 sm:min-w-44" onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false) }}>
+      <input aria-label={mode === 'players' ? 'Add player' : 'Add team'} value={q} onChange={e => { const value = e.target.value; setQ(value); if (!value.trim()) setResults([]); setOpen(true) }} onFocus={() => setOpen(true)} onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
         placeholder={mode === 'players' ? '+ Add player…' : '+ Add team…'}
-        className="bg-surface-card border border-surface-line text-ink text-sm rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-surface-line placeholder:text-ink-dim" />
+        className="min-h-10 w-full bg-surface-card border border-surface-line text-ink text-sm rounded-lg px-3 py-2 focus-visible:outline-2 focus-visible:outline-indigo-400 focus-visible:outline-offset-2 placeholder:text-ink-dim" />
       {open && q.trim() && results.length > 0 && (
-        <div className="absolute z-30 mt-1 w-64 max-h-72 overflow-y-auto bg-surface-card border border-surface-line rounded-lg shadow-2xl">
+        <div className="absolute left-0 right-0 z-30 mt-2 max-h-72 overflow-y-auto bg-surface-card border border-surface-line rounded-lg shadow-2xl">
           {results.slice(0, 12).map(r => (
-            <button key={r.id} onMouseDown={() => { onAdd(r); setQ(''); setResults([]) }} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-surface-raise text-left">
+            <button key={r.id} onMouseDown={e => e.preventDefault()} onClick={() => { onAdd(r); setQ(''); setResults([]); setOpen(false) }} className="w-full flex items-center gap-2.5 px-3 py-3 hover:bg-surface-raise focus-visible:bg-surface-raise focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-400 text-left">
               {r.type === 'team' ? <img src={teamLogoUrl(r.id)} className="w-6 h-6 object-contain shrink-0" alt="" />
                 : r.headshot_url ? <img src={r.headshot_url} className="w-6 h-6 rounded-full object-cover object-top shrink-0 bg-surface-raise" alt="" /> : <div className="w-6 h-6 rounded-full bg-surface-raise shrink-0" />}
               <div className="min-w-0">
