@@ -283,6 +283,21 @@ truncated preview prioritizes non-regular games, keeping postseason games
 discoverable, and returns the existing compact fields. The team-overview fallback
 uses the same schedule to identify game types missing from profile data.
 
+## Weekly game listing
+
+`api/services/schedule.py` also owns `get_games(week, season)`. This ordinary
+function selects exactly the requested week and season, orders by kickoff time,
+and returns game dictionaries or an empty list. It includes all game types and
+preserves nullable fields. It does not attach pregame records; the HTTP `Game`
+schema supplies null record fields, as before.
+
+The `/api/games` route owns the required week parameter constrained to 1–22,
+configured season default, response validation and missing-data status. An empty
+service result becomes the unchanged HTTP 404 message:
+`No games found for week {week}, season {season}`. Unexpected database failures
+propagate rather than being relabeled as missing games. This endpoint has no
+assistant consumer; season game search continues using `get_schedule`.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -363,6 +378,14 @@ types, pregame records, nullable fields, assistant filters/projection/provenance
 and its 25-game preview, team-overview fallback, defaults, invalid/empty seasons
 and failure propagation. Tool functions run without a model; existing historical
 snapshot checks do not establish production freshness or answer quality.
+
+Weekly game checks are `uv run --locked pytest tests/test_weekly_games_service.py
+tests/test_schedule_service.py tests/test_endpoints.py tests/test_invariants.py`.
+They cover seeded and isolated service/HTTP parity, exact week/season filtering,
+kickoff ordering across different dates, game types and nullable fields, absent
+domain records versus HTTP null records, week 22, exact empty-result 404 messages,
+configured defaults, required/range/type validation before SQL and database error
+propagation. These run entirely offline with controlled data.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No

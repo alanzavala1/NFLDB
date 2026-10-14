@@ -15,6 +15,9 @@ with server pacing and the existing ordering safeguards.
 Season schedule assembly now lives in `api/services/schedule.py`, shared by the
 HTTP route and assistant. Week grouping, kickoff ordering and pregame-record
 annotations are unchanged; the route still owns season defaults and validation.
+The separate weekly `/api/games` listing uses the same backend module, retaining
+its week validation and 404 response for an empty week. Its team-record fields
+remain null; it does not use the season listing's record annotations.
 
 Power-ranking response assembly now lives in `api/services/power_rankings.py`,
 shared by the HTTP route and assistant. Team records stop at the ranking's
