@@ -286,12 +286,12 @@ nfl-platform/
 │   ├── tests/                     # endpoints, invariants, data-reconciliation
 │   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
 └── frontend/src/
-    ├── components/GameLineupView.tsx  # matchup field view, rating badges, popup charts
-    ├── pages/SplitsPage.tsx       # the splits explorer
+    ├── features/                 # Scores, Games, Players, Teams, Leaders, Standings, Splits, Search, Live Scores
+    ├── components/               # shared navigation, cards, request feedback, live card, playoff bracket
     ├── pages/AskPage.tsx          # Ask NFLDB
-    ├── pages/                     # Schedule, Game, Player, Team, Leaders, Standings
-    ├── splits.ts                  # split metrics / dimensions config
-    └── api.ts, types/             # typed client (codegen from OpenAPI)
+    ├── api/                      # typed resource requests/query options; Ask streaming transport
+    ├── utils/                    # shared season selection, team identity and awards
+    └── types/                    # generated API types and navigation state
 ```
 
 ## Setup

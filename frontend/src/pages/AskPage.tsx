@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Nav from '../components/Nav'
-import { askStream } from '../api'
+import { askStream } from '../api/ask'
 import type { AskHistoryMessage, ToolCall } from '../types'
 
 // Welcome-screen prompts, grouped so a first-time visitor learns the range of

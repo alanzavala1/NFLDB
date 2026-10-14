@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { PlayerProfile, DepthChartEntry, InjuryStatus } from '../../types'
-import { CURRENT_NFL_SEASON } from '../../api'
+import { CURRENT_NFL_SEASON } from '../../utils/seasons'
 import Card from '../../components/Card'
 import { teamLogoUrl, teamName } from '../../utils/teams'
 

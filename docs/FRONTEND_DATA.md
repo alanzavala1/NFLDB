@@ -24,7 +24,7 @@ Leaders now lives in `frontend/src/features/leaders/`. Its page coordinates
 metadata, player-stat queries, URL choices, and local sort state. Tables,
 column definitions, awards, the dashboard, and the podium have separate owners.
 `WpaPanel.tsx` mounts its query only when WPA is selected. Its typed resource
-module is `src/api/wpaLeaders.ts`; the existing API method and hook delegate it.
+module is `src/api/wpaLeaders.ts`; the panel uses its query options directly.
 Statistics and WPA failures have separate retries and retain successful cached
 results on refresh failures. Shared loaded-season selection is in
 `src/utils/seasons.ts`, used by both Standings and Leaders. Scores also permits
@@ -56,8 +56,8 @@ Profile and similar-player requests now live in `src/api/players.ts`, using the
 shared typed client and canonical query options. Cache keys include the player
 ID, and each request consumes Query's cancellation signal. The Player page uses
 these options directly; Splits uses the same profile options for its dynamic
-queries. Legacy API methods/hooks delegate to the same definitions. Both profile
-and comparables now inherit the normal five-minute freshness policy instead of
+queries. Both profile and comparables now inherit the normal five-minute
+freshness policy instead of
 keeping comparables or Splits profiles permanently fresh.
 
 The profile, league-rank context, and similar-player section have independent
@@ -92,8 +92,8 @@ Team profile, roster, depth-chart, injury, and split requests/options now live i
 Each request uses the shared typed client and consumes an `AbortSignal`.
 Team-specific cache keys include team/year and, for depth/injuries, optional week.
 League analytics use one key per year because a response contains every team.
-Legacy methods/hooks delegate to these definitions. Team uses them directly;
-Splits reuses canonical team-split and analytics options. These resources inherit
+Team uses these definitions directly; Splits reuses canonical team-split and
+analytics options. These resources inherit
 the normal five-minute freshness policy, replacing permanent freshness for splits
 and their duplicate Splits-page observers.
 
@@ -165,9 +165,8 @@ Existing game/player origin state, statistical formatting, and live score
 overlays remain in place. The live query owns pacing and ordering; its provider
 distributes the selected games to consumers.
 
-Ordinary game queries inherit the normal five-minute freshness policy. The
-compatibility API methods and `useGame` hook delegate to the new definitions;
-the hook no longer treats an uncharted game as permanently fresh.
+Ordinary game queries inherit the normal five-minute freshness policy, including
+uncharted games. Consumers use the resource query options directly.
 
 Games now lives in `src/features/games/`. Its small `GamePage.tsx` owns
 queries, route context, tab choice, and composition. Header, quarter scores,
@@ -200,7 +199,6 @@ player-splits requests and their canonical query options. Offensive categories
 share `['player-splits', playerId]` because that response contains every offensive
 category and season; the page filters and aggregates returned rows locally.
 Defense uses `['player-def-splits', playerId]`, a separate dataset and cache.
-Compatibility API methods and `usePlayerSplits` delegate to the same definitions.
 The former permanent freshness override is removed; normal five-minute freshness
 and thirty-minute cache retention apply. Requests consume Query's abort signal.
 
@@ -289,7 +287,6 @@ Search now uses the typed request and canonical query options in
 defaults, and requests that consume Query's abort signal. Empty text makes no
 request; one-character searches remain supported. Player/team filtering belongs
 to the picker, so it never replaces the shared all-entity cache with filtered data.
-Compatibility `api.search` and `useSearch` delegate to this definition.
 
 `src/features/search/useEntitySearch.ts` owns the shared 300-ms typing delay.
 The input's query key changes immediately when its trimmed text changes, hiding
@@ -319,8 +316,8 @@ statistics request. A route group in `main.tsx` keeps one LiveScoresProvider
 mounted across Scores/Game navigation and unmounts it on other pages. The
 provider selects a game-ID map from Query data; `useLiveGame` reads that map.
 The old fetching effect, timer, copied board/timestamp state, and unused
-`useAnyGameLive` hook are removed. The compatibility API method delegates to
-typed transport; its old generic GET helper is no longer needed.
+`useAnyGameLive` hook are removed. Consumers use the typed resource directly;
+the old generic GET helper is removed.
 
 This query uses the server's `poll_after` rather than ordinary five-minute
 freshness. Each interval begins when the request finishes; a running request
@@ -388,17 +385,28 @@ cached for thirty minutes, retried once, and not refreshed on window focus.
 The season list has a shorter thirty-second freshness window. A failed background
 refresh keeps the last successful result visible with a warning and retry button.
 
-## Migration boundary
+## Request ownership and remaining work
 
 Shared season and schedule requests live in `src/api/seasons.ts` and
 `src/api/schedule.ts`; games, players, teams, leaders, and power rankings have
 matching resource modules.
-Standings-specific requests and queries live with the
-Standings feature. Existing `src/api.ts` methods and `src/queries.ts` hooks
-delegate migrated resources to the new implementations so there are no
-duplicate endpoint implementations or cache-key definitions for them.
-Other endpoints keep their current implementation until their feature migrates.
-Remove the compatibility entry points after their remaining callers move.
+Standings-specific requests and queries live with the Standings feature.
+Pages and sections consume canonical query options directly through `useQuery`
+or `useQueries`. The unused `src/queries.ts` wrapper hooks, `src/api.ts` facade,
+historical type re-exports and aliases, and unused non-streaming Ask request are
+removed. Generated response aliases have one public home in `src/types/index.ts`.
+
+Ask's existing streaming transport now lives in `src/api/ask.ts`; its event
+handling and request behavior are unchanged. Its conversation lifecycle,
+cancellation and stream-parser migration remain the assistant milestone.
+The current-season date value used only to hide outdated player status badges
+lives in `src/utils/seasons.ts`. Published season choices still come from server
+metadata; this date value does not choose a season or start ingestion.
+
+The unused starter logo and hero image are removed. An import-graph audit from
+the application entry point confirms the remaining handwritten source modules
+are reachable, including lazy route imports. This checks module usage rather
+than proving every branch or exported helper is used.
 
 ## Browser regression checks
 

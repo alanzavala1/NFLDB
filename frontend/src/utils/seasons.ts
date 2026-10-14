@@ -1,5 +1,11 @@
 import type { SeasonStatus } from '../types'
 
+// NFL season year = calendar year the season starts (Sep onward = this year, Jan–Aug = last year)
+export const CURRENT_NFL_SEASON = ((): number => {
+  const now = new Date()
+  return now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
+})()
+
 export function loadedSeasons(seasons: SeasonStatus[]) {
   return seasons.filter(s => s.status === 'loaded').map(s => s.season).sort((a, b) => b - a)
 }
