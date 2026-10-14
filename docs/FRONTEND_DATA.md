@@ -123,6 +123,9 @@ mounts only while its modal is open; closing it cancels unfinished work, and fre
 results are reused on reopening. Analytics derives the focal team from Query data
 instead of keeping fetched/loading state in an effect. Unknown roster positions
 remain visible under Other.
+Roster selection now lives in `api/services/team_roster.py`. The HTTP route
+retains season defaults and the existing 404 response for a missing roster;
+the frontend's error/retry behavior is unchanged.
 The selected detail is keyed by team/year so local UI state resets between profiles.
 There are no frontend season-loading callers; obsolete `api.loadSeason` is removed.
 Backend admin endpoints and generated contract types are unchanged.

@@ -11,6 +11,7 @@ from schemas.supplemental import DepthChartEntry, InjuryStatus
 from schemas.teams import RosterPlayer, TeamProfile
 from services.team_depth_chart import get_team_depth_chart as query_team_depth_chart
 from services.team_injuries import get_team_injuries as query_team_injuries
+from services.team_roster import get_team_roster as query_team_roster
 from sql_helpers import ROSTER_CTE
 
 router = APIRouter()
@@ -112,21 +113,7 @@ def get_team(team: str, season: int = Query(default=CURRENT_SEASON)):
 def get_team_roster(team: str, season: int = Query(default=None)):
     if season is None:
         season = CURRENT_SEASON
-    rows = query_to_dict(
-        """
-        SELECT
-            player_id,
-            player_name,
-            position,
-            jersey_number,
-            headshot_url
-        FROM rosters
-        WHERE team = ? AND season = ?
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY season DESC) = 1
-        ORDER BY position, player_name
-        """,
-        [team, season],
-    )
+    rows = query_team_roster(team, season)
     if not rows:
         raise HTTPException(status_code=404, detail=f"No roster found for {team} in {season}")
     return rows

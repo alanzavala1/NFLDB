@@ -1,9 +1,8 @@
 # Backend data ownership
 
-Standings, search, league leaders, WPA leaders, power rankings, team depth charts
-and team injury reports use services. This establishes a small pattern for the
-remaining backend work; other assistant tools still import route functions and will move one
-domain at a time.
+League queries, power rankings and several team views use services. This
+establishes a small pattern for the remaining backend work; other assistant
+tools still import route functions and will move one domain at a time.
 
 ## Standings
 
@@ -194,6 +193,26 @@ injuries. The separate player-profile injury selection is unchanged.
 `safe_query`'s existing logged empty-list fallback on query failure is retained
 and remains part of the later error-handling work.
 
+## Team rosters
+
+`api/services/team_roster.py` owns roster selection for an explicit team and
+season. It returns ordinary player dictionaries or an empty list. It has no
+HTTP parameter objects, status codes or default-season configuration.
+
+The `/teams/{team}/roster` route resolves an omitted season through the existing
+current-season configuration, then calls the service. Empty rows still produce
+HTTP 404 with `No roster found for {team} in {season}`. The response uses the
+unchanged `RosterPlayer` schema. Unexpected database errors propagate instead
+of being relabeled as missing roster data. This endpoint has no assistant
+consumer, and the extraction adds no tool.
+
+Selection still filters team and season, keeps one row per player ID, and orders
+by position then name. Nullable position, jersey number and headshot fields are
+preserved. The existing deduplication orders by season inside an already fixed
+season, so it does not specify which weekly entry wins when their projected
+values differ. That ambiguity is preserved by this structural extraction and
+is a later roster-consistency task.
+
 ## Verification
 
 From `api`, run `uv run --locked pytest tests/test_standings_service.py
@@ -245,6 +264,13 @@ selection, explicit/missing weeks, default seasons, ordering and nullable
 response fields, service/HTTP parity, input validation, assistant current versus
 historical behavior, projection/provenance, its 20-entry cap, and logged query
 failure fallback.
+
+Team roster checks are `uv run --locked pytest tests/test_team_roster_service.py
+tests/test_endpoints.py`. They cover seeded and isolated service/HTTP parity,
+deduplication, ordering/projection, nullable fields, team/season isolation,
+explicit and default-season 404 messages, malformed season validation and
+database-failure propagation through both service and route. Duplicate test rows
+have identical projected values; the tests do not claim a latest-week rule.
 
 These extractions compared the complete OpenAPI document before and after,
 and compared the moved logic's Python syntax tree. These were unchanged. No
