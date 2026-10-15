@@ -25,7 +25,7 @@ from database import get_connection, query_to_dict, write_lock
 _MIN_EVENTS = 20
 
 # (slot player-id column, stat bucket, weight). Mirrors DEFENSIVE_SLOTS in
-# ingest.py. Fumble recoveries are intentionally excluded — they can be credited
+# pipeline/play_stats.py. Fumble recoveries are intentionally excluded — they can be credited
 # to offensive players too, so they're not cleanly "defense".
 _SLOTS = [
     ("solo_tackle_1_player_id", "solo", 1.0),

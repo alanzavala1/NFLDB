@@ -61,7 +61,7 @@ def _get_current_injury(player_id: str) -> dict | None:
 def _get_player_awards(player_id: str) -> list[dict]:
     """All major postseason voting awards for a player, ordered season DESC.
     Joins on gsis_id which is populated by the ingest-time name-to-roster
-    join in `_load_player_awards`."""
+    join in `pipeline.awards.load_player_awards`."""
     return safe_query("""
         SELECT season, award, team, position
         FROM player_awards

@@ -274,7 +274,7 @@ nfl-platform/
 ├── Dockerfile, DEPLOY.md          # one-container deploy → Cloud Run
 ├── api/
 │   ├── main.py                    # FastAPI app: /api routes + serves the SPA
-│   ├── ingest.py                  # source loading and player-game statistics
+│   ├── ingest.py                  # refresh orchestration and legacy local CLI
 │   ├── pipeline/                  # feed adapters, normalization and analytics preparation; see docs/DATA_PIPELINE.md
 │   ├── splits_core.py             # shared situational-dimension scaffolding
 │   ├── splits_builder.py          # player_splits (passing/rushing/receiving)

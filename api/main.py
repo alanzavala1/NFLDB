@@ -29,8 +29,8 @@ def _ensure_player_awards() -> None:
             r[0] == 'player_awards' for r in conn.execute("SHOW TABLES").fetchall()
         ) else 0
         if n == 0:
-            import ingest
-            ingest._load_player_awards(conn)
+            from pipeline.awards import load_player_awards
+            load_player_awards(conn)
     except Exception as e:
         print(f"awards seed load failed (non-fatal): {e}")
 

@@ -40,9 +40,9 @@ import httpx
 import pandas as pd
 
 from pipeline.vendor_sources import WATCHED_VENDOR_SOURCES
+from pipeline.context_sources import SCHEDULE_CSV
 
 RELEASE_API = "https://api.github.com/repos/nflverse/nflverse-data/releases/tags/{tag}"
-SCHEDULE_CSV = "http://www.habitatring.com/games.csv"
 
 # Recorded when a season is ingested before its play-by-play exists, so a
 # schedules-only load isn't repeated every run while we wait for kickoff.
@@ -242,7 +242,9 @@ def cmd_ingest(watermarks_path: str) -> int:
         outcomes = run_ingest([season], log=_log)
 
     marks = read_watermarks(watermarks_path)
-    if remote["pbp"] is None:
+    if remote["pbp"] is None and any(
+        o.source == 'schedules' and o.season == season and o.status == 'loaded' for o in outcomes
+    ) and not any(o.source == 'plays' and o.status == 'loaded' for o in outcomes):
         # Schedules and rosters only — there is nothing else to have ingested,
         # so leave the other keys alone rather than claiming them.
         marks[f"pbp:{season}"] = SCHEDULES_ONLY
@@ -250,9 +252,10 @@ def cmd_ingest(watermarks_path: str) -> int:
         for key, stamp in remote.items():
             if stamp is not None:
                 spec = WATCHED_VENDOR_SOURCES.get(key)
-                if spec and not any(
-                    o.source == spec.name and o.season == season
-                    and o.status in ('loaded', 'empty') for o in outcomes
+                source = spec.name if spec else {'pbp': 'plays', 'weekly': 'weekly_player_stats'}[key]
+                if not any(
+                    o.source == source and o.season == season
+                    and (o.status == 'loaded' or (spec and o.status == 'empty')) for o in outcomes
                 ):
                     # Optional failures retain stored data and their old stamp.
                     # A successfully read empty asset acknowledges this version

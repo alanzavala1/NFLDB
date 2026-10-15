@@ -5,8 +5,8 @@ import duckdb
 import pandas as pd
 import pytest
 
-import ingest
-from pipeline import sources
+from pipeline import loading, storage, player_stats
+from pipeline import sources, context_sources
 from tests.test_weekly_columns import _feed_frame
 
 
@@ -110,14 +110,14 @@ def test_wrong_season_payload_is_not_inserted_under_requested_year(monkeypatch):
         sources.fetch_weekly_stats([2024])
 
 
-@pytest.mark.parametrize('action', [ingest._weekly_schema_is_legacy, ingest.build_offensive_stats_from_weekly])
+@pytest.mark.parametrize('action', [storage.weekly_schema_is_legacy, player_stats.build_offensive_stats_from_weekly])
 def test_weekly_storage_fault_is_not_an_absent_table_fallback(action):
     class FailedReader:
         def execute(self, *args):
             raise RuntimeError('storage unavailable')
 
     with pytest.raises(RuntimeError, match='storage unavailable'):
-        if action is ingest._weekly_schema_is_legacy:
+        if action is storage.weekly_schema_is_legacy:
             action(FailedReader())
         else:
             action(FailedReader(), [2024])
@@ -135,7 +135,7 @@ def test_network_failure_leaves_weekly_storage_unchanged(monkeypatch):
 
         monkeypatch.setattr(sources.pd, 'read_parquet', read)
         with pytest.raises(sources.SourceError, match='2025'):
-            ingest.load_weekly_player_stats(conn, [2024, 2025])
+            loading.load_weekly_player_stats(conn, [2024, 2025])
         assert conn.execute('SELECT season, week FROM weekly_player_stats').fetchall() == [(2024, 1)]
 
 
@@ -146,7 +146,7 @@ def test_missing_required_weekly_asset_blocks_played_season(monkeypatch):
     monkeypatch.setattr(sources.pd, 'read_parquet', read)
     with duckdb.connect(':memory:') as conn:
         with pytest.raises(sources.SourceError, match='official stats are required'):
-            ingest.load_weekly_player_stats(conn, [2024], required_seasons=[2024])
+            loading.load_weekly_player_stats(conn, [2024], required_seasons=[2024])
         assert conn.execute('SHOW TABLES').fetchall() == []
 
 
@@ -154,7 +154,7 @@ def test_incomplete_legacy_download_does_not_drop_old_history(monkeypatch):
     with duckdb.connect(':memory:') as conn:
         conn.execute('CREATE TABLE weekly_player_stats (season INTEGER, recent_team VARCHAR)')
         conn.execute("INSERT INTO weekly_player_stats VALUES (2024, 'KC')")
-        monkeypatch.setattr(ingest, 'FIRST_SEASON', 2023)
+        monkeypatch.setattr(loading, 'FIRST_SEASON', 2023)
 
         def read(url):
             if '2023' in url:
@@ -163,48 +163,49 @@ def test_incomplete_legacy_download_does_not_drop_old_history(monkeypatch):
 
         monkeypatch.setattr(sources.pd, 'read_parquet', read)
         with pytest.raises(sources.SourceError, match='legacy schema rebuild is incomplete'):
-            ingest.load_weekly_player_stats(conn, [2024])
+            loading.load_weekly_player_stats(conn, [2024])
         assert conn.execute('SELECT * FROM weekly_player_stats').fetchall() == [(2024, 'KC')]
 
 
 @pytest.mark.parametrize('completed', [False, True])
 def test_missing_plays_are_allowed_only_for_unplayed_season(monkeypatch, completed):
-    monkeypatch.setattr(ingest, 'fetch_play_by_play', lambda *a, **k: sources.SeasonalFeed(None, [], [2027]))
-    monkeypatch.setattr(ingest.nfl_data_py, 'import_schedules', lambda years: pd.DataFrame({
+    monkeypatch.setattr(loading, 'fetch_play_by_play', lambda *a, **k: sources.SeasonalFeed(None, [], [2027]))
+    monkeypatch.setattr(loading, 'fetch_schedules', lambda years: sources.SeasonalFeed(pd.DataFrame({
         'season': [2027], 'away_score': [7 if completed else None],
         'home_score': [14 if completed else None],
-    }))
-    monkeypatch.setattr(ingest.nfl_data_py, 'import_seasonal_rosters',
-                        lambda years: pd.DataFrame({'season': [2027], 'player_id': ['p']}))
+    }), [2027], []))
+    monkeypatch.setattr(loading, 'fetch_rosters',
+                        lambda years: sources.SeasonalFeed(pd.DataFrame({'season': [2027], 'player_id': ['p']}), [2027], []))
     calls = []
-    monkeypatch.setattr(ingest, '_upsert_by_season', lambda *a, **k: calls.append(a[1]))
+    monkeypatch.setattr(loading, 'upsert_by_season', lambda *a, **k: calls.append(a[1]))
 
     def weekly(conn, years, log, *, required_seasons):
         assert required_seasons == []
         calls.append('weekly')
+        return []
 
-    monkeypatch.setattr(ingest, 'load_weekly_player_stats', weekly)
+    monkeypatch.setattr(loading, 'load_weekly_player_stats', weekly)
     if completed:
         with pytest.raises(sources.SourceError, match='completed games'):
-            ingest.load_and_store_raw(object(), [2027])
+            loading.load_and_store_raw(object(), [2027])
         assert calls == []
     else:
-        assert ingest.load_and_store_raw(object(), [2027]) is None
+        assert loading.load_and_store_raw(object(), [2027]).plays is None
         assert calls == ['schedules', 'rosters', 'weekly']
 
 
 def test_partial_play_download_never_replaces_unavailable_season(monkeypatch):
     plays = pd.DataFrame({'season': [2024]})
-    monkeypatch.setattr(ingest, 'fetch_play_by_play',
+    monkeypatch.setattr(loading, 'fetch_play_by_play',
                         lambda *a, **k: sources.SeasonalFeed(plays, [2024], [2027]))
-    monkeypatch.setattr(ingest.nfl_data_py, 'import_schedules', lambda years: pd.DataFrame({
+    monkeypatch.setattr(loading, 'fetch_schedules', lambda years: sources.SeasonalFeed(pd.DataFrame({
         'season': [2024, 2027], 'away_score': [7, None], 'home_score': [14, None],
-    }))
-    monkeypatch.setattr(ingest.nfl_data_py, 'import_seasonal_rosters',
-                        lambda years: pd.DataFrame({'season': [2024, 2027]}))
+    }), [2024, 2027], []))
+    monkeypatch.setattr(loading, 'fetch_rosters',
+                        lambda years: sources.SeasonalFeed(pd.DataFrame({'season': [2024, 2027]}), [2024, 2027], []))
     replacements = []
-    monkeypatch.setattr(ingest, '_upsert_by_season',
+    monkeypatch.setattr(loading, 'upsert_by_season',
                         lambda conn, table, frame, years, **k: replacements.append((table, years)))
-    monkeypatch.setattr(ingest, 'load_weekly_player_stats', lambda *a, **k: None)
-    ingest.load_and_store_raw(object(), [2024, 2027])
+    monkeypatch.setattr(loading, 'load_weekly_player_stats', lambda *a, **k: [])
+    loading.load_and_store_raw(object(), [2024, 2027])
     assert replacements == [('plays', [2024]), ('schedules', [2024, 2027]), ('rosters', [2024, 2027])]

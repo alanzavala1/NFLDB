@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from pipeline.analytics import prepare_analytics
+from pipeline.source_results import RawLoad, SourceOutcome
 
 
 @pytest.fixture
@@ -73,7 +74,7 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
     def load_raw(conn, seasons, log):
         assert conn is connection and seasons == requested
         calls.append('raw')
-        return plays if has_plays else None
+        return RawLoad(plays if has_plays else None, [SourceOutcome('schedules', 2024, 'loaded', 1)])
 
     def build_player_stats(conn, frame, seasons, log):
         assert conn is connection and frame is plays and seasons == [2024]
@@ -93,6 +94,7 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
         calls.append('analytics')
 
     monkeypatch.setattr(ingest, 'prepare_analytics', prepare)
-    ingest.run_ingest(requested, log=lambda message: None)
+    outcomes = ingest.run_ingest(requested, log=lambda message: None)
+    assert outcomes == [SourceOutcome('schedules', 2024, 'loaded', 1)]
     assert calls == (['raw', 'player_stats', 'load_advanced_stats',
                       'load_supplemental_data', 'analytics'] if has_plays else ['raw'])

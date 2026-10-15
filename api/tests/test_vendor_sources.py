@@ -5,7 +5,7 @@ import duckdb
 import pandas as pd
 import pytest
 
-import ingest
+from pipeline import loading, storage
 from pipeline import vendor_sources as vendor
 from pipeline.source_results import SourceError
 
@@ -131,25 +131,25 @@ def test_partial_snap_refresh_preserves_missing_seasons_in_real_storage(monkeypa
         return frame_for(spec, [2024]).assign(week=2)
 
     mock_reads(monkeypatch, read)
-    monkeypatch.setattr(ingest, 'ADVANCED_SOURCES', (spec,))
+    monkeypatch.setattr(loading, 'ADVANCED_SOURCES', (spec,))
     with duckdb.connect(':memory:') as conn:
         conn.register('seed', seed)
         conn.execute('CREATE TABLE snap_counts AS SELECT * FROM seed')
-        outcomes = ingest.load_advanced_stats(conn, [2024, 2025])
+        outcomes = loading.load_advanced_stats(conn, [2024, 2025])
         assert conn.execute('SELECT season, week FROM snap_counts ORDER BY season').fetchall() == [(2024, 2), (2025, 1)]
     assert [(o.season, o.status) for o in outcomes] == [(2024, 'loaded'), (2025, 'not_found')]
 
 
 def test_storage_failure_propagates_after_successful_download(monkeypatch):
     mock_reads(monkeypatch, lambda url: frame_for(vendor.SNAPS, [2024]))
-    monkeypatch.setattr(ingest, 'ADVANCED_SOURCES', (vendor.SNAPS,))
+    monkeypatch.setattr(loading, 'ADVANCED_SOURCES', (vendor.SNAPS,))
 
     def fail(*args, **kwargs):
         raise RuntimeError('write failed')
 
-    monkeypatch.setattr(ingest, '_upsert_by_season', fail)
+    monkeypatch.setattr(loading, 'upsert_by_season', fail)
     with pytest.raises(RuntimeError, match='write failed'):
-        ingest.load_advanced_stats(object(), [2024])
+        loading.load_advanced_stats(object(), [2024])
 
 
 @pytest.mark.parametrize('stage', ['DESCRIBE', 'DELETE'])
@@ -170,7 +170,7 @@ def test_upsert_storage_fault_does_not_create_or_append_after_error(stage):
             return [('season', 'INTEGER')]
 
     with pytest.raises(RuntimeError, match='storage failed'):
-        ingest._upsert_by_season(FailedStorage(), 'snap_counts', pd.DataFrame({'season': [2024]}), [2024])
+        storage.upsert_by_season(FailedStorage(), 'snap_counts', pd.DataFrame({'season': [2024]}), [2024])
     assert not any(sql.startswith(('CREATE', 'INSERT')) for sql in statements)
 
 
@@ -214,11 +214,11 @@ def test_ftn_real_parquet_matches_provider_normalization(tmp_path, monkeypatch):
 
 
 def test_static_awards_failure_is_not_swallowed_as_an_optional_feed(monkeypatch):
-    monkeypatch.setattr(ingest, 'SUPPLEMENTAL_SOURCES', ())
+    monkeypatch.setattr(loading, 'SUPPLEMENTAL_SOURCES', ())
 
     def fail(*args, **kwargs):
         raise RuntimeError('awards seed failed')
 
-    monkeypatch.setattr(ingest, '_load_player_awards', fail)
+    monkeypatch.setattr(loading, 'load_player_awards', fail)
     with pytest.raises(RuntimeError, match='awards seed failed'):
-        ingest.load_supplemental_data(object(), [2024])
+        loading.load_supplemental_data(object(), [2024])

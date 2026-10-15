@@ -12,7 +12,7 @@ import duckdb
 import pandas as pd
 import pytest
 
-import ingest
+from pipeline import loading, player_stats, sources
 
 
 def test_required_list_matches_the_select_exactly():
@@ -23,9 +23,9 @@ def test_required_list_matches_the_select_exactly():
     resolve to zero — which is how passing_epa, rushing_epa, receiving_epa,
     receiving_air_yards and receiving_yards_after_catch were left unguarded.
     """
-    src = inspect.getsource(ingest.build_offensive_stats_from_weekly)
+    src = inspect.getsource(player_stats.build_offensive_stats_from_weekly)
     read = set(re.findall(r"col\(\s*'([a-z_]+)'", src))
-    assert read == set(ingest.WEEKLY_STAT_COLUMNS)
+    assert read == set(sources.WEEKLY_STAT_COLUMNS)
 
 
 def _table_with(conn, columns):
@@ -41,15 +41,15 @@ def test_absent_table_falls_back_quietly():
     missing columns is a broken migration.
     """
     conn = duckdb.connect()
-    assert ingest.build_offensive_stats_from_weekly(conn, [2024], log=lambda *a: None).empty
+    assert player_stats.build_offensive_stats_from_weekly(conn, [2024], log=lambda *a: None).empty
 
 
 def test_missing_column_raises_instead_of_zeroing():
     conn = duckdb.connect()
-    _table_with(conn, [c for c in ingest.WEEKLY_REQUIRED_COLUMNS if c != "passing_epa"])
+    _table_with(conn, [c for c in sources.WEEKLY_REQUIRED_COLUMNS if c != "passing_epa"])
 
     with pytest.raises(RuntimeError, match="passing_epa"):
-        ingest.build_offensive_stats_from_weekly(conn, [2024], log=lambda *a: None)
+        player_stats.build_offensive_stats_from_weekly(conn, [2024], log=lambda *a: None)
 
 
 def test_legacy_schema_raises_and_says_to_reingest():
@@ -66,12 +66,12 @@ def test_legacy_schema_raises_and_says_to_reingest():
     _table_with(conn, legacy)
 
     with pytest.raises(RuntimeError, match="re-run the ingest"):
-        ingest.build_offensive_stats_from_weekly(conn, [2024], log=lambda *a: None)
+        player_stats.build_offensive_stats_from_weekly(conn, [2024], log=lambda *a: None)
 
 
 def _feed_frame(season: int, week: int = 1) -> pd.DataFrame:
     """One row shaped like the stats_player feed, valid enough to be ingested."""
-    row = {c: 0.0 for c in ingest.WEEKLY_STAT_COLUMNS}
+    row = {c: 0.0 for c in sources.WEEKLY_STAT_COLUMNS}
     row.update(player_id=f"00-000{season}", season=season, week=week,
                season_type="REG", team="KC")
     return pd.DataFrame([row])
@@ -95,8 +95,8 @@ def test_a_season_that_fails_to_download_is_not_deleted(monkeypatch):
             return _feed_frame(2024, week=2)
         raise HTTPError(url, 404, 'not published yet', None, None)
 
-    monkeypatch.setattr(ingest.pd, "read_parquet", only_2024)
-    ingest.load_weekly_player_stats(conn, [2024, 2025], log=lambda *a, **k: None)
+    monkeypatch.setattr(sources.pd, "read_parquet", only_2024)
+    loading.load_weekly_player_stats(conn, [2024, 2025], log=lambda *a, **k: None)
 
     stored = dict(conn.execute(
         "SELECT season, COUNT(*) FROM weekly_player_stats GROUP BY 1"
@@ -112,9 +112,9 @@ def test_no_seasons_available_leaves_the_table_alone(monkeypatch):
     conn.register("seed", _feed_frame(2024))
     conn.execute("CREATE TABLE weekly_player_stats AS SELECT * FROM seed")
 
-    monkeypatch.setattr(ingest.pd, "read_parquet",
+    monkeypatch.setattr(sources.pd, "read_parquet",
                         lambda url: (_ for _ in ()).throw(HTTPError(url, 404, 'missing', None, None)))
-    ingest.load_weekly_player_stats(conn, [2025], log=lambda *a, **k: None)
+    loading.load_weekly_player_stats(conn, [2025], log=lambda *a, **k: None)
 
     assert conn.execute("SELECT COUNT(*) FROM weekly_player_stats").fetchone()[0] == 1
 
@@ -131,8 +131,8 @@ def test_rows_with_no_player_id_are_dropped(monkeypatch):
     frame = pd.concat([_feed_frame(2026), _feed_frame(2026, week=2)], ignore_index=True)
     frame.loc[1, "player_id"] = None
 
-    monkeypatch.setattr(ingest.pd, "read_parquet", lambda url: frame)
-    ingest.load_weekly_player_stats(conn, [2026], log=lambda *a, **k: None)
+    monkeypatch.setattr(sources.pd, "read_parquet", lambda url: frame)
+    loading.load_weekly_player_stats(conn, [2026], log=lambda *a, **k: None)
 
     assert conn.execute(
         "SELECT COUNT(*) FROM weekly_player_stats WHERE player_id IS NULL"
@@ -153,8 +153,8 @@ def test_orphans_stored_by_an_earlier_run_are_purged(monkeypatch):
     conn.register("seed", seed)
     conn.execute("CREATE TABLE weekly_player_stats AS SELECT * FROM seed")
 
-    monkeypatch.setattr(ingest.pd, "read_parquet", lambda url: _feed_frame(2026))
-    ingest.load_weekly_player_stats(conn, [2026], log=lambda *a, **k: None)
+    monkeypatch.setattr(sources.pd, "read_parquet", lambda url: _feed_frame(2026))
+    loading.load_weekly_player_stats(conn, [2026], log=lambda *a, **k: None)
 
     assert conn.execute(
         "SELECT COUNT(*) FROM weekly_player_stats WHERE player_id IS NULL"

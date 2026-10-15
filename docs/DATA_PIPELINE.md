@@ -9,10 +9,10 @@ the app. Visitors should only read published data.
 
 ```text
 jobs.refresh → ingest.run_ingest
-                    ├─ pipeline.sources downloads core seasonal feeds
-                    ├─ ingest stores retrieved source data
-                    ├─ build player_game_stats
-                    ├─ load advanced and supplemental feeds
+                    ├─ pipeline.loading coordinates adapters and storage
+                    ├─ pipeline.player_stats composes player_game_stats
+                    │      └─ pipeline.play_stats computes play-derived lines
+                    ├─ pipeline.loading loads advanced and supplemental feeds
                     └─ pipeline.analytics.prepare_analytics
                            ├─ seasonal analytics
                            ├─ globally calibrated analytics
@@ -48,7 +48,18 @@ would mix scales. Those global rebuilds therefore run once per ingest batch.
 `api/pipeline/sources.py` owns downloading play-by-play and official weekly
 player statistics. It has no database dependency. Each result identifies the
 seasons loaded, assets that returned HTTP 404, and the combined data frame.
-`ingest.py` still owns storage; optional vendors have separate adapters below.
+Schedule and roster downloads live in `pipeline/context_sources.py`; optional
+vendors have separate adapters below. The loading module coordinates their
+validation and storage. It returns `RawLoad`, containing plays plus explicit core
+source outcomes, and each subsequent phase adds its own outcomes.
+
+The schedule adapter requires rows for every requested season and validates
+the game/team/score keys. It shares its CSV location with upstream season
+discovery and preserves the library's season filter. The roster adapter fetches each season independently,
+retaining the installed library's identity renaming, birth-date parsing, existing
+month-based age calculation and null-ID filtering. It reports a real 404
+separately; missing rosters are allowed only for unplayed seasons without plays.
+Unexpected provider errors retain source, season and original cause.
 
 | Source outcome | Behavior |
 |---|---|
@@ -81,7 +92,8 @@ For an unplayed season whose plays return 404, ingestion still stores schedules
 and rosters, then stops before player statistics and analytics. Mixed requests
 replace plays and rebuild downstream statistics only for downloaded seasons,
 preserving unavailable seasons' stored data. Failed required-feed downloads stop
-the refresh before its upstream watermarks advance.
+the refresh before its upstream watermarks advance. Required weekly data must
+also contain identified players in each played season after orphan filtering.
 
 ## Optional vendor downloads and outcomes
 
@@ -123,13 +135,45 @@ column selection, join-ID conversion and float precision are preserved in the
 pure `pipeline/normalization.py` helpers. Depth charts retain the latest daily
 snapshot across fetched frames; older formats do not overwrite it.
 
-`run_ingest` returns the vendor outcomes, and logs show which source/year was
+`run_ingest` returns core and vendor outcomes, and logs show which source/year was
 loaded, empty, unavailable or retained after failure. Refresh timestamps advance
 only for observed `loaded`/`empty` vendor outcomes, allowing failed downloads to
 be retried. A successful empty result records that this version was checked;
 it does not claim that new rows were stored. This avoids rebuilding daily for a
 valid bulk file that has not yet added the current season. Coverage limits are
 also applied before upstream stamp lookups for unsupported years.
+
+Core play/weekly stamps now require a corresponding observed loaded outcome,
+even if upstream metadata advertises an asset. A schedules-only marker requires
+actual downloaded schedule rows and no loaded plays. Thus a missing asset or
+inconsistent upstream metadata cannot itself acknowledge a successful download.
+
+## Calculations, normalization and storage
+
+The orchestration entry point `ingest.py` now only runs pipeline phases and
+retains the legacy CLI pending its replacement. The focused owners are:
+
+| Module | Responsibility |
+|---|---|
+| `loading.py` | Source validation, replacement scope and coordination |
+| `player_stats.py` | Official weekly offensive selection and player-game composition |
+| `play_stats.py` | Play-derived offensive fallback, defensive slots and special teams |
+| `normalization.py` | Frame merging, historical team mapping, FTN and depth cleanup |
+| `storage.py` | Core seasonal upserts, reference replacement and player/weekly writes |
+| `awards.py` | Static award preparation with its existing roster identity join |
+
+These moves preserve the football calculations, SQL, row selection and scoring
+weights. Seventeen moved functions match their previous syntax trees after
+renaming, and player composition before storage is unchanged. The shared common-
+column/TRY_CAST compatibility behavior in seasonal upserts also remains; a future
+candidate's schema and coverage still need validation before publication.
+
+Player-game storage now creates a table only when its initial existence query
+finds a known missing table. Later delete, describe and insert faults propagate.
+Previously a broad handler tried CREATE after any failure, masking an insertion
+error with a misleading table-already-exists error. Static award writes have also
+moved out of ingestion; startup still calls that same preparation function until
+the serving-write migration is complete.
 
 Outcomes currently exist in return values and job logs. A durable coverage
 manifest belongs to candidate snapshot construction. Storage updates are not yet
@@ -157,18 +201,16 @@ the intended final architecture.
 
 ## Next migration checkpoints
 
-1. Complete storage/player-stat normalization boundaries and the remaining
-   schedule/roster adapter ownership; vendor download outcomes are now explicit.
-2. Provide one offline command for source refresh, analytics rebuild and
+1. Provide one offline command for source refresh, analytics rebuild and
    validation. Build a separate candidate file so a failed run leaves the
    published snapshot intact.
-3. Prepare awards, indexes and every formerly lazy analytics table in that
+2. Prepare awards, indexes and every formerly lazy analytics table in that
    candidate. Validate historical and newest-season coverage, statistics and
    representative requests. Report allowed empty datasets explicitly.
-4. Replace request-time materialization with reads, remove startup writes and
+3. Replace request-time materialization with reads, remove startup writes and
    retire the runtime ingestion queue/load/progress endpoints. Open serving
    connections read-only and check that requests cannot write.
-5. Update refresh and deployment together so only validated candidates are
+4. Update refresh and deployment together so only validated candidates are
    published. Record the source coverage and snapshot revision being shipped.
 
 Live scores remain a separate provider with their existing freshness behavior.
@@ -182,6 +224,7 @@ From `api`, run:
 uv run --locked pytest tests/test_pipeline_analytics.py tests/test_refresh_watermarks.py tests/test_ratings_power.py
 uv run --locked pytest tests/test_pipeline_sources.py tests/test_weekly_columns.py
 uv run --locked pytest tests/test_vendor_sources.py tests/test_refresh_watermarks.py
+uv run --locked pytest tests/test_context_sources.py tests/test_pipeline_storage.py
 ```
 
 The new checks cover seasonal scope, one global rebuild per batch, ordering,
@@ -196,3 +239,7 @@ adapter, expected outages versus unexpected faults, coverage/season filtering,
 real snap storage preservation, FTN parquet parity with the installed provider,
 depth snapshot selection, reference-history scope, storage/seed failures and
 outcome-driven refresh stamps.
+Context/storage checks use local CSV/parquet fixtures and in-memory DuckDB to
+cover provider parity, required source coverage, table creation and scoped
+replacement, original write errors, core refresh evidence, and actual official
+offensive/special-team player composition while retaining another season.

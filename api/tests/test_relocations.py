@@ -8,7 +8,7 @@ import duckdb
 import pandas as pd
 
 from config import RELOCATIONS, era_team_case
-from ingest import normalize_relocated_teams
+from pipeline.normalization import normalize_relocated_teams
 
 
 def _sql_map(team: str, season: int):

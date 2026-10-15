@@ -33,3 +33,22 @@ class VendorFeed:
     @property
     def loaded_seasons(self) -> list[int]:
         return [o.season for o in self.outcomes if o.status == 'loaded' and o.season is not None]
+
+
+@dataclass
+class SeasonalFeed:
+    data: pd.DataFrame | None
+    loaded_seasons: list[int]
+    not_found_seasons: list[int]
+
+    def outcomes(self, source: str) -> list[SourceOutcome]:
+        counts = self.data['season'].value_counts().to_dict() if self.data is not None else {}
+        return [SourceOutcome(source, s, 'loaded', int(counts.get(s, 0))) for s in self.loaded_seasons] + [
+            SourceOutcome(source, s, 'not_found') for s in self.not_found_seasons
+        ]
+
+
+@dataclass
+class RawLoad:
+    plays: pd.DataFrame | None
+    outcomes: list[SourceOutcome]

@@ -3,12 +3,11 @@
 Only an actual upstream HTTP 404 is a missing asset. Other failures stop the
 refresh; an empty published file is not evidence of an unplayed season.
 """
-from dataclasses import dataclass
 from urllib.error import HTTPError
 
 import pandas as pd
 
-from pipeline.source_results import SourceError
+from pipeline.source_results import SourceError, SeasonalFeed
 
 
 # nflfastR play-by-play ships ~396 columns; the app uses ~169. Storing only
@@ -95,13 +94,6 @@ PBP_URL = (
     "https://github.com/nflverse/nflverse-data/releases/download/"
     "pbp/play_by_play_{season}.parquet"
 )
-
-
-@dataclass
-class SeasonalFeed:
-    data: pd.DataFrame | None
-    loaded_seasons: list[int]
-    not_found_seasons: list[int]
 
 
 def _read_parquet(source: str, season: int, url: str, *, columns=None, log=print):

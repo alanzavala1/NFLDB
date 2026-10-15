@@ -3,7 +3,7 @@
 These are voting outcomes — there's no nfl_data_py function for them and
 no clean public download. They don't change once awarded, so keeping
 them as a versioned seed in code is acceptable. The downstream pipeline
-(see `load_awards` in ingest.py) turns this dict into a real DuckDB
+(see `load_player_awards` in pipeline/awards.py) turns this dict into a real DuckDB
 table with gsis_id joins so the API can serve it like any other data.
 
 When the upcoming season's awards are announced (~Feb each year), add
