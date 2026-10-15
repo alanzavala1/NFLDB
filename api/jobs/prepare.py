@@ -1,8 +1,9 @@
 """Build a candidate without modifying or publishing the source database.
 
 Run from api/ with its locked environment. The source must be closed and have
-no pending WAL. Existing candidates are never overwritten. This first checkpoint
-checks preparation and core row coverage; it does not certify a release.
+no pending WAL. Existing candidates are never overwritten. Preparation checks
+core counts, analytics, statistical identities and representative HTTP reads.
+Publishing and refresh watermark updates remain separate.
 """
 import argparse
 from pathlib import Path

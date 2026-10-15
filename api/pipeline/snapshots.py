@@ -1,4 +1,4 @@
-"""Prepare a separate database; publication and release validation are later steps."""
+"""Prepare and validate a separate database; publication is a separate step."""
 from __future__ import annotations
 
 import json
@@ -44,12 +44,12 @@ def _copy_source(source: Path, candidate: Path) -> None:
         conn.close()
 
 
-def _run_worker(candidate: Path, seasons: list[int]) -> None:
+def _run_job(candidate: Path, module: str, arguments: list[str], *, read_only=False) -> None:
     env = os.environ.copy()
     # Set before importing ingest/config/builders: they share database._conn.
     env['NFL_DB_PATH'] = str(candidate)
-    command = [sys.executable, '-m', 'jobs.prepare_worker',
-               '--seasons', *(str(s) for s in seasons)]
+    env['NFL_DB_READ_ONLY'] = '1' if read_only else '0'
+    command = [sys.executable, '-m', module, *arguments]
     process = subprocess.Popen(command, cwd=Path(__file__).resolve().parents[1], env=env)
     try:
         code = process.wait()
@@ -59,6 +59,14 @@ def _run_worker(candidate: Path, seasons: list[int]) -> None:
         raise
     if code:
         raise subprocess.CalledProcessError(code, command)
+
+
+def _run_worker(candidate: Path, seasons: list[int]) -> None:
+    _run_job(candidate, 'jobs.prepare_worker', ['--seasons', *(str(s) for s in seasons)])
+
+
+def _run_validation(candidate: Path) -> None:
+    _run_job(candidate, 'jobs.validate', ['--database', str(candidate)], read_only=True)
 
 
 def validate_preparation(candidate: Path, seasons: list[int]) -> None:
@@ -114,10 +122,11 @@ def validate_preparation(candidate: Path, seasons: list[int]) -> None:
 
 
 def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=print) -> Path:
-    """Copy a closed snapshot, prepare in an isolated process and check core rows.
+    """Copy a closed snapshot, prepare and validate in isolated processes.
 
     Never replaces source. Failed candidates are removed after the worker exits.
-    Successful candidates still need statistical and API validation before release.
+    Validation checks core rows, analytics, statistical identities and sampled API
+    responses. Promotion and refresh watermark changes remain separate.
     """
     source, candidate = Path(source).resolve(), Path(candidate).absolute()
     if not seasons or any(type(s) is not int or s < 1999 for s in seasons):
@@ -133,9 +142,10 @@ def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=pri
     try:
         _run_worker(candidate, seasons)
         validate_preparation(candidate, seasons)
+        _run_validation(candidate)
     except BaseException:
         candidate.unlink(missing_ok=True)
         _wal(candidate).unlink(missing_ok=True)
         raise
-    log(f'Candidate prepared: {candidate}; release validation still required')
+    log(f'Candidate validated: {candidate}; publication remains a separate step')
     return candidate

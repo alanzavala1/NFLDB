@@ -225,23 +225,27 @@ def _ftn_available(conn) -> bool:
         return False
 
 
-def _category_sql(category: str, season: int, available: set[str], has_ftn: bool = False) -> str:
-    """Long-format splits SELECT for one category + season."""
-    s = int(season)
-    min_vol = _MIN_VOLUME[category]
-
-    base_select, metric_select = _base_and_metrics(category, core.success_col(available), has_ftn)
-    union = core.union_blocks(_category_dims(category, has_ftn), metric_select, "player_id")
-
+def qualification_ctes(category: str, season: int, available: set[str], has_ftn: bool = False) -> str:
+    """Shared source filtering and admission for materialization and validation."""
+    base_select, _ = _base_and_metrics(category, core.success_col(available), has_ftn)
     return f"""
     WITH base AS (
         SELECT {base_select}
-          AND plays.season = {s} AND plays.season_type = 'REG'
+          AND plays.season = {int(season)} AND plays.season_type = 'REG'
           {core.two_pt_filter(available)}
     ),
     qualified AS (
-        SELECT player_id FROM base GROUP BY player_id HAVING COUNT(*) >= {min_vol}
-    ),
+        SELECT player_id FROM base GROUP BY player_id HAVING COUNT(*) >= {_MIN_VOLUME[category]}
+    )
+    """
+
+
+def _category_sql(category: str, season: int, available: set[str], has_ftn: bool = False) -> str:
+    """Long-format splits SELECT for one category + season."""
+    _, metric_select = _base_and_metrics(category, core.success_col(available), has_ftn)
+    union = core.union_blocks(_category_dims(category, has_ftn), metric_select, "player_id")
+    return f"""
+    {qualification_ctes(category, season, available, has_ftn)},
     b AS (
         SELECT base.* FROM base JOIN qualified USING (player_id)
     )

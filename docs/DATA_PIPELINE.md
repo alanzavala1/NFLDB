@@ -214,17 +214,69 @@ database target. Existing candidate files are refused rather than overwritten.
    plays, rosters, official weekly rows and prepared player-game rows. A genuinely
    unplayed season can contain schedules without plays; an existing played season
    cannot be relabeled unplayed after its upstream asset disappears.
-5. Keep a successful candidate for further validation. On a copy, build or check
+5. Run the analytics/statistical/API gate in another process with writes blocked
+   (see below). Keep a successful candidate for publication. On a copy, build or check
    failure, remove only this run's candidate and its WAL, after its worker exits.
    The source is never replaced by this command.
 
-These are preparation checks, not full statistical/schema/API validation.
-Analytics builders still have their existing missing-schema fallbacks, and the
-checks do not yet prove every derived table or historical season is ready to
-serve. Preparation never promotes a candidate, uploads data, advances refresh
-watermarks or changes the running site's database. The scheduled workflow,
-runtime ingestion and startup/lazy writes are unchanged until the remaining
-validation and publication migration is complete.
+Candidate finalization also prepares static awards for a schedules-only refresh
+and strictly ensures applicable lookup indexes. Failure stops the candidate
+instead of relying on startup to repair those serving prerequisites.
+
+Preparation never promotes a candidate, uploads data, advances refresh watermarks
+or changes the running site's database. The scheduled workflow, runtime ingestion
+and startup/lazy writes are unchanged until the publication/serving migration.
+
+## Read-only candidate validation
+
+The preparation command runs this gate automatically after core source checks.
+An existing closed database can also be inspected without refreshing it:
+
+```sh
+uv run --locked python -m jobs.validate --database data/candidate.duckdb
+```
+
+The command sets `NFL_DB_PATH` and `NFL_DB_READ_ONLY=1` before app/config imports.
+DuckDB enforces the write prohibition for the shared connection and its cursors;
+a request attempting lazy materialization fails validation. Normal serving still
+defaults to writable during this migration.
+
+- Schema and key checks use the analytics builders' existing DDL in a scratch
+  in-memory database as the contract. Candidate tables must have those column
+  types and unique, non-null lookup keys; validation never creates missing ones.
+- Every loaded regular season must have schedules, rosters, official weekly
+  stats, player-game stats, team analytics/rankings/splits, ratings and O-line
+  grades. Qualifying offensive/defensive players require split output. Below-
+  threshold player splits and career comparable pools may legitimately be empty.
+  Those allowances and per-table season counts appear in the JSON report.
+  Offensive eligibility shares the builder's `qualification_ctes` directly,
+  including its two-point conversion exclusion; table presence alone cannot hide
+  an individual qualifying player missing from the output.
+- Lookup indexes and a nonempty awards seed must already exist. Ratings/grades
+  must stay finite and within 3–10; split rates must be finite and within bounds.
+- The accuracy gate runs shared reconciliation functions for **every loaded
+  regular season**, rather than the old deploy test's fixed 2023 alone. Counting
+  stats and passing yards are exact at the established qualifying volumes;
+  rushing/receiving yardage retain the existing limits of two/six differing
+  players per season. Passing EPA includes the modern feed's no-down adjustment.
+  Missing qualified QBs/defenders cannot disappear through inner joins. Low-volume
+  players below the established checks' thresholds are not a claim of exhaustive
+  per-player reconciliation.
+- ASGI HTTP checks exercise actual routes, services and response models for the
+  oldest/newest played seasons: schedules, standings, leaders, power rankings,
+  team analytics, a covered game's ratings, a team split request and a player
+  split request when an admitted player exists. They require nonempty HTTP 200
+  responses. Lifespan is deliberately excluded because it still writes. These
+  are representative requests, not exhaustive endpoint or UI validation; live
+  providers and billed model calls are excluded.
+
+The legacy deploy reconciliation tests call the same statistical functions,
+retaining their current 2023 fixture until the workflow adopts this gate.
+Optional-source freshness and individual page coverage still depend on recorded
+source outcomes, and the gate does not invent missing optional data. A copied
+snapshot with an old season's required stats missing fails even if the requested
+new season refreshed successfully. Refresh all missing years into a candidate
+before attempting publication.
 
 ## Remaining serving writes
 
@@ -246,12 +298,10 @@ the intended final architecture.
 
 ## Next migration checkpoints
 
-1. Extend candidate validation to schemas, all required analytics tables and
-   explicit allowed-empty cases. Ensure awards and indexes are prepared even
-   when only schedules were refreshed.
-2. Validate historical and newest-season statistics and representative requests
-   against the candidate. Consolidate legacy entry points into this offline
-   command once it is ready to replace them.
+1. Refresh a real candidate with every missing required season, inspect its
+   validation report and resolve any uncovered data/analytics gaps.
+2. Consolidate legacy entry points into the candidate command and persist/bind
+   the validation report and source revision to the artifact being published.
 3. Replace request-time materialization with reads, remove startup writes and
    retire the runtime ingestion queue/load/progress endpoints. Open serving
    connections read-only and check that requests cannot write.
@@ -271,6 +321,7 @@ uv run --locked pytest tests/test_pipeline_sources.py tests/test_weekly_columns.
 uv run --locked pytest tests/test_vendor_sources.py tests/test_refresh_watermarks.py
 uv run --locked pytest tests/test_context_sources.py tests/test_pipeline_storage.py
 uv run --locked pytest tests/test_candidate_snapshots.py
+uv run --locked pytest tests/test_snapshot_validation.py tests/test_reconciliation.py
 ```
 
 The new checks cover seasonal scope, one global rebuild per batch, ordering,
@@ -296,3 +347,10 @@ failed row-count validation remove the candidate, existing paths remain intact,
 pending WALs are refused, inherited database overrides cannot redirect workers,
 and interrupted workers stop before cleanup. They establish lifecycle safety;
 they do not evaluate a full real-data candidate or certify publication.
+Validation checks additionally build a small real historical/newest snapshot,
+launch the actual read-only validation CLI, exercise HTTP responses, verify its
+file bytes/WAL are unchanged, and reject deliberately broken schemas, keys,
+coverage, indexes, rating ranges, counts, EPA and attempted lazy writes. The
+existing local snapshot is also inspectable read-only; it currently fails the
+new coverage gate because official weekly stats stop in 2024 while plays reach
+2026. No automatic repair or live-site change follows from this inspection.

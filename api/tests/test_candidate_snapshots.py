@@ -40,6 +40,10 @@ def ingest(seasons, log):
     return outcomes
 
 sys.modules['ingest'] = types.SimpleNamespace(run_ingest=ingest)
+import database
+database.ensure_indexes = lambda **kwargs: None
+import pipeline.awards
+pipeline.awards.load_player_awards = lambda conn: None
 from jobs.prepare_worker import prepare
 prepare([int(s) for s in sys.argv[1:]])
 '''
@@ -67,6 +71,9 @@ def synthetic_worker(monkeypatch):
         return popen([command[0], '-c', WORKER_FIXTURE, *command[4:]], **kwargs)
 
     monkeypatch.setattr(snapshots.subprocess, 'Popen', start)
+    # These lifecycle fixtures have only core columns. Full contracts/statistics
+    # and the real HTTP process are exercised in test_snapshot_validation.py.
+    monkeypatch.setattr(snapshots, '_run_validation', lambda candidate: None)
 
 
 def digest(path):
@@ -248,3 +255,17 @@ def test_no_preparation_record_fails_even_if_copied_tables_exist(source, tmp_pat
     with pytest.raises(snapshots.CandidateError, match='no preparation record'):
         snapshots.prepare_candidate(source, candidate, [2023])
     assert not candidate.exists()
+
+
+def test_failed_analytics_validation_removes_candidate(source, synthetic_worker, tmp_path, monkeypatch):
+    candidate = tmp_path / 'invalid-analytics.duckdb'
+    before = digest(source)
+
+    def fail(candidate):
+        raise RuntimeError('analytics failed validation')
+
+    monkeypatch.setattr(snapshots, '_run_validation', fail)
+    with pytest.raises(RuntimeError, match='analytics failed validation'):
+        snapshots.prepare_candidate(source, candidate, [2026])
+    assert not candidate.exists()
+    assert digest(source) == before

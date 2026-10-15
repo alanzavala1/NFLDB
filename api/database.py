@@ -17,7 +17,8 @@ import threading
 import duckdb
 
 # Overridable so a local run can point at a rebuilt or experimental copy
-# without touching the working database. Production never sets it.
+# without touching the working database. Validation also uses NFL_DB_READ_ONLY=1;
+# normal serving remains writable until startup/lazy writes are retired.
 DB_PATH = os.environ.get(
     "NFL_DB_PATH", os.path.join(os.path.dirname(__file__), "data", "nfl.duckdb")
 )
@@ -31,11 +32,13 @@ _conn: duckdb.DuckDBPyConnection | None = None
 
 
 def get_connection() -> duckdb.DuckDBPyConnection:
-    """The single process-wide Connection. Use this only for writes (ingest)."""
+    """The process connection; ordinary read queries take independent cursors."""
     global _conn
     if _conn is None:
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        _conn = duckdb.connect(DB_PATH)
+        read_only = os.environ.get('NFL_DB_READ_ONLY') == '1'
+        if not read_only:
+            os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        _conn = duckdb.connect(DB_PATH, read_only=read_only)
         # In a container, DuckDB sizes its memory budget (80% of RAM) and
         # thread pool (one per core) from the HOST, not the cgroup limits —
         # on Cloud Run that meant queries happily allocated past the 1 GiB
@@ -74,14 +77,18 @@ _INDEXES = [
 ]
 
 
-def ensure_indexes() -> None:
+def ensure_indexes(*, strict: bool = False) -> None:
     """Idempotent point-lookup indexes for the hot read paths. DuckDB persists
     indexes, so this only does real work the first time (or after a table that
-    was rebuilt via CREATE TABLE AS, e.g. player_game_stats, dropped its index)."""
+    was rebuilt via CREATE TABLE AS, e.g. player_game_stats, dropped its index).
+    Offline candidate finalization uses strict=True so failures stop the build.
+    """
     conn = get_connection()
     try:
         tables = {r[0] for r in conn.execute("SHOW TABLES").fetchall()}
     except Exception:
+        if strict:
+            raise
         return
     for table, col in _INDEXES:
         if table not in tables:
@@ -89,6 +96,8 @@ def ensure_indexes() -> None:
         try:
             conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_{col} ON {table}({col})")
         except Exception as e:
+            if strict:
+                raise
             print(f"index {table}.{col} skipped: {e}")
 
 

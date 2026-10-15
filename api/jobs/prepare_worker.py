@@ -20,6 +20,12 @@ def prepare(seasons: list[int]) -> None:
         with database.write_lock:
             outcomes = run_ingest(seasons, log=lambda message: print(message, flush=True))
             conn = database.get_connection()
+            # A schedules-only refresh skips supplemental loading/analytics.
+            # These local serving prerequisites must still be prepared offline.
+            if not any(o.source == 'plays' and o.status == 'loaded' for o in outcomes):
+                from pipeline.awards import load_player_awards
+                load_player_awards(conn)
+            database.ensure_indexes(strict=True)
             conn.execute('''CREATE OR REPLACE TABLE snapshot_preparation (
                 format_version INTEGER, requested_seasons JSON,
                 source_outcomes JSON, prepared_at TIMESTAMPTZ
