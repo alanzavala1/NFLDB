@@ -239,10 +239,15 @@ calculations, admission thresholds, reconciliation cutoffs or tolerances.
 Regression checks cover below-minimum players with high official volumes,
 incorrect/absent eligible output, and season/conversion exclusions.
 
-The next step is a focused comparison of official per-play stat credits with
-the play-by-play fields currently used by split builders, including yardage and
-target attribution. Keep the full-history gate failing until the data contract
-is resolved. The RDS reader used for this investigation was an isolated,
+An [isolated receiving-credit pilot](../api/experiments/README.md) now exercises
+twelve real play fixtures and cached full-season data for 2001, 2004, 2006 and
+2024. Receiving yards, catches and TDs match the provider's player/game and
+player/season summaries; down/quarter totals are preserved. This is evidence
+for the proposed attribution model, not a production builder change or an
+accepted full-history candidate. Observed target credits also reproduce the
+provider's incomplete historical totals; they cannot establish target coverage.
+Source/storage integration, target policy, other situational metrics and full
+candidate validation remain outstanding. The RDS reader used for research was an isolated,
 temporary `uv --with pyreadr` environment; no application dependency or lockfile
 was added. Logs, detailed audit JSON and diagnostic data remain ignored locally
 under `api/data/`, rather than being committed as production data.
@@ -396,6 +401,7 @@ uv run --locked pytest tests/test_vendor_sources.py tests/test_refresh_watermark
 uv run --locked pytest tests/test_context_sources.py tests/test_pipeline_storage.py
 uv run --locked pytest tests/test_candidate_snapshots.py
 uv run --locked pytest tests/test_snapshot_validation.py tests/test_reconciliation.py
+uv run --locked pytest tests/test_receiving_credit_pilot.py
 ```
 
 The new checks cover seasonal scope, one global rebuild per batch, ordering,
