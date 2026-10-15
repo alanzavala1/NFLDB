@@ -50,6 +50,19 @@ def get_connection() -> duckdb.DuckDBPyConnection:
     return _conn
 
 
+def close_connection() -> None:
+    """Release the process connection after an offline job has finished.
+
+    The caller must own the process lifecycle; never close while serving queries.
+    """
+    global _conn
+    if _conn is not None:
+        try:
+            _conn.close()
+        finally:
+            _conn = None
+
+
 # Large tables hit by per-request point lookups that lack a usable index
 # (the materialized splits/comparables tables already have a PRIMARY KEY on
 # their lookup key, so they're not listed). Small/fast tables are left

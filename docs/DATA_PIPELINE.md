@@ -7,6 +7,10 @@ the app. Visitors should only read published data.
 
 ## Current preparation flow
 
+The scheduled job still uses `jobs.refresh` and updates its downloaded database
+in place. The new, opt-in candidate command wraps the same ingestion pipeline
+in a separate working file; publication has not been migrated yet.
+
 ```text
 jobs.refresh → ingest.run_ingest
                     ├─ pipeline.loading coordinates adapters and storage
@@ -175,11 +179,52 @@ error with a misleading table-already-exists error. Static award writes have als
 moved out of ingestion; startup still calls that same preparation function until
 the serving-write migration is complete.
 
-Outcomes currently exist in return values and job logs. A durable coverage
-manifest belongs to candidate snapshot construction. Storage updates are not yet
-a snapshot transaction: a later failure can leave an in-place working database
-partially updated. A separate validated candidate file remains necessary before
-publication can be treated as atomic.
+The legacy refresh records outcomes in return values and job logs. Candidate
+preparation also persists them in a `snapshot_preparation` table, with requested
+seasons, preparation time and record format version. It describes this run's
+downloads, including optional failures and retained data; it is not a full
+historical source inventory or a release certificate. Storage updates remain
+in-place within whichever working file the process owns.
+
+## Candidate preparation
+
+From `api`, with the source database closed:
+
+```sh
+uv run --locked python -m jobs.prepare --source data/nfl.duckdb --candidate data/candidate.duckdb --seasons 2026
+```
+
+The source must already exist; bootstrap from an empty database is outside this
+checkpoint. Both paths and seasons are explicit so there is no default serving
+database target. Existing candidate files are refused rather than overwritten.
+
+1. Open the source read-only and copy it into a newly created file, preserving
+   other seasons. DuckDB's file lock excludes another writer process during the
+   copy. Refuse a source with a pending write-ahead log (`.wal`): committed writes
+   in that companion file might not yet be included in the main database file.
+2. Start a separate Python process with `NFL_DB_PATH` set to the candidate before
+   importing ingestion, configuration or builders. Their shared connection and
+   existing locks therefore target the candidate throughout preparation.
+3. Run existing source loading, player statistics and analytics preparation.
+   Record source outcomes only after that sequence returns. Checkpoint the
+   database (merge committed writes into the main file) and close the connection
+   on success or failure.
+4. Reopen the candidate read-only and check the preparation record and core
+   per-season counts against downloaded counts. Played seasons require schedules,
+   plays, rosters, official weekly rows and prepared player-game rows. A genuinely
+   unplayed season can contain schedules without plays; an existing played season
+   cannot be relabeled unplayed after its upstream asset disappears.
+5. Keep a successful candidate for further validation. On a copy, build or check
+   failure, remove only this run's candidate and its WAL, after its worker exits.
+   The source is never replaced by this command.
+
+These are preparation checks, not full statistical/schema/API validation.
+Analytics builders still have their existing missing-schema fallbacks, and the
+checks do not yet prove every derived table or historical season is ready to
+serve. Preparation never promotes a candidate, uploads data, advances refresh
+watermarks or changes the running site's database. The scheduled workflow,
+runtime ingestion and startup/lazy writes are unchanged until the remaining
+validation and publication migration is complete.
 
 ## Remaining serving writes
 
@@ -201,12 +246,12 @@ the intended final architecture.
 
 ## Next migration checkpoints
 
-1. Provide one offline command for source refresh, analytics rebuild and
-   validation. Build a separate candidate file so a failed run leaves the
-   published snapshot intact.
-2. Prepare awards, indexes and every formerly lazy analytics table in that
-   candidate. Validate historical and newest-season coverage, statistics and
-   representative requests. Report allowed empty datasets explicitly.
+1. Extend candidate validation to schemas, all required analytics tables and
+   explicit allowed-empty cases. Ensure awards and indexes are prepared even
+   when only schedules were refreshed.
+2. Validate historical and newest-season statistics and representative requests
+   against the candidate. Consolidate legacy entry points into this offline
+   command once it is ready to replace them.
 3. Replace request-time materialization with reads, remove startup writes and
    retire the runtime ingestion queue/load/progress endpoints. Open serving
    connections read-only and check that requests cannot write.
@@ -225,6 +270,7 @@ uv run --locked pytest tests/test_pipeline_analytics.py tests/test_refresh_water
 uv run --locked pytest tests/test_pipeline_sources.py tests/test_weekly_columns.py
 uv run --locked pytest tests/test_vendor_sources.py tests/test_refresh_watermarks.py
 uv run --locked pytest tests/test_context_sources.py tests/test_pipeline_storage.py
+uv run --locked pytest tests/test_candidate_snapshots.py
 ```
 
 The new checks cover seasonal scope, one global rebuild per batch, ordering,
@@ -243,3 +289,10 @@ Context/storage checks use local CSV/parquet fixtures and in-memory DuckDB to
 cover provider parity, required source coverage, table creation and scoped
 replacement, original write errors, core refresh evidence, and actual official
 offensive/special-team player composition while retaining another season.
+Candidate checks use real temporary DuckDB files and worker processes with
+synthetic ingestion (no downloads). They verify source bytes and older seasons
+are preserved, coverage records survive connection closure, partial writes and
+failed row-count validation remove the candidate, existing paths remain intact,
+pending WALs are refused, inherited database overrides cannot redirect workers,
+and interrupted workers stop before cleanup. They establish lifecycle safety;
+they do not evaluate a full real-data candidate or certify publication.
