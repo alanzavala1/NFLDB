@@ -94,3 +94,29 @@ def test_player_composition_uses_official_totals_and_keeps_other_seasons():
                                WHERE player_id = '00-KC-QB1'""").fetchone() == (25, 321, 3, 7.5)
         assert conn.execute("SELECT fg_made FROM player_game_stats WHERE player_id = '00-KC-K1'").fetchone()[0] == 1
         assert conn.execute("SELECT COUNT(*) FROM player_game_stats WHERE season = 2023").fetchone()[0] == 1
+
+
+def test_receiving_composition_preserves_production_when_target_credits_are_zero():
+    from pipeline.player_stats import build_player_game_stats
+    from pipeline.reconciliation import receiving_total_checks
+    from tests.conftest import _create_schema, _seed
+    from tests.test_weekly_columns import _feed_frame
+
+    with duckdb.connect(':memory:') as conn:
+        _create_schema(conn)
+        _seed(conn)
+        weekly = pd.concat([
+            _feed_frame(2024).assign(game_id='2024_01_BUF_MIA', player_id=player,
+                player_name=player, targets=0, receptions=catches, receiving_yards=yards,
+                receiving_tds=tds)
+            for player, catches, yards, tds in (
+                ('receiver', 4, 52, 1), ('lateral', 0, 20, 1), ('negative', 1, -3, 0))
+        ], ignore_index=True)
+        conn.register('weekly', weekly)
+        conn.execute('CREATE TABLE weekly_player_stats AS SELECT * FROM weekly')
+        build_player_game_stats(conn, conn.execute('SELECT * FROM plays').df(), [2024])
+        assert conn.execute('''SELECT player_id, receptions, rec_yards, rec_tds
+            FROM player_game_stats WHERE player_id IN ('receiver','lateral','negative')
+            ORDER BY player_id''').fetchall() == [
+                ('lateral', 0, 20, 1), ('negative', 1, -3, 0), ('receiver', 4, 52, 1)]
+        assert all(count == 0 for count, _ in receiving_total_checks(conn, 2024).values())

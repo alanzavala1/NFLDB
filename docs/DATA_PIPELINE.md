@@ -327,6 +327,17 @@ defaults to writable during this migration.
   an individual qualifying player missing from the output.
 - Lookup indexes and a nonempty awards seed must already exist. Ratings/grades
   must stay finite and within 3–10; split rates must be finite and within bounds.
+- Receiving production has its own exact preservation check: prepared
+  `player_game_stats` catches, receiving yards and receiving TDs must match
+  `weekly_player_stats` for every identified player/regular-season week. It has
+  no target requirement, split admission or volume cutoff. Missing low-volume
+  players, altered/extra production, nonfinite totals and moving production to
+  another week fail. Weekly keys support source schemas without `game_id`;
+  prepared rows are REG-filtered through schedules. This checks preservation
+  of source totals, not independent source correctness or historical target
+  completeness. Missing targets must not cause otherwise usable production to
+  be dropped. Frontend visibility filters and target/rate coverage are separate
+  migration steps; this guard does not yet change those consumers.
 - The accuracy gate runs shared reconciliation functions for **every loaded
   regular season**, rather than the old deploy test's fixed 2023 alone. Counting
   stats and passing yards are exact at the established qualifying volumes;
@@ -402,6 +413,7 @@ uv run --locked pytest tests/test_context_sources.py tests/test_pipeline_storage
 uv run --locked pytest tests/test_candidate_snapshots.py
 uv run --locked pytest tests/test_snapshot_validation.py tests/test_reconciliation.py
 uv run --locked pytest tests/test_receiving_credit_pilot.py
+uv run --locked pytest tests/test_receiving_preservation.py tests/test_pipeline_storage.py
 ```
 
 The new checks cover seasonal scope, one global rebuild per batch, ordering,
@@ -434,3 +446,11 @@ coverage, indexes, rating ranges, counts, EPA and attempted lazy writes. The
 existing local snapshot is also inspectable read-only; it currently fails the
 new coverage gate because official weekly stats stop in 2024 while plays reach
 2026. No automatic repair or live-site change follows from this inspection.
+
+An October 15 isolated run used the actual player-game composition/storage
+code with cached current weekly feeds and stored PBP for all six target-gap
+seasons (2003–2008). All three receiving preservation checks passed for every
+player/week in each season, including zero-target production rows; composing
+later seasons retained earlier years. Only an in-memory database was written.
+This scoped source-preservation result does not establish that a complete
+candidate passes validation or that historical targets are usable.

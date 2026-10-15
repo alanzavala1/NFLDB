@@ -2,6 +2,36 @@
 from splits_core import PASSING_EPA_PLAY
 
 
+def receiving_total_checks(conn, season):
+    """Preserve weekly receiving production in prepared player-game rows.
+
+    Compare every identified player/week, without targets, split eligibility or
+    minimum volume. Week keys also support weekly feeds without game_id. This
+    checks transfer of source counts, not source completeness or target coverage.
+    """
+    metrics = (('receptions', 'receptions'), ('receiving_yards', 'rec_yards'),
+               ('receiving_tds', 'rec_tds'))
+    expected = ', '.join(f'SUM({source}) AS {stored}' for source, stored in metrics)
+    prepared = ', '.join(f'SUM(p.{stored}) AS {stored}' for _, stored in metrics)
+    comparisons = ', '.join(f'''COUNT(*) FILTER (WHERE
+        COALESCE(w.{stored}, 0) <> COALESCE(p.{stored}, 0)
+        OR NOT isfinite(COALESCE(w.{stored}, 0))
+        OR NOT isfinite(COALESCE(p.{stored}, 0)))''' for _, stored in metrics)
+    counts = conn.execute(f'''
+        WITH w AS (
+            SELECT player_id, week, {expected} FROM weekly_player_stats
+            WHERE season = ? AND season_type = 'REG' AND player_id IS NOT NULL
+            GROUP BY player_id, week),
+        p AS (
+            SELECT p.player_id, p.week, {prepared} FROM player_game_stats p
+            JOIN schedules s ON s.game_id = p.game_id AND s.game_type = 'REG'
+            WHERE p.season = ? GROUP BY p.player_id, p.week)
+        SELECT {comparisons} FROM w FULL OUTER JOIN p USING (player_id, week)
+    ''', [season, season]).fetchone()
+    return {f'player_game_{source}': (count, 0)
+            for (source, _), count in zip(metrics, counts)}
+
+
 def count_mismatches(conn, season, category, split_col, official_col, minimum):
     import splits_builder
 

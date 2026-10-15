@@ -66,6 +66,21 @@ def test_prepared_small_season_allows_legitimate_empty_splits_and_comparables(pr
     assert 'career comparables below volume/pool thresholds' in report['allowed_empty']
 
 
+def test_snapshot_preserves_receiving_production_without_target_admission(prepared):
+    conn, _ = prepared
+    conn.execute('''UPDATE weekly_player_stats SET targets=0, receptions=4,
+        receiving_yards=52, receiving_tds=1''')
+    conn.execute("""UPDATE player_game_stats SET targets=0, receptions=4, rec_yards=52, rec_tds=1
+        WHERE player_id='00-KC-QB1' AND week=1""")
+    checks = validate_snapshot(conn)['reconciliation'][2024]
+    assert checks['player_game_receptions'] == (0, 0)
+    assert checks['player_game_receiving_yards'] == (0, 0)
+    assert checks['player_game_receiving_tds'] == (0, 0)
+    conn.execute("UPDATE player_game_stats SET rec_yards=0 WHERE player_id='00-KC-QB1' AND week=1")
+    with pytest.raises(SnapshotValidationError, match=r'player_game_receiving_yards\[2024\]: 1 mismatches'):
+        validate_snapshot(conn)
+
+
 @pytest.mark.parametrize('sql,error', [
     ('DROP TABLE team_power_rankings', 'missing prepared table'),
     ('ALTER TABLE player_game_ratings DROP COLUMN rating', 'expected DOUBLE'),
@@ -236,8 +251,12 @@ def test_high_yardage_receiver_below_admission_passes_but_missing_eligible_recei
         0 AS incomplete_pass, 0 AS interception, 0 AS two_point_attempt)
         FROM (SELECT * FROM plays LIMIT 1) p CROSS JOIN range(24)''')
     conn.execute('''INSERT INTO weekly_player_stats
-        (season, season_type, player_id, receiving_yards)
-        VALUES (2024, 'REG', 'limited-receiver', 400)''')
+        (season, week, season_type, player_id, receptions, receiving_yards, receiving_tds)
+        VALUES (2024, 1, 'REG', 'limited-receiver', 24, 400, 0)''')
+    # Split admission is independent of preserving the player's basic game stats.
+    conn.execute('''INSERT INTO player_game_stats
+        (game_id, season, week, player_id, receptions, rec_yards, rec_tds)
+        VALUES ('2024_01_BUF_MIA', 2024, 1, 'limited-receiver', 24, 400, 0)''')
     # An extra conversion, postseason play, and other-season play cannot admit
     # this receiver to 2024 regular-season splits.
     for replacement in ('1 AS two_point_attempt', "'POST' AS season_type", '2023 AS season'):

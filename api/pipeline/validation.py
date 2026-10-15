@@ -3,7 +3,7 @@ import importlib
 
 import duckdb
 
-from pipeline.reconciliation import impossible_rates, season_checks
+from pipeline.reconciliation import impossible_rates, receiving_total_checks, season_checks
 
 
 class SnapshotValidationError(RuntimeError):
@@ -108,7 +108,7 @@ def validate_snapshot(conn):
 
     reconciliation = {}
     for season in seasons:
-        checks = season_checks(conn, season)
+        checks = {**receiving_total_checks(conn, season), **season_checks(conn, season)}
         for name, (mismatches, allowed) in checks.items():
             _require(mismatches <= allowed,
                      f'{name}[{season}]: {mismatches} mismatches (allowed {allowed})')
