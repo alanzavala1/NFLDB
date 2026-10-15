@@ -55,6 +55,14 @@ punt_returns punt_return_yards punt_return_tds away_team home_team
 '''.split())
 
 
+def is_missing_table_error(error: Exception, table: str) -> bool:
+    """An absent write target may be created; an absent view dependency may not."""
+    if not isinstance(error, duckdb.CatalogException):
+        return False
+    match = re.search(r'Table with name (.+?) does not exist', str(error))
+    return bool(match and match.group(1).strip('"').lower() == table.lower())
+
+
 def is_missing_data_error(error: Exception) -> bool:
     """Only absent tables/source columns qualify for an optional-data fallback.
 

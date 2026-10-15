@@ -3,7 +3,7 @@ import duckdb
 import pandas as pd
 import pytest
 
-from pipeline.storage import store_player_game_stats
+from pipeline.storage import store_player_game_stats, upsert_by_season
 
 
 def test_create_then_replace_one_season_preserves_other_stored_season():
@@ -13,6 +13,22 @@ def test_create_then_replace_one_season_preserves_other_stored_season():
         replacement = pd.DataFrame({'season': [2024], 'player_id': ['p'], 'attempts': [30]})
         store_player_game_stats(conn, replacement, [2024])
         assert conn.execute('SELECT season, attempts FROM player_game_stats ORDER BY season').fetchall() == [(2023, 10), (2024, 30)]
+
+
+@pytest.mark.parametrize('table', ['pfr_pass', 'pfr_rush', 'pfr_rec', 'pfr_def', 'qbr_season', 'qbr_weekly'])
+def test_new_vendor_write_targets_are_created_without_optional_read_registry(table):
+    with duckdb.connect(':memory:') as conn:
+        upsert_by_season(conn, table, pd.DataFrame({'season': [2025], 'value': [7]}), [2025])
+        assert conn.execute(f'SELECT * FROM {table}').fetchall() == [(2025, 7)]
+
+
+def test_missing_view_dependency_does_not_trigger_new_vendor_table_creation():
+    with duckdb.connect(':memory:') as conn:
+        conn.execute('CREATE TABLE plays (season INTEGER)')
+        conn.execute('CREATE VIEW pfr_pass AS SELECT * FROM plays')
+        conn.execute('DROP TABLE plays')
+        with pytest.raises(duckdb.CatalogException, match='Table with name plays does not exist'):
+            upsert_by_season(conn, 'pfr_pass', pd.DataFrame({'season': [2025]}), [2025])
 
 
 @pytest.mark.parametrize('stage', ['SELECT 1', 'DELETE', 'DESCRIBE', 'INSERT'])

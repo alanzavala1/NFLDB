@@ -1,4 +1,5 @@
 """Statistical identities shared by offline validation and the deploy test gate."""
+from splits_core import PASSING_EPA_PLAY
 
 
 def count_mismatches(conn, season, category, split_col, official_col, minimum):
@@ -25,7 +26,7 @@ def passing_epa_mismatches(conn, season):
         two_pt AS (
             SELECT passer_player_id AS player_id, SUM(qb_epa) epa FROM plays
             WHERE season = ? AND season_type = 'REG' AND down IS NULL
-              AND (pass_attempt = 1 OR COALESCE(sack, 0) = 1)
+              AND {PASSING_EPA_PLAY}
               AND passer_player_id IS NOT NULL GROUP BY 1),
         off AS (
             SELECT player_id, SUM(passing_epa) / NULLIF(SUM(attempts), 0) e

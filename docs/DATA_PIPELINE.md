@@ -24,21 +24,20 @@ jobs.refresh → ingest.run_ingest
 ```
 
 `api/pipeline/analytics.py` owns the analytics preparation order. It calls the
-existing builders; their SQL, formulas, missing-schema policies and locks are
-unchanged. It does not download feeds. Source loading and player-game statistics
+existing builders and their locks. It does not download feeds. Source loading and player-game statistics
 must be prepared before calling it. Unexpected builder failures propagate and
 stop later steps; a known missing-schema fallback is still owned by each builder.
 Completing this sequence alone does not establish snapshot completeness.
 
 | Prepared data | Rebuild scope |
 |---|---|
-| Team season analytics | Each selected season |
-| Weekly power rankings | Each selected season |
+| Team season analytics | Each refreshed play or official-weekly season with stored plays |
+| Weekly power rankings | Each refreshed play or official-weekly season with stored plays |
 | Player game ratings | All loaded seasons, one global calibration |
 | Offensive-line unit grades | All loaded seasons, one global calibration |
-| Offensive player splits | Each selected season |
-| Defensive player splits | Each selected season |
-| Team offense/defense splits | Each selected season |
+| Offensive player splits | Each refreshed play or official-weekly season with stored plays |
+| Defensive player splits | Each refreshed play or official-weekly season with stored plays |
+| Team offense/defense splits | Each refreshed play or official-weekly season with stored plays |
 | Career summaries and comparable players | All loaded careers, once per batch |
 | Lookup indexes | After table preparation |
 
@@ -95,7 +94,11 @@ range; an incomplete download leaves the old table intact.
 For an unplayed season whose plays return 404, ingestion still stores schedules
 and rosters, then stops before player statistics and analytics. Mixed requests
 replace plays and rebuild downstream statistics only for downloaded seasons,
-preserving unavailable seasons' stored data. Failed required-feed downloads stop
+preserving unavailable seasons' stored data. A legacy weekly schema migration
+downloads official history too: rebuild player-game statistics for every updated
+weekly season with stored plays, then prepare seasonal analytics for that expanded
+scope. Historical plays are read one season at a time to bound memory; vendor
+downloads remain scoped to the requested play seasons. Failed required-feed downloads stop
 the refresh before its upstream watermarks advance. Required weekly data must
 also contain identified players in each played season after orphan filtering.
 
@@ -178,6 +181,61 @@ Previously a broad handler tried CREATE after any failure, masking an insertion
 error with a misleading table-already-exists error. Static award writes have also
 moved out of ingestion; startup still calls that same preparation function until
 the serving-write migration is complete.
+
+Seasonal upserts now use the same exact-target missing-table classification as
+player-game storage. A first download can create a new PFR/QBR table even if the
+optional-read fallback registry does not list it. A missing dependency inside an
+existing view, or a later storage failure, remains an error; it cannot trigger
+table creation or broaden what read queries may silently treat as unavailable.
+
+### Passing EPA correction found by the real candidate
+
+The full weekly migration exposed a definition difference that the old 2023-only
+legacy-feed test did not reveal. The modern provider sums `qb_epa` for play types
+`pass` and `qb_spike`; our split base used `pass_attempt OR sack`, including some
+penalty-nullified `no_play` rows. A fresh 1999 source comparison had 19 qualifying
+QB mismatches with the old EPA selection and zero with the provider's selection, at the
+same 0.005-per-attempt tolerance. See the provider's
+[calculate_stats implementation](https://github.com/nflverse/nflfastR/blob/master/R/calculate_stats.R).
+
+`splits_core.PASSING_EPA_PLAY` now filters the split EPA numerator and
+the modern feed's no-down reconciliation adjustment. Counting stats retain their
+broader flag-based base: historical valid attempts can have NULL play_type, so
+filtering the entire base would incorrectly drop those attempts. Sacks remain in
+the passing EPA numerator; their rows do not become pass attempts. This is an intentional
+metric correction, unlike the earlier structural moves. A weekly history
+migration rebuilds historical player-game totals and splits before validation,
+so leaders/profiles cannot retain old EPA beside newly loaded official values.
+
+### First real candidate: still rejected
+
+The October 14, 2026 local trial refreshed 2025/2026, migrated official weekly
+history for 1999–2026, and rebuilt its historical dependents. The full candidate
+still fails the unchanged gate: `targets[2001]` has three one-target differences.
+The failed candidate was removed. The original 616 MB source file retained its
+exact SHA256 across every attempt; nothing was published or uploaded.
+
+Fresh 2001 play-by-play reproduces those differences. The provider's underlying
+`play_stats_2001.rds` has no target credit (`stat_id=115`) for three plays whose
+play-by-play rows contain a completed pass and receiver: Wycheck in MIA–TEN,
+Smith in DEN–OAK, and Gadsden in MIA–BUF. The current weekly feed follows those
+credits. This is a source-attribution disagreement, not grounds to subtract one
+from arbitrary player totals or raise a global tolerance.
+
+A separate read-only audit compared the existing split counts with fresh weekly
+data for 1999–2025 (162 metric/year comparisons). It also found differences in
+2004 passing and 2024 targets, and receiving-yardage differences beyond the old
+2023-derived six-player bound in multiple years. Except the independently
+refetched 1999/2001 samples, that audit used stored historical plays/splits; those
+other cases still need investigation before assigning causes.
+
+The next step is a focused comparison of official per-play stat credits with
+the play-by-play fields currently used by split builders, including yardage and
+target attribution. Keep the full-history gate failing until the data contract
+is resolved. The RDS reader used for this investigation was an isolated,
+temporary `uv --with pyreadr` environment; no application dependency or lockfile
+was added. Logs, detailed audit JSON and diagnostic data remain ignored locally
+under `api/data/`, rather than being committed as production data.
 
 The legacy refresh records outcomes in return values and job logs. Candidate
 preparation also persists them in a `snapshot_preparation` table, with requested
@@ -298,8 +356,9 @@ the intended final architecture.
 
 ## Next migration checkpoints
 
-1. Refresh a real candidate with every missing required season, inspect its
-   validation report and resolve any uncovered data/analytics gaps.
+1. Resolve the real candidate's historical target/yardage credit disagreements;
+   compare canonical per-play credits and fresh PBP before changing attribution.
+   Rebuild and pass the unchanged gate before accepting a candidate.
 2. Consolidate legacy entry points into the candidate command and persist/bind
    the validation report and source revision to the artifact being published.
 3. Replace request-time materialization with reads, remove startup writes and

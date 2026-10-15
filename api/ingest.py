@@ -31,8 +31,19 @@ def run_ingest(seasons: list[int], log=print) -> list[SourceOutcome]:
     # Restrict downstream replacements to seasons actually downloaded.
     seasons = sorted(int(season) for season in plays['season'].unique())
 
-    # Build stats only for the seasons being ingested — never touch other seasons.
+    # Requested play seasons are replaced first. A weekly schema migration can
+    # also refresh historical official data, so rebuild those dependent stats
+    # one season at a time instead of loading all historical plays into memory.
     build_player_game_stats(conn, plays, seasons, log=log)
+    analytics_seasons = set(seasons)
+    weekly_seasons = {o.season for o in outcomes
+                      if o.source == 'weekly_player_stats' and o.status == 'loaded'}
+    for season in sorted(weekly_seasons - analytics_seasons):
+        historical = conn.execute('SELECT * FROM plays WHERE season = ?', [season]).df()
+        if not historical.empty:
+            log(f'Official weekly data changed for {season}; rebuilding dependent player stats')
+            build_player_game_stats(conn, historical, [season], log=log)
+            analytics_seasons.add(season)
 
     log(f"\nLoading advanced stats for {seasons}...")
     outcomes.extend(load_advanced_stats(conn, seasons, log=log))
@@ -40,7 +51,7 @@ def run_ingest(seasons: list[int], log=print) -> list[SourceOutcome]:
     log(f"\nLoading supplemental vendor data for {seasons}...")
     outcomes.extend(load_supplemental_data(conn, seasons, log=log))
 
-    prepare_analytics(seasons, log=log)
+    prepare_analytics(sorted(analytics_seasons), log=log)
     return outcomes
 
 

@@ -190,7 +190,7 @@ def reconciled():
         season INTEGER, player_id VARCHAR, category VARCHAR, split_dim VARCHAR,
         att INTEGER, epa DOUBLE, yards INTEGER, success_pct DOUBLE)''')
     conn.execute('''CREATE TABLE plays (season INTEGER, season_type VARCHAR, down INTEGER,
-        pass_attempt INTEGER, sack INTEGER, passer_player_id VARCHAR, qb_epa DOUBLE)''')
+        pass_attempt INTEGER, sack INTEGER, passer_player_id VARCHAR, qb_epa DOUBLE, play_type VARCHAR)''')
     conn.execute("INSERT INTO weekly_player_stats VALUES (2024, 'REG', 'qb', 100, 20)")
     conn.execute("INSERT INTO player_splits VALUES (2024, 'qb', 'passing', 'down', 100, 0.2, 500, 50)")
     yield conn
@@ -210,11 +210,32 @@ def test_reconciliation_detects_corrupt_counts_and_entirely_missing_players(reco
 def test_passing_epa_new_feed_adjustment_and_failure(reconciled):
     conn = reconciled
     conn.execute('ALTER TABLE weekly_player_stats ADD COLUMN sacks_suffered DOUBLE')
-    conn.execute("INSERT INTO plays VALUES (2024, 'REG', NULL, 1, 0, 'qb', 2)")
+    conn.execute("INSERT INTO plays VALUES (2024, 'REG', NULL, 1, 0, 'qb', 2, 'pass')")
+    conn.execute("INSERT INTO plays VALUES (2024, 'REG', NULL, 1, 0, 'qb', 100, 'no_play')")
     conn.execute('UPDATE weekly_player_stats SET passing_epa = 22')
     assert passing_epa_mismatches(conn, 2024) == 0
     conn.execute('UPDATE weekly_player_stats SET passing_epa = 23')
     assert passing_epa_mismatches(conn, 2024) == 1
+
+
+def test_passing_split_epa_excludes_nullified_plays_and_keeps_sacks(prepared):
+    import splits_builder
+    conn, _ = prepared
+    base = "(SELECT * FROM plays WHERE passer_player_id = '00-KC-QB1' LIMIT 1) p"
+    conn.execute(f'INSERT INTO plays BY NAME SELECT p.* FROM {base} CROSS JOIN range(60)')
+    conn.execute(f'''INSERT INTO plays BY NAME SELECT p.* REPLACE (
+        'no_play' AS play_type, 0 AS complete_pass, 1000 AS qb_epa) FROM {base}''')
+    conn.execute(f'''INSERT INTO plays BY NAME SELECT p.* REPLACE (
+        1 AS sack, 0 AS complete_pass, -2 AS qb_epa) FROM {base}''')
+    conn.execute(f'''INSERT INTO plays BY NAME SELECT p.* REPLACE (
+        NULL::VARCHAR AS play_type, 500 AS qb_epa) FROM {base}''')
+    splits_builder.materialize(2024)
+    attempts, epa = conn.execute('''SELECT SUM(att), SUM(att * epa) FROM player_splits
+        WHERE player_id = '00-KC-QB1' AND category = 'passing' AND split_dim = 'down' ''').fetchone()
+    # Seed: 24 attempts, +6 EPA. Add 60 passes and a -2 EPA sack. A valid
+    # untyped attempt still counts, but neither it nor no_play adds passing EPA.
+    assert attempts == 85
+    assert epa == pytest.approx(64, abs=0.005)
 
 
 @pytest.mark.parametrize('value', ["'NaN'::DOUBLE", '101', '-1'])

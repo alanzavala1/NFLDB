@@ -136,9 +136,10 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
     ftn_join = ("LEFT JOIN ftn_charting f ON plays.game_id = f.game_id AND plays.play_id = f.play_id"
                 if has_ftn else "")
     if category == "passing":
-        # Base is DROPBACKS (pass_attempt OR sack) and EPA uses nflfastR's
-        # `qb_epa` — exactly reproducing the official weekly passing_epa that
-        # Leaders/Player/Team show (SUM(qb_epa) over dropbacks ÷ attempts). All
+        # Keep the dropback base for official counting stats (older valid
+        # attempts can lack play_type). Filter only the EPA numerator to the
+        # provider's pass/qb_spike play types, using `qb_epa` to reproduce EPA that
+        # Leaders/Player show (provider-selected qb_epa divided by attempts). All
         # counting metrics stay attempt-only (att = comp/incomp/int) via FILTER;
         # sack rows contribute only their qb_epa to the EPA numerator.
         #
@@ -152,7 +153,7 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
             down, pass_length, pass_location, score_differential, qtr, shotgun,
             yardline_100, posteam_type, first_down,
             qb_hit, roof, surface, no_huddle, wp, {ftn_cols}
-            complete_pass, incomplete_pass, interception, sack,
+            complete_pass, incomplete_pass, interception, sack, play_type,
             passing_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, qb_epa, cpoe, {success_col}
         FROM plays {ftn_join}
@@ -166,7 +167,8 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
             SUM(COALESCE(air_yards, 0))       AS air_yards,
             SUM(COALESCE(yards_after_catch, 0)) AS yac,
             SUM(COALESCE(first_down, 0)) FILTER (WHERE {core.PASS_ATTEMPT}) AS first_downs,
-            ROUND(SUM(qb_epa) / NULLIF(COUNT(*) FILTER (WHERE {core.PASS_ATTEMPT}), 0), 4) AS epa,
+            ROUND(SUM(qb_epa) FILTER (WHERE {core.PASSING_EPA_PLAY}) /
+                  NULLIF(COUNT(*) FILTER (WHERE {core.PASS_ATTEMPT}), 0), 4) AS epa,
             ROUND(100.0 * AVG(success) FILTER (WHERE {core.PASS_ATTEMPT}), 1) AS success_pct,
             ROUND(AVG(cpoe), 2)               AS cpoe"""
     elif category == "rushing":

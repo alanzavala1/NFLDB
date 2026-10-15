@@ -156,6 +156,11 @@ def two_pt_filter(available: set[str]) -> str:
 PASS_ATTEMPT = ("(COALESCE(complete_pass, 0) = 1 OR COALESCE(incomplete_pass, 0) = 1 "
                 "OR COALESCE(interception, 0) = 1)")
 
+# nflfastR calculate_stats.R uses this play-type filter for modern passing EPA,
+# excluding no_play/untyped rows even if pass_attempt remains set. Counting
+# stats still use PASS_ATTEMPT: some historical untyped plays are valid attempts.
+PASSING_EPA_PLAY = "play_type IN ('pass', 'qb_spike')"
+
 
 # ── UNION assembly ───────────────────────────────────────────────────────────
 

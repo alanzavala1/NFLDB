@@ -2,7 +2,7 @@
 import duckdb
 import pandas as pd
 
-from data_errors import is_missing_data_error
+from data_errors import is_missing_data_error, is_missing_table_error
 
 
 def upsert_by_season(conn, table: str, df: pd.DataFrame, seasons: list[int], log=print):
@@ -16,7 +16,7 @@ def upsert_by_season(conn, table: str, df: pd.DataFrame, seasons: list[int], log
     try:
         existing_cols = [r[0] for r in conn.execute(f"DESCRIBE {table}").fetchall()]
     except Exception as error:
-        if not is_missing_data_error(error):
+        if not is_missing_table_error(error, table):
             raise
         existing_cols = None
 
@@ -90,7 +90,7 @@ def store_player_game_stats(conn, frame: pd.DataFrame, seasons: list[int], log=p
     try:
         conn.execute('SELECT 1 FROM player_game_stats LIMIT 1')
     except duckdb.CatalogException as error:
-        if 'Table with name player_game_stats does not exist' not in str(error):
+        if not is_missing_table_error(error, 'player_game_stats'):
             raise
         conn.execute('CREATE TABLE player_game_stats AS SELECT * FROM pgs_df')
     else:

@@ -98,3 +98,33 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
     assert outcomes == [SourceOutcome('schedules', 2024, 'loaded', 1)]
     assert calls == (['raw', 'player_stats', 'load_advanced_stats',
                       'load_supplemental_data', 'analytics'] if has_plays else ['raw'])
+
+
+def test_weekly_history_migration_rebuilds_dependents_without_expanding_vendor_downloads(monkeypatch):
+    import duckdb
+    import ingest
+
+    with duckdb.connect(':memory:') as conn:
+        conn.execute('CREATE TABLE plays AS SELECT * FROM (VALUES (1999), (2025)) t(season)')
+        monkeypatch.setattr(ingest, 'get_connection', lambda: conn)
+        plays = pd.DataFrame({'season': [2025]})
+        outcomes = [SourceOutcome('weekly_player_stats', s, 'loaded', 1) for s in (1999, 2025, 2026)]
+        monkeypatch.setattr(ingest, 'load_and_store_raw', lambda *a, **k: RawLoad(plays, outcomes))
+        rebuilt, vendors, analytics = [], [], []
+
+        def build(connection, frame, seasons, log):
+            assert sorted(frame['season'].unique()) == seasons
+            rebuilt.extend(seasons)
+
+        def load(connection, seasons, log):
+            vendors.append(seasons)
+            return []
+
+        monkeypatch.setattr(ingest, 'build_player_game_stats', build)
+        monkeypatch.setattr(ingest, 'load_advanced_stats', load)
+        monkeypatch.setattr(ingest, 'load_supplemental_data', load)
+        monkeypatch.setattr(ingest, 'prepare_analytics', lambda seasons, log: analytics.extend(seasons))
+        ingest.run_ingest([2025], log=lambda message: None)
+        assert rebuilt == [2025, 1999]
+        assert vendors == [[2025], [2025]]
+        assert analytics == [1999, 2025]  # absent historical plays never erase tables
