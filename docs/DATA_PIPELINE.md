@@ -229,6 +229,16 @@ data for 1999–2025 (162 metric/year comparisons). It also found differences in
 refetched 1999/2001 samples, that audit used stored historical plays/splits; those
 other cases still need investigation before assigning causes.
 
+The subsequent eligibility correction makes counting/yardage comparisons use
+the split builder's existing admission rules. In a read-only comparison of
+stored splits against cached fresh weekly feeds, 2006 receiving-yardage
+mismatches fall from 17 to 5; 2004 falls from 12 to 4. The three 2024 target
+differences and twelve receiving-yardage differences remain. These are scoped
+diagnostics, not a passing full candidate. The correction changes no football
+calculations, admission thresholds, reconciliation cutoffs or tolerances.
+Regression checks cover below-minimum players with high official volumes,
+incorrect/absent eligible output, and season/conversion exclusions.
+
 The next step is a focused comparison of official per-play stat credits with
 the play-by-play fields currently used by split builders, including yardage and
 target attribution. Keep the full-history gate failing until the data contract
@@ -317,9 +327,14 @@ defaults to writable during this migration.
   stats and passing yards are exact at the established qualifying volumes;
   rushing/receiving yardage retain the existing limits of two/six differing
   players per season. Passing EPA includes the modern feed's no-down adjustment.
-  Missing qualified QBs/defenders cannot disappear through inner joins. Low-volume
-  players below the established checks' thresholds are not a claim of exhaustive
-  per-player reconciliation.
+  Offensive counting/yardage comparisons also require the builder's source-play
+  admission rules: high official yardage alone does not imply eligibility for
+  splits. Eligible players are selected from plays before a left join to output,
+  so missing qualified output still fails; the separate coverage check requires
+  output even below the reconciliation volume cutoffs. No volume cutoff or
+  yardage tolerance was increased. Missing qualified QBs/defenders cannot
+  disappear through inner joins. Players outside these admission/volume checks
+  are not a claim of exhaustive per-player reconciliation.
 - ASGI HTTP checks exercise actual routes, services and response models for the
   oldest/newest played seasons: schedules, standings, leaders, power rankings,
   team analytics, a covered game's ratings, a team split request and a player

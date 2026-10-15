@@ -197,14 +197,67 @@ def reconciled():
     conn.close()
 
 
-def test_reconciliation_detects_corrupt_counts_and_entirely_missing_players(reconciled):
-    conn = reconciled
-    assert count_mismatches(conn, 2024, 'passing', 'att', 'attempts', 100) == 0
-    conn.execute('UPDATE player_splits SET att = 99')
-    assert count_mismatches(conn, 2024, 'passing', 'att', 'attempts', 100) == 1
-    conn.execute('DELETE FROM player_splits')
-    assert count_mismatches(conn, 2024, 'passing', 'att', 'attempts', 100) == 1
-    assert passing_epa_mismatches(conn, 2024) == 1
+@pytest.mark.parametrize('category,identity,admission,official_count', [
+    ('passing', 'passer_player_id', 50, 'attempts'),
+    ('rushing', 'rusher_player_id', 25, 'carries'),
+    ('receiving', 'receiver_player_id', 25, 'targets'),
+])
+@pytest.mark.parametrize('split_column', ['att', 'yards'])
+def test_reconciliation_compares_only_admitted_players_without_hiding_missing_output(
+        prepared, category, identity, admission, official_count, split_column):
+    conn, _ = prepared
+    official = official_count if split_column == 'att' else f'{category}_yards'
+    minimum = 100 if split_column == 'att' else 1000
+    for player, count in (('below-minimum', admission - 1), ('eligible', admission)):
+        conn.execute(f'''INSERT INTO plays BY NAME SELECT p.* REPLACE (
+            '{player}' AS {identity}, 1 AS complete_pass, 0 AS incomplete_pass,
+            0 AS interception, 0 AS sack, 0 AS two_point_attempt,
+            {int(category != 'rushing')} AS pass_attempt,
+            {int(category == 'rushing')} AS rush_attempt)
+            FROM (SELECT * FROM plays LIMIT 1) p CROSS JOIN range({count})''')
+        conn.execute(f'''INSERT INTO weekly_player_stats (season, season_type, player_id, {official})
+            VALUES (2024, 'REG', ?, ?)''', [player, minimum])
+    # No output for the below-minimum player is intentional. Other players'
+    # stored rows must not disguise eligible output that is wrong or absent.
+    conn.execute(f'''INSERT INTO player_splits
+        (season, player_id, category, split_dim, split_value, {split_column})
+        VALUES (2024, 'eligible', ?, 'down', '1', ?)''', [category, minimum])
+    assert count_mismatches(conn, 2024, category, split_column, official, minimum) == 0
+    conn.execute(f"UPDATE player_splits SET {split_column} = ? WHERE player_id = 'eligible'", [minimum - 1])
+    assert count_mismatches(conn, 2024, category, split_column, official, minimum) == 1
+    conn.execute("DELETE FROM player_splits WHERE player_id = 'eligible'")
+    assert count_mismatches(conn, 2024, category, split_column, official, minimum) == 1
+
+
+def test_high_yardage_receiver_below_admission_passes_but_missing_eligible_receiver_fails(prepared):
+    conn, _ = prepared
+    conn.execute('''INSERT INTO plays BY NAME SELECT p.* REPLACE (
+        'limited-receiver' AS receiver_player_id, 1 AS complete_pass,
+        0 AS incomplete_pass, 0 AS interception, 0 AS two_point_attempt)
+        FROM (SELECT * FROM plays LIMIT 1) p CROSS JOIN range(24)''')
+    conn.execute('''INSERT INTO weekly_player_stats
+        (season, season_type, player_id, receiving_yards)
+        VALUES (2024, 'REG', 'limited-receiver', 400)''')
+    # An extra conversion, postseason play, and other-season play cannot admit
+    # this receiver to 2024 regular-season splits.
+    for replacement in ('1 AS two_point_attempt', "'POST' AS season_type", '2023 AS season'):
+        conn.execute(f'''INSERT INTO plays BY NAME SELECT * REPLACE ({replacement})
+            FROM plays WHERE receiver_player_id = 'limited-receiver' LIMIT 1''')
+    # The other-season play also needs its core tables; remove it after checking
+    # the reconciliation population, before exercising the full season gate.
+    assert count_mismatches(conn, 2024, 'receiving', 'yards', 'receiving_yards', 300) == 0
+    conn.execute('DELETE FROM plays WHERE season = 2023')
+    assert validate_snapshot(conn)['played_seasons'] == [2024]
+    conn.execute('''INSERT INTO plays BY NAME SELECT * FROM plays
+        WHERE receiver_player_id = 'limited-receiver' AND season_type = 'REG'
+            AND two_point_attempt = 0 LIMIT 1''')
+    with pytest.raises(SnapshotValidationError, match=r'player_splits\[2024, receiving\]: qualifying players missing'):
+        validate_snapshot(conn)
+
+
+def test_passing_epa_detects_entirely_missing_player(reconciled):
+    reconciled.execute('DELETE FROM player_splits')
+    assert passing_epa_mismatches(reconciled, 2024) == 1
 
 
 def test_passing_epa_new_feed_adjustment_and_failure(reconciled):

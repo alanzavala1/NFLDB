@@ -3,15 +3,23 @@ from splits_core import PASSING_EPA_PLAY
 
 
 def count_mismatches(conn, season, category, split_col, official_col, minimum):
+    import splits_builder
+
+    # Official volume alone does not imply split admission (for example, a
+    # receiver can gain 300 yards on fewer than 25 targets). Select eligibility
+    # from source plays, not stored splits, so missing qualified output fails.
+    available = {r[0] for r in conn.execute('DESCRIBE plays').fetchall()}
+    eligibility = splits_builder.qualification_ctes(category, season, available)
     return conn.execute(f'''
-        WITH s AS (
+        {eligibility}, s AS (
             SELECT player_id, SUM({split_col}) v FROM player_splits
             WHERE category = ? AND split_dim = 'down' AND season = ? GROUP BY 1),
         o AS (
             SELECT player_id, SUM({official_col}) v FROM weekly_player_stats
             WHERE season = ? AND season_type = 'REG' GROUP BY 1)
-        SELECT COUNT(*) FROM o LEFT JOIN s USING (player_id)
-        WHERE o.v >= ? AND COALESCE(s.v, 0) <> o.v
+        SELECT COUNT(*) FROM o JOIN qualified USING (player_id)
+        LEFT JOIN s USING (player_id)
+        WHERE o.v >= ? AND (s.player_id IS NULL OR COALESCE(s.v, 0) <> o.v)
     ''', [category, season, season, minimum]).fetchone()[0]
 
 
