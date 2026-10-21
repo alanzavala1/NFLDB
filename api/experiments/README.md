@@ -1,5 +1,9 @@
 # Receiving-credit pilot
 
+For the separate trial that executes the official R calculator, see
+[Official nflfastR receiving split trial](UPSTREAM_SPLITS.md). Neither experiment
+is imported by production code.
+
 This isolated prototype tests whether individual provider stat credits can
 correct receiving attribution before any production migration. Serving and
 ingestion do not import it. It uses the existing pandas/DuckDB dependencies,
