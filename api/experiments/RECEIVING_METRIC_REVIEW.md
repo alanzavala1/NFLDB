@@ -5,6 +5,8 @@ now implements YAC and receiving first downs. The notes below preserve the
 research checkpoint that established their definitions and coverage boundaries.
 The [v4 extension](UPSTREAM_SPLITS.md#target-role-epa-and-success-extension-october-21)
 also implements EPA/tgt and explicitly defined Success%, with population checks.
+The [v5 extension](UPSTREAM_SPLITS.md#receiving-air-yard-extension-october-21)
+implements air yards with independent per-target coverage checks.
 
 The original review below preceded those implementations. Live rows are unchanged.
 

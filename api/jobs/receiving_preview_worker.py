@@ -12,19 +12,19 @@ import pandas as pd
 from pipeline.receiving_preview import file_sha256
 from pipeline.receiving_splits import VERSIONS, load_receiving_down_export, read_export_csv
 from pipeline.snapshots import CandidateError
-from services.receiving_coverage import targets_unavailable, yac_unavailable
+from services.receiving_coverage import air_yards_unavailable, targets_unavailable, yac_unavailable
 
 
 def _check_totals(rows: pd.DataFrame, weekly: pd.DataFrame, season: int,
                   qualified: list[str]) -> dict:
     counts = {"receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td",
               "receiving_first_downs": "first_downs"}
-    required = {"player_id", "season", "season_type", "targets", "receiving_yards_after_catch", *counts}
+    required = {"player_id", "season", "season_type", "targets", "receiving_yards_after_catch", "receiving_air_yards", *counts}
     if not required.issubset(weekly.columns) or weekly.empty:
         raise CandidateError(f"weekly[{season}]: missing receiving reference data")
     if weekly[["season", "season_type"]].isna().any().any() or not weekly.season.eq(season).all() or not weekly.season_type.eq("REG").all():
         raise CandidateError(f"weekly[{season}]: unexpected reference scope")
-    values = weekly[["targets", "receiving_yards_after_catch", *counts]].apply(pd.to_numeric, errors="raise")
+    values = weekly[["targets", "receiving_yards_after_catch", "receiving_air_yards", *counts]].apply(pd.to_numeric, errors="raise")
     numeric = values.to_numpy(dtype=float, na_value=np.nan)
     if not np.isfinite(numeric).all() or not (numeric == np.trunc(numeric)).all():
         raise CandidateError(f"weekly[{season}]: invalid reference counts")
@@ -52,10 +52,26 @@ def _check_totals(rows: pd.DataFrame, weekly: pd.DataFrame, season: int,
         a, b = actual.align(expected, fill_value=0)
         if not a.eq(b).all():
             raise CandidateError(f"receiving[{season}]: {source} does not match weekly totals")
+    air_matches = 0
+    if air_yards_unavailable([season]):
+        if rows.air_yards.notna().any():
+            raise CandidateError(f"receiving[{season}]: unsupported historical air yards must be NULL")
+    else:
+        grouped = rows.groupby("player_id")
+        complete = grouped.air_yards.count().eq(grouped.size())
+        players = complete[complete].index
+        actual = grouped.air_yards.sum(min_count=1).reindex(players)
+        expected = weekly.groupby("player_id").receiving_air_yards.sum().reindex(players)
+        if not actual.eq(expected).all():
+            raise CandidateError(f"receiving[{season}]: receiving_air_yards does not match weekly totals")
+        air_matches = len(players)
     return {"players": len(qualified), "rows": len(rows), "production_matches_weekly": True,
             "targets": "unavailable" if targets_unavailable([season]) else "matched_weekly",
             "yac": "unavailable" if yac_unavailable([season]) else "matched_weekly",
             "first_downs": "matched_weekly",
+            "air_yards": {"available_rows": int(rows.air_yards.notna().sum()),
+                          "unavailable_rows": int(rows.air_yards.isna().sum()),
+                          "players_matched_weekly": air_matches},
             "target_rates": {"definition": "original target role; EPA/tgt and percent EPA > 0",
                              "epa_rows": int(rows.epa.notna().sum()),
                              "success_rows": int(rows.success_pct.notna().sum()),

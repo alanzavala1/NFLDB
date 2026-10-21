@@ -61,17 +61,21 @@ def fake_export(monkeypatch):
                                        targets=count, receptions=7, receiving_yards=70,
                                        receiving_tds=0, receiving_yards_after_catch=yac,
                                        receiving_first_downs=7, receiving_epa=3.5,
+                                       receiving_air_yards=count * 2,
                                        split_value=str(down)) for down in range(1, 5)])
             context = pd.DataFrame([dict(game_id="game", play_id=index, season=year,
                                         season_type="REG", two_point_attempt=0,
                                         receiver_player_id="receiver", down=index % 4 + 1,
                                         complete_pass=1, incomplete_pass=0, interception=0,
-                                        epa=0.5) for index in range(28)])
+                                        epa=0.5, air_yards=2) for index in range(28)])
+            if fault == "missing_air":
+                context.loc[0, "air_yards"] = None
             if fault == "missing_player":
                 frame["player_id"] = "unqualified"
             weekly = pd.DataFrame([dict(player_id="receiver", season=year, season_type="REG",
                                         targets=count * 4, receptions=28, receiving_yards=280, receiving_tds=0,
-                                        receiving_yards_after_catch=yac * 4, receiving_first_downs=28)])
+                                        receiving_yards_after_catch=yac * 4, receiving_first_downs=28,
+                                        receiving_air_yards=count * 8)])
             if fault == "wrong_totals":
                 weekly["receiving_yards"] = 281
             if fault == "missing_scope":
@@ -80,6 +84,8 @@ def fake_export(monkeypatch):
                 weekly["receiving_yards_after_catch"] += 1
             if fault == "wrong_first_downs":
                 weekly["receiving_first_downs"] += 1
+            if fault == "wrong_air":
+                weekly["receiving_air_yards"] += 1
             for name, data in ((f"down-{year}.csv", frame), (f"weekly-{year}.csv", weekly),
                                (f"context-{year}.csv", context)):
                 path = output / name
@@ -117,10 +123,11 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
         assert conn.execute("SELECT player_id,yards FROM player_splits ORDER BY player_id").fetchall() == [("older", 88), ("receiver", 60)]
         assert conn.execute("SELECT season,SUM(yac),SUM(first_downs) FROM receiving_down_preview GROUP BY season ORDER BY season").fetchall() == [(2004, None, 28), (2024, 200, 28)]
         assert conn.execute("SELECT DISTINCT season,epa,success_pct FROM receiving_down_preview ORDER BY season").fetchall() == [(2004, None, None), (2024, 0.5, 100.0)]
+        assert conn.execute("SELECT season,SUM(air_yards) FROM receiving_down_preview GROUP BY season ORDER BY season").fetchall() == [(2004, None), (2024, 56)]
     assert not Path(str(tmp_path / "preview.duckdb") + ".wal").exists()
 
 
-@pytest.mark.parametrize("fault", ["wrong_totals", "missing_player", "missing_scope", "changed_bytes", "stale_run", "wrong_versions", "wrong_YAC", "wrong_first_downs"])
+@pytest.mark.parametrize("fault", ["wrong_totals", "missing_player", "missing_scope", "changed_bytes", "stale_run", "wrong_versions", "wrong_YAC", "wrong_first_downs", "wrong_air"])
 def test_failed_validation_removes_owned_candidate_preserves_original_and_exports(source, tmp_path, fake_export, monkeypatch, fault):
     monkeypatch.setenv("PREVIEW_TEST_FAULT", fault)
     before = preview.file_sha256(source)
@@ -234,3 +241,13 @@ def test_2006_preview_keeps_YAC_and_first_downs_with_unknown_targets(source, tmp
     assert report["seasons"]["2006"]["yac"] == "matched_weekly"
     with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
         assert conn.execute("SELECT SUM(att),SUM(yac),SUM(first_downs) FROM receiving_down_preview").fetchone() == (None, 200, 28)
+
+
+def test_missing_target_air_yards_preserves_rates_and_reports_partial_coverage(source, tmp_path, fake_export, monkeypatch):
+    monkeypatch.setenv("PREVIEW_TEST_FAULT", "missing_air")
+    report = run(source, tmp_path)
+    assert report["seasons"]["2024"]["air_yards"] == {
+        "available_rows": 3, "unavailable_rows": 1, "players_matched_weekly": 0,
+    }
+    with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
+        assert conn.execute("SELECT air_yards,epa,success_pct,cmp,yards FROM receiving_down_preview WHERE season=2024 AND split_value='1'").fetchone() == (None, 0.5, 100.0, 7, 70)

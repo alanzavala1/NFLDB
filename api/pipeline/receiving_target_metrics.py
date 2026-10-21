@@ -1,24 +1,25 @@
-"""Target-role rates for the isolated receiving preview, not lateral allocation."""
+"""Target-role air yards and rates for the isolated receiving preview."""
 import numpy as np
 import pandas as pd
 
 from pipeline.source_results import SourceError
-from services.receiving_coverage import targets_unavailable
+from services.receiving_coverage import air_yards_unavailable, targets_unavailable
 
 
-def receiving_rates(source: pd.DataFrame, context: pd.DataFrame, season: int) -> pd.DataFrame:
-    """Require complete matching target/EPA populations before exposing a rate.
+def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season: int) -> pd.DataFrame:
+    """Require complete matching target populations before exposing each field.
 
     Success is EPA > 0, calculated here because calculate_stats has no success
     output. Missing EPA is not a failed play. Official receiving EPA must also
     match the target-play numerator before it can be divided by target credits.
+    Air yards has independent completeness checks, without requiring EPA.
     """
     def fail(reason):
-        raise SourceError("nflfastR_receiving_rates", season, reason)
+        raise SourceError("nflfastR_receiving_target_metrics", season, reason)
 
     flags = ["complete_pass", "incomplete_pass", "interception"]
     required = {"game_id", "play_id", "season", "season_type", "two_point_attempt",
-                "down", "receiver_player_id", "epa", *flags}
+                "down", "receiver_player_id", "epa", "air_yards", *flags}
     if required - set(context.columns):
         fail("missing target context columns")
     plays = context.copy()
@@ -44,12 +45,30 @@ def receiving_rates(source: pd.DataFrame, context: pd.DataFrame, season: int) ->
         fail(f"EPA must be numeric: {error}")
     if np.isinf(plays.epa.to_numpy(dtype=float, na_value=np.nan)).any() or np.isinf(official.to_numpy(dtype=float, na_value=np.nan)).any():
         fail("EPA must be finite or missing")
+    # Upstream sums missing air-yard inputs as zero. Inspect coverage ourselves
+    # before accepting that aggregate, without making EPA depend on air yards.
+    for frame, column, missing_allowed in ((plays, "air_yards", True),
+                                           (source, "receiving_air_yards", False)):
+        try:
+            air = pd.to_numeric(frame[column], errors="raise")
+            numeric = air.to_numpy(dtype=float, na_value=np.nan)
+        except (ValueError, TypeError) as error:
+            fail(f"air yards must be numeric: {error}")
+        valid = numeric[~np.isnan(numeric)] if missing_allowed else numeric
+        if (not np.isfinite(valid).all() or not (valid == np.trunc(valid)).all()
+                or (valid < np.iinfo(np.int32).min).any() or (valid > np.iinfo(np.int32).max).any()):
+            fail("air yards must be finite integers within SQL storage range")
+        if missing_allowed:
+            plays["air_yards"] = air
+        else:
+            official_air = air
     plays = plays.loc[plays[flags].eq(1).any(axis=1) & plays.receiver_player_id.notna() & plays.down.notna()].copy()
     plays["split_value"] = plays.down.astype(int).astype(str)
     plays["positive_epa"] = plays.epa.gt(0).astype(int)
     grouped = plays.groupby(["receiver_player_id", "split_value"]).agg(
         target_plays=("play_id", "size"), epa_plays=("epa", "count"),
         epa_total=("epa", "sum"), successful=("positive_epa", "sum"),
+        air_plays=("air_yards", "count"), air_total=("air_yards", "sum"),
     ).rename_axis(index=["player_id", "split_value"])
     aligned = source[["player_id", "split_value"]].join(grouped, on=["player_id", "split_value"])
     complete = (source.targets.gt(0) & aligned.target_plays.eq(source.targets)
@@ -61,4 +80,13 @@ def receiving_rates(source: pd.DataFrame, context: pd.DataFrame, season: int) ->
     result = pd.DataFrame(index=source.index)
     result["epa"] = (official / source.targets.replace(0, np.nan)).where(complete & same_epa).round(4).astype("Float64")
     result["success_pct"] = (100 * aligned.successful / source.targets.replace(0, np.nan)).where(complete).round(1).astype("Float64")
+    # An observed zero-target lateral-only bucket has zero target air yards,
+    # although it has no target-based rates. Never replace missing per-play air
+    # yards with zero when one or more targets do exist.
+    matching_targets = aligned.target_plays.fillna(0).eq(source.targets)
+    complete_air = (matching_targets & aligned.air_plays.fillna(0).eq(source.targets)
+                    & official_air.eq(aligned.air_total.fillna(0)))
+    if air_yards_unavailable([season]):
+        complete_air[:] = False
+    result["air_yards"] = official_air.where(complete_air).astype("Int64")
     return result

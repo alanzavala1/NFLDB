@@ -305,3 +305,70 @@ EPA, incompletions/interceptions, lateral-only buckets, malformed context and
 the actual SQL/worker lifecycle.
 Next: receiving air-yard coverage/mapping, then other split dimensions and
 the coordinated source-refresh/full-history candidate checks.
+
+## Receiving air-yard extension (October 21)
+
+Version 5 adds official `receiving_air_yards` and PBP `air_yards` to the bound
+exports. The shared target-context validation and aggregation now live in
+`pipeline/receiving_target_metrics.py` (formerly `receiving_rates.py`), avoiding
+separate target populations for each field. Air yards is the summed depth of
+all targets relative to the line of scrimmage, including incompletions. It may
+be negative and is not the air component of completed receiving yards alone.
+
+The preview requires target credits to match the original target-play count,
+air yards on every target, and agreement between that sum and the official
+numerator. A missing input or population/numerator discrepancy masks only air
+yards. Missing EPA does not erase complete air yards. Malformed, nonfinite,
+fractional or out-of-SQL-range air yards fail. Valid negative and zero totals
+survive. A zero-target lateral-only bucket has zero target air yards, while its
+EPA/tgt and Success% remain NULL. Receiving production is preserved throughout.
+
+`air_yards_unavailable` is preview-only: pre-2006 air records are unsupported and
+2003–08 target attribution is incomplete. Thus the supported date boundary is
+2009, subject to actual per-bucket checks. It does not certify complete coverage
+after that date or change existing API responses. YAC retains its independent
+2006 boundary. Weekly reconciliation checks players with complete air-yard
+splits; reports explicitly count available/unavailable rows and complete players
+matched. Partial player sums are never certified as complete weekly totals.
+
+Actual ignored preview: `data/receiving-preview-air-20261021.duckdb`, exports
+`data/upstream-r-trial/preview-export-v5/`:
+
+| Season | Players | Down rows | Available air-yard rows | Unavailable rows | Complete players matched weekly |
+|---|---:|---:|---:|---:|---:|
+| 2002 | 217 | 781 | 0 | 781 | 0 |
+| 2006 | 141 | 492 | 0 | 492 | 0 |
+| 2009 | 210 | 766 | 756 | 10 | 201 |
+| 2024 | 220 | 813 | 813 | 0 | 220 |
+
+In 2009, 13 original target plays have missing air yards across all identified
+players; 10 admitted player/down buckets across 9 players are affected. Their
+receiving production and EPA remain. Gonzalez first-down targets include one
+missing air-yard input: 44 targets, 27 catches, 268 yards, 1 TD, 61 YAC,
+12 receiving first downs and 0.1491 EPA/tgt survive, with air yards NULL. The
+upstream aggregate is 362; exposing that as a complete total would hide the gap.
+Real frozen input/expected-output fixtures cover this example.
+
+2024 totals: Gibbs **-11 air yards**, Jefferson **1,682**. The existing zero-target
+10-yard lateral bucket keeps zero air yards and NULL target-based rates.
+An independent read-only replay joins raw stat-115 target credits to stat-111/112
+team/play air yards, preserving all raw records. It matches every identified
+official Down bucket in all four seasons. Official whole-season air yards match
+weekly and the Down partition, including below-admission players. That source
+agreement does not establish coverage: the 2002 zeros are still unavailable.
+
+All 32 bound file hashes verify. Canonical `player_splits` is unchanged by
+bidirectional EXCEPT ALL; all existing 2024 preview metrics match v4 exactly.
+Source SHA256 remains `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
+source and preview closed without WALs. Evidence: ignored
+`data/upstream-r-trial/air-preview-verification.json`, `verify_air_inputs.R`,
+`verify_air_preview.py`, `preview-job-v5.log` and test logs.
+No full candidate acceptance, source/serving replacement, push or deployment.
+Validation: full backend 809 passed, 2 skipped (78.50s). The final real
+Gonzalez-2009 regression and updated frozen inputs were then replayed with the
+complete 124-test receiving/coverage/worker suite, all passing. Cases cover
+field-specific missingness, valid negative/zero air, malformed numbers,
+historical boundaries, partial weekly reporting and unchanged SQL production.
+Next small checkpoint: apply the validated receiving approach to another play
+context, starting with quarters. Full environment locking, coordinated source
+refresh/qualification and full-history/dimension validation remain outstanding.

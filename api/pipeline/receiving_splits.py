@@ -14,12 +14,12 @@ import numpy as np
 import pandas as pd
 
 from pipeline.source_results import SourceError
-from pipeline.receiving_rates import receiving_rates
+from pipeline.receiving_target_metrics import receiving_target_metrics
 from services.receiving_coverage import targets_unavailable, yac_unavailable
 
 
 EXPORT_CONTRACT = {
-    "schema_version": 4,
+    "schema_version": 5,
     "season_type": "REG",
     "excludes_two_point_attempts": True,
     "summary_level": "season",
@@ -28,7 +28,8 @@ EXPORT_CONTRACT = {
 VERSIONS = {"nflfastR": "6.0.0", "nflreadr": "1.5.1"}
 _PRODUCTION = {"targets": "att", "receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td"}
 _COUNTS = {**_PRODUCTION, "receiving_yards_after_catch": "yac", "receiving_first_downs": "first_downs"}
-_UNSUPPORTED = ("interceptions", "air_yards", "cpoe")
+_UNSUPPORTED = ("interceptions", "cpoe")
+_TARGET_METRICS = ("epa", "success_pct", "air_yards")
 _COLUMNS = ("player_id", "season", "category", "split_dim", "split_value", "sort_order",
             "att", "cmp", "yards", "td", "interceptions", "air_yards", "yac",
             "first_downs", "epa", "success_pct", "cpoe")
@@ -50,7 +51,7 @@ def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: 
         not isinstance(player, str) or not player.strip() for player in qualified_players
     ):
         raise _error(season, "qualified_players must contain nonempty player IDs")
-    required = {"player_id", "season", "season_type", "split_value", "receiving_epa", *_COUNTS}
+    required = {"player_id", "season", "season_type", "split_value", "receiving_epa", "receiving_air_yards", *_COUNTS}
     if missing := required - set(frame.columns):
         raise _error(season, f"export is missing columns {sorted(missing)}")
     source = frame.copy()
@@ -83,7 +84,7 @@ def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: 
     if values.receiving_first_downs.gt(values.receptions).any():
         raise _error(season, "receiving first downs exceed receptions")
     source[list(_COUNTS)] = values
-    source[["epa", "success_pct"]] = receiving_rates(source, context, season)
+    source[list(_TARGET_METRICS)] = receiving_target_metrics(source, context, season)
     # The all-position calculator also emits zero receiving lines. Test activity
     # before target masking so unknown historical targets cannot become fake 0s.
     activity_fields = [*_PRODUCTION, "receiving_first_downs"]
@@ -91,7 +92,7 @@ def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: 
         activity_fields.append("receiving_yards_after_catch")
     active = values[activity_fields].ne(0).any(axis=1)
     source = source.loc[identified & active & source.player_id.isin(qualified_players)]
-    result = source[["player_id", "season", "split_value", *_COUNTS, "epa", "success_pct"]].rename(columns=_COUNTS).copy()
+    result = source[["player_id", "season", "split_value", *_COUNTS, *_TARGET_METRICS]].rename(columns=_COUNTS).copy()
     result["category"] = "receiving"
     result["split_dim"] = "down"
     result["sort_order"] = result.split_value.astype("Int64")
@@ -102,7 +103,7 @@ def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: 
     if yac_unavailable([season]):
         result["yac"] = pd.Series(pd.NA, index=result.index, dtype="Int64")
     for column in _UNSUPPORTED:
-        dtype = "Float64" if column in ("epa", "success_pct", "cpoe") else "Int64"
+        dtype = "Float64" if column == "cpoe" else "Int64"
         result[column] = pd.Series(pd.NA, index=result.index, dtype=dtype)
     return result[list(_COLUMNS)].sort_values(["player_id", "sort_order"]).reset_index(drop=True)
 

@@ -6,13 +6,14 @@ including postseason, rather than inventing zeroes or trusting legacy counts.
 Outside this known gap this policy leaves the existing source values unchanged;
 that is not a certification of every other season or of receiving EPA/ratings.
 Raw stored data and independently usable catches/yards/TDs are never changed.
-The YAC helper is currently used only by the isolated preview, not serving.
+YAC and air-yard helpers are used only by the isolated preview, not serving.
 """
 from collections.abc import Iterable
 
 
 UNAVAILABLE_TARGET_SEASONS = frozenset(range(2003, 2009))
 FIRST_YAC_SEASON = 2006
+FIRST_AIR_YARDS_SEASON = 2006
 
 
 def targets_unavailable(seasons: Iterable[int]) -> bool:
@@ -27,6 +28,16 @@ def yac_unavailable(seasons: Iterable[int]) -> bool:
     This helper does not change the existing serving mask below.
     """
     return any(season < FIRST_YAC_SEASON for season in seasons)
+
+
+def air_yards_unavailable(seasons: Iterable[int]) -> bool:
+    """Preview requires both air-yard records and complete target attribution.
+
+    Pre-2006 air records are unsupported; 2003–08 targets are incomplete.
+    Later seasons still require per-bucket coverage and reconciliation.
+    """
+    return any(season < FIRST_AIR_YARDS_SEASON or season in UNAVAILABLE_TARGET_SEASONS
+               for season in seasons)
 
 
 def mask_target_fields(row: dict, season: int, *, split: bool = False) -> dict:

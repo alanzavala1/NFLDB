@@ -2,7 +2,7 @@
 import duckdb
 import pytest
 
-from services.receiving_coverage import mask_target_fields, targets_unavailable, yac_unavailable
+from services.receiving_coverage import air_yards_unavailable, mask_target_fields, targets_unavailable, yac_unavailable
 from tests.conftest import _create_schema, _seed
 
 
@@ -11,6 +11,13 @@ def test_YAC_coverage_has_its_own_boundary_independent_of_targets():
     assert yac_unavailable([2004, 2024])
     assert not yac_unavailable([2006, 2007, 2008])
     assert targets_unavailable([2006, 2007, 2008])
+
+
+@pytest.mark.parametrize("season, unavailable", [(1999, True), (2002, True), (2005, True),
+                                               (2006, True), (2008, True), (2009, False), (2024, False)])
+def test_preview_air_yards_requires_both_air_and_target_coverage(season, unavailable):
+    assert air_yards_unavailable([season]) == unavailable
+    assert air_yards_unavailable([2024, season]) == unavailable
 
 
 @pytest.mark.parametrize("season, unavailable", [(2002, False), (2003, True), (2004, True), (2008, True), (2009, False), (2024, False)])

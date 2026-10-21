@@ -404,7 +404,7 @@ excluding first downs supplied by penalties; this is distinct from generic
 play first downs. First-down counts remain available without targets, while a
 first-downs-per-target rate still requires a supported target denominator.
 
-`pipeline/receiving_rates.py` adds target-role EPA/tgt (four decimals) and
+`pipeline/receiving_target_metrics.py` adds target-role EPA/tgt (four decimals) and
 Success% (one decimal) in the v4 preview. Success means EPA > 0; the official
 calculator does not supply this rate. The adapter reads the hash-bound PBP
 context, excludes conversions, and requires original-receiver completed,
@@ -414,9 +414,18 @@ match that target population. Missing coverage, the 2003–08 target gap and
 zero-target lateral-only buckets produce NULL rates, preserving other fields.
 EPA describes the original target role, not individual lateral attribution.
 
-Air yards and category-inapplicable fields remain NULL. These partial rows must
-not replace complete live rows. The v4 manifest requires receiving EPA and
-target context, and records the R environment and SHA256 digests of
+Version 5 also maps official receiving air yards after independently checking
+per-target air-yard completeness, matching target counts and the summed air-yard
+numerator. Air yards includes incompletions and can be negative. Missing air
+yards masks only that field; missing EPA does not erase usable air yards.
+Pre-2006 air records and the 2003–08 target gap make receiving air yards
+unavailable before 2009 in this preview. Later years still require bucket checks.
+A verified zero-target lateral-only bucket has zero target air yards and NULL
+target-based rates. The existing serving mask is unchanged.
+
+Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
+not replace complete live rows. The v5 manifest requires receiving EPA/air yards
+and target context, and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
 captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
@@ -453,6 +462,9 @@ Known-gap targets and unsupported pre-2006 YAC must be NULL. Receiving first
 downs match weekly totals, as does YAC when supported. The report records
 available and unavailable rate-row counts. Weekly EPA includes conversions;
 the preview's EPA does not, so these numerators cannot be compared directly.
+It also records available/unavailable air-yard rows and how many players have
+complete air-yard splits reconciled to weekly totals. A player's partial sum
+is never reported as a complete weekly match.
 Qualification still uses the copied stored PBP;
 this preview is not a coordinated refresh of every source or dimension.
 

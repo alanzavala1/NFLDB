@@ -49,7 +49,9 @@ def test_real_counts_round_trip_through_actual_player_splits_schema():
         assert conn.execute("SELECT SUM(yac),SUM(first_downs) FROM player_splits WHERE player_id=?", [GONZALEZ]).fetchone() == (None, 69)
         assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE season=2004 AND (epa IS NOT NULL OR success_pct IS NOT NULL)").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE season=2024 AND epa IS NOT NULL AND success_pct IS NOT NULL").fetchone()[0] == 8
-        assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE air_yards IS NOT NULL").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE season=2004 AND air_yards IS NOT NULL").fetchone()[0] == 0
+        assert conn.execute("SELECT SUM(air_yards) FROM player_splits WHERE player_id=?", [GIBBS]).fetchone()[0] == -11
+        assert conn.execute("SELECT SUM(air_yards) FROM player_splits WHERE player_id=?", [JEFFERSON]).fetchone()[0] == 1682
 
 
 def test_historical_positive_credits_remain_unknown_without_erasing_production():
@@ -138,12 +140,13 @@ def test_real_lateral_only_bucket_preserves_yards_without_inventing_target_rates
     rows = adapt(players=["00-0036158"])
     assert rows[["att", "cmp", "yards", "td", "yac"]].iloc[0].tolist() == [0, 0, 10, 0, 10]
     assert rows[["epa", "success_pct"]].isna().all().all()
+    assert rows.air_yards.iloc[0] == 0
 
 
 @pytest.mark.parametrize("field,value", [
     ("season_type", "POST"), ("summary_level", "week"), ("split_dimension", "quarter"),
     ("excludes_two_point_attempts", False), ("excludes_two_point_attempts", 1),
-    ("schema_version", 3), ("schema_version", True),
+    ("schema_version", 4), ("schema_version", True),
 ])
 def test_scope_drift_fails(export, field, value):
     directory, manifest = export
@@ -206,6 +209,15 @@ def test_2006_YAC_does_not_acquire_a_target_dependency():
     assert rows.yards.sum() == 900
     assert rows.yac.sum() == 319
     assert rows.first_downs.sum() == 54
+    assert rows.air_yards.isna().all()
+
+
+def test_real_2009_missing_air_preserves_Gonzalez_production_and_EPA():
+    rows = adapt(season=2009, players=[GONZALEZ])
+    assert rows[["att", "cmp", "yards", "td", "yac", "first_downs"]].iloc[0].tolist() == [44, 27, 268, 1, 61, 12]
+    assert rows.air_yards.isna().all()
+    assert rows.epa.iloc[0] == 0.1491
+    assert rows.success_pct.notna().all()
 
 
 def test_supported_zero_YAC_is_not_missing_and_YAC_can_exceed_receiving_yards():
@@ -216,6 +228,6 @@ def test_supported_zero_YAC_is_not_missing_and_YAC_can_exceed_receiving_yards():
 
 
 def test_missing_new_fields_is_not_treated_as_a_zero_valued_legacy_export():
-    for column in ("receiving_yards_after_catch", "receiving_first_downs", "receiving_epa"):
+    for column in ("receiving_yards_after_catch", "receiving_first_downs", "receiving_epa", "receiving_air_yards"):
         with pytest.raises(SourceError, match="missing columns"):
             adapt(frame().drop(columns=column))
