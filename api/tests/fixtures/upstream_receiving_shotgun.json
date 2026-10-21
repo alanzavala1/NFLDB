@@ -1,0 +1,15 @@
+{
+  "source": "Official nflfastR 6.0.0 / nflreadr 1.5.1 calculate_stats, October 21, 2026 v8 preview",
+  "scope": "REG nonconversion shotgun flag 1 vs 0; missing is not under_center",
+  "columns": ["player_id", "season", "season_type", "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_yards_after_catch", "receiving_first_downs", "receiving_epa", "receiving_air_yards", "split_value"],
+  "rows": [
+    ["00-0006101", 2006, "REG", 0, 13, 176, 0, 54, 8, 14.2634714386659, 0, "shotgun"],
+    ["00-0006101", 2006, "REG", 0, 60, 724, 5, 265, 46, 75.0435570716218, 0, "under_center"],
+    ["00-0006101", 2009, "REG", 73, 47, 496, 4, 105, 35, 33.9363410576379, 569, "shotgun"],
+    ["00-0006101", 2009, "REG", 62, 36, 371, 2, 135, 19, 6.49471134319901, 513, "under_center"],
+    ["00-0036322", 2024, "REG", 113, 77, 1041, 7, 334, 44, 41.4286874331512, 1086, "shotgun"],
+    ["00-0039139", 2024, "REG", 41, 31, 280, 4, 316, 14, 3.57412551709061, 36, "shotgun"],
+    ["00-0036322", 2024, "REG", 41, 26, 492, 3, 153, 18, 22.76442416996, 596, "under_center"],
+    ["00-0039139", 2024, "REG", 22, 21, 237, 0, 277, 10, 11.3936052687932, -47, "under_center"]
+  ]
+}

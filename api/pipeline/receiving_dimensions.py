@@ -6,7 +6,7 @@ from pipeline.source_results import SourceError
 
 
 DIMENSIONS = {"down": ("1", "2", "3", "4"), "quarter": ("1", "2", "3", "4", "OT"),
-              "home_away": ("home", "away")}
+              "home_away": ("home", "away"), "shotgun": ("shotgun", "under_center")}
 
 
 def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> pd.Series:
@@ -17,7 +17,7 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
     """
     if dimension not in DIMENSIONS:
         raise SourceError("nflfastR_receiving_splits", season, "unsupported split dimension")
-    field = {"down": "down", "quarter": "qtr", "home_away": "posteam_type"}[dimension]
+    field = {"down": "down", "quarter": "qtr", "home_away": "posteam_type", "shotgun": "shotgun"}[dimension]
     if field not in context:
         raise SourceError("nflfastR_receiving_splits", season, f"missing context {field}")
     if dimension == "home_away":
@@ -32,6 +32,10 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
         observed = values.dropna().to_numpy(dtype=float)
     except (TypeError, ValueError) as error:
         raise SourceError("nflfastR_receiving_splits", season, f"invalid context {field}") from error
+    if dimension == "shotgun":
+        if not values.dropna().isin([0, 1]).all():
+            raise SourceError("nflfastR_receiving_splits", season, "invalid context shotgun")
+        return values.map({1: "shotgun", 0: "under_center"}).astype("string")
     if (not np.isfinite(observed).all() or not (observed == np.trunc(observed)).all()
             or (observed < 1).any() or (observed > np.iinfo(np.int32).max).any()
             or (dimension == "down" and (observed > 4).any())):

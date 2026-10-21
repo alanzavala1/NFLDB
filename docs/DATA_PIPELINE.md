@@ -424,17 +424,17 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v7 manifest requires receiving EPA/air yards
+not replace complete live rows. The v8 manifest requires receiving EPA/air yards
 and target context, and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
 captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
 See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
 
-Down, quarter and home/away use `adapt_receiving_splits` and
+Down, quarter, home/away and shotgun use `adapt_receiving_splits` and
 `load_receiving_split_export` with an explicit dimension. The supported labels
 live in `pipeline/receiving_dimensions.py`: downs 1–4, quarters 1–4 and OT,
-and designated `home`/`away` sides.
+designated `home`/`away` sides, and `shotgun`/`under_center` formation labels.
 Every period above four groups into OT, matching `splits_core.QUARTER_DIM`.
 Missing periods remain unknown. Quarter target populations do not require a
 known down; a usable quarter play must not disappear because down is missing.
@@ -448,6 +448,14 @@ season team. Missing sides stay unknown and unexpected nonmissing labels fail
 instead of defaulting to away. Home/away target metrics do not require down or
 quarter fields. The export includes offensive/home/away team IDs and location
 for independent checks of designations and neutral-site inputs.
+
+Shotgun uses the provider's binary `shotgun` flag: 1 maps to `shotgun`, 0 to
+`under_center`, with the existing label order. Missing flags remain unknown;
+nonmissing values outside 0/1 fail. This preview does not inherit the legacy
+SQL's NULL-to-under-center fallback. It uses the recorded flag rather than a
+new formation classifier. The same target/air completeness rules and historical
+masks apply, without requiring another dimension's context fields. Export
+filenames and the manifest's dimension list now derive from one R catalog.
 
 ## Receiving candidate preview
 
@@ -472,7 +480,7 @@ source/default serving database, verifies the copied baseline and invocation,
 checks runtime records, and loads hash-verified dimension, context and weekly CSV bytes.
 
 The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
-`receiving_home_away_preview` and one JSON record in
+`receiving_home_away_preview`, `receiving_shotgun_preview` and one JSON record in
 `receiving_preview_preparation`. Format version 2 records
 checks under `seasons[year][dimension]`, binding the copied source hash, export
 manifest hash, invocation ID and observed R/package versions. Every existing
@@ -489,7 +497,8 @@ Qualification still uses the copied stored PBP;
 this preview is not a coordinated refresh of every source or dimension.
 
 Original `player_splits` rows remain intact. The main snapshot validator rejects
-any preview table or preparation marker: a receiving preview is not an accepted publication
+any `receiving_*_preview` table or preparation marker, including unknown future
+preview dimensions: a receiving preview is not an accepted publication
 candidate. `jobs.prepare`, serving, refresh/deploy workflows and snapshot
 promotion are unchanged. Full R dependency locking, coordinated source refresh,
 remaining dimensions/metrics and full-history reconciliation remain outstanding.

@@ -63,8 +63,8 @@ def validate_snapshot(conn):
     This gate does not assert freshness or completeness of optional vendor feeds.
     """
     tables = {row[0] for row in conn.execute('SHOW TABLES').fetchall()}
-    _require(not tables.intersection({'receiving_down_preview', 'receiving_quarter_preview',
-                                      'receiving_home_away_preview', 'receiving_preview_preparation'}),
+    _require('receiving_preview_preparation' not in tables
+             and not any(table.startswith('receiving_') and table.endswith('_preview') for table in tables),
              'Receiving-only preview is not a publishable snapshot')
     _check_schema(conn)
     seasons = [r[0] for r in conn.execute(

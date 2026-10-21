@@ -507,3 +507,70 @@ publication; assistant model/streaming work remains deferred.
 Validation: 843 backend tests passed, 2 skipped (79.47s). Source fingerprint and
 absence of source/candidate WALs were rechecked after the suite. No active jobs
 remain. Private simplification notes remain excluded from Git.
+
+## Shotgun split extension (October 21)
+
+Version 8 adds `shotgun` through the existing dimension loop. Provider flag 1
+maps to `shotgun` and 0 to `under_center`, sorted in that order, matching the
+existing labels in `splits_core.SHOTGUN_DIM`. Missing flags stay unknown and
+invalid nonmissing values fail; the preview does not reuse the legacy SQL's
+ELSE-under-center treatment of NULL. These are recorded provider flags, not
+new formation charting. Other dimensions' fields are not required to classify
+a formation. The same credits, qualification, REG/nonconversion scope and
+field-specific coverage rules apply.
+
+The R dimension catalog now also drives bound export filenames and the
+manifest's dimension list, reducing bookkeeping drift. The worker automatically
+creates `receiving_shotgun_preview` in its existing transaction and records
+`seasons[year][shotgun]`. Missing, changed or incorrect formation exports reject
+the candidate. The full gate now rejects every `receiving_*_preview` table or
+the preparation marker, including a synthetic future dimension, so adding a
+new context cannot omit that publication guard.
+
+Actual ignored output: `data/receiving-preview-shotgun-20261021.duckdb`, exports
+`data/upstream-r-trial/preview-export-v8/`:
+
+| Season | Eligible players | Shotgun rows | Under-center rows | Available air-yard rows | Available EPA/tgt rows |
+|---|---:|---:|---:|---:|---:|
+| 2006 | 141 | 129 | 141 | 0 | 0 |
+| 2009 | 210 | 208 | 210 | 408 of 418 | 418 |
+| 2024 | 220 | 220 | 216 | 436 | 436 |
+
+Absent formation buckets are not invented. Every eligible player remains in at
+least one bucket. Independent raw-credit replay matches all identified official
+player/formation rows for targets, catches, yards, TD, YAC, receiving first
+downs and air yards, including below-admission players. Both formations sum to
+whole-season and weekly counts. Available target metrics match fresh PBP; their
+weighted displayed rates match whole-target rates within rounding precision.
+Exported formation flags also match the full saved PBP inputs. All target plays
+in the three samples have 0/1 flags; this does not certify all historical years.
+
+Frozen real cases cover Gonzalez 2006/2009 and Gibbs/Jefferson 2024. Gonzalez
+2006 preserves 73 catches, 900 yards, 5 TD, 319 YAC and 54 first downs with
+targets/rates/air NULL. In 2009, the incomplete air-yard input masks one of his
+formation air totals; all receiving counts and both EPA/success rates survive.
+Jefferson 2024: shotgun 77 catches / 1,041 yards / 7 TD, under center 26 / 492 /
+3, totaling the reviewed 103 / 1,533 / 10. His shotgun EPA/tgt is 0.3666.
+Synthetic cases cover binary/nullable/bad flags, absent buckets, missing unrelated
+context, lateral production, field-specific masks and the actual SQL schema.
+
+All 33 bound hashes verify. Canonical `player_splits` and all three previous
+Down/quarter/home-away preview tables are unchanged by bidirectional EXCEPT ALL.
+Source SHA256 remains
+`b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`; source and
+candidate have no WAL. Evidence is ignored
+`data/upstream-r-trial/shotgun-preview-verification.json`,
+`verify_shotgun_inputs.R`, `verify_shotgun_preview.py`,
+`shotgun-verification.log` and `preview-job-v8.log`. Preliminary coverage was
+reviewed from bound v7 PBP with `review_shotgun.R`.
+
+This is scoped provider consistency, not independent charting correctness or a
+publishable full candidate. Main ingestion, serving, source DB and deployment
+remain unchanged; no push or deployment. Next small context: field-position
+receiving splits. Full R locking/build, coordinated fresh sources/qualification,
+remaining dimensions and full historical validation still precede publication.
+Assistant model/streaming work remains deferred.
+
+Validation: 860 backend tests passed, 2 skipped (84.83s). Source fingerprint and
+absence of source/candidate WALs were rechecked after the suite. No active jobs
+remain; private simplification notes remain excluded from Git.
