@@ -1,0 +1,18 @@
+{
+  "source": "Official nflfastR 6.0.0 / nflreadr 1.5.1 calculate_stats output, October 21, 2026 trial",
+  "scope": "Minimal REG nonconversion Down outputs. Historical target credits are incomplete. Expected totals were reviewed separately.",
+  "columns": ["player_id", "season", "season_type", "targets", "receptions", "receiving_yards", "receiving_tds", "split_value"],
+  "rows": [
+    ["00-0039139", 2024, "REG", 23, 21, 237, 1, "1"],
+    ["00-0039139", 2024, "REG", 24, 18, 168, 1, "2"],
+    ["00-0039139", 2024, "REG", 13, 10, 74, 0, "3"],
+    ["00-0039139", 2024, "REG", 3, 3, 38, 2, "4"],
+    ["00-0036322", 2024, "REG", 57, 44, 546, 3, "1"],
+    ["00-0036322", 2024, "REG", 52, 36, 615, 1, "2"],
+    ["00-0036322", 2024, "REG", 41, 21, 357, 5, "3"],
+    ["00-0036322", 2024, "REG", 4, 2, 15, 1, "4"],
+    ["00-0006101", 2004, "REG", 0, 43, 598, 2, "1"],
+    ["00-0006101", 2004, "REG", 0, 35, 321, 1, "2"],
+    ["00-0006101", 2004, "REG", 0, 24, 339, 4, "3"]
+  ]
+}

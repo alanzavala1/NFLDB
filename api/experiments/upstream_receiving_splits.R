@@ -88,6 +88,10 @@ capture.output(nflfastR::calculate_stats, file = file.path(out, "installed-calcu
 jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
+  receiving_export = list(
+    schema_version = 1L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    summary_level = "season", split_dimension = "down"
+  ),
   scope = "REG, excluding two-point attempts; identified-player comparisons done separately",
   inputs = input_records, completed_utc = format(Sys.time(), tz = "UTC", usetz = TRUE)
 ), completion, pretty = TRUE, auto_unbox = TRUE)

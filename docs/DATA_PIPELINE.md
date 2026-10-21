@@ -371,6 +371,34 @@ snapshot with an old season's required stats missing fails even if the requested
 new season refreshed successfully. Refresh all missing years into a candidate
 before attempting publication.
 
+## Official receiving split adapter
+
+`pipeline/receiving_splits.py` is the first offline integration boundary for
+official nflfastR receiving counts. It reads a completed, versioned Down export
+from `experiments/upstream_receiving_splits.R` and returns the existing
+`player_splits` column layout. It has no R execution, network, database write or
+request-time dependency. The main rebuild does not call it yet.
+
+The caller must supply qualified player IDs using the existing admission policy.
+The adapter never re-qualifies players using raw upstream target counts: doing
+that would drop historical receivers whose target source is incomplete. It maps
+targets/receptions/yards/TD to `att`/`cmp`/`yards`/`td`, masks targets in the known
+2003–08 gap through the shared coverage policy, and preserves production.
+This is not a claim of complete target coverage in every other season.
+
+All source rows are checked before admission filtering: required fields, season,
+REG scope, down values, duplicate keys, finite integral counts, nonnegative
+target/catch/TD counts and SQL integer range. Negative receiving yards and TD
+credits without catches/targets remain valid. Unidentified players and wholly
+zero receiving lines are excluded. Partial exports, unexpected package versions
+and scope/schema changes fail rather than silently falling back to old math.
+
+EPA, success, air yards, YAC, first downs and category-inapplicable fields remain
+NULL in this first adapter. Its partial rows must not replace complete live
+rows. R runtime locking, source/manifest binding, candidate orchestration,
+additional dimensions and advanced-metric definitions remain separate work.
+See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
+
 ## Remaining serving writes
 
 The app is not read-only yet. These paths must be retired together with verified
@@ -417,6 +445,7 @@ uv run --locked pytest tests/test_context_sources.py tests/test_pipeline_storage
 uv run --locked pytest tests/test_candidate_snapshots.py
 uv run --locked pytest tests/test_snapshot_validation.py tests/test_reconciliation.py
 uv run --locked pytest tests/test_receiving_credit_pilot.py
+uv run --locked pytest tests/test_upstream_receiving_splits.py
 uv run --locked pytest tests/test_receiving_preservation.py tests/test_pipeline_storage.py
 ```
 

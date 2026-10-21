@@ -43,6 +43,12 @@ The optional database is opened read-only and compared only for players already
 stored; this does not evaluate or change production qualification/admission.
 Keep large outputs and runtime installations in ignored `data/`.
 
+New runs also emit a structured `receiving_export` contract in `run.json`:
+schema version 1, REG, season summaries, Down dimension, two-point attempts
+excluded. The adapter deliberately refuses older manifests without this scope.
+It checks nflfastR/nflreadr versions, but does not lock all R dependencies or
+cryptographically bind a manifest to its CSV files.
+
 ## What was checked
 
 Select regular-season plays excluding two-point attempts, then call official
@@ -123,10 +129,39 @@ Ignored evidence: `data/upstream-r-trial/results/target-review-2024.json`,
 ## Boundary before integration
 
 The integration direction is to use the maintained official calculator for
-supported receiving counts. The next implementation checkpoint is a small
-offline adapter. Before production: lock the R environment/build, define input
-and output contracts, preserve qualification and historical null policies, and
-evaluate other dimensions and full history.
+supported receiving counts. `pipeline/receiving_splits.py` now provides the first
+offline adapter: validated R Down exports become the existing `player_splits`
+column layout. It receives an explicit qualified-player collection, masks
+known historical targets, retains receiving production and negative yardage,
+and leaves unsupported columns NULL. It does not execute R or write a database.
+Serving and the main analytics rebuild do not call it yet. These partial rows
+must not replace complete production rows and erase their remaining fields.
+
+A second official run produced versioned inputs under ignored
+`data/upstream-r-trial/adapter-input/`. The read-only dry run used the existing
+`qualification_ctes` against stored PBP, then inserted converted rows into an
+in-memory instance of the actual `player_splits` schema:
+
+| Season | Qualified players retained | Converted rows | Historical targets |
+|---|---:|---:|---|
+| 2024 | 220 / 220 | 813 | Existing coverage policy passes values through |
+| 2004 | 152 / 152 | 522 | NULL |
+
+Every player/down catch, yard and TD count survived conversion. Modern target
+counts also survived; historical targets became NULL, including positive raw
+credits. Gonzalez's 2004 output retains 102 catches, 1,258 yards and 7 TD.
+The dry run preserves the original admission policy for comparison; production
+must coordinate qualification and calculator inputs from the prepared sources.
+
+36 network-free adapter tests cover the real Gibbs/Jefferson/Gonzalez rows,
+actual SQL schema insertion, null handling, negative/lateral counts, explicit
+admission, unknown players, invalid counts, duplicate rows, incomplete exports,
+package versions and scope drift. Evidence is `adapter-check.json` alongside
+the fresh trial inputs. Run `uv run --locked pytest tests/test_upstream_receiving_splits.py`.
+
+Before production: lock the R environment/build, connect R execution to the
+candidate lifecycle, preserve qualification/null policies, and evaluate other
+dimensions and full history.
 Receiving EPA, success rates and target-specific dimensions still need explicit
 definitions. No metric/rating/comparables correctness is established here.
 
