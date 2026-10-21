@@ -197,6 +197,9 @@ Before production: lock the complete R environment/build, coordinate source
 refresh and remaining metrics, and evaluate other dimensions and full history.
 Receiving EPA, success rates and target-specific dimensions still need explicit
 definitions. No metric/rating/comparables correctness is established here.
+The subsequent [receiving metric review](RECEIVING_METRIC_REVIEW.md) records
+executed extra-field checks and recommends YAC/receiving first downs as the next
+preview additions. It does not change the existing preview data or adapter.
 
 Source DB SHA256 before and after:
 `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`.
