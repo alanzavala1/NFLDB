@@ -374,7 +374,7 @@ before attempting publication.
 ## Official receiving split adapter
 
 `pipeline/receiving_splits.py` is the offline integration boundary for official
-nflfastR receiving counts. It reads completed, versioned Down/quarter exports from
+nflfastR receiving counts. It reads completed, versioned per-dimension exports from
 `experiments/upstream_receiving_splits.R` and returns the existing `player_splits`
 column layout. The adapter has no R execution, network, database write or
 request-time dependency. The main rebuild does not call it yet; the separate
@@ -424,21 +424,30 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v6 manifest requires receiving EPA/air yards
+not replace complete live rows. The v7 manifest requires receiving EPA/air yards
 and target context, and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
 captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
 See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
 
-Down and quarter now use `adapt_receiving_splits` and
+Down, quarter and home/away use `adapt_receiving_splits` and
 `load_receiving_split_export` with an explicit dimension. The supported labels
-live in `pipeline/receiving_dimensions.py`: downs 1–4, quarters 1–4 and OT.
+live in `pipeline/receiving_dimensions.py`: downs 1–4, quarters 1–4 and OT,
+and designated `home`/`away` sides.
 Every period above four groups into OT, matching `splits_core.QUARTER_DIM`.
 Missing periods remain unknown. Quarter target populations do not require a
 known down; a usable quarter play must not disappear because down is missing.
 The producer filters each play context before invoking the official calculator,
 retaining all credited recipients. Absent buckets do not get invented zero rows.
+
+Home/away uses each play's `posteam_type`, matching the existing split labels
+and sort order. It follows the game's designated home/away team, including
+neutral-site games; it does not use stadium geography or a player's latest
+season team. Missing sides stay unknown and unexpected nonmissing labels fail
+instead of defaulting to away. Home/away target metrics do not require down or
+quarter fields. The export includes offensive/home/away team IDs and location
+for independent checks of designations and neutral-site inputs.
 
 ## Receiving candidate preview
 
@@ -460,10 +469,11 @@ invocation ID and writes its completion marker last. Its log and exports remain
 available on failure; only the job's newly created candidate/WAL are removed.
 Interrupting R stops its process tree before cleanup. The worker refuses the
 source/default serving database, verifies the copied baseline and invocation,
-checks runtime records, and loads hash-verified Down, quarter, context and weekly CSV bytes.
+checks runtime records, and loads hash-verified dimension, context and weekly CSV bytes.
 
-The candidate contains `receiving_down_preview`, `receiving_quarter_preview` and
-one JSON record in `receiving_preview_preparation`. Format version 2 records
+The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
+`receiving_home_away_preview` and one JSON record in
+`receiving_preview_preparation`. Format version 2 records
 checks under `seasons[year][dimension]`, binding the copied source hash, export
 manifest hash, invocation ID and observed R/package versions. Every existing
 qualifying player must remain in each dimension, and catches/yards/TD must

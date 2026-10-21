@@ -19,7 +19,7 @@ FIXTURE = json.loads((Path(__file__).parent / "fixtures/upstream_receiving_down.
 GIBBS = "00-0039139"
 JEFFERSON = "00-0036322"
 GONZALEZ = "00-0006101"
-CONTEXT = pd.read_csv(Path(__file__).parent / "fixtures/upstream_receiving_rate_context.csv")
+CONTEXT = pd.read_csv(Path(__file__).parent / "fixtures/upstream_receiving_context.csv")
 
 
 def frame(season=2024):
@@ -146,8 +146,9 @@ def test_real_lateral_only_bucket_preserves_yards_without_inventing_target_rates
 @pytest.mark.parametrize("field,value", [
     ("season_type", "POST"), ("summary_level", "week"), ("split_dimension", "quarter"),
     ("split_dimensions", ["down"]), ("split_dimensions", ["quarter", "down"]),
+    ("split_dimensions", ["down", "quarter"]),
     ("excludes_two_point_attempts", False), ("excludes_two_point_attempts", 1),
-    ("schema_version", 5), ("schema_version", True),
+    ("schema_version", 6), ("schema_version", True),
 ])
 def test_scope_drift_fails(export, field, value):
     directory, manifest = export

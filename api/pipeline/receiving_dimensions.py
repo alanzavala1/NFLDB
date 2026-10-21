@@ -5,7 +5,8 @@ import pandas as pd
 from pipeline.source_results import SourceError
 
 
-DIMENSIONS = {"down": ("1", "2", "3", "4"), "quarter": ("1", "2", "3", "4", "OT")}
+DIMENSIONS = {"down": ("1", "2", "3", "4"), "quarter": ("1", "2", "3", "4", "OT"),
+              "home_away": ("home", "away")}
 
 
 def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> pd.Series:
@@ -16,9 +17,16 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
     """
     if dimension not in DIMENSIONS:
         raise SourceError("nflfastR_receiving_splits", season, "unsupported split dimension")
-    field = "down" if dimension == "down" else "qtr"
+    field = {"down": "down", "quarter": "qtr", "home_away": "posteam_type"}[dimension]
     if field not in context:
         raise SourceError("nflfastR_receiving_splits", season, f"missing context {field}")
+    if dimension == "home_away":
+        # Designated game side, not stadium geography or a season's latest team.
+        # Unknown values must never silently fall through to the away bucket.
+        values = context[field].astype("string")
+        if not values.dropna().isin(DIMENSIONS[dimension]).all():
+            raise SourceError("nflfastR_receiving_splits", season, f"invalid context {field}")
+        return values
     try:
         values = pd.to_numeric(context[field], errors="raise")
         observed = values.dropna().to_numpy(dtype=float)

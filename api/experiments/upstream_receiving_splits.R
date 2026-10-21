@@ -51,6 +51,7 @@ for (year in years) {
   reg <- pbp[pbp$season_type %in% "REG" & !(pbp$two_point_attempt %in% 1), ]
   stopifnot(!anyDuplicated(reg[c("game_id", "play_id")]))
   write_frame(reg[c("game_id", "play_id", "season", "season_type", "down", "qtr",
+                    "posteam_type", "posteam", "home_team", "away_team", "location",
                     "two_point_attempt", "receiver_player_id", "complete_pass",
                     "incomplete_pass", "interception", "epa", "air_yards",
                     "receiving_yards", "pass_touchdown")], paste0("context-", year, ".csv"))
@@ -65,11 +66,16 @@ for (year in years) {
     repeat_full <- record(paste(year, "warm_full_calculation"), function() calculate(reg))
     stopifnot(isTRUE(all.equal(as.data.frame(full), as.data.frame(repeat_full))))
   }
-  dimensions <- list(down = as.character(1:4), quarter = c(as.character(1:4), "OT"))
+  dimensions <- list(down = as.character(1:4), quarter = c(as.character(1:4), "OT"),
+                     home_away = c("home", "away"))
   for (dimension in names(dimensions)) {
     buckets <- lapply(dimensions[[dimension]], function(bucket) {
-      period <- if (dimension == "down") reg$down else reg$qtr
-      keep <- if (bucket == "OT") !is.na(period) & period > 4 else period %in% as.integer(bucket)
+      if (dimension == "home_away") {
+        keep <- reg$posteam_type %in% bucket
+      } else {
+        period <- if (dimension == "down") reg$down else reg$qtr
+        keep <- if (bucket == "OT") !is.na(period) & period > 4 else period %in% as.integer(bucket)
+      }
       plays <- reg[keep, ]
       # No invented zero rows when a season has no plays in a bucket.
       if (nrow(plays) == 0L) return(NULL)
@@ -91,6 +97,7 @@ for (year in years) {
     all_plays = nrow(pbp), regular_nonconversion_plays = nrow(reg),
     missing_down_plays = sum(!(reg$down %in% 1:4)),
     missing_quarter_plays = sum(is.na(reg$qtr)),
+    missing_home_away_plays = sum(is.na(reg$posteam_type)),
     weekly_rows = nrow(weekly), raw_credit_rows = nrow(credits)
   )
 }
@@ -99,7 +106,7 @@ capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
 capture.output(nflfastR::calculate_stats, file = file.path(out, "installed-calculator.txt"))
 # Bind the consumed exports and captured source inputs before writing completion.
 files <- unlist(lapply(years, function(year) c(
-  paste0(c("context-", "weekly-", "overall-", "down-", "quarter-", "credits-"), year, ".csv"),
+  paste0(c("context-", "weekly-", "overall-", "down-", "quarter-", "home_away-", "credits-"), year, ".csv"),
   paste0(c("pbp-", "weekly-", "credits-"), year, ".rds")
 )))
 hashes <- setNames(lapply(files, function(name) {
@@ -112,8 +119,8 @@ jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 6L, season_type = "REG", excludes_two_point_attempts = TRUE,
-    summary_level = "season", split_dimensions = c("down", "quarter")
+    schema_version = 7L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    summary_level = "season", split_dimensions = c("down", "quarter", "home_away")
   ),
   run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),
   runtime = list(R = as.character(getRversion()), platform = R.version$platform,

@@ -1,6 +1,6 @@
 """Offline boundary from official nflfastR exports to player_splits rows.
 
-Receiving Down/quarter preview. No R execution, downloads, database writes or new
+Receiving split preview. No R execution, downloads, database writes or new
 qualification rules. Callers supply the players admitted by the existing build.
 Unsupported metrics are NULL; this output must not replace complete live rows.
 """
@@ -20,7 +20,7 @@ from services.receiving_coverage import targets_unavailable, yac_unavailable
 
 
 EXPORT_CONTRACT = {
-    "schema_version": 6,
+    "schema_version": 7,
     "season_type": "REG",
     "excludes_two_point_attempts": True,
     "summary_level": "season",

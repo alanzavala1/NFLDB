@@ -438,3 +438,72 @@ Validation: 827 backend tests passed, 2 skipped (80.10s), including real frozen
 quarter/OT outputs, target-context edge cases, actual worker rollback and the
 full-gate preview rejection. Source fingerprint and absence of source/preview
 WALs were rechecked after the suite. No active jobs remain.
+
+## Home/away split extension (October 21)
+
+Version 7 adds `home_away` to the same producer, adapter and worker dimension
+loop. It uses `posteam_type` from each play, with `home` then `away` sort order
+matching `splits_core.HOME_AWAY_DIM`. Designated teams determine the side even
+at a neutral site. A player's latest season team does not determine earlier
+plays' buckets, so traded players retain production from every team.
+
+Unknown side remains unknown; malformed nonmissing labels fail instead of
+falling through to away. Missing down/quarter does not prevent usable home/away
+metrics. The same REG/nonconversion scope, credit attribution, qualification,
+historical masks and independent EPA/air-yard checks apply. Missing buckets
+do not produce invented zero rows. Bound context CSVs now include offensive,
+home and away team IDs plus location for independent designation checks.
+
+The worker adds `receiving_home_away_preview` in the same transaction and
+records it under preparation format 2's `seasons[year][home_away]`. Counts
+reconcile to weekly independently of the other dimensions. Missing, changed or
+incorrect home/away exports reject the candidate and preserve the source.
+The full validator also rejects a standalone home/away preview table.
+
+Actual ignored output: `data/receiving-preview-home-away-20261021.duckdb`,
+exports `data/upstream-r-trial/preview-export-v7/`:
+
+| Season | Eligible players | Home rows | Away rows | Available air-yard rows | Available EPA/tgt rows |
+|---|---:|---:|---:|---:|---:|
+| 2006 | 141 | 141 | 141 | 0 | 0 |
+| 2009 | 210 | 210 | 210 | 410 of 420 | 420 |
+| 2024 | 220 | 220 | 220 | 440 | 440 |
+
+Independent raw-credit replay matches all identified official home/away rows
+for targets, catches, yards, TD, YAC, receiving first downs and air yards,
+including below-admission players. Both sides sum to whole-season and weekly
+counts. Available target metrics match fresh PBP; weighted displayed rates
+reproduce whole-target rates within rounding precision. Each known offensive
+side matches the designated team in PBP; no disagreements in any sample.
+Neutral-location inputs include one game in 2009 and five in 2024.
+
+Frozen real fixtures cover Gonzalez 2006 and Gibbs, Jefferson and Amari Cooper
+2024. Cooper's target plays span CLE and BUF, yet his split totals remain
+85 targets, 44 catches, 547 yards, 4 TD, 111 YAC and 25 receiving first downs.
+Home: 22 catches / 301 yards / 4 TD; away: 22 / 246 / 0. The Jefferson input
+includes 2024_05_NYJ_MIN, a neutral-location game whose MIN offensive plays
+retain the designated home side. Gonzalez preserves 73 catches / 900 yards /
+5 TD, 319 YAC and 54 first downs with historical targets/rates/air NULL.
+
+The shared fixture is now named `upstream_receiving_context.csv`, reflecting
+its use by all supported dimensions rather than only rates. Synthetic cases
+cover trades, neutral designation, a lateral-only recipient, missing side,
+invalid labels, missing down/quarter, SQL round trip and absent-side handling.
+
+All 30 bound file hashes verify. Canonical `player_splits` and both prior Down
+and quarter previews are unchanged by bidirectional EXCEPT ALL. Source SHA256
+remains `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
+source and candidate have no WAL. Evidence is ignored
+`data/upstream-r-trial/home-away-preview-verification.json`,
+`verify_home_away_inputs.R`, `verify_home_away_preview.py`,
+`home-away-verification.log` and `preview-job-v7.log`.
+This is scoped provider consistency, not full historical certification or an
+accepted publication candidate. Main ingestion, serving, refresh/deployment and
+the source DB remain unchanged. No push or deployment. Next small context:
+shotgun/under-center receiving splits. Full R locking, coordinated fresh sources
+and qualification, remaining dimensions and full-history validation still precede
+publication; assistant model/streaming work remains deferred.
+
+Validation: 843 backend tests passed, 2 skipped (79.47s). Source fingerprint and
+absence of source/candidate WALs were rechecked after the suite. No active jobs
+remain. Private simplification notes remain excluded from Git.

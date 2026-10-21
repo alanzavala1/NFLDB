@@ -98,7 +98,7 @@ def test_real_quarter_exports_conserve_reviewed_counts_and_retain_overtime():
     fixtures = Path(__file__).parent / "fixtures"
     record = json.loads((fixtures / "upstream_receiving_quarter.json").read_text())
     source = pd.DataFrame(record["rows"], columns=record["columns"])
-    context = pd.read_csv(fixtures / "upstream_receiving_rate_context.csv")
+    context = pd.read_csv(fixtures / "upstream_receiving_context.csv")
     for year, players, expected in [
         (2006, ["00-0006101"], [(None, 73, 900, 5, 319, 54)]),
         (2024, ["00-0036322", "00-0039139"], [(154, 103, 1533, 10, 487, 62), (63, 52, 517, 4, 593, 24)]),
