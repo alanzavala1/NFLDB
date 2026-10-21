@@ -60,7 +60,13 @@ def fake_export(monkeypatch):
             frame = pd.DataFrame([dict(player_id="receiver", season=year, season_type="REG",
                                        targets=count, receptions=7, receiving_yards=70,
                                        receiving_tds=0, receiving_yards_after_catch=yac,
-                                       receiving_first_downs=7, split_value=str(down)) for down in range(1, 5)])
+                                       receiving_first_downs=7, receiving_epa=3.5,
+                                       split_value=str(down)) for down in range(1, 5)])
+            context = pd.DataFrame([dict(game_id="game", play_id=index, season=year,
+                                        season_type="REG", two_point_attempt=0,
+                                        receiver_player_id="receiver", down=index % 4 + 1,
+                                        complete_pass=1, incomplete_pass=0, interception=0,
+                                        epa=0.5) for index in range(28)])
             if fault == "missing_player":
                 frame["player_id"] = "unqualified"
             weekly = pd.DataFrame([dict(player_id="receiver", season=year, season_type="REG",
@@ -74,7 +80,8 @@ def fake_export(monkeypatch):
                 weekly["receiving_yards_after_catch"] += 1
             if fault == "wrong_first_downs":
                 weekly["receiving_first_downs"] += 1
-            for name, data in ((f"down-{year}.csv", frame), (f"weekly-{year}.csv", weekly)):
+            for name, data in ((f"down-{year}.csv", frame), (f"weekly-{year}.csv", weekly),
+                               (f"context-{year}.csv", context)):
                 path = output / name
                 data.to_csv(path, index=False)
                 manifest["files"][name] = preview.file_sha256(path)
@@ -109,6 +116,7 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
         assert conn.execute("SELECT season,SUM(att),SUM(cmp),SUM(yards),SUM(td) FROM receiving_down_preview GROUP BY season ORDER BY season").fetchall() == [(2004, None, 28, 280, 0), (2024, 28, 28, 280, 0)]
         assert conn.execute("SELECT player_id,yards FROM player_splits ORDER BY player_id").fetchall() == [("older", 88), ("receiver", 60)]
         assert conn.execute("SELECT season,SUM(yac),SUM(first_downs) FROM receiving_down_preview GROUP BY season ORDER BY season").fetchall() == [(2004, None, 28), (2024, 200, 28)]
+        assert conn.execute("SELECT DISTINCT season,epa,success_pct FROM receiving_down_preview ORDER BY season").fetchall() == [(2004, None, None), (2024, 0.5, 100.0)]
     assert not Path(str(tmp_path / "preview.duckdb") + ".wal").exists()
 
 

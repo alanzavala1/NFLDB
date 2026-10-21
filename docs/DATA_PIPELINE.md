@@ -404,9 +404,19 @@ excluding first downs supplied by penalties; this is distinct from generic
 play first downs. First-down counts remain available without targets, while a
 first-downs-per-target rate still requires a supported target denominator.
 
-EPA, success, air yards and category-inapplicable fields remain NULL in this
-adapter. Its partial rows must not replace complete live rows. The v3 export
-manifest requires YAC/first-down columns and records the R environment and SHA256 digests of
+`pipeline/receiving_rates.py` adds target-role EPA/tgt (four decimals) and
+Success% (one decimal) in the v4 preview. Success means EPA > 0; the official
+calculator does not supply this rate. The adapter reads the hash-bound PBP
+context, excludes conversions, and requires original-receiver completed,
+incomplete or intercepted target-play counts to equal target credits. Every
+target must have EPA. EPA/tgt additionally requires the official EPA sum to
+match that target population. Missing coverage, the 2003–08 target gap and
+zero-target lateral-only buckets produce NULL rates, preserving other fields.
+EPA describes the original target role, not individual lateral attribution.
+
+Air yards and category-inapplicable fields remain NULL. These partial rows must
+not replace complete live rows. The v4 manifest requires receiving EPA and
+target context, and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
 captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
@@ -432,7 +442,7 @@ invocation ID and writes its completion marker last. Its log and exports remain
 available on failure; only the job's newly created candidate/WAL are removed.
 Interrupting R stops its process tree before cleanup. The worker refuses the
 source/default serving database, verifies the copied baseline and invocation,
-checks runtime records, and loads hash-verified Down and weekly CSV bytes.
+checks runtime records, and loads hash-verified Down, context and weekly CSV bytes.
 
 The candidate contains `receiving_down_preview` and one JSON record in
 `receiving_preview_preparation`. That record binds the copied source hash,
@@ -440,7 +450,10 @@ export manifest hash, invocation ID, observed R/package versions and per-season
 checks. Every existing qualifying player must remain, and catches/yards/TD must
 match the exported weekly reference by player; modern targets are checked too.
 Known-gap targets and unsupported pre-2006 YAC must be NULL. Receiving first
-downs match weekly totals, as does YAC when supported. Qualification still uses the copied stored PBP;
+downs match weekly totals, as does YAC when supported. The report records
+available and unavailable rate-row counts. Weekly EPA includes conversions;
+the preview's EPA does not, so these numerators cannot be compared directly.
+Qualification still uses the copied stored PBP;
 this preview is not a coordinated refresh of every source or dimension.
 
 Original `player_splits` rows remain intact. The main snapshot validator rejects

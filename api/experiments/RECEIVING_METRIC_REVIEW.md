@@ -3,10 +3,10 @@
 Follow-up: the [v3 preview extension](UPSTREAM_SPLITS.md#yac-and-receiving-first-down-extension-october-21)
 now implements YAC and receiving first downs. The notes below preserve the
 research checkpoint that established their definitions and coverage boundaries.
+The [v4 extension](UPSTREAM_SPLITS.md#target-role-epa-and-success-extension-october-21)
+also implements EPA/tgt and explicitly defined Success%, with population checks.
 
-Review checkpoint, not an extension of the adapter or serving data. The existing
-preview still imports only targets, catches, receiving yards and TDs. Advanced
-columns remain NULL there; live rows are unchanged.
+The original review below preceded those implementations. Live rows are unchanged.
 
 ## Definitions and next integration choices
 

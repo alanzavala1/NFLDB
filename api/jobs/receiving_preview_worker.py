@@ -55,7 +55,12 @@ def _check_totals(rows: pd.DataFrame, weekly: pd.DataFrame, season: int,
     return {"players": len(qualified), "rows": len(rows), "production_matches_weekly": True,
             "targets": "unavailable" if targets_unavailable([season]) else "matched_weekly",
             "yac": "unavailable" if yac_unavailable([season]) else "matched_weekly",
-            "first_downs": "matched_weekly"}
+            "first_downs": "matched_weekly",
+            "target_rates": {"definition": "original target role; EPA/tgt and percent EPA > 0",
+                             "epa_rows": int(rows.epa.notna().sum()),
+                             "success_rows": int(rows.success_pct.notna().sum()),
+                             "unavailable_epa_rows": int(rows.epa.isna().sum()),
+                             "unavailable_success_rows": int(rows.success_pct.isna().sum())}}
 
 
 def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseline: str) -> dict:

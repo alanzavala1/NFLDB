@@ -19,6 +19,7 @@ FIXTURE = json.loads((Path(__file__).parent / "fixtures/upstream_receiving_down.
 GIBBS = "00-0039139"
 JEFFERSON = "00-0036322"
 GONZALEZ = "00-0006101"
+CONTEXT = pd.read_csv(Path(__file__).parent / "fixtures/upstream_receiving_rate_context.csv")
 
 
 def frame(season=2024):
@@ -28,6 +29,7 @@ def frame(season=2024):
 
 def adapt(source=None, season=2024, players=(GIBBS, JEFFERSON)):
     return adapt_receiving_down(frame(season) if source is None else source,
+                                context=CONTEXT.loc[CONTEXT.season.eq(season)],
                                 season=season, qualified_players=players)
 
 
@@ -45,7 +47,9 @@ def test_real_counts_round_trip_through_actual_player_splits_schema():
         assert conn.execute("SELECT SUM(yac),SUM(first_downs) FROM player_splits WHERE player_id=?", [GIBBS]).fetchone() == (593, 24)
         assert conn.execute("SELECT SUM(yac),SUM(first_downs) FROM player_splits WHERE player_id=?", [JEFFERSON]).fetchone() == (487, 62)
         assert conn.execute("SELECT SUM(yac),SUM(first_downs) FROM player_splits WHERE player_id=?", [GONZALEZ]).fetchone() == (None, 69)
-        assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE epa IS NOT NULL OR success_pct IS NOT NULL OR air_yards IS NOT NULL").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE season=2004 AND (epa IS NOT NULL OR success_pct IS NOT NULL)").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE season=2024 AND epa IS NOT NULL AND success_pct IS NOT NULL").fetchone()[0] == 8
+        assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE air_yards IS NOT NULL").fetchone()[0] == 0
 
 
 def test_historical_positive_credits_remain_unknown_without_erasing_production():
@@ -113,7 +117,9 @@ def test_player_ids_must_be_an_explicit_collection():
 def export(tmp_path):
     manifest = {**VERSIONS, "seasons": [2024], "receiving_export": deepcopy(EXPORT_CONTRACT)}
     frame().to_csv(tmp_path / "down-2024.csv", index=False)
-    manifest["files"] = {"down-2024.csv": hashlib.sha256((tmp_path / "down-2024.csv").read_bytes()).hexdigest()}
+    CONTEXT.loc[CONTEXT.season.eq(2024)].to_csv(tmp_path / "context-2024.csv", index=False)
+    manifest["files"] = {name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest()
+                         for name in ("down-2024.csv", "context-2024.csv")}
     (tmp_path / "run.json").write_text(json.dumps(manifest))
     return tmp_path, manifest
 
@@ -123,12 +129,21 @@ def test_completed_export_loads_without_r_or_network(export):
     result = load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
     assert result.yards.sum() == 517
     assert result.player_id.unique().tolist() == [GIBBS]
+    first_down = result.loc[result.split_value.eq("1")].iloc[0]
+    assert first_down.epa == 0.385
+    assert first_down.success_pct == 65.2
+
+
+def test_real_lateral_only_bucket_preserves_yards_without_inventing_target_rates():
+    rows = adapt(players=["00-0036158"])
+    assert rows[["att", "cmp", "yards", "td", "yac"]].iloc[0].tolist() == [0, 0, 10, 0, 10]
+    assert rows[["epa", "success_pct"]].isna().all().all()
 
 
 @pytest.mark.parametrize("field,value", [
     ("season_type", "POST"), ("summary_level", "week"), ("split_dimension", "quarter"),
     ("excludes_two_point_attempts", False), ("excludes_two_point_attempts", 1),
-    ("schema_version", 4), ("schema_version", True),
+    ("schema_version", 3), ("schema_version", True),
 ])
 def test_scope_drift_fails(export, field, value):
     directory, manifest = export
@@ -150,7 +165,7 @@ def test_version_or_completion_metadata_drift_fails(export, field, value):
         load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
 
 
-@pytest.mark.parametrize("name", ["run.json", "down-2024.csv"])
+@pytest.mark.parametrize("name", ["run.json", "down-2024.csv", "context-2024.csv"])
 def test_partial_exports_fail(export, name):
     directory, _ = export
     (directory / name).unlink()
@@ -201,6 +216,6 @@ def test_supported_zero_YAC_is_not_missing_and_YAC_can_exceed_receiving_yards():
 
 
 def test_missing_new_fields_is_not_treated_as_a_zero_valued_legacy_export():
-    for column in ("receiving_yards_after_catch", "receiving_first_downs"):
+    for column in ("receiving_yards_after_catch", "receiving_first_downs", "receiving_epa"):
         with pytest.raises(SourceError, match="missing columns"):
             adapt(frame().drop(columns=column))

@@ -17,7 +17,7 @@ stopifnot(as.character(packageVersion("nflfastR")) == "6.0.0")
 stopifnot(as.character(packageVersion("nflreadr")) == "1.5.1")
 stopifnot("pbp" %in% names(formals(nflfastR::calculate_stats)))
 metrics <- c("targets", "receptions", "receiving_yards", "receiving_tds",
-             "receiving_yards_after_catch", "receiving_first_downs")
+             "receiving_yards_after_catch", "receiving_first_downs", "receiving_epa")
 selected <- c("player_id", "season", "season_type", metrics)
 timings <- list()
 record <- function(label, fn) {
@@ -51,6 +51,7 @@ for (year in years) {
   stopifnot(!anyDuplicated(reg[c("game_id", "play_id")]))
   write_frame(reg[c("game_id", "play_id", "season", "season_type", "down", "qtr",
                     "two_point_attempt", "receiver_player_id", "complete_pass",
+                    "incomplete_pass", "interception", "epa",
                     "receiving_yards", "pass_touchdown")], paste0("context-", year, ".csv"))
   write_frame(weekly[weekly$season_type %in% "REG", c("player_id", "season", "season_type", "week", metrics)],
               paste0("weekly-", year, ".csv"))
@@ -102,7 +103,7 @@ jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 3L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    schema_version = 4L, season_type = "REG", excludes_two_point_attempts = TRUE,
     summary_level = "season", split_dimension = "down"
   ),
   run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),

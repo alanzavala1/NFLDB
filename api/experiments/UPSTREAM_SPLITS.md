@@ -251,3 +251,57 @@ No WAL, push, deployment or serving-data replacement.
 
 References: [calculator documentation](https://nflfastr.com/reference/calculate_stats.html),
 [upstream subset feature](https://github.com/nflverse/nflfastR/pull/524).
+
+## Target-role EPA and success extension (October 21)
+
+Version 4 exports official `receiving_epa` plus the original-receiver PBP
+attempt flags and EPA in hash-bound context CSVs. A separate pure helper,
+`pipeline/receiving_rates.py`, derives existing SQL columns:
+
+- `epa`: official receiving EPA sum / targets, rounded to four decimals.
+- `success_pct`: 100 × positive-EPA target plays / targets, rounded to one decimal.
+
+Success is our explicit calculation, not an official calculator output. The
+population includes completed passes, incompletions and interceptions with an
+identified original receiver, REG only, excluding two-point attempts. Target
+credits must match the original target-play count and every such play must
+have EPA. EPA/tgt additionally requires the official numerator to agree with
+that population. Missing coverage masks rates only; malformed context, duplicate
+plays, changed bytes and nonfinite EPA fail the export. Zero EPA is a failure;
+missing EPA is unknown. No targets means no target-based rates. Known 2003–08
+target coverage gaps continue to mask both rates even if PBP is present.
+
+These metrics describe the original target role; they do not divide EPA among
+lateral recipients. A modern numerator disagreement hides EPA/tgt without
+erasing independently verified Success% or receiving production. Air yards,
+interceptions and CPOE remain NULL in the partial preview.
+
+Executed preview: `data/receiving-preview-epa-20261021.duckdb`, exports
+`data/upstream-r-trial/preview-export-v4/`. Samples: 2004 (152 players / 522
+rows), 2006 (141 / 492), 2024 (220 / 813). All existing count reconciliations
+pass. Historical rates are NULL. In 2024, 812 buckets have both rates and agree
+with fresh PBP target-play EPA means and success flags. One admitted player's
+fourth-down bucket has 10 lateral receiving yards and no targets: those yards
+and YAC survive, with both rates NULL. Gibbs first-down EPA/tgt is 0.3850 and
+Success% 65.2; Jefferson's are 0.3031 and 63.2.
+
+Independent diagnostics read full saved RDS inputs, confirm positive EPA matches
+the source success flags in all three samples, and reconcile whole-season EPA
+to weekly after explicitly adding excluded two-point EPA. Weekly includes those
+plays, so directly matching its EPA to the nonconversion preview would be wrong.
+These related-provider comparisons establish consistency, not independent NFL
+correctness or coverage beyond the samples. All 24 input/export hashes verify;
+bidirectional SQL comparison finds zero changes to canonical `player_splits`.
+Source SHA256 remains `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
+source and preview closed without WALs. The full validator still rejects previews.
+
+Evidence is ignored `data/upstream-r-trial/epa-preview-verification.json`,
+`verify_epa_preview.py`, `verify_epa_inputs.R` and `preview-job-v4.log`.
+Real regression fixtures retain Gibbs, Jefferson, Gonzalez (2004/2006), and
+the zero-target 10-yard bucket. No serving integration, push or deployment.
+Validation: 789 backend tests passed, 2 skipped. Cases cover missing EPA,
+denominator and numerator disagreement, historical masks, valid zero/negative
+EPA, incompletions/interceptions, lateral-only buckets, malformed context and
+the actual SQL/worker lifecycle.
+Next: receiving air-yard coverage/mapping, then other split dimensions and
+the coordinated source-refresh/full-history candidate checks.
