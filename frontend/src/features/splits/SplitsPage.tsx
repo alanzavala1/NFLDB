@@ -16,6 +16,7 @@ import { GetStarted } from './GetStarted'
 import { HeadToHead } from './HeadToHead'
 import { StandoutSplits } from './StandoutSplits'
 import { SplitSections } from './SplitSections'
+import { ReceivingAttributionNote } from './ReceivingAttributionNote'
 
 export default function SplitsPage() {
   const seasonsQuery = useQuery(seasonsQueryOptions())
@@ -38,6 +39,7 @@ export default function SplitsPage() {
             model.splitRows.some(rows => rows.some(row => 'category' in row && row.category === 'receiving' && row.att === null && (model.isCareer || row.season === comparison.season)))
             || model.playerGames.some(rows => rows.some(({ g }) => g.targets === null))
           )} career={model.isCareer} />
+          <ReceivingAttributionNote differences={model.yardageDifferences} />
           <HeadToHead model={model} comparison={comparison} splitResults={queries.splitResults} />
           <StandoutSplits notable={notable} entityLabel={model.entities[0].label} isCareer={model.isCareer} season={comparison.season} />
           <SplitSections model={model} selectors={selectors} display={display} queries={queries} />

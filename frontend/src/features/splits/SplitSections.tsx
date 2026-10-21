@@ -22,6 +22,7 @@ export function SplitSections({ model, selectors, display, queries }: {
   const { hidden, expandedKeys, keyStatsOnly, setKeyStatsOnly, isOpen, toggleOpen, toggleHidden, toggleExpanded } = display
   const { playerProfiles, splitResults } = queries
   const visibleDims = sectionDims.filter(d => !hidden.has(d.key))
+  const sourceNoteEntityKeys = new Set(model.yardageDifferences.map(item => item.playerId))
   return <><Card className="mb-3" headerClassName="flex-wrap [&>div:first-child]:whitespace-normal"
     title={singleEntity ? <span>All splits · <span className="text-ink-mid">{entities[0].label}</span></span> : 'All splits · side-by-side'}
     action={!singleEntity ? <SegmentControl value={keyStatsOnly ? 'key' : 'all'} options={[{ value: 'key', label: 'Key stats' }, { value: 'all', label: 'All stats' }]} onChange={v => setKeyStatsOnly(v === 'key')} /> : undefined}>
@@ -69,6 +70,7 @@ export function SplitSections({ model, selectors, display, queries }: {
               ? <div className="py-6 text-center"><EmptySplitState queries={gameBased ? playerProfiles : splitResults}
                 resource={gameBased ? 'game records' : 'split statistics'} /></div>
               : <GroupedTable label={d.label} entities={entities} metrics={m} keys={keys} keyLabel={keyLabel} sections={secs}
+                sourceNoteEntityKeys={sourceNoteEntityKeys}
                 defRkFor={d.key === 'opponent' && showDefensiveRanks ? (k => defensiveRanks.get(k)) : undefined}
                 expandable={gameBased} expandShowSeason={d.key === 'opponent'} expandedKeys={expandedKeys}
                 onToggleExpand={gameBased ? (k => toggleExpanded(k)) : undefined}

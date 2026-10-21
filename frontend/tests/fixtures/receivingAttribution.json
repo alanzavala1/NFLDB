@@ -1,0 +1,475 @@
+{
+  "provenance": "Regular-season 2024 weekly game lines from the current stats_player feed cached October 15, 2026; existing original-receiver Down splits read from the local database READ_ONLY October 20. Minimal real source observations, not a full-history accuracy certificate.",
+  "players": [
+    {
+      "player_id": "00-0039139",
+      "player_name": "Jahmyr Gibbs",
+      "weekly_games": [
+        {
+          "season": 2024,
+          "week": 1,
+          "game_id": "2024_01_LA_DET",
+          "team": "DET",
+          "opponent": "LA",
+          "targets": 6,
+          "receptions": 4,
+          "rec_yards": 34,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 2,
+          "game_id": "2024_02_TB_DET",
+          "team": "DET",
+          "opponent": "TB",
+          "targets": 7,
+          "receptions": 7,
+          "rec_yards": 22,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 3,
+          "game_id": "2024_03_DET_ARI",
+          "team": "DET",
+          "opponent": "ARI",
+          "targets": 0,
+          "receptions": 0,
+          "rec_yards": 20,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 4,
+          "game_id": "2024_04_SEA_DET",
+          "team": "DET",
+          "opponent": "SEA",
+          "targets": 0,
+          "receptions": 0,
+          "rec_yards": 0,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 6,
+          "game_id": "2024_06_DET_DAL",
+          "team": "DET",
+          "opponent": "DAL",
+          "targets": 5,
+          "receptions": 3,
+          "rec_yards": 28,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 7,
+          "game_id": "2024_07_DET_MIN",
+          "team": "DET",
+          "opponent": "MIN",
+          "targets": 4,
+          "receptions": 4,
+          "rec_yards": 44,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 8,
+          "game_id": "2024_08_TEN_DET",
+          "team": "DET",
+          "opponent": "TEN",
+          "targets": 1,
+          "receptions": 1,
+          "rec_yards": 6,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 9,
+          "game_id": "2024_09_DET_GB",
+          "team": "DET",
+          "opponent": "GB",
+          "targets": 2,
+          "receptions": 1,
+          "rec_yards": 11,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 10,
+          "game_id": "2024_10_DET_HOU",
+          "team": "DET",
+          "opponent": "HOU",
+          "targets": 3,
+          "receptions": 2,
+          "rec_yards": 37,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 11,
+          "game_id": "2024_11_JAX_DET",
+          "team": "DET",
+          "opponent": "JAX",
+          "targets": 1,
+          "receptions": 1,
+          "rec_yards": 54,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 12,
+          "game_id": "2024_12_DET_IND",
+          "team": "DET",
+          "opponent": "IND",
+          "targets": 3,
+          "receptions": 3,
+          "rec_yards": 9,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 13,
+          "game_id": "2024_13_CHI_DET",
+          "team": "DET",
+          "opponent": "CHI",
+          "targets": 4,
+          "receptions": 2,
+          "rec_yards": 17,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 14,
+          "game_id": "2024_14_GB_DET",
+          "team": "DET",
+          "opponent": "GB",
+          "targets": 6,
+          "receptions": 6,
+          "rec_yards": 30,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 15,
+          "game_id": "2024_15_BUF_DET",
+          "team": "DET",
+          "opponent": "BUF",
+          "targets": 7,
+          "receptions": 5,
+          "rec_yards": 83,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 16,
+          "game_id": "2024_16_DET_CHI",
+          "team": "DET",
+          "opponent": "CHI",
+          "targets": 5,
+          "receptions": 4,
+          "rec_yards": 45,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 17,
+          "game_id": "2024_17_DET_SF",
+          "team": "DET",
+          "opponent": "SF",
+          "targets": 4,
+          "receptions": 4,
+          "rec_yards": 46,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 18,
+          "game_id": "2024_18_MIN_DET",
+          "team": "DET",
+          "opponent": "MIN",
+          "targets": 5,
+          "receptions": 5,
+          "rec_yards": 31,
+          "rec_tds": 1
+        }
+      ],
+      "down_splits": [
+        {
+          "season": 2024,
+          "split_dim": "down",
+          "split_value": "1",
+          "sort_order": 1,
+          "att": 23,
+          "cmp": 21,
+          "yards": 217,
+          "td": 0
+        },
+        {
+          "season": 2024,
+          "split_dim": "down",
+          "split_value": "2",
+          "sort_order": 2,
+          "att": 24,
+          "cmp": 18,
+          "yards": 168,
+          "td": 1
+        },
+        {
+          "season": 2024,
+          "split_dim": "down",
+          "split_value": "3",
+          "sort_order": 3,
+          "att": 13,
+          "cmp": 10,
+          "yards": 74,
+          "td": 0
+        },
+        {
+          "season": 2024,
+          "split_dim": "down",
+          "split_value": "4",
+          "sort_order": 4,
+          "att": 3,
+          "cmp": 3,
+          "yards": 17,
+          "td": 2
+        }
+      ]
+    },
+    {
+      "player_id": "00-0036322",
+      "player_name": "Justin Jefferson",
+      "weekly_games": [
+        {
+          "season": 2024,
+          "week": 1,
+          "game_id": "2024_01_MIN_NYG",
+          "team": "MIN",
+          "opponent": "NYG",
+          "targets": 6,
+          "receptions": 4,
+          "rec_yards": 59,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 2,
+          "game_id": "2024_02_SF_MIN",
+          "team": "MIN",
+          "opponent": "SF",
+          "targets": 7,
+          "receptions": 4,
+          "rec_yards": 133,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 3,
+          "game_id": "2024_03_HOU_MIN",
+          "team": "MIN",
+          "opponent": "HOU",
+          "targets": 8,
+          "receptions": 6,
+          "rec_yards": 81,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 4,
+          "game_id": "2024_04_MIN_GB",
+          "team": "MIN",
+          "opponent": "GB",
+          "targets": 8,
+          "receptions": 6,
+          "rec_yards": 85,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 5,
+          "game_id": "2024_05_NYJ_MIN",
+          "team": "MIN",
+          "opponent": "NYJ",
+          "targets": 14,
+          "receptions": 6,
+          "rec_yards": 92,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 7,
+          "game_id": "2024_07_DET_MIN",
+          "team": "MIN",
+          "opponent": "DET",
+          "targets": 8,
+          "receptions": 7,
+          "rec_yards": 81,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 8,
+          "game_id": "2024_08_MIN_LA",
+          "team": "MIN",
+          "opponent": "LA",
+          "targets": 9,
+          "receptions": 8,
+          "rec_yards": 115,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 9,
+          "game_id": "2024_09_IND_MIN",
+          "team": "MIN",
+          "opponent": "IND",
+          "targets": 9,
+          "receptions": 7,
+          "rec_yards": 137,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 10,
+          "game_id": "2024_10_MIN_JAX",
+          "team": "MIN",
+          "opponent": "JAX",
+          "targets": 9,
+          "receptions": 5,
+          "rec_yards": 48,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 11,
+          "game_id": "2024_11_MIN_TEN",
+          "team": "MIN",
+          "opponent": "TEN",
+          "targets": 8,
+          "receptions": 6,
+          "rec_yards": 81,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 12,
+          "game_id": "2024_12_MIN_CHI",
+          "team": "MIN",
+          "opponent": "CHI",
+          "targets": 5,
+          "receptions": 2,
+          "rec_yards": 27,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 13,
+          "game_id": "2024_13_ARI_MIN",
+          "team": "MIN",
+          "opponent": "ARI",
+          "targets": 9,
+          "receptions": 7,
+          "rec_yards": 99,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 14,
+          "game_id": "2024_14_ATL_MIN",
+          "team": "MIN",
+          "opponent": "ATL",
+          "targets": 7,
+          "receptions": 7,
+          "rec_yards": 132,
+          "rec_tds": 2
+        },
+        {
+          "season": 2024,
+          "week": 15,
+          "game_id": "2024_15_CHI_MIN",
+          "team": "MIN",
+          "opponent": "CHI",
+          "targets": 14,
+          "receptions": 7,
+          "rec_yards": 73,
+          "rec_tds": 1
+        },
+        {
+          "season": 2024,
+          "week": 16,
+          "game_id": "2024_16_MIN_SEA",
+          "team": "MIN",
+          "opponent": "SEA",
+          "targets": 13,
+          "receptions": 10,
+          "rec_yards": 144,
+          "rec_tds": 2
+        },
+        {
+          "season": 2024,
+          "week": 17,
+          "game_id": "2024_17_GB_MIN",
+          "team": "MIN",
+          "opponent": "GB",
+          "targets": 11,
+          "receptions": 8,
+          "rec_yards": 92,
+          "rec_tds": 0
+        },
+        {
+          "season": 2024,
+          "week": 18,
+          "game_id": "2024_18_MIN_DET",
+          "team": "MIN",
+          "opponent": "DET",
+          "targets": 9,
+          "receptions": 3,
+          "rec_yards": 54,
+          "rec_tds": 0
+        }
+      ],
+      "down_splits": [
+        {
+          "season": 2024,
+          "split_dim": "down",
+          "split_value": "1",
+          "sort_order": 1,
+          "att": 57,
+          "cmp": 44,
+          "yards": 546,
+          "td": 3
+        },
+        {
+          "season": 2024,
+          "split_dim": "down",
+          "split_value": "2",
+          "sort_order": 2,
+          "att": 52,
+          "cmp": 36,
+          "yards": 615,
+          "td": 1
+        },
+        {
+          "season": 2024,
+          "split_dim": "down",
+          "split_value": "3",
+          "sort_order": 3,
+          "att": 41,
+          "cmp": 21,
+          "yards": 357,
+          "td": 5
+        },
+        {
+          "season": 2024,
+          "split_dim": "down",
+          "split_value": "4",
+          "sort_order": 4,
+          "att": 4,
+          "cmp": 2,
+          "yards": 15,
+          "td": 1
+        }
+      ]
+    }
+  ]
+}

@@ -5,7 +5,7 @@ import { bestSet } from './tableRanking'
 
 // Side-by-side: rows = split values, columns grouped by entity (each entity's
 // metrics). Sticky label column; best per metric across entities tinted.
-export function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defRkFor, expandable, expandShowSeason, expandedKeys, onToggleExpand, flip }: {
+export function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defRkFor, expandable, expandShowSeason, expandedKeys, onToggleExpand, flip, sourceNoteEntityKeys }: {
   label: string
   entities: EntityCard[]
   metrics: Metric<SplitRow>[]
@@ -18,6 +18,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
   expandedKeys: Set<string>
   onToggleExpand?: (k: string) => void
   flip: (hib: boolean | undefined) => boolean | undefined
+  sourceNoteEntityKeys?: Set<string>
 }) {
   const sticky = 'sticky left-0 z-10 bg-surface-card'
   return (
@@ -37,7 +38,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
           </tr>
           <tr>
             {entities.map(e => metrics.map((m, mi) => (
-              <th key={e.key + m.key} className={`py-1.5 px-3 text-[10px] font-semibold text-ink-dim uppercase tracking-wider text-right whitespace-nowrap border-b-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line' : ''}`}>{m.label}</th>
+              <th key={e.key + m.key} aria-describedby={sourceNoteEntityKeys?.has(e.key) ? m.sourceNoteId : undefined} className={`py-1.5 px-3 text-[10px] font-semibold text-ink-dim uppercase tracking-wider text-right whitespace-nowrap border-b-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line' : ''}`}>{m.label}{m.sourceNoteId && sourceNoteEntityKeys?.has(e.key) && <sup aria-hidden="true">†</sup>}</th>
             )))}
           </tr>
         </thead>

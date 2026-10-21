@@ -12,6 +12,7 @@ import {
 import { CAREER_SEASON, OVERALL_DIM } from './constants'
 import { entityColor } from './presets'
 import { hasReceivingActivity } from '../../utils/receiving'
+import { receivingYardageDifferences, RECEIVING_YARDAGE_NOTE_ID } from './receivingAttribution'
 
 export function createSplitModel(comparison: ComparisonSelection, queries: ReturnType<typeof useSplitQueries>) {
   const { mode, playerLens, teamSide, season, situation, players, teams } = comparison
@@ -20,7 +21,14 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
 
   const splitConfig = mode === 'teams' ? TEAM_SPLIT_CONFIG[teamSide] : isDefense ? DEFENSE_SPLIT_CONFIG : PLAYER_SPLIT_CONFIG[playerLens as PlayerCategory]
 
-  const metrics = splitConfig.metrics as Metric<SplitRow>[]
+  const yardageDifferences = mode === 'players' && playerLens === 'receiving'
+    ? players.flatMap((player, i) => receivingYardageDifferences(player.id, playerProfiles[i]?.data?.games,
+      playerResults[i]?.data as PlayerSplit[] | undefined, season)
+      .map(difference => ({ ...difference, playerId: player.id, playerName: playerProfiles[i]?.data?.player_name || player.name || player.id })))
+    : []
+  const baseMetrics = splitConfig.metrics as Metric<SplitRow>[]
+  const metrics = baseMetrics.map(metric => ['yds', 'ypr', 'ytgt'].includes(metric.key) && yardageDifferences.length
+    ? { ...metric, sourceNoteId: RECEIVING_YARDAGE_NOTE_ID } : metric)
 
   const metricGroup = mode === 'teams' ? `team_${teamSide}` : playerLens
 
@@ -62,7 +70,7 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
 
   const games = playerGames[0] ?? []
 
-  const gameMetrics = metrics.filter(m => m.key !== 'succ' && m.key !== 'cpoe' && m.key !== 'conv')
+  const gameMetrics = baseMetrics.filter(m => m.key !== 'succ' && m.key !== 'cpoe' && m.key !== 'conv')
 
   const singleEntity = entityCount === 1
 
@@ -88,7 +96,7 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
   return {
     mode, playerLens, season, splitConfig, metrics, metricGroup, situations, isCareer, isDefense, flip,
     aggregateRows, aggregateValues, matchesDimension, splitRows, entities, entityCount, focusData, playerGames,
-    games, gameMetrics, singleEntity, showDefensiveRanks, defensiveRanks, situationRow, sectionDims, defaultOpen, gameDims
+    games, gameMetrics, singleEntity, showDefensiveRanks, defensiveRanks, situationRow, sectionDims, defaultOpen, gameDims, yardageDifferences
   }
 }
 

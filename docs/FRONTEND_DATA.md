@@ -556,6 +556,45 @@ totals, game tables and popups. Its historical responses are controlled fixtures
 not a claim of deployed-data verification. The mobile running-back log retains
 its receiving counts without widening the document.
 
+### Receiving yardage source differences
+
+`features/splits/receivingAttribution.ts` compares each selected regular season's
+profile game-log receiving yards with receiving **Down** split yards. It uses one
+partition only, never sums multiple dimensions, and keeps career seasons separate
+so opposite differences cannot cancel. It waits for both datasets and does not
+treat absent split rows or null/nonfinite yards as measured zeroes. Empty or matching
+observations do not create a note. There is no extra request, source rewrite or
+candidate-gate change.
+
+`ReceivingAttributionNote` shows the actual weekly total, play-by-play total and
+signed difference. It labels the two calculation sources and preserves all table
+values. Situational YDS, Y/R and Y/Tgt headers carry a dagger with an accessible
+description referencing the note. Season/Opponent/game-log columns keep their
+existing source values without those markers. Side-by-side situational tables mark
+only the affected player's columns; the shared summary refers to the named notes.
+
+The first reviewed explanation is Gibbs2024: current weekly517yards versus
+original-receiver Down splits476, explained by the20/21yard lateral credits in
+`2024_03_DET_ARI` and `2024_15_BUF_DET`. The note links to those games and names
+the cause only when the player, season and both observed totals match this reviewed
+case. Other mismatches have a neutral unexplained-difference message; matching
+numeric deltas for another player do not inherit Gibbs's explanation. Corrected
+totals automatically remove the note. This is a reviewed display annotation,
+not automatic play attribution or an exhaustive catalogue of known limitations.
+
+The original local snapshot still has an older497yard Gibbs game-log total and
+476 split yards. It correctly gets an observed21yard difference without claiming
+the specific41yard explanation. No snapshot refresh was performed here. The latest
+weekly517yard value has been verified separately; refreshing a candidate remains
+separate work.
+
+`tests/fixtures/receivingAttribution.json` contains minimal real2024 weekly game
+lines and stored Down observations for Gibbs and matching control Justin Jefferson
+(1533yards in both). `tests/receiving-attribution.spec.ts` verifies the reviewed
+case, control, other/older values, invalid/missing inputs, season/career scopes,
+postseason exclusion, unchanged numbers, affected comparison columns, keyboard
+disclosure and mobile/desktop layout. Existing target-coverage notes remain separate.
+
 ## Browser regression checks
 
 From `frontend`, install dependencies with `npm ci --legacy-peer-deps`, then:

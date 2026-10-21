@@ -57,7 +57,7 @@ export function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defa
             <th className={`${sticky} py-2 pl-4 pr-3 border-b-2 border-surface-line text-[11px] font-bold text-ink-mid uppercase tracking-wider text-left whitespace-nowrap`}>{firstCol}</th>
             {hasDefRk && <th aria-sort={sortDirection('__defrk')} className="border-b-2 border-surface-line text-[11px] font-bold text-ink-dim/70 uppercase tracking-wider whitespace-nowrap"><button onClick={() => clickSort('__defrk', 'asc')} className={sortButton}>Def Rk{arrow('__defrk')}</button></th>}
             {metrics.map(m => (
-              <th key={m.key} aria-sort={sortDirection(m.key)} className="border-b-2 border-surface-line text-[11px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap"><button onClick={() => clickSort(m.key)} className={sortButton}>{m.label}{arrow(m.key)}</button></th>
+              <th key={m.key} aria-describedby={m.sourceNoteId} aria-sort={sortDirection(m.key)} className="border-b-2 border-surface-line text-[11px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap"><button onClick={() => clickSort(m.key)} className={sortButton}>{m.label}{m.sourceNoteId && <sup aria-hidden="true">†</sup>}{arrow(m.key)}</button></th>
             ))}
           </tr>
         </thead>
