@@ -1,4 +1,5 @@
 import type { PlayerGame, SituationalStats } from '../../types'
+import { hasReceivingProduction } from '../../utils/receiving'
 
 export function passerRating(cmp: number, att: number, yds: number, td: number, int_: number): string | null {
   if (att === 0) return null
@@ -42,8 +43,10 @@ const OL_POSITIONS = new Set(['C', 'G', 'T', 'OT', 'OG', 'OL', 'LS', 'OC'])
 
 export function detectPos(t: Totals, position?: string | null): string {
   if (position === 'QB' || t.attempts > 10) return 'QB'
+  // Missing targets must not turn a rostered receiver with rushing work into RB.
+  if (position === 'WR' || position === 'TE') return 'WR'
   if (position === 'RB' || (t.carries > 20 && t.targets < t.carries * 0.7)) return 'RB'
-  if (position === 'WR' || position === 'TE' || t.targets > 20) return 'WR'
+  if (t.targets > 20 || (!position && hasReceivingProduction(t))) return 'WR'
   if (position === 'K'  || t.fg_att > 0) return 'K'
   if (position === 'P'  || t.punts  > 0) return 'P'
   if (OL_POSITIONS.has(position ?? '')) return 'OL'

@@ -1,4 +1,5 @@
 import type { TeamLeader } from '../../types'
+import { hasReceivingActivity, hasReceivingProduction } from '../../utils/receiving'
 import type { SortingState, Updater } from '@tanstack/react-table'
 import type { SectionKind, SectionSorting } from './types'
 import { aggregateTotals } from './stats'
@@ -15,8 +16,8 @@ export default function StatsSections({ leaders, sorting, onSortingChange, onClo
   // Preserve each section's established tie order before interactive sorting.
   const passers   = leaders.filter(p => p.attempts >= 1).sort((a, b) => b.pass_yards - a.pass_yards)
   const rushers   = leaders.filter(p => p.carries >= 1).sort((a, b) => b.rush_yards - a.rush_yards)
-  const receivers = leaders.filter(p => p.targets >= 1).sort((a, b) => b.rec_yards - a.rec_yards)
-  const scrimmers = leaders.filter(p => (p.carries + p.receptions) >= 1).sort((a, b) => (b.rush_yards + b.rec_yards) - (a.rush_yards + a.rec_yards))
+  const receivers = leaders.filter(p => hasReceivingActivity(p)).sort((a, b) => b.rec_yards - a.rec_yards)
+  const scrimmers = leaders.filter(p => p.carries >= 1 || hasReceivingProduction(p)).sort((a, b) => (b.rush_yards + b.rec_yards) - (a.rush_yards + a.rec_yards))
   const defenders = leaders
     .filter(p => p.solo_tackles + p.assist_tackles + p.sacks + p.def_interceptions > 0)
     .sort((a, b) => (b.solo_tackles + b.assist_tackles) - (a.solo_tackles + a.assist_tackles))

@@ -336,8 +336,9 @@ defaults to writable during this migration.
   prepared rows are REG-filtered through schedules. This checks preservation
   of source totals, not independent source correctness or historical target
   completeness. Missing targets must not cause otherwise usable production to
-  be dropped. Frontend visibility filters and target/rate coverage are separate
-  migration steps; this guard does not yet change those consumers.
+  be dropped. Frontend receiving views now retain recorded production without
+  requiring targets (see [frontend data boundaries](FRONTEND_DATA.md#receiving-production-and-visibility)).
+  Explicit target/rate coverage remains a separate migration step.
 - The accuracy gate runs shared reconciliation functions for **every loaded
   regular season**, rather than the old deploy test's fixed 2023 alone. Counting
   stats and passing yards are exact at the established qualifying volumes;

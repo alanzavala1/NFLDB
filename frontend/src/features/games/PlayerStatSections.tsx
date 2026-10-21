@@ -1,4 +1,5 @@
 import React from 'react'
+import { hasReceivingActivity } from '../../utils/receiving'
 import { Link } from 'react-router-dom'
 import type { GameDetail, GamePlayerStats } from '../../types'
 import type { GameOrigin } from '../../types/navigation'
@@ -71,8 +72,8 @@ export function PlayerStatSections({ game, origin }: { game: GameDetail; origin:
   const passers   = { away: game.away.filter(p => p.attempts > 0), home: game.home.filter(p => p.attempts > 0) }
   const rushers   = { away: [...game.away].filter(p => p.carries > 0).sort((a, b) => b.rush_yards - a.rush_yards),
                       home: [...game.home].filter(p => p.carries > 0).sort((a, b) => b.rush_yards - a.rush_yards) }
-  const receivers = { away: [...game.away].filter(p => p.targets > 0).sort((a, b) => b.rec_yards - a.rec_yards),
-                      home: [...game.home].filter(p => p.targets > 0).sort((a, b) => b.rec_yards - a.rec_yards) }
+  const receivers = { away: [...game.away].filter(p => hasReceivingActivity(p)).sort((a, b) => b.rec_yards - a.rec_yards),
+                      home: [...game.home].filter(p => hasReceivingActivity(p)).sort((a, b) => b.rec_yards - a.rec_yards) }
   const defenders = { away: [...game.away].filter(p => p.solo_tackles + p.assist_tackles + p.sacks + p.def_interceptions > 0)
                                .sort((a, b) => (b.solo_tackles + b.assist_tackles) - (a.solo_tackles + a.assist_tackles)),
                       home: [...game.home].filter(p => p.solo_tackles + p.assist_tackles + p.sacks + p.def_interceptions > 0)

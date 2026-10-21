@@ -1,5 +1,6 @@
 import type { TeamLeader } from '../../types'
 import { Link } from 'react-router-dom'
+import { hasReceivingActivity } from '../../utils/receiving'
 import { sv, pct, avg } from './formatting'
 
 const LEADERS_PREVIEW = 3
@@ -44,7 +45,7 @@ function LeaderSection({ title, rows }: { title: string; rows: React.ReactNode[]
 export default function LeadersPanel({ leaders, onViewFull }: { leaders: TeamLeader[]; onViewFull: () => void }) {
   const passers   = leaders.filter(p => p.attempts >= 50).sort((a, b) => b.pass_yards - a.pass_yards).slice(0, LEADERS_PREVIEW)
   const rushers   = leaders.filter(p => p.carries >= 20).sort((a, b) => b.rush_yards - a.rush_yards).slice(0, LEADERS_PREVIEW)
-  const receivers = leaders.filter(p => p.targets >= 10).sort((a, b) => b.rec_yards - a.rec_yards).slice(0, LEADERS_PREVIEW)
+  const receivers = leaders.filter(p => hasReceivingActivity(p, 10)).sort((a, b) => b.rec_yards - a.rec_yards).slice(0, LEADERS_PREVIEW)
   const defenders = leaders
     .filter(p => p.solo_tackles + p.assist_tackles + p.sacks + p.def_interceptions > 0)
     .sort((a, b) => (b.solo_tackles + b.assist_tackles) - (a.solo_tackles + a.assist_tackles))

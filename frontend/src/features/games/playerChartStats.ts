@@ -31,8 +31,8 @@ export const ROLE_STAT_KEYS: Record<string, string[]> = {
 // A player's game is often bigger than his primary role — a back who feasts
 // as a receiver, a receiver who takes jet sweeps. Show the secondary stat
 // family whenever it has volume, so the rating is explainable from the popup.
-export const SECONDARY_FAMILY: Record<string, { gate: string; title: string; keys: string[] }[]> = {
-  rusher: [{ gate: 'targets', title: 'Receiving', keys: ROLE_STAT_KEYS.receiver }],
+export const SECONDARY_FAMILY: Record<string, { gate: 'receiving' | 'carries'; title: string; keys: string[] }[]> = {
+  rusher: [{ gate: 'receiving', title: 'Receiving', keys: ROLE_STAT_KEYS.receiver }],
   receiver: [{ gate: 'carries', title: 'Rushing', keys: ROLE_STAT_KEYS.rusher }],
   passer: [{ gate: 'carries', title: 'Rushing', keys: ROLE_STAT_KEYS.rusher }],
 }

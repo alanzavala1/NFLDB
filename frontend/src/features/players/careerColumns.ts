@@ -1,5 +1,6 @@
 import type { NgsStats, SnapTotals, SituationalStats, PlayerWpa, PlayerAdvStats, KickingStats } from '../../types'
 import { passerRating, pct, ratio, sfmt, dfmt, type Totals } from './stats'
+import { hasReceivingActivity } from '../../utils/receiving'
 
 export type ColKind = 'trad' | 'adv' | 'ngs' | 'snap' | 'sit'
 
@@ -59,8 +60,9 @@ export const RB_COLS: Col[] = [
   { key: 'ryg',  label: 'Y/G',     kind: 'trad', group: 'Rushing',      cell: (t, g) => ratio(t.rush_yards, g) },
   // Receiving
   { key: 'tgt',  label: 'TGT',     kind: 'trad', group: 'Receiving',    cell: t => t.targets > 0 ? t.targets : null },
-  { key: 'rec',  label: 'REC',     kind: 'trad', group: 'Receiving',    cell: t => t.targets > 0 ? t.receptions : null },
-  { key: 'rcy',  label: 'YDS',     kind: 'trad', group: 'Receiving',    cell: t => t.targets > 0 ? t.rec_yards : null },
+  { key: 'rec',  label: 'REC',     kind: 'trad', group: 'Receiving',    cell: t => hasReceivingActivity(t) ? t.receptions : null },
+  { key: 'rcy',  label: 'YDS',     kind: 'trad', group: 'Receiving',    cell: t => hasReceivingActivity(t) ? t.rec_yards : null },
+  { key: 'rctd', label: 'TD',      kind: 'trad', group: 'Receiving',    cell: t => hasReceivingActivity(t) ? t.rec_tds : null },
   { key: 'scr',  label: 'SCR YDS', kind: 'trad', group: 'Receiving',    cell: t => t.rush_yards + t.rec_yards > 0 ? t.rush_yards + t.rec_yards : null },
   // Passing (trick plays / pass-catchers who throw)
   { key: 'patt', label: 'ATT',     kind: 'trad', group: 'Passing',      cell: t => t.attempts > 0 ? t.attempts : null },

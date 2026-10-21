@@ -483,6 +483,38 @@ the application entry point confirms the remaining handwritten source modules
 are reachable, including lazy route imports. This checks module usage rather
 than proving every branch or exported helper is used.
 
+## Receiving production and visibility
+
+`src/utils/receiving.ts` owns the display rule shared by receiving lists,
+leader cards, game tables/popups and running-back profile cells. A recorded
+catch, nonzero signed receiving yardage, or receiving touchdown qualifies for
+display independently of targets. Target-only rows retain the view's previous
+target minimum (for example, 20 on the receiving leaderboard). Production can
+therefore admit low-volume players previously excluded by that minimum. This
+is a visibility rule, not certification of target coverage or rate qualification.
+
+Player receiving-yard rankings use that rule; target-rate highlight rankings
+retain their target minimum. Rostered WR/TE players retain receiving columns
+when missing targets would otherwise trigger a rushing-usage heuristic; unknown
+positions can use recorded receiving production as a fallback. Running-back
+career and game-log views include receiving touchdowns and lateral yardage
+without requiring a catch. Team receiving tables preserve negative yards and
+measured zero counts, and their totals include those retained players. Rushing
+game popups can show secondary receiving production without targets.
+
+This checkpoint changes no API field types, source values, statistical formulas
+or split-builder admission. Historical target availability/reasons, unsupported
+rates, career null handling, calculated ratings and assistant grounding remain
+separate coverage work. A displayed target value is not made trustworthy by
+keeping the player's independently usable receiving production visible.
+
+`tests/receiving-visibility.spec.ts` covers zero/null targets, signed yardage,
+zero-catch touchdowns, target-only rows, empty production, source-position
+fallback, and browser flows through leaders/positions, Scores, profiles, team
+totals, game tables and popups. Its historical responses are controlled fixtures,
+not a claim of deployed-data verification. The mobile running-back log retains
+its receiving counts without widening the document.
+
 ## Browser regression checks
 
 From `frontend`, install dependencies with `npm ci --legacy-peer-deps`, then:

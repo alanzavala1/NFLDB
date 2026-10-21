@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { hasReceivingActivity } from '../../utils/receiving'
 import { useQuery } from '@tanstack/react-query'
 import type { GameDetail, LineupPlayer } from '../../types'
 import { playerChartQueryOptions } from '../../api/games'
@@ -27,12 +28,14 @@ export function PlayerChartModal({ game, player, onClose }: { game: GameDetail; 
     .filter(([k, v]) => {
       const num = Number(v)
       if (!Number.isFinite(num)) return false
-      return k.endsWith('_epa') ? num !== 0 : num > 0
+      return k.endsWith('_epa') || k === 'rec_yards' ? num !== 0 : num > 0
     })
     .slice(0, 8)
   const stats = statRows(ROLE_STAT_KEYS[role] ?? Object.keys(chart?.stats ?? {}))
   const secondary = (SECONDARY_FAMILY[role] ?? [])
-    .filter(fam => Number(chart?.stats?.[fam.gate as keyof typeof chart.stats] ?? 0) > 0)
+    .filter(fam => fam.gate === 'receiving'
+      ? hasReceivingActivity(chart?.stats ?? {})
+      : Number(chart?.stats?.[fam.gate] ?? 0) > 0)
     .map(fam => ({ title: fam.title, rows: statRows(fam.keys) }))
     .filter(fam => fam.rows.length > 0)
   const events = chart?.events ?? []

@@ -1,4 +1,5 @@
 import type { LeagueLeader } from '../../types'
+import { hasReceivingActivity } from '../../utils/receiving'
 import { passerRating, pct, ratio, sfmt } from './formatting'
 
 type ColKind = 'trad' | 'adv'
@@ -143,15 +144,15 @@ type PosTab  = { key: string; label: string; filter: (p: LeagueLeader) => boolea
 export const STAT_TABS: StatTab[] = [
   { key: 'passing',   label: 'Passing',   filter: p => p.attempts >= 100,                                   defaultSort: 'yds', cols: PASSING_COLS },
   { key: 'rushing',   label: 'Rushing',   filter: p => p.carries >= 50,                                     defaultSort: 'yds', cols: RUSHING_COLS },
-  { key: 'receiving', label: 'Receiving', filter: p => p.targets >= 20,                                     defaultSort: 'yds', cols: RECEIVING_COLS },
+  { key: 'receiving', label: 'Receiving', filter: p => hasReceivingActivity(p, 20),                        defaultSort: 'yds', cols: RECEIVING_COLS },
   { key: 'defense',   label: 'Defense',   filter: p => p.solo_tackles + p.assist_tackles >= 10,             defaultSort: 'tot', cols: DEFENSE_COLS },
 ]
 
 export const POS_TABS: PosTab[] = [
   { key: 'qb',  label: 'QB',      filter: p => p.position === 'QB' && p.attempts >= 1,                          defaultSort: 'yds', cols: QB_POS_COLS },
   { key: 'rb',  label: 'RB',      filter: p => p.position === 'RB' && p.carries >= 1,                           defaultSort: 'yds', cols: RB_POS_COLS },
-  { key: 'wr',  label: 'WR',      filter: p => p.position === 'WR' && p.targets >= 1,                           defaultSort: 'yds', cols: REC_POS_COLS },
-  { key: 'te',  label: 'TE',      filter: p => p.position === 'TE' && p.targets >= 1,                           defaultSort: 'yds', cols: REC_POS_COLS },
+  { key: 'wr',  label: 'WR',      filter: p => p.position === 'WR' && hasReceivingActivity(p),                  defaultSort: 'yds', cols: REC_POS_COLS },
+  { key: 'te',  label: 'TE',      filter: p => p.position === 'TE' && hasReceivingActivity(p),                  defaultSort: 'yds', cols: REC_POS_COLS },
   { key: 'k',   label: 'K',       filter: p => p.position === 'K' && (p.fg_att + p.xp_att) >= 1,               defaultSort: 'pts', cols: K_POS_COLS },
   { key: 'def', label: 'Defense', filter: p => DEF_POS_SET.has(p.position ?? '') && (p.solo_tackles + p.assist_tackles) >= 1, defaultSort: 'tot', cols: DEF_POS_COLS },
   { key: 'p',   label: 'P',       filter: p => p.position === 'P' && (p.punts ?? 0) >= 1,                            defaultSort: 'punts', cols: P_POS_COLS },

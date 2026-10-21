@@ -1,4 +1,5 @@
 import type { LeagueLeader } from '../../types'
+import { hasReceivingActivity } from '../../utils/receiving'
 import { teamLogoUrl } from '../../utils/teams'
 import { STAT_PRIMARY, type PrimaryStat } from './primaryStats'
 
@@ -13,7 +14,7 @@ interface DashboardCategory {
 const DASHBOARD_CATEGORIES: DashboardCategory[] = [
   { key: 'pass_yds', label: 'Passing Leader',   tabKey: 'passing',   filter: p => p.attempts >= 100,                   primary: STAT_PRIMARY.passing },
   { key: 'rush_yds', label: 'Rushing Leader',   tabKey: 'rushing',   filter: p => p.carries >= 50,                     primary: STAT_PRIMARY.rushing },
-  { key: 'rec_yds',  label: 'Receiving Leader', tabKey: 'receiving', filter: p => p.targets >= 20,                     primary: STAT_PRIMARY.receiving },
+  { key: 'rec_yds',  label: 'Receiving Leader', tabKey: 'receiving', filter: p => hasReceivingActivity(p, 20),        primary: STAT_PRIMARY.receiving },
   { key: 'tkl',      label: 'Tackles Leader',   tabKey: 'defense',   filter: p => p.solo_tackles + p.assist_tackles >= 10, primary: STAT_PRIMARY.defense },
 ]
 

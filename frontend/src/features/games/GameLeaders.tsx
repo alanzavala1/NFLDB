@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { hasReceivingActivity } from '../../utils/receiving'
 import type { GameDetail, GamePlayerStats } from '../../types'
 import type { GameOrigin } from '../../types/navigation'
 import Card from '../../components/Card'
@@ -61,10 +62,10 @@ export function GameLeaders({ game, origin }: { game: GameDetail; origin: GameOr
     },
     {
       label: 'Receiving Yds',
-      away: top(game.away, p => p.targets > 0, p => p.rec_yards,
+      away: top(game.away, p => hasReceivingActivity(p), p => p.rec_yards,
         p => formatStat(p.rec_yards),
         p => `${p.receptions}/${p.targets} TGT${p.rec_tds ? `, ${p.rec_tds} TD` : ''}`),
-      home: top(game.home, p => p.targets > 0, p => p.rec_yards,
+      home: top(game.home, p => hasReceivingActivity(p), p => p.rec_yards,
         p => formatStat(p.rec_yards),
         p => `${p.receptions}/${p.targets} TGT${p.rec_tds ? `, ${p.rec_tds} TD` : ''}`),
     },

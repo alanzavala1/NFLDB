@@ -1,4 +1,5 @@
 import type { DivisionStandings, LeagueLeader, PowerRankingRow, StandingsRow } from '../../types'
+import { hasReceivingActivity } from '../../utils/receiving'
 import Card, { CardRow } from '../../components/Card'
 import { QueryFailure } from '../../components/QueryFeedback'
 import { teamLogoUrl, teamNickname } from '../../utils/teams'
@@ -21,7 +22,7 @@ type LeaderCategory = {
 const LEADER_CATEGORIES: LeaderCategory[] = [
   { label: 'Passing',   unit: 'YDS', filter: p => p.attempts >= 100, value: p => p.pass_yards, display: p => p.pass_yards.toLocaleString() },
   { label: 'Rushing',   unit: 'YDS', filter: p => p.carries >= 50,   value: p => p.rush_yards, display: p => p.rush_yards.toLocaleString() },
-  { label: 'Receiving', unit: 'YDS', filter: p => p.targets >= 20,   value: p => p.rec_yards,  display: p => p.rec_yards.toLocaleString() },
+  { label: 'Receiving', unit: 'YDS', filter: p => hasReceivingActivity(p, 20), value: p => p.rec_yards, display: p => p.rec_yards.toLocaleString() },
   { label: 'Defense',   unit: 'TKL', filter: p => p.solo_tackles + p.assist_tackles >= 10, value: p => p.solo_tackles + p.assist_tackles, display: p => (p.solo_tackles + p.assist_tackles).toString() },
 ]
 
