@@ -62,6 +62,9 @@ def validate_snapshot(conn):
     Low-volume player splits and career comparables may legitimately be empty.
     This gate does not assert freshness or completeness of optional vendor feeds.
     """
+    tables = {row[0] for row in conn.execute('SHOW TABLES').fetchall()}
+    _require(not tables.intersection({'receiving_down_preview', 'receiving_preview_preparation'}),
+             'Receiving-only preview is not a publishable snapshot')
     _check_schema(conn)
     seasons = [r[0] for r in conn.execute(
         "SELECT DISTINCT season FROM plays WHERE season_type = 'REG' ORDER BY season"

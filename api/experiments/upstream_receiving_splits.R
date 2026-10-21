@@ -1,4 +1,4 @@
-# Isolated official-calculator trial; never imports or writes the serving DB.
+# Official receiving export producer; never imports or writes a database.
 # Rscript --vanilla experiments/upstream_receiving_splits.R OUTPUT_DIR [SEASONS...]
 # R_LIBS_USER may point at a separate experiment-only package library.
 args <- commandArgs(trailingOnly = TRUE)
@@ -12,6 +12,7 @@ out <- normalizePath(out, winslash = "/", mustWork = TRUE)
 completion <- file.path(out, "run.json")
 if (file.exists(completion)) file.remove(completion)
 options(timeout = 300, nflreadr.cache = "memory")
+stopifnot(requireNamespace("jsonlite", quietly = TRUE))
 stopifnot(as.character(packageVersion("nflfastR")) == "6.0.0")
 stopifnot(as.character(packageVersion("nflreadr")) == "1.5.1")
 stopifnot("pbp" %in% names(formals(nflfastR::calculate_stats)))
@@ -50,7 +51,7 @@ for (year in years) {
   write_frame(reg[c("game_id", "play_id", "season", "season_type", "down", "qtr",
                     "two_point_attempt", "receiver_player_id", "complete_pass",
                     "receiving_yards", "pass_touchdown")], paste0("context-", year, ".csv"))
-  write_frame(weekly[weekly$season_type %in% "REG", c("player_id", "season", "week", metrics)],
+  write_frame(weekly[weekly$season_type %in% "REG", c("player_id", "season", "season_type", "week", metrics)],
               paste0("weekly-", year, ".csv"))
   full <- record(paste(year, "full_calculation"), function() calculate(reg))
   stopifnot(isTRUE(attr(full, "custom_pbp")))
@@ -85,13 +86,28 @@ for (year in years) {
 write_frame(do.call(rbind, timings), "timings.csv")
 capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
 capture.output(nflfastR::calculate_stats, file = file.path(out, "installed-calculator.txt"))
+# Bind the consumed exports and captured source inputs before writing completion.
+files <- unlist(lapply(years, function(year) c(
+  paste0(c("context-", "weekly-", "overall-", "down-", "credits-"), year, ".csv"),
+  paste0(c("pbp-", "weekly-", "credits-"), year, ".rds")
+)))
+hashes <- setNames(lapply(files, function(name) {
+  digest::digest(file = file.path(out, name), algo = "sha256", serialize = FALSE)
+}), files)
+packages <- setNames(lapply(loadedNamespaces(), function(name) {
+  as.character(packageVersion(name))
+}), loadedNamespaces())
 jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 1L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    schema_version = 2L, season_type = "REG", excludes_two_point_attempts = TRUE,
     summary_level = "season", split_dimension = "down"
   ),
+  run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),
+  runtime = list(R = as.character(getRversion()), platform = R.version$platform,
+                 packages = packages),
+  files = hashes,
   scope = "REG, excluding two-point attempts; identified-player comparisons done separately",
   inputs = input_records, completed_utc = format(Sys.time(), tz = "UTC", usetz = TRUE)
 ), completion, pretty = TRUE, auto_unbox = TRUE)

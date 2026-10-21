@@ -43,11 +43,14 @@ The optional database is opened read-only and compared only for players already
 stored; this does not evaluate or change production qualification/admission.
 Keep large outputs and runtime installations in ignored `data/`.
 
-New runs also emit a structured `receiving_export` contract in `run.json`:
-schema version 1, REG, season summaries, Down dimension, two-point attempts
-excluded. The adapter deliberately refuses older manifests without this scope.
-It checks nflfastR/nflreadr versions, but does not lock all R dependencies or
-cryptographically bind a manifest to its CSV files.
+New runs emit a structured `receiving_export` contract in `run.json`:
+schema version 2, REG, season summaries, Down dimension, two-point attempts
+excluded. The adapter refuses earlier versions. The completion manifest now
+records R/loaded package versions and SHA256 hashes of the source snapshots and
+CSV exports. The loader parses only bytes matching the recorded hash. These
+digests detect changed files; they do not authenticate the producer or lock the
+complete R dependency environment. Earlier unbound trial results remain useful
+research evidence but are not accepted by the current adapter.
 
 ## What was checked
 
@@ -153,15 +156,45 @@ credits. Gonzalez's 2004 output retains 102 catches, 1,258 yards and 7 TD.
 The dry run preserves the original admission policy for comparison; production
 must coordinate qualification and calculator inputs from the prepared sources.
 
-36 network-free adapter tests cover the real Gibbs/Jefferson/Gonzalez rows,
+38 network-free adapter tests cover the real Gibbs/Jefferson/Gonzalez rows,
 actual SQL schema insertion, null handling, negative/lateral counts, explicit
 admission, unknown players, invalid counts, duplicate rows, incomplete exports,
-package versions and scope drift. Evidence is `adapter-check.json` alongside
+package versions, scope drift and changed/missing file hashes. Evidence for the
+earlier v1 conversion is `adapter-check.json` alongside
 the fresh trial inputs. Run `uv run --locked pytest tests/test_upstream_receiving_splits.py`.
 
-Before production: lock the R environment/build, connect R execution to the
-candidate lifecycle, preserve qualification/null policies, and evaluate other
-dimensions and full history.
+## End-to-end preview (October 21)
+
+`python -m jobs.receiving_preview` now copies a closed source, invokes official
+R in isolation and writes the converted rows into `receiving_down_preview` in
+the separate DB. Existing `player_splits` rows remain intact. A recorded
+invocation ID, copied-baseline hash and export-manifest hash tie the preview to
+its inputs and observed R environment. All eligible players and their receiving
+production are checked against bound weekly exports. Failures remove only the
+new candidate and retain exports/logs. The full snapshot validator rejects this
+preview, even when its scoped receiving checks pass.
+
+Actual output is ignored `data/receiving-preview-20261021.duckdb`, with exports
+under `data/upstream-r-trial/preview-export-v2b/`. Results remain 152 players / 522
+rows in 2004, 220 / 813 in 2024. All production comparisons pass; historical
+targets remain NULL and modern targets match weekly. Sixteen file hashes were
+independently verified in Python, and 38 loaded namespaces were recorded.
+A bidirectional SQL comparison found zero differences in the complete existing
+`player_splits` table versus the source. Both DBs closed without WALs.
+
+The first preview attempt correctly failed because weekly CSVs lacked the
+season_type field required by reference validation. The producer now exports
+that field; the failed candidate was removed, and its logs remain at
+`data/upstream-r-trial/preview-export-v2/`. Lifecycle tests cover that case,
+changed bytes, stale invocation IDs, reference mismatches, missing players,
+runtime mismatches, existing paths, original-file preservation, missing R,
+pending WALs, interrupted process-tree cleanup and full-gate preview rejection.
+Focused adapter/preview/candidate/validation checks: 108 passed. Full backend:
+755 passed, 2 skipped. The actual preview was also opened read-only and rejected
+by the full snapshot validator as expected.
+
+Before production: lock the complete R environment/build, coordinate source
+refresh and remaining metrics, and evaluate other dimensions and full history.
 Receiving EPA, success rates and target-specific dimensions still need explicit
 definitions. No metric/rating/comparables correctness is established here.
 

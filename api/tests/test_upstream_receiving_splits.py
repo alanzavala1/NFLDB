@@ -1,5 +1,6 @@
 """Real R outputs map to existing SQL rows; corrupt exports fail before filtering."""
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 
@@ -102,8 +103,9 @@ def test_player_ids_must_be_an_explicit_collection():
 @pytest.fixture
 def export(tmp_path):
     manifest = {**VERSIONS, "seasons": [2024], "receiving_export": deepcopy(EXPORT_CONTRACT)}
-    (tmp_path / "run.json").write_text(json.dumps(manifest))
     frame().to_csv(tmp_path / "down-2024.csv", index=False)
+    manifest["files"] = {"down-2024.csv": hashlib.sha256((tmp_path / "down-2024.csv").read_bytes()).hexdigest()}
+    (tmp_path / "run.json").write_text(json.dumps(manifest))
     return tmp_path, manifest
 
 
@@ -117,7 +119,7 @@ def test_completed_export_loads_without_r_or_network(export):
 @pytest.mark.parametrize("field,value", [
     ("season_type", "POST"), ("summary_level", "week"), ("split_dimension", "quarter"),
     ("excludes_two_point_attempts", False), ("excludes_two_point_attempts", 1),
-    ("schema_version", 2), ("schema_version", True),
+    ("schema_version", 3), ("schema_version", True),
 ])
 def test_scope_drift_fails(export, field, value):
     directory, manifest = export
@@ -144,4 +146,20 @@ def test_partial_exports_fail(export, name):
     directory, _ = export
     (directory / name).unlink()
     with pytest.raises(SourceError):
+        load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+
+
+def test_changed_export_bytes_are_rejected_even_if_counts_still_parse(export):
+    directory, _ = export
+    path = directory / "down-2024.csv"
+    path.write_bytes(path.read_bytes() + b"\n")
+    with pytest.raises(SourceError, match="SHA256 mismatch"):
+        load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+
+
+def test_missing_export_hash_is_rejected(export):
+    directory, manifest = export
+    manifest.pop("files")
+    (directory / "run.json").write_text(json.dumps(manifest))
+    with pytest.raises(SourceError, match="missing SHA256"):
         load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])

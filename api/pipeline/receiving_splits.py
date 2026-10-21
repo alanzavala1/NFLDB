@@ -5,6 +5,8 @@ qualification rules. Callers supply the players admitted by the existing build.
 Unsupported metrics are NULL; this output must not replace complete live rows.
 """
 from collections.abc import Collection
+import hashlib
+import io
 import json
 from pathlib import Path
 
@@ -16,7 +18,7 @@ from services.receiving_coverage import targets_unavailable
 
 
 EXPORT_CONTRACT = {
-    "schema_version": 1,
+    "schema_version": 2,
     "season_type": "REG",
     "excludes_two_point_attempts": True,
     "summary_level": "season",
@@ -95,14 +97,17 @@ def adapt_receiving_down(frame: pd.DataFrame, *, season: int,
 
 
 def load_receiving_down_export(directory: Path, *, season: int,
-                               qualified_players: Collection[str]) -> pd.DataFrame:
+                               qualified_players: Collection[str],
+                               manifest: dict | None = None) -> pd.DataFrame:
     """Read a completed, versioned R trial export; fail closed on scope drift.
 
-    A completion marker describes scope and package versions. It is not a
-    cryptographic binding or a substitute for candidate reconciliation.
+    Read verified bytes rather than reopening files after their hash check.
+    Digests detect changed files; they are not publisher authentication or a
+    substitute for candidate reconciliation.
     """
     try:
-        manifest = json.loads((directory / "run.json").read_text(encoding="utf-8"))
+        if manifest is None:
+            manifest = json.loads((directory / "run.json").read_text(encoding="utf-8"))
         if not isinstance(manifest, dict):
             raise _error(season, "completion marker must be an object")
         contract = manifest.get("receiving_export")
@@ -115,7 +120,21 @@ def load_receiving_down_export(directory: Path, *, season: int,
         seasons = manifest.get("seasons")
         if not isinstance(seasons, list) or season not in seasons:
             raise _error(season, "requested season is absent from completion marker")
-        frame = pd.read_csv(directory / f"down-{season}.csv", dtype={"player_id": "string", "split_value": "string"})
+        frame = read_export_csv(directory, manifest, f"down-{season}.csv", season=season)
     except (OSError, ValueError) as error:
         raise _error(season, f"cannot read completed export: {error}") from error
     return adapt_receiving_down(frame, season=season, qualified_players=qualified_players)
+
+
+def read_export_csv(directory: Path, manifest: dict, name: str, *, season: int) -> pd.DataFrame:
+    """Parse only the exact CSV bytes whose SHA256 matches the completion record."""
+    if Path(name).name != name:
+        raise _error(season, "export name must be a plain filename")
+    hashes = manifest.get("files")
+    expected = hashes.get(name) if isinstance(hashes, dict) else None
+    if not isinstance(expected, str) or len(expected) != 64:
+        raise _error(season, f"missing SHA256 for {name}")
+    data = (directory / name).read_bytes()
+    if hashlib.sha256(data).hexdigest() != expected:
+        raise _error(season, f"SHA256 mismatch for {name}")
+    return pd.read_csv(io.BytesIO(data), dtype={"player_id": "string", "split_value": "string"})

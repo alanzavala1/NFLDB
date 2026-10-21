@@ -373,11 +373,12 @@ before attempting publication.
 
 ## Official receiving split adapter
 
-`pipeline/receiving_splits.py` is the first offline integration boundary for
-official nflfastR receiving counts. It reads a completed, versioned Down export
-from `experiments/upstream_receiving_splits.R` and returns the existing
-`player_splits` column layout. It has no R execution, network, database write or
-request-time dependency. The main rebuild does not call it yet.
+`pipeline/receiving_splits.py` is the offline integration boundary for official
+nflfastR receiving counts. It reads a completed, versioned Down export from
+`experiments/upstream_receiving_splits.R` and returns the existing `player_splits`
+column layout. The adapter has no R execution, network, database write or
+request-time dependency. The main rebuild does not call it yet; the separate
+preview job below now connects the producer and adapter.
 
 The caller must supply qualified player IDs using the existing admission policy.
 The adapter never re-qualifies players using raw upstream target counts: doing
@@ -395,9 +396,47 @@ and scope/schema changes fail rather than silently falling back to old math.
 
 EPA, success, air yards, YAC, first downs and category-inapplicable fields remain
 NULL in this first adapter. Its partial rows must not replace complete live
-rows. R runtime locking, source/manifest binding, candidate orchestration,
-additional dimensions and advanced-metric definitions remain separate work.
+rows. The v2 export manifest records the R environment and SHA256 digests of
+exports/source snapshots. Loaders parse the exact bytes they verified, using one
+captured manifest in the preview worker. This detects changed exports; it does
+not authenticate the publisher or independently establish source correctness.
 See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
+
+## Receiving candidate preview
+
+From `api/`, `python -m jobs.receiving_preview` provides one explicit path through
+copy, official R export, conversion, scoped reconciliation and metadata storage.
+It requires an installed Rscript and separate R library. For the local trial:
+
+```powershell
+uv run --locked python -m jobs.receiving_preview `
+  --source data/nfl.duckdb --candidate data/receiving-preview-example.duckdb `
+  --exports data/receiving-preview-example-exports --seasons 2004 2024 `
+  --rscript data/upstream-r-trial/R-4.6.1/bin/Rscript.exe `
+  --r-library data/upstream-r-trial/library
+```
+
+Source must be closed with no WAL; candidate and export paths must be new. The
+job reuses the existing snapshot copy and worker path binding. R runs with a new
+invocation ID and writes its completion marker last. Its log and exports remain
+available on failure; only the job's newly created candidate/WAL are removed.
+Interrupting R stops its process tree before cleanup. The worker refuses the
+source/default serving database, verifies the copied baseline and invocation,
+checks runtime records, and loads hash-verified Down and weekly CSV bytes.
+
+The candidate contains `receiving_down_preview` and one JSON record in
+`receiving_preview_preparation`. That record binds the copied source hash,
+export manifest hash, invocation ID, observed R/package versions and per-season
+checks. Every existing qualifying player must remain, and catches/yards/TD must
+match the exported weekly reference by player; modern targets are checked too.
+Known-gap targets must be NULL. Qualification still uses the copied stored PBP;
+this preview is not a coordinated refresh of every source or dimension.
+
+Original `player_splits` rows remain intact. The main snapshot validator rejects
+either preview table: a receiving preview is not an accepted publication
+candidate. `jobs.prepare`, serving, refresh/deploy workflows and snapshot
+promotion are unchanged. Full R dependency locking, coordinated source refresh,
+remaining dimensions/metrics and full-history reconciliation remain outstanding.
 
 ## Remaining serving writes
 
@@ -446,6 +485,7 @@ uv run --locked pytest tests/test_candidate_snapshots.py
 uv run --locked pytest tests/test_snapshot_validation.py tests/test_reconciliation.py
 uv run --locked pytest tests/test_receiving_credit_pilot.py
 uv run --locked pytest tests/test_upstream_receiving_splits.py
+uv run --locked pytest tests/test_receiving_preview.py
 uv run --locked pytest tests/test_receiving_preservation.py tests/test_pipeline_storage.py
 ```
 
