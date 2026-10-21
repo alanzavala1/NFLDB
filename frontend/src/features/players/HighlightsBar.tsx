@@ -33,12 +33,12 @@ export default function HighlightsBar({ pos, totals, games, ngs, ranks }: {
       { label: 'SCR YDS / G', value: scryg != null ? scryg.toFixed(1) : null, note: 'Scrimmage per game' },
     ]
   } else if (pos === 'WR') {
-    const epat = totals.targets > 0 ? totals.rec_epa / totals.targets : null
+    const epat = totals.targets != null && totals.targets > 0 ? totals.rec_epa / totals.targets : null
     stats = [
       { label: 'Rec Yards', value: totals.rec_yards.toLocaleString() },
-      { label: 'Catch %', value: totals.targets > 0 ? pct(totals.receptions, totals.targets) + '%' : null },
+      { label: 'Catch %', value: totals.targets != null && totals.targets > 0 ? pct(totals.receptions, totals.targets) + '%' : null },
       { label: 'EPA / Target', value: epat != null ? `${epat >= 0 ? '+' : ''}${epat.toFixed(3)}` : null, note: 'Exp. Points Added', green: epat != null && epat >= 0, red: epat != null && epat < 0 },
-      { label: 'Y / Target', value: totals.targets > 0 ? (totals.rec_yards / totals.targets).toFixed(1) : null },
+      { label: 'Y / Target', value: totals.targets != null && totals.targets > 0 ? (totals.rec_yards / totals.targets).toFixed(1) : null },
     ]
   } else if (pos === 'K') {
     const fgPct = totals.fg_att > 0 ? (totals.fg_made / totals.fg_att * 100).toFixed(1) : null
@@ -75,7 +75,7 @@ export default function HighlightsBar({ pos, totals, games, ngs, ranks }: {
   return (
     <Card title="Career highlights" className="mb-8"><div className="grid grid-cols-2 border-t border-surface-line sm:grid-cols-4">
       {stats.map(s => {
-        const rank = ranks?.[s.label]
+        const rank = s.value == null ? null : ranks?.[s.label]
         return (
           <div key={s.label} className="border-b border-surface-line p-4 even:border-l sm:border-b-0 sm:border-l sm:first:border-l-0">
             <div className={`text-2xl font-black tabular-nums leading-none mb-1.5

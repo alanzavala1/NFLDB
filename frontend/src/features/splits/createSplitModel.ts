@@ -11,6 +11,7 @@ import {
 } from './aggregation'
 import { CAREER_SEASON, OVERALL_DIM } from './constants'
 import { entityColor } from './presets'
+import { hasReceivingActivity } from '../../utils/receiving'
 
 export function createSplitModel(comparison: ComparisonSelection, queries: ReturnType<typeof useSplitQueries>) {
   const { mode, playerLens, teamSide, season, situation, players, teams } = comparison
@@ -56,7 +57,7 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
     ? players.map((_, i) => (playerProfiles[i]?.data?.games ?? [])
       .filter(g => g.game_type === 'REG' && (isCareer || g.season === season))
       .map(g => ({ g, r: gameToSplitRow(g, playerLens as PlayerCategory) }))
-      .filter(x => (x.r.att ?? 0) > 0))
+      .filter(x => playerLens === 'receiving' ? hasReceivingActivity(x.g) : (x.r.att ?? 0) > 0))
     : []
 
   const games = playerGames[0] ?? []

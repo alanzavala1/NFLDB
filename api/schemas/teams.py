@@ -56,7 +56,8 @@ class TeamLeader(BaseModel):
     rush_tds: float
     rush_epa: float
 
-    targets: float
+    # Known source gaps are unavailable, never a measured zero.
+    targets: float | None
     receptions: float
     rec_yards: float
     rec_tds: float

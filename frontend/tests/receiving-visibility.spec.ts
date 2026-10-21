@@ -77,6 +77,7 @@ test('running back career and game log retain catches, lateral yards and receivi
   await expect(row).toBeVisible()
   const indexOf = async (label: string) => (await log.getByRole('columnheader').allTextContents()).indexOf(label)
   await expect(row.getByRole('cell').nth(await indexOf('REC'))).toHaveText('0')
+  await expect(row.getByRole('cell').nth(await indexOf('TGT'))).toHaveText('0')
   await expect(row.getByRole('cell').nth(await indexOf('REC YDS'))).toHaveText('20')
   await expect(row.getByRole('cell').nth(await indexOf('REC TD'))).toHaveText('1')
   const career = page.locator('section').filter({ has: page.getByText('Regular Season', { exact: true }) })

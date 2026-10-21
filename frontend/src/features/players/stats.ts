@@ -11,9 +11,9 @@ export function passerRating(cmp: number, att: number, yds: number, td: number, 
   return (((a + b + c + d) / 6) * 100).toFixed(1)
 }
 
-export function pct(a: number, b: number, dec = 1): string | null { return b > 0 ? (a / b * 100).toFixed(dec) : null }
+export function pct(a: number, b: number | null, dec = 1): string | null { return b != null && b > 0 ? (a / b * 100).toFixed(dec) : null }
 
-export function ratio(y: number, a: number, dec = 1): string | null { return a > 0 ? (y / a).toFixed(dec) : null }
+export function ratio(y: number, a: number | null, dec = 1): string | null { return a != null && a > 0 ? (y / a).toFixed(dec) : null }
 
 export function sfmt(x: number | null | undefined, dec = 1): string | null { if (x == null) return null; return `${x >= 0 ? '+' : ''}${x.toFixed(dec)}` }
 
@@ -34,7 +34,7 @@ export function sumGames(games: PlayerGame[]) {
   for (const g of games) {
     for (const k of Object.keys(s) as (keyof typeof s)[]) s[k] += g[k] ?? 0
   }
-  return s
+  return { ...s, targets: games.some(g => g.targets === null) ? null : s.targets }
 }
 
 export type Totals = ReturnType<typeof sumGames>
@@ -45,8 +45,8 @@ export function detectPos(t: Totals, position?: string | null): string {
   if (position === 'QB' || t.attempts > 10) return 'QB'
   // Missing targets must not turn a rostered receiver with rushing work into RB.
   if (position === 'WR' || position === 'TE') return 'WR'
-  if (position === 'RB' || (t.carries > 20 && t.targets < t.carries * 0.7)) return 'RB'
-  if (t.targets > 20 || (!position && hasReceivingProduction(t))) return 'WR'
+  if (position === 'RB' || (t.carries > 20 && t.targets != null && t.targets < t.carries * 0.7)) return 'RB'
+  if ((t.targets != null && t.targets > 20) || (!position && hasReceivingProduction(t))) return 'WR'
   if (position === 'K'  || t.fg_att > 0) return 'K'
   if (position === 'P'  || t.punts  > 0) return 'P'
   if (OL_POSITIONS.has(position ?? '')) return 'OL'
@@ -66,5 +66,9 @@ export function aggregateSituational(situational: Record<number, SituationalStat
     agg.lng_rec  = Math.max(agg.lng_rec  ?? 0, s.lng_rec  ?? 0)
     for (const k of sumKeys) agg[k] = (agg[k] ?? 0) + (s[k] ?? 0)
   }
-  return agg as SituationalStats
+  const result = agg as SituationalStats
+  for (const key of ['rz_targets', 'third_targets'] as const) {
+    if (Object.values(situational).some(s => s[key] === null)) result[key] = null
+  }
+  return result
 }

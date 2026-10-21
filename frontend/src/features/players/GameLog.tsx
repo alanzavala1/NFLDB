@@ -28,7 +28,7 @@ function getGameCols(pos: string): GameCol[] {
     { label: 'YDS',     cell: g => g.rush_yards, highlight: true },
     { label: 'Y/C',     cell: g => g.carries > 0 ? ratio(g.rush_yards, g.carries) : null },
     { label: 'TD',      cell: g => g.rush_tds > 0 ? g.rush_tds : null },
-    { label: 'TGT',     cell: g => g.targets > 0 ? g.targets : null },
+    { label: 'TGT',     cell: g => hasReceivingActivity(g) ? g.targets : null },
     { label: 'REC',     cell: g => hasReceivingActivity(g) ? g.receptions : null },
     { label: 'REC YDS', cell: g => hasReceivingActivity(g) ? g.rec_yards : null },
     { label: 'REC TD',  cell: g => hasReceivingActivity(g) ? g.rec_tds : null },

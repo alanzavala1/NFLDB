@@ -47,12 +47,12 @@ export function computeHighlightRanks(pos: string, playerId: string, leaders: Le
     }
   }
   if (pos === 'WR') {
-    const wrFilter = (p: LeagueLeader) => p.targets >= 20
+    const wrFilter = (p: LeagueLeader) => p.targets != null && p.targets >= 20
     return {
       'Rec Yards':    r(p => p.rec_yards, p => hasReceivingActivity(p, 20)),
-      'Catch %':      r(p => p.targets > 0 ? p.receptions / p.targets : 0, wrFilter),
-      'EPA / Target': r(p => p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, wrFilter),
-      'Y / Target':   r(p => p.targets > 0 ? p.rec_yards / p.targets : 0, wrFilter),
+      'Catch %':      r(p => p.targets != null && p.targets > 0 ? p.receptions / p.targets : 0, wrFilter),
+      'EPA / Target': r(p => p.targets != null && p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, wrFilter),
+      'Y / Target':   r(p => p.targets != null && p.targets > 0 ? p.rec_yards / p.targets : 0, wrFilter),
     }
   }
   if (pos === 'DEF') {

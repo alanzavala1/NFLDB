@@ -502,11 +502,52 @@ without requiring a catch. Team receiving tables preserve negative yards and
 measured zero counts, and their totals include those retained players. Rushing
 game popups can show secondary receiving production without targets.
 
-This checkpoint changes no API field types, source values, statistical formulas
-or split-builder admission. Historical target availability/reasons, unsupported
-rates, career null handling, calculated ratings and assistant grounding remain
-separate coverage work. A displayed target value is not made trustworthy by
-keeping the player's independently usable receiving production visible.
+### Unavailable historical targets
+
+The serving policy in `api/services/receiving_coverage.py` withholds target counts
+for the known 2003–08 nflverse source gap, including plausible positive legacy
+counts. This is conservative across both regular season and postseason; outside
+that interval existing values pass through, which does not independently certify
+all other source data. Raw stored values and production counts remain unchanged.
+Policy changes belong on the backend; frontend code contains no season blacklist.
+
+`targets` is now required-but-nullable in leader, team, game, profile-game and
+comparable responses. Profile aggregate totals also support null. The generated
+OpenAPI/TypeScript contract reflects this change. API and frontend changes should
+ship together. `null` means unavailable; a measured zero remains numeric zero.
+Target-based shares and situational target counts are masked on profiles. Receiving
+split targets (`att`), EPA/target and success rates are masked before HTTP serving;
+passing/rushing split rows are unchanged. Comparable target displays conservatively
+withhold a total when the career range overlaps the source gap; this does not
+repair comparable model selection or calibration.
+
+`ReceivingDataNote` explains the expected gap without treating a loaded page as
+an error. Existing table cells show a dash for unavailable counts and rates;
+combined REC/TGT lines retain the catch count (`4/—`). Target-dependent sort
+values stay null (rather than zero); entirely unavailable columns cannot be sorted,
+and mixed rows sort unavailable values last. Receiver target maps are hidden when
+their incomplete play sample could imply complete target coverage. Passing and
+rushing maps retain their existing behavior.
+
+Career, career-by-team, team-summary and receiving-split aggregations keep targets
+unavailable if any included row lacks coverage. They never sum only covered targets
+and divide complete production by a partial denominator. Receiving-yard rankings
+and independently usable counts stay visible. Target-rate rankings and highlight
+rank badges cannot attach to unavailable values. Target-share career summaries
+and situational target rates preserve the gap too. Independent Next Gen Stats
+remain separate from this play-by-play coverage policy.
+
+`tests/target-availability.spec.ts` covers null versus zero, mixed-career totals,
+target sorting, historical/modern leaderboards, profile rates, team totals,
+game charts and receiving split game rows, including a mobile layout capture.
+Backend `tests/test_receiving_coverage.py` exercises real HTTP serialization with
+an in-memory historical dataset and confirms the underlying counts are unchanged.
+
+This serving/display checkpoint does not repair raw attribution, split admission,
+receiving EPA/WPA, ratings or comparable calibration. It does not integrate the
+individual-credit pilot or claim that every displayed historical metric is verified.
+Assistant execution/stream work remains separate; its compact stat summation only
+avoids reconstructing a partial target total from the newly nullable profile rows.
 
 `tests/receiving-visibility.spec.ts` covers zero/null targets, signed yardage,
 zero-catch touchdowns, target-only rows, empty production, source-position

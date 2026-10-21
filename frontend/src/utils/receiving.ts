@@ -16,3 +16,7 @@ export function hasReceivingProduction(stats: ReceivingStats): boolean {
 export function hasReceivingActivity(stats: ReceivingStats, minimumTargets = 1): boolean {
   return hasReceivingProduction(stats) || (stats.targets ?? 0) >= minimumTargets
 }
+
+export function hasUnavailableTargets(rows: ReceivingStats[]): boolean {
+  return rows.some(row => row.targets === null && hasReceivingProduction(row))
+}

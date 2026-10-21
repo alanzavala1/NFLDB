@@ -8,8 +8,8 @@ export function passerRating(cmp: number, att: number, yds: number, td: number, 
   return ((a + b + c + d) / 6) * 100
 }
 
-export function pct(a: number, b: number) { return b > 0 ? (a / b * 100).toFixed(1) : null }
+export function pct(a: number, b: number | null) { return b != null && b > 0 ? (a / b * 100).toFixed(1) : null }
 
-export function ratio(y: number, a: number, d = 1) { return a > 0 ? (y / a).toFixed(d) : null }
+export function ratio(y: number, a: number | null, d = 1) { return a != null && a > 0 ? (y / a).toFixed(d) : null }
 
 export function sfmt(x: number, d = 3) { return `${x >= 0 ? '+' : ''}${x.toFixed(d)}` }

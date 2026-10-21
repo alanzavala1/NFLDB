@@ -42,10 +42,12 @@ export function LeaderTable({ players, cols, sorting, onSortingChange, view }: {
   const columns = useMemo<ColumnDef<typeof features, LeagueLeader>[]>(() => cols.map(column => ({
     id: column.key,
     header: column.label,
-    accessorFn: column.sortVal,
+    accessorFn: player => column.sortVal(player) ?? undefined,
+    sortUndefined: 'last',
+    enableSorting: players.some(player => column.sortVal(player) != null),
     sortFn: sortFn_basic,
     cell: ({ row }) => <StatValue player={row.original} column={column} />,
-  })), [cols])
+  })), [cols, players])
   const table = useTable({
     features,
     data: players,
@@ -86,7 +88,7 @@ export function LeaderTable({ players, cols, sorting, onSortingChange, view }: {
                   className={`py-2 px-3 text-xs font-medium whitespace-nowrap text-right select-none hover:text-ink transition-colors
                     ${startsGroup(index) ? 'border-l border-surface-line/40' : ''}
                     ${isAdvanced ? 'bg-surface-raise/10 text-ink-dim hover:text-ink-mid' : direction ? 'text-ink' : 'text-ink-dim'}`}>
-                  <button type="button" onClick={header.column.getToggleSortingHandler()}
+                  <button type="button" disabled={!header.column.getCanSort()} onClick={header.column.getToggleSortingHandler()}
                     className="flex w-full items-center justify-end gap-1 cursor-pointer">
                     <table.FlexRender header={header} />
                     <span aria-hidden="true" className={`text-[10px] transition-opacity ${direction ? 'opacity-100' : 'opacity-0'}`}>

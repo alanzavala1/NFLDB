@@ -30,15 +30,17 @@ export function aggregatePlayerSplitRows(rows: PlayerSplit[]): PlayerSplit | nul
   if (rows.length === 0) return null
   const sum = (f: (r: PlayerSplit) => number | null | undefined) => rows.reduce((a, r) => a + (f(r) ?? 0), 0)
   const att = sum(r => r.att)
+  const missingTargets = rows[0].category === 'receiving' && rows.some(r => r.att === null)
   const wavg = (f: (r: PlayerSplit) => number | null | undefined) =>
     att > 0 ? rows.reduce((a, r) => a + (f(r) ?? 0) * (r.att ?? 0), 0) / att : null
   return {
     season: rows[0].season, category: rows[0].category, split_dim: rows[0].split_dim,
     split_value: rows[0].split_value, sort_order: rows[0].sort_order,
-    att, cmp: sum(r => r.cmp), yards: sum(r => r.yards), td: sum(r => r.td),
+    att: missingTargets ? null : att, cmp: sum(r => r.cmp), yards: sum(r => r.yards), td: sum(r => r.td),
     interceptions: sum(r => r.interceptions), air_yards: sum(r => r.air_yards), yac: sum(r => r.yac),
     first_downs: sum(r => r.first_downs),
-    epa: wavg(r => r.epa), success_pct: wavg(r => r.success_pct), cpoe: wavg(r => r.cpoe),
+    epa: missingTargets ? null : wavg(r => r.epa),
+    success_pct: missingTargets ? null : wavg(r => r.success_pct), cpoe: wavg(r => r.cpoe),
   }
 }
 

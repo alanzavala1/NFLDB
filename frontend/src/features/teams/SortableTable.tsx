@@ -39,9 +39,11 @@ export default function SortableTable({ title, section, players, cols, sorting, 
   const columns = useMemo<ColumnDef<typeof features, TeamLeader>[]>(() => cols.map(column => ({
     id: column.key,
     header: column.label,
-    accessorFn: column.sortVal,
+    accessorFn: player => column.sortVal(player) ?? undefined,
+    sortUndefined: 'last',
+    enableSorting: players.some(player => column.sortVal(player) != null),
     sortFn: sortFn_basic,
-  })), [cols])
+  })), [cols, players])
   const table = useTable({
     features,
     data: players,
@@ -88,7 +90,7 @@ export default function SortableTable({ title, section, players, cols, sorting, 
                   <th key={header.id} aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
                     className={`${thBase} ${sep ? 'border-l border-surface-line/40' : ''}
                       ${c.kind === 'adv' ? 'bg-surface-raise/10 text-ink-dim hover:text-ink-mid' : active ? 'text-ink' : 'text-ink-dim'}`}>
-                    <button type="button" onClick={header.column.getToggleSortingHandler()} className="flex w-full items-center justify-end gap-1 cursor-pointer">
+                    <button type="button" disabled={!header.column.getCanSort()} onClick={header.column.getToggleSortingHandler()} className="flex w-full items-center justify-end gap-1 cursor-pointer">
                       <table.FlexRender header={header} />
                       <span aria-hidden="true" className={`text-[10px] ${active ? 'opacity-100' : 'opacity-0'}`}>{direction === 'asc' ? '↑' : '↓'}</span>
                     </button>

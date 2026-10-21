@@ -17,7 +17,7 @@ function mvpScore(p: LeagueLeader): number {
 
 function opoyScore(p: LeagueLeader): number {
   if (p.position === 'QB') return -Infinity
-  if (p.carries < 50 && p.targets < 30) return -Infinity
+  if (p.carries < 50 && (p.targets == null || p.targets < 30)) return -Infinity
   return (p.rush_yards + p.rec_yards) + (p.rush_tds + p.rec_tds) * 25 + ((p.rush_epa ?? 0) + (p.rec_epa ?? 0)) * 5
 }
 

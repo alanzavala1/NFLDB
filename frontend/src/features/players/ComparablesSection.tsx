@@ -4,6 +4,8 @@ import type { PlayerComparable } from '../../types'
 import { playerComparablesQueryOptions } from '../../api/players'
 import { QueryFailure, QueryLoading } from '../../components/QueryFeedback'
 import { teamLogoUrl } from '../../utils/teams'
+import ReceivingDataNote from '../../components/ReceivingDataNote'
+import { hasUnavailableTargets } from '../../utils/receiving'
 
 function simColor(s: number) {
   if (s >= 95) return 'text-data-win'
@@ -29,7 +31,7 @@ function ComparableCard({ p, pos }: { p: PlayerComparable; pos: string }) {
     const ypc = p.carries > 0 ? (p.rush_yards / p.carries).toFixed(1) : '—'
     statLine = `${p.rush_yards.toLocaleString()} YDS · ${p.rush_tds} TD · ${ypc} Y/C`
   } else if (pos === 'WR') {
-    statLine = `${p.rec_yards.toLocaleString()} YDS · ${p.rec_tds} TD · ${p.targets} TGT`
+    statLine = `${p.rec_yards.toLocaleString()} YDS · ${p.rec_tds} TD · ${p.targets ?? '—'} TGT`
   } else {
     statLine = `${p.games}G · ${p.first_season}–${p.last_season}`
   }
@@ -89,6 +91,7 @@ export default function ComparablesSection({ playerId, pos }: { playerId: string
         <span className="text-xs text-ink-dim">Cosine similarity on career rate stats · same position group</span>
       </div>
       <QueryFailure resource="similar players" error={comparablesQuery.error} hasData={comparablesQuery.data !== undefined} onRetry={() => void comparablesQuery.refetch()} />
+      <ReceivingDataNote unavailable={pos === 'WR' && hasUnavailableTargets(comps)} career />
       {!comps.length && !comparablesQuery.error && <p className="text-sm text-ink-dim">No similar players are available.</p>}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {comps.map(p => <ComparableCard key={p.player_id} p={p} pos={pos} />)}

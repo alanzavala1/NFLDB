@@ -920,7 +920,7 @@ export interface components {
             /** Pass Epa */
             pass_epa: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Receptions */
             receptions: number;
             /** Rec Yards */
@@ -1061,7 +1061,8 @@ export interface components {
          * @description One row per player in /leaders. Stat fields are season totals from
          *     SUM() over player_game_stats, returned as DOUBLE.
          *
-         *     All stat fields are required-and-non-null: the underlying columns have
+         *     Stat fields are required; targets alone can be unavailable at serving time
+         *     for a known source-coverage gap. The underlying stored columns have
          *     DEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable
          *     stats like RB pass_yards). Roster-joined fields (position/team) may be
          *     null because the join is LEFT and roster data can be missing.
@@ -1102,7 +1103,7 @@ export interface components {
             /** Rush Epa */
             rush_epa: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Receptions */
             receptions: number;
             /** Rec Yards */
@@ -1488,7 +1489,7 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Att */
             att: number;
             /** Cmp */
@@ -1547,7 +1548,7 @@ export interface components {
             /** Pass Epa */
             pass_epa: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Receptions */
             receptions: number;
             /** Rec Yards */
@@ -1644,7 +1645,7 @@ export interface components {
             games_played: number;
             /** Season Totals */
             season_totals: {
-                [key: string]: number;
+                [key: string]: number | null;
             };
             /** Games */
             games: components["schemas"]["PlayerGame"][];
@@ -2180,7 +2181,7 @@ export interface components {
             /** Rush Epa */
             rush_epa: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Receptions */
             receptions: number;
             /** Rec Yards */

@@ -68,8 +68,8 @@ export default function CareerTable({ title, seasons, bySeason, ngs, snapTotals,
       false_starts: totalFS,
       holding: totalHold,
       stuff_rate: totalCarries > 0 ? parseFloat((100 * totalStuffed / totalCarries).toFixed(1)) : undefined,
-      target_share: tshVals.length > 0 ? parseFloat((tshVals.reduce((a, b) => a + b, 0) / tshVals.length).toFixed(1)) : undefined,
-      air_yards_share: ayshVals.length > 0 ? parseFloat((ayshVals.reduce((a, b) => a + b, 0) / ayshVals.length).toFixed(1)) : undefined,
+      target_share: allTotals.targets != null && tshVals.length > 0 ? parseFloat((tshVals.reduce((a, b) => a + b, 0) / tshVals.length).toFixed(1)) : undefined,
+      air_yards_share: allTotals.targets != null && ayshVals.length > 0 ? parseFloat((ayshVals.reduce((a, b) => a + b, 0) / ayshVals.length).toFixed(1)) : undefined,
     }
   })() : undefined
 

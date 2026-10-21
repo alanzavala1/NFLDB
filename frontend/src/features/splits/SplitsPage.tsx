@@ -1,3 +1,4 @@
+import ReceivingDataNote from '../../components/ReceivingDataNote'
 import Nav from '../../components/Nav'
 import { useQuery } from '@tanstack/react-query'
 import { seasonsQueryOptions } from '../../api/seasons'
@@ -33,6 +34,10 @@ export default function SplitsPage() {
         <SplitQueryFeedback entities={model.entities} splits={queries.splitResults} profiles={queries.playerProfiles}
           analytics={queries.rankQuery} splitKind={comparison.mode === 'teams' ? 'team' : model.isDefense ? 'defensive' : 'offensive'} />
         {comparison.season !== null && (model.entityCount === 0 ? <GetStarted mode={comparison.mode} loadExample={comparison.loadExample} /> : <>
+          <ReceivingDataNote unavailable={comparison.mode === 'players' && comparison.playerLens === 'receiving' && (
+            model.splitRows.some(rows => rows.some(row => 'category' in row && row.category === 'receiving' && row.att === null && (model.isCareer || row.season === comparison.season)))
+            || model.playerGames.some(rows => rows.some(({ g }) => g.targets === null))
+          )} career={model.isCareer} />
           <HeadToHead model={model} comparison={comparison} splitResults={queries.splitResults} />
           <StandoutSplits notable={notable} entityLabel={model.entities[0].label} isCareer={model.isCareer} season={comparison.season} />
           <SplitSections model={model} selectors={selectors} display={display} queries={queries} />

@@ -1,3 +1,4 @@
+import ReceivingDataNote from '../../components/ReceivingDataNote'
 import { useEffect } from 'react'
 import { hasReceivingActivity } from '../../utils/receiving'
 import { useQuery } from '@tanstack/react-query'
@@ -39,7 +40,7 @@ export function PlayerChartModal({ game, player, onClose }: { game: GameDetail; 
     .map(fam => ({ title: fam.title, rows: statRows(fam.keys) }))
     .filter(fam => fam.rows.length > 0)
   const events = chart?.events ?? []
-  const showZones = role === 'passer' || role === 'receiver'
+  const showZones = role === 'passer' || (role === 'receiver' && chart?.stats.targets !== null)
   const showRush = role === 'rusher'
   const adot = role === 'passer' ? avgDepthOfTarget(events) : null
   const footer = showRush
@@ -55,6 +56,7 @@ export function PlayerChartModal({ game, player, onClose }: { game: GameDetail; 
     {!player.player_id && <p className="micro">No chart is available for this player.</p>}
     {chart && events.length === 0 && stats.length === 0 && secondary.length === 0 && <p className="micro">No chart data is available for this player in this game.</p>}
     {chart && <>
+    <ReceivingDataNote unavailable={chart.stats.targets === null && (role === 'receiver' || hasReceivingActivity(chart.stats))} />
     <div className={`modal-grid ${role === 'defender' ? 'single' : ''}`}><div><div className="micro popup-title">{title}</div>{stats.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}{adot != null && <div className="rrow"><span>Average depth of target</span><b style={{ marginLeft: 'auto' }}>{adot.toFixed(1)}</b></div>}{secondary.map(fam => <div key={fam.title}><div className="micro popup-title">{fam.title}</div>{fam.rows.map(([k, v]) => <div className="rrow" key={k}><span>{STAT_LABELS[k] ?? titleCase(k.replaceAll('_', ' '))}</span><b style={{ marginLeft: 'auto', color: statColor(k, v) }}>{formatStatValue(k, v)}</b></div>)}</div>)}</div>{showZones && <div className="target-map"><TargetMap events={events} role={role} /><ZoneGrid events={events} /></div>}{showRush && <div className="target-map"><RunMap events={events} /><GapStrip events={events} /></div>}</div>
     <div className="modal-foot">{footer}</div>
     </>}

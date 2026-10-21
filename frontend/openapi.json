@@ -2803,7 +2803,14 @@
             "title": "Pass Epa"
           },
           "targets": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Targets"
           },
           "receptions": {
@@ -3357,7 +3364,14 @@
             "title": "Rush Epa"
           },
           "targets": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Targets"
           },
           "receptions": {
@@ -3488,7 +3502,7 @@
           "punt_yards"
         ],
         "title": "LeagueLeader",
-        "description": "One row per player in /leaders. Stat fields are season totals from\nSUM() over player_game_stats, returned as DOUBLE.\n\nAll stat fields are required-and-non-null: the underlying columns have\nDEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable\nstats like RB pass_yards). Roster-joined fields (position/team) may be\nnull because the join is LEFT and roster data can be missing."
+        "description": "One row per player in /leaders. Stat fields are season totals from\nSUM() over player_game_stats, returned as DOUBLE.\n\nStat fields are required; targets alone can be unavailable at serving time\nfor a known source-coverage gap. The underlying stored columns have\nDEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable\nstats like RB pass_yards). Roster-joined fields (position/team) may be\nnull because the join is LEFT and roster data can be missing."
       },
       "LineupPlayer": {
         "properties": {
@@ -4812,7 +4826,14 @@
             "title": "Rec Tds"
           },
           "targets": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Targets"
           },
           "att": {
@@ -4999,7 +5020,14 @@
             "title": "Pass Epa"
           },
           "targets": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Targets"
           },
           "receptions": {
@@ -5330,7 +5358,14 @@
           },
           "season_totals": {
             "additionalProperties": {
-              "type": "number"
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "type": "object",
             "title": "Season Totals"
@@ -7380,7 +7415,14 @@
             "title": "Rush Epa"
           },
           "targets": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Targets"
           },
           "receptions": {

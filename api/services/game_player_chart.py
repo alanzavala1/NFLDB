@@ -2,6 +2,7 @@
 import game_ratings_builder
 from database import query_to_dict
 from services.game_players import position_group as _position_group
+from services.receiving_coverage import mask_target_fields
 from sql_helpers import PGS_GAME_CTE, safe_query
 
 
@@ -171,6 +172,6 @@ def get_game_player_chart(game_id: str, player_id: str) -> dict:
         "role": role,
         "rating": p.get("rating"),
         "snap_pct": snap_pct,
-        "stats": stats,
+        "stats": mask_target_fields(stats, game["season"]),
         "events": events,
     }

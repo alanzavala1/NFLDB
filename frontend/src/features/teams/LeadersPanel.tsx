@@ -68,7 +68,7 @@ export default function LeadersPanel({ leaders, onViewFull }: { leaders: TeamLea
       <LeaderSection title="Receiving" rows={receivers.map(p => (
         <LeaderRow key={p.player_id} player={p}
           primary={{ value: sv(p.rec_yards), label: 'YDS' }}
-          secondary={`${sv(p.receptions)}/${sv(p.targets)} REC · ${avg(p.rec_yards, p.receptions)} YPR · ${sv(p.rec_tds)} TD`}
+          secondary={`${p.receptions}/${p.targets ?? '—'} REC · ${avg(p.rec_yards, p.receptions)} YPR · ${sv(p.rec_tds)} TD`}
         />
       ))} />
       <LeaderSection title="Defense" rows={defenders.map(p => (

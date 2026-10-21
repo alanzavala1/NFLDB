@@ -59,7 +59,7 @@ export const RB_COLS: Col[] = [
   { key: 'rtd',  label: 'TD',      kind: 'trad', group: 'Rushing',      cell: t => t.rush_tds },
   { key: 'ryg',  label: 'Y/G',     kind: 'trad', group: 'Rushing',      cell: (t, g) => ratio(t.rush_yards, g) },
   // Receiving
-  { key: 'tgt',  label: 'TGT',     kind: 'trad', group: 'Receiving',    cell: t => t.targets > 0 ? t.targets : null },
+  { key: 'tgt',  label: 'TGT',     kind: 'trad', group: 'Receiving',    cell: t => hasReceivingActivity(t) ? t.targets : null },
   { key: 'rec',  label: 'REC',     kind: 'trad', group: 'Receiving',    cell: t => hasReceivingActivity(t) ? t.receptions : null },
   { key: 'rcy',  label: 'YDS',     kind: 'trad', group: 'Receiving',    cell: t => hasReceivingActivity(t) ? t.rec_yards : null },
   { key: 'rctd', label: 'TD',      kind: 'trad', group: 'Receiving',    cell: t => hasReceivingActivity(t) ? t.rec_tds : null },
@@ -103,10 +103,10 @@ export const WR_COLS: Col[] = [
   { key: 'pyds', label: 'YDS',       kind: 'trad', group: 'Passing',    cell: t => t.attempts > 0 ? t.pass_yards : null },
   { key: 'ptd',  label: 'TD',        kind: 'trad', group: 'Passing',    cell: t => t.attempts > 0 ? t.pass_tds : null },
   // Advanced / NGS / Situational / WPA
-  { key: 'epat',   label: 'EPA/Tgt', kind: 'adv',  signed: true,        cell: t => t.targets > 0 ? sfmt(t.rec_epa / t.targets, 3) : null },
-  { key: 'ayt',    label: 'AY/TGT',  kind: 'adv',                       cell: t => t.targets > 0 ? ratio(t.air_yards, t.targets) : null },
+  { key: 'epat',   label: 'EPA/Tgt', kind: 'adv',  signed: true,        cell: t => t.targets != null && t.targets > 0 ? sfmt(t.rec_epa / t.targets, 3) : null },
+  { key: 'ayt',    label: 'AY/TGT',  kind: 'adv',                       cell: t => t.targets != null && t.targets > 0 ? ratio(t.air_yards, t.targets) : null },
   { key: 'yacr',   label: 'YAC/R',   kind: 'adv',                       cell: t => t.receptions > 0 ? ratio(t.yac, t.receptions) : null },
-  { key: 'racr',   label: 'RACR',    kind: 'adv',                       cell: t => t.air_yards > 0 ? (t.rec_yards / t.air_yards).toFixed(2) : null },
+  { key: 'racr',   label: 'RACR',    kind: 'adv',                       cell: t => t.targets != null && t.air_yards > 0 ? (t.rec_yards / t.air_yards).toFixed(2) : null },
   { key: 'tgtsh',  label: 'TGT%',    kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.target_share != null ? `${a.target_share.toFixed(1)}%` : null },
   { key: 'aysh',   label: 'AY%',     kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.air_yards_share != null ? `${a.air_yards_share.toFixed(1)}%` : null },
   { key: 'wrfl',   label: 'FUM',     kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },

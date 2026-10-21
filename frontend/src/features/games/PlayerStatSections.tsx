@@ -140,7 +140,7 @@ export function PlayerStatSections({ game, origin }: { game: GameDetail; origin:
                 {list.map(p => (
                   <tr key={p.player_id} className={rowCls}>
                     <PlayerLinkCell p={p} origin={origin} />
-                    {TD(`${p.receptions}/${p.targets}`)}
+                    {TD(`${p.receptions}/${p.targets ?? '—'}`)}
                     {TD(formatStat(p.rec_yards))}
                     {TD(formatYardsPerAttempt(p.rec_yards, p.receptions), true)}
                     {TD(p.rec_tds)}

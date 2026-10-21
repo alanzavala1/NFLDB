@@ -338,7 +338,10 @@ defaults to writable during this migration.
   completeness. Missing targets must not cause otherwise usable production to
   be dropped. Frontend receiving views now retain recorded production without
   requiring targets (see [frontend data boundaries](FRONTEND_DATA.md#receiving-production-and-visibility)).
-  Explicit target/rate coverage remains a separate migration step.
+  Read-time coverage policy now masks known 2003–08 target gaps as unavailable
+  in serving responses, with corresponding UI rate/aggregation handling. This
+  does not repair stored source attribution, model calibration or split admission;
+  the preservation gate continues to compare the unchanged source counts.
 - The accuracy gate runs shared reconciliation functions for **every loaded
   regular season**, rather than the old deploy test's fixed 2023 alone. Counting
   stats and passing yards are exact at the established qualifying volumes;

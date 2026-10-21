@@ -6,7 +6,7 @@ type ColKind = 'trad' | 'adv'
 
 export type LeaderCol = {
   key: string; label: string; kind: ColKind
-  sortVal: (p: LeagueLeader) => number
+  sortVal: (p: LeagueLeader) => number | null
   render: (p: LeagueLeader) => string | number | null
   highlight?: boolean; dim?: boolean
 }
@@ -44,10 +44,10 @@ const RECEIVING_COLS: LeaderCol[] = [
   { key: 'yds',  label: 'YDS',     kind: 'trad', highlight: true, sortVal: p => p.rec_yards,      render: p => p.rec_yards.toLocaleString() },
   { key: 'ypr',  label: 'Y/R',     kind: 'trad', dim: true,       sortVal: p => p.receptions ? p.rec_yards / p.receptions : 0, render: p => ratio(p.rec_yards, p.receptions) },
   { key: 'td',   label: 'TD',      kind: 'trad',                  sortVal: p => p.rec_tds,        render: p => p.rec_tds },
-  { key: 'cpct', label: 'CTH%',    kind: 'trad', dim: true,       sortVal: p => p.targets ? p.receptions / p.targets : 0, render: p => pct(p.receptions, p.targets) },
+  { key: 'cpct', label: 'CTH%',    kind: 'trad', dim: true,       sortVal: p => p.targets == null ? null : p.targets ? p.receptions / p.targets : 0, render: p => pct(p.receptions, p.targets) },
   { key: 'ypg',  label: 'Y/G',     kind: 'trad', dim: true,       sortVal: p => p.games_played ? p.rec_yards / p.games_played : 0, render: p => ratio(p.rec_yards, p.games_played) },
-  { key: 'ytgt', label: 'Y/TGT',   kind: 'adv',                   sortVal: p => p.targets ? p.rec_yards / p.targets : 0, render: p => ratio(p.rec_yards, p.targets) },
-  { key: 'epat', label: 'EPA/Tgt', kind: 'adv',                   sortVal: p => p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, render: p => p.targets > 0 && p.rec_epa != null ? sfmt(p.rec_epa / p.targets) : null },
+  { key: 'ytgt', label: 'Y/TGT',   kind: 'adv',                   sortVal: p => p.targets == null ? null : p.targets ? p.rec_yards / p.targets : 0, render: p => ratio(p.rec_yards, p.targets) },
+  { key: 'epat', label: 'EPA/Tgt', kind: 'adv',                   sortVal: p => p.targets == null ? null : p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, render: p => p.targets != null && p.targets > 0 && p.rec_epa != null ? sfmt(p.rec_epa / p.targets) : null },
 ]
 
 const DEFENSE_COLS: LeaderCol[] = [
@@ -65,7 +65,7 @@ const DEFENSE_COLS: LeaderCol[] = [
 
 export type PosCol = {
   key: string; label: string; desc: string
-  sortVal: (p: LeagueLeader) => number
+  sortVal: (p: LeagueLeader) => number | null
   render: (p: LeagueLeader) => string | number | null
   highlight?: boolean; dim?: boolean
 }
@@ -101,9 +101,9 @@ const REC_POS_COLS: PosCol[] = [
   { key: 'yds',  label: 'YDS',   desc: 'Receiving yards',         highlight: true, sortVal: p => p.rec_yards,      render: p => p.rec_yards.toLocaleString() },
   { key: 'ypr',  label: 'Y/R',   desc: 'Yards per reception',     dim: true,       sortVal: p => p.receptions ? p.rec_yards / p.receptions : 0, render: p => ratio(p.rec_yards, p.receptions) },
   { key: 'td',   label: 'TD',    desc: 'Receiving touchdowns',                     sortVal: p => p.rec_tds,        render: p => p.rec_tds },
-  { key: 'cth',  label: 'CTH%',  desc: 'Catch rate',              dim: true,       sortVal: p => p.targets ? p.receptions / p.targets : 0, render: p => pct(p.receptions, p.targets) },
+  { key: 'cth',  label: 'CTH%',  desc: 'Catch rate',              dim: true,       sortVal: p => p.targets == null ? null : p.targets ? p.receptions / p.targets : 0, render: p => pct(p.receptions, p.targets) },
   { key: 'ypg',  label: 'Y/G',   desc: 'Yards per game',          dim: true,       sortVal: p => p.games_played ? p.rec_yards / p.games_played : 0, render: p => ratio(p.rec_yards, p.games_played) },
-  { key: 'epat', label: 'EPA/T', desc: 'EPA per target',          dim: true,       sortVal: p => p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, render: p => p.targets > 0 && p.rec_epa != null ? sfmt(p.rec_epa / p.targets) : null },
+  { key: 'epat', label: 'EPA/T', desc: 'EPA per target',          dim: true,       sortVal: p => p.targets == null ? null : p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, render: p => p.targets != null && p.targets > 0 && p.rec_epa != null ? sfmt(p.rec_epa / p.targets) : null },
 ]
 
 const K_POS_COLS: PosCol[] = [

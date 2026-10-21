@@ -310,6 +310,8 @@ _GAME_LINE_STATS = [
 def _season_stat_line(games: list[dict]) -> dict:
     """Sum the profile page's reconciled per-game columns into one compact line."""
     totals = {col: round(sum(g.get(col) or 0 for g in games), 2) for col in STAT_COLS}
+    if any(g.get("targets") is None for g in games):
+        totals["targets"] = None
     return _nonzero(totals)
 
 
@@ -841,6 +843,8 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         games = [g for g in prof.get("games", [])
                  if int(g.get("season", -1)) == s and g.get("game_type") == "REG"]
         totals = {c: round(sum(g.get(c) or 0 for g in games), 2) for c in STAT_COLS}
+        if any(g.get("targets") is None for g in games):
+            totals["targets"] = None
 
         overview = {
             "player": {"id": player_id, "name": prof.get("player_name"),

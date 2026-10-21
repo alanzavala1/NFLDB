@@ -62,8 +62,8 @@ export const RUSH_COLS: TCol[] = [
 ]
 
 export const REC_COLS: TCol[] = [
-  { key: 'tgt',  label: 'TGT',     kind: 'trad', dim: true,       sortVal: p => p.targets,        render: p => p.targets > 0 ? p.targets : null,
-    total: t => t.targets > 0 ? t.targets : null },
+  { key: 'tgt',  label: 'TGT',     kind: 'trad', dim: true,       sortVal: p => p.targets,        render: p => p.targets,
+    total: t => t.targets },
   { key: 'rec',  label: 'REC',     kind: 'trad',                  sortVal: p => p.receptions,     render: p => p.receptions,
     total: t => t.receptions },
   { key: 'yds',  label: 'YDS',     kind: 'trad', highlight: true, sortVal: p => p.rec_yards,      render: p => p.rec_yards.toLocaleString(),
@@ -76,11 +76,11 @@ export const REC_COLS: TCol[] = [
     total: t => ratio(t.rec_yards, t.receptions) },
   { key: 'td',   label: 'TD',      kind: 'trad',                  sortVal: p => p.rec_tds,        render: p => p.rec_tds,
     total: t => t.rec_tds },
-  { key: 'cpct', label: 'CTH%',    kind: 'trad', dim: true,       sortVal: p => p.targets ? p.receptions / p.targets : 0, render: p => p.targets > 0 ? (p.receptions / p.targets * 100).toFixed(1) : null,
-    total: t => t.targets > 0 ? (t.receptions / t.targets * 100).toFixed(1) : null },
-  { key: 'tdpct', label: 'TD%',    kind: 'trad', dim: true,       sortVal: p => p.targets > 0 ? p.rec_tds / p.targets : 0,
-    render: p => p.targets > 0 && p.rec_tds > 0 ? (p.rec_tds / p.targets * 100).toFixed(1) : null,
-    total: t => t.targets > 0 && t.rec_tds > 0 ? (t.rec_tds / t.targets * 100).toFixed(1) : null },
+  { key: 'cpct', label: 'CTH%',    kind: 'trad', dim: true,       sortVal: p => p.targets == null ? null : p.targets ? p.receptions / p.targets : 0, render: p => p.targets != null && p.targets > 0 ? (p.receptions / p.targets * 100).toFixed(1) : null,
+    total: t => t.targets != null && t.targets > 0 ? (t.receptions / t.targets * 100).toFixed(1) : null },
+  { key: 'tdpct', label: 'TD%',    kind: 'trad', dim: true,       sortVal: p => p.targets == null ? null : p.targets > 0 ? p.rec_tds / p.targets : 0,
+    render: p => p.targets != null && p.targets > 0 && p.rec_tds > 0 ? (p.rec_tds / p.targets * 100).toFixed(1) : null,
+    total: t => t.targets != null && t.targets > 0 && t.rec_tds > 0 ? (t.rec_tds / t.targets * 100).toFixed(1) : null },
   { key: 'yac',  label: 'YAC',     kind: 'trad', dim: true,       sortVal: p => p.yac,
     render: p => p.yac > 0 ? p.yac.toLocaleString() : null,
     total: t => t.yac > 0 ? t.yac.toLocaleString() : null },
@@ -89,12 +89,12 @@ export const REC_COLS: TCol[] = [
     total: t => t.receptions > 0 && t.yac > 0 ? (t.yac / t.receptions).toFixed(1) : null },
   { key: 'ypg',  label: 'Y/G',     kind: 'trad', dim: true,       sortVal: p => p.games_played ? p.rec_yards / p.games_played : 0, render: p => ratio(p.rec_yards, p.games_played),
     total: (t, g) => g > 0 && t.rec_yards > 0 ? (t.rec_yards / g).toFixed(1) : null },
-  { key: 'ytgt', label: 'Y/TGT',   kind: 'adv',                   sortVal: p => p.targets ? p.rec_yards / p.targets : 0, render: p => ratio(p.rec_yards, p.targets),
+  { key: 'ytgt', label: 'Y/TGT',   kind: 'adv',                   sortVal: p => p.targets == null ? null : p.targets ? p.rec_yards / p.targets : 0, render: p => ratio(p.rec_yards, p.targets),
     total: t => ratio(t.rec_yards, t.targets) },
-  { key: 'aytg', label: 'AY/TGT',  kind: 'adv',                   sortVal: p => p.targets > 0 && p.air_yards != null ? p.air_yards / p.targets : 0, render: p => p.targets > 0 && p.air_yards != null ? ratio(p.air_yards, p.targets) : null,
-    total: t => t.targets > 0 ? ratio(t.air_yards, t.targets) : null },
-  { key: 'epat', label: 'EPA/Tgt', kind: 'adv',                   sortVal: p => p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, render: p => p.targets > 0 && p.rec_epa != null ? sfmt(p.rec_epa / p.targets) : null,
-    total: t => t.targets > 0 ? sfmt(t.rec_epa / t.targets) : null },
+  { key: 'aytg', label: 'AY/TGT',  kind: 'adv',                   sortVal: p => p.targets == null ? null : p.targets > 0 && p.air_yards != null ? p.air_yards / p.targets : 0, render: p => p.targets != null && p.targets > 0 && p.air_yards != null ? ratio(p.air_yards, p.targets) : null,
+    total: t => t.targets != null && t.targets > 0 ? ratio(t.air_yards, t.targets) : null },
+  { key: 'epat', label: 'EPA/Tgt', kind: 'adv',                   sortVal: p => p.targets == null ? null : p.targets > 0 && p.rec_epa != null ? p.rec_epa / p.targets : 0, render: p => p.targets != null && p.targets > 0 && p.rec_epa != null ? sfmt(p.rec_epa / p.targets) : null,
+    total: t => t.targets != null && t.targets > 0 ? sfmt(t.rec_epa / t.targets) : null },
 ]
 
 export const SCRIM_COLS: TCol[] = [
