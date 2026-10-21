@@ -383,20 +383,30 @@ preview job below now connects the producer and adapter.
 The caller must supply qualified player IDs using the existing admission policy.
 The adapter never re-qualifies players using raw upstream target counts: doing
 that would drop historical receivers whose target source is incomplete. It maps
-targets/receptions/yards/TD to `att`/`cmp`/`yards`/`td`, masks targets in the known
-2003–08 gap through the shared coverage policy, and preserves production.
+targets/receptions/yards/TD to `att`/`cmp`/`yards`/`td`, and official YAC/receiving
+first downs to `yac`/`first_downs`. It masks targets in the known 2003–08 gap
+through the shared coverage policy, and preserves production.
 This is not a claim of complete target coverage in every other season.
 
 All source rows are checked before admission filtering: required fields, season,
 REG scope, down values, duplicate keys, finite integral counts, nonnegative
-target/catch/TD counts and SQL integer range. Negative receiving yards and TD
-credits without catches/targets remain valid. Unidentified players and wholly
+target/catch/TD/first-down counts and SQL integer range. Receiving first downs
+cannot exceed catches. Negative receiving yards, negative YAC, YAC greater than
+receiving yards and TD credits without catches/targets remain valid. Unidentified players and wholly
 zero receiving lines are excluded. Partial exports, unexpected package versions
 and scope/schema changes fail rather than silently falling back to old math.
 
-EPA, success, air yards, YAC, first downs and category-inapplicable fields remain
-NULL in this first adapter. Its partial rows must not replace complete live
-rows. The v2 export manifest records the R environment and SHA256 digests of
+YAC has an independent coverage policy: `yac_unavailable` masks pre-2006 values
+only in this preview. It does not reuse the target-gap mask: 2006–08 YAC remains
+usable after reconciliation while targets stay NULL. This helper does not
+change serving responses. First downs follow upstream's receiving definition,
+excluding first downs supplied by penalties; this is distinct from generic
+play first downs. First-down counts remain available without targets, while a
+first-downs-per-target rate still requires a supported target denominator.
+
+EPA, success, air yards and category-inapplicable fields remain NULL in this
+adapter. Its partial rows must not replace complete live rows. The v3 export
+manifest requires YAC/first-down columns and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
 captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
@@ -429,7 +439,8 @@ The candidate contains `receiving_down_preview` and one JSON record in
 export manifest hash, invocation ID, observed R/package versions and per-season
 checks. Every existing qualifying player must remain, and catches/yards/TD must
 match the exported weekly reference by player; modern targets are checked too.
-Known-gap targets must be NULL. Qualification still uses the copied stored PBP;
+Known-gap targets and unsupported pre-2006 YAC must be NULL. Receiving first
+downs match weekly totals, as does YAC when supported. Qualification still uses the copied stored PBP;
 this preview is not a coordinated refresh of every source or dimension.
 
 Original `player_splits` rows remain intact. The main snapshot validator rejects

@@ -44,13 +44,14 @@ stored; this does not evaluate or change production qualification/admission.
 Keep large outputs and runtime installations in ignored `data/`.
 
 New runs emit a structured `receiving_export` contract in `run.json`:
-schema version 2, REG, season summaries, Down dimension, two-point attempts
+schema version 3, REG, season summaries, Down dimension, two-point attempts
 excluded. The adapter refuses earlier versions. The completion manifest now
 records R/loaded package versions and SHA256 hashes of the source snapshots and
 CSV exports. The loader parses only bytes matching the recorded hash. These
 digests detect changed files; they do not authenticate the producer or lock the
 complete R dependency environment. Earlier unbound trial results remain useful
-research evidence but are not accepted by the current adapter.
+research evidence but are not accepted by the current adapter. Version 3 also
+requires official receiving YAC and first-down counts in Down and weekly CSVs.
 
 ## What was checked
 
@@ -135,8 +136,9 @@ The integration direction is to use the maintained official calculator for
 supported receiving counts. `pipeline/receiving_splits.py` now provides the first
 offline adapter: validated R Down exports become the existing `player_splits`
 column layout. It receives an explicit qualified-player collection, masks
-known historical targets, retains receiving production and negative yardage,
-and leaves unsupported columns NULL. It does not execute R or write a database.
+known historical targets and unsupported pre-2006 YAC, retains receiving
+production and negative yardage/YAC, and imports official receiving first downs.
+Unsupported advanced columns stay NULL. It does not execute R or write a database.
 Serving and the main analytics rebuild do not call it yet. These partial rows
 must not replace complete production rows and erase their remaining fields.
 
@@ -197,9 +199,51 @@ Before production: lock the complete R environment/build, coordinate source
 refresh and remaining metrics, and evaluate other dimensions and full history.
 Receiving EPA, success rates and target-specific dimensions still need explicit
 definitions. No metric/rating/comparables correctness is established here.
-The subsequent [receiving metric review](RECEIVING_METRIC_REVIEW.md) records
-executed extra-field checks and recommends YAC/receiving first downs as the next
-preview additions. It does not change the existing preview data or adapter.
+The [receiving metric review](RECEIVING_METRIC_REVIEW.md) records the definitions
+and availability evidence used by the v3 extension below.
+
+## YAC and receiving first-down extension (October 21)
+
+Version 3 adds official `receiving_yards_after_catch` and
+`receiving_first_downs`, mapped to existing `yac` and `first_downs` columns.
+Negative YAC and YAC greater than receiving yards are accepted. Nonfinite,
+fractional, missing values, negative first-down counts and first downs exceeding
+catches fail. The preview checks supported YAC and receiving first downs against
+weekly totals, independently of target availability.
+
+Actual ignored output: `data/receiving-preview-yac-20261021.duckdb`; source
+exports: `data/upstream-r-trial/preview-export-v3/`.
+
+| REG season | Eligible players retained | Preview rows | Targets | YAC |
+|---|---:|---:|---|---|
+| 2004 | 152 | 522 | Unavailable | Unavailable |
+| 2006 | 141 | 492 | Unavailable | Matches weekly |
+| 2007 | 159 | 549 | Unavailable | Matches weekly |
+| 2008 | 149 | 514 | Unavailable | Matches weekly |
+| 2024 | 220 | 813 | Matches weekly | Matches weekly |
+
+Receiving first downs match weekly totals for all five samples. Independent
+read-only diagnostics cover all identified players, including those below split
+admission: catches, yards, TD, YAC and receiving first downs reconcile full
+season to weekly and across the Down partition. Every individual YAC player/down
+bucket matches raw stat-113 credits joined to the selected play context. These
+checks establish consistency, not independent NFL correctness or all-year coverage.
+
+Gonzalez 2006: targets NULL, 73 catches, 900 yards, 5 TD, **319 YAC, 54 receiving
+first downs**. Gonzalez 2004 retains 102/1,258/7 and 69 first downs with YAC NULL.
+Gibbs 2024 includes 593 YAC and 24 receiving first downs; Jefferson has 487/62.
+All 40 recorded file hashes were verified, and full bidirectional comparison
+found zero changes to original `player_splits`. Source DB hash remains unchanged;
+both DBs closed without WALs. The artifact remains a preview rejected by the
+full snapshot validator.
+
+Validation: 769 backend tests passed, 2 skipped. The stronger real Gonzalez-2006
+fixture was subsequently replayed with the complete 48-test adapter suite, all
+passing. New cases cover the target-independent YAC boundary, missing new fields,
+negative/oversized/fractional values, unavailable historical positive values,
+YAC/first-down reference disagreement and the actual SQL/worker lifecycle.
+Evidence: ignored `data/upstream-r-trial/yac-preview-verification.json`,
+`verify_yac_preview.py` and `preview-job-v3.log`.
 
 Source DB SHA256 before and after:
 `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`.

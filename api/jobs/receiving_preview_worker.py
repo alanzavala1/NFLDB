@@ -12,23 +12,26 @@ import pandas as pd
 from pipeline.receiving_preview import file_sha256
 from pipeline.receiving_splits import VERSIONS, load_receiving_down_export, read_export_csv
 from pipeline.snapshots import CandidateError
-from services.receiving_coverage import targets_unavailable
+from services.receiving_coverage import targets_unavailable, yac_unavailable
 
 
 def _check_totals(rows: pd.DataFrame, weekly: pd.DataFrame, season: int,
                   qualified: list[str]) -> dict:
-    counts = {"receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td"}
-    required = {"player_id", "season", "season_type", "targets", *counts}
+    counts = {"receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td",
+              "receiving_first_downs": "first_downs"}
+    required = {"player_id", "season", "season_type", "targets", "receiving_yards_after_catch", *counts}
     if not required.issubset(weekly.columns) or weekly.empty:
         raise CandidateError(f"weekly[{season}]: missing receiving reference data")
     if weekly[["season", "season_type"]].isna().any().any() or not weekly.season.eq(season).all() or not weekly.season_type.eq("REG").all():
         raise CandidateError(f"weekly[{season}]: unexpected reference scope")
-    values = weekly[["targets", *counts]].apply(pd.to_numeric, errors="raise")
+    values = weekly[["targets", "receiving_yards_after_catch", *counts]].apply(pd.to_numeric, errors="raise")
     numeric = values.to_numpy(dtype=float, na_value=np.nan)
     if not np.isfinite(numeric).all() or not (numeric == np.trunc(numeric)).all():
         raise CandidateError(f"weekly[{season}]: invalid reference counts")
-    if values[["targets", "receptions", "receiving_tds"]].lt(0).any().any():
+    if values[["targets", "receptions", "receiving_tds", "receiving_first_downs"]].lt(0).any().any():
         raise CandidateError(f"weekly[{season}]: negative reference counts")
+    if values.receiving_first_downs.gt(values.receptions).any():
+        raise CandidateError(f"weekly[{season}]: first downs exceed receptions")
     weekly = weekly.copy()
     weekly[values.columns] = values
     if set(rows.player_id) != set(qualified):
@@ -38,6 +41,11 @@ def _check_totals(rows: pd.DataFrame, weekly: pd.DataFrame, season: int,
             raise CandidateError(f"receiving[{season}]: historical targets must be NULL")
     else:
         counts["targets"] = "att"
+    if yac_unavailable([season]):
+        if rows.yac.notna().any():
+            raise CandidateError(f"receiving[{season}]: unsupported historical YAC must be NULL")
+    else:
+        counts["receiving_yards_after_catch"] = "yac"
     for source, target in counts.items():
         expected = weekly[weekly.player_id.isin(qualified)].groupby("player_id")[source].sum()
         actual = rows.groupby("player_id")[target].sum()
@@ -45,7 +53,9 @@ def _check_totals(rows: pd.DataFrame, weekly: pd.DataFrame, season: int,
         if not a.eq(b).all():
             raise CandidateError(f"receiving[{season}]: {source} does not match weekly totals")
     return {"players": len(qualified), "rows": len(rows), "production_matches_weekly": True,
-            "targets": "unavailable" if targets_unavailable([season]) else "matched_weekly"}
+            "targets": "unavailable" if targets_unavailable([season]) else "matched_weekly",
+            "yac": "unavailable" if yac_unavailable([season]) else "matched_weekly",
+            "first_downs": "matched_weekly"}
 
 
 def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseline: str) -> dict:

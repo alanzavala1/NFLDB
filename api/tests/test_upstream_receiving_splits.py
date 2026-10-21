@@ -42,7 +42,10 @@ def test_real_counts_round_trip_through_actual_player_splits_schema():
         assert conn.execute("SELECT SUM(att),SUM(cmp),SUM(yards),SUM(td) FROM player_splits WHERE player_id=?", [GIBBS]).fetchone() == (63, 52, 517, 4)
         assert conn.execute("SELECT SUM(att),SUM(cmp),SUM(yards),SUM(td) FROM player_splits WHERE player_id=?", [JEFFERSON]).fetchone() == (154, 103, 1533, 10)
         assert conn.execute("SELECT SUM(att),SUM(cmp),SUM(yards),SUM(td) FROM player_splits WHERE player_id=?", [GONZALEZ]).fetchone() == (None, 102, 1258, 7)
-        assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE epa IS NOT NULL OR success_pct IS NOT NULL OR air_yards IS NOT NULL OR yac IS NOT NULL OR first_downs IS NOT NULL").fetchone()[0] == 0
+        assert conn.execute("SELECT SUM(yac),SUM(first_downs) FROM player_splits WHERE player_id=?", [GIBBS]).fetchone() == (593, 24)
+        assert conn.execute("SELECT SUM(yac),SUM(first_downs) FROM player_splits WHERE player_id=?", [JEFFERSON]).fetchone() == (487, 62)
+        assert conn.execute("SELECT SUM(yac),SUM(first_downs) FROM player_splits WHERE player_id=?", [GONZALEZ]).fetchone() == (None, 69)
+        assert conn.execute("SELECT COUNT(*) FROM player_splits WHERE epa IS NOT NULL OR success_pct IS NOT NULL OR air_yards IS NOT NULL").fetchone()[0] == 0
 
 
 def test_historical_positive_credits_remain_unknown_without_erasing_production():
@@ -58,10 +61,12 @@ def test_historical_positive_credits_remain_unknown_without_erasing_production()
 def test_lateral_negative_yards_real_zeros_and_explicit_admission():
     source = frame().iloc[:1].copy()
     source.loc[0, ["targets", "receptions", "receiving_yards", "receiving_tds"]] = [0, 0, -3, 1]
+    source.loc[0, ["receiving_yards_after_catch", "receiving_first_downs"]] = [-3, 0]
     result = adapt(source, players=[GIBBS])
     assert result[["att", "cmp", "yards", "td"]].iloc[0].tolist() == [0, 0, -3, 1]
+    assert result.yac.iloc[0] == -3
     assert adapt(source, players=[JEFFERSON]).empty
-    source.loc[0, ["targets", "receptions", "receiving_yards", "receiving_tds"]] = 0
+    source.loc[0, ["targets", "receptions", "receiving_yards", "receiving_tds", "receiving_yards_after_catch", "receiving_first_downs"]] = 0
     assert adapt(source).empty
 
 
@@ -78,6 +83,10 @@ def test_unidentified_players_are_excluded_without_mutating_input():
     ("targets", None), ("receiving_yards", float("nan")), ("receiving_yards", float("inf")),
     ("receiving_yards", 1.5), ("receptions", -1), ("receiving_tds", -1),
     ("receiving_yards", 2**31), ("targets", "bad"),
+    ("receiving_yards_after_catch", None), ("receiving_yards_after_catch", float("inf")),
+    ("receiving_yards_after_catch", 1.5), ("receiving_first_downs", -1),
+    ("receiving_first_downs", None),
+    ("receiving_first_downs", 100),
     ("season", None), ("season", 2023), ("season_type", "POST"),
     ("season_type", None), ("split_value", "5"), ("split_value", None),
     ("player_id", " "), ("player_id", " padded "),
@@ -119,7 +128,7 @@ def test_completed_export_loads_without_r_or_network(export):
 @pytest.mark.parametrize("field,value", [
     ("season_type", "POST"), ("summary_level", "week"), ("split_dimension", "quarter"),
     ("excludes_two_point_attempts", False), ("excludes_two_point_attempts", 1),
-    ("schema_version", 3), ("schema_version", True),
+    ("schema_version", 4), ("schema_version", True),
 ])
 def test_scope_drift_fails(export, field, value):
     directory, manifest = export
@@ -163,3 +172,35 @@ def test_missing_export_hash_is_rejected(export):
     (directory / "run.json").write_text(json.dumps(manifest))
     with pytest.raises(SourceError, match="missing SHA256"):
         load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+
+
+def test_historical_YAC_is_unknown_even_with_a_positive_stray_value():
+    source = frame(2004)
+    source.loc[0, "receiving_yards_after_catch"] = 42
+    rows = adapt(source, season=2004, players=[GONZALEZ])
+    assert rows.yac.isna().all()
+    assert rows.first_downs.sum() == 69
+    assert rows.yards.sum() == 1258
+
+
+def test_2006_YAC_does_not_acquire_a_target_dependency():
+    source = frame(2006)
+    rows = adapt(source, season=2006, players=[GONZALEZ])
+    assert rows.att.isna().all()
+    assert rows.cmp.sum() == 73
+    assert rows.yards.sum() == 900
+    assert rows.yac.sum() == 319
+    assert rows.first_downs.sum() == 54
+
+
+def test_supported_zero_YAC_is_not_missing_and_YAC_can_exceed_receiving_yards():
+    source = frame().iloc[:1].copy()
+    assert adapt(source).yac.iloc[0] > adapt(source).yards.iloc[0]
+    source["receiving_yards_after_catch"] = 0
+    assert adapt(source).yac.iloc[0] == 0
+
+
+def test_missing_new_fields_is_not_treated_as_a_zero_valued_legacy_export():
+    for column in ("receiving_yards_after_catch", "receiving_first_downs"):
+        with pytest.raises(SourceError, match="missing columns"):
+            adapt(frame().drop(columns=column))

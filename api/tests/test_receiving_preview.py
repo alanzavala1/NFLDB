@@ -21,7 +21,7 @@ import splits_builder
 def source(tmp_path):
     path = tmp_path / "source.duckdb"
     plays = []
-    for year in (2004, 2024):
+    for year in (2004, 2006, 2024):
         for index in range(28):
             row = {name: 0 for name in (
                 "score_differential", "shotgun", "first_down", "qb_hit", "no_huddle", "wp",
@@ -55,18 +55,25 @@ def fake_export(monkeypatch):
                     "receiving_export": deepcopy(EXPORT_CONTRACT), "files": {},
                     "runtime": {"R": "4.6.1", "platform": "test fixture", "packages": dict(VERSIONS)}}
         for year in seasons:
-            count = 0 if year == 2004 else 7
+            count = 0 if year in range(2003, 2009) else 7
+            yac = 0 if year < 2006 else 50
             frame = pd.DataFrame([dict(player_id="receiver", season=year, season_type="REG",
                                        targets=count, receptions=7, receiving_yards=70,
-                                       receiving_tds=0, split_value=str(down)) for down in range(1, 5)])
+                                       receiving_tds=0, receiving_yards_after_catch=yac,
+                                       receiving_first_downs=7, split_value=str(down)) for down in range(1, 5)])
             if fault == "missing_player":
                 frame["player_id"] = "unqualified"
             weekly = pd.DataFrame([dict(player_id="receiver", season=year, season_type="REG",
-                                        targets=count * 4, receptions=28, receiving_yards=280, receiving_tds=0)])
+                                        targets=count * 4, receptions=28, receiving_yards=280, receiving_tds=0,
+                                        receiving_yards_after_catch=yac * 4, receiving_first_downs=28)])
             if fault == "wrong_totals":
                 weekly["receiving_yards"] = 281
             if fault == "missing_scope":
                 weekly = weekly.drop(columns="season_type")
+            if fault == "wrong_YAC" and year >= 2006:
+                weekly["receiving_yards_after_catch"] += 1
+            if fault == "wrong_first_downs":
+                weekly["receiving_first_downs"] += 1
             for name, data in ((f"down-{year}.csv", frame), (f"weekly-{year}.csv", weekly)):
                 path = output / name
                 data.to_csv(path, index=False)
@@ -96,13 +103,16 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
     assert report["status"] == "preview_only"
     assert report["export_manifest_sha256"] == preview.file_sha256(tmp_path / "exports/run.json")
     assert report["seasons"]["2004"]["targets"] == "unavailable"
+    assert report["seasons"]["2004"]["yac"] == "unavailable"
+    assert report["seasons"]["2024"]["yac"] == "matched_weekly"
     with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
         assert conn.execute("SELECT season,SUM(att),SUM(cmp),SUM(yards),SUM(td) FROM receiving_down_preview GROUP BY season ORDER BY season").fetchall() == [(2004, None, 28, 280, 0), (2024, 28, 28, 280, 0)]
         assert conn.execute("SELECT player_id,yards FROM player_splits ORDER BY player_id").fetchall() == [("older", 88), ("receiver", 60)]
+        assert conn.execute("SELECT season,SUM(yac),SUM(first_downs) FROM receiving_down_preview GROUP BY season ORDER BY season").fetchall() == [(2004, None, 28), (2024, 200, 28)]
     assert not Path(str(tmp_path / "preview.duckdb") + ".wal").exists()
 
 
-@pytest.mark.parametrize("fault", ["wrong_totals", "missing_player", "missing_scope", "changed_bytes", "stale_run", "wrong_versions"])
+@pytest.mark.parametrize("fault", ["wrong_totals", "missing_player", "missing_scope", "changed_bytes", "stale_run", "wrong_versions", "wrong_YAC", "wrong_first_downs"])
 def test_failed_validation_removes_owned_candidate_preserves_original_and_exports(source, tmp_path, fake_export, monkeypatch, fault):
     monkeypatch.setenv("PREVIEW_TEST_FAULT", fault)
     before = preview.file_sha256(source)
@@ -207,3 +217,12 @@ def test_receiving_preview_cannot_pass_full_snapshot_gate(table):
         conn.execute(f"CREATE TABLE {table} (fixture INTEGER)")
         with pytest.raises(SnapshotValidationError, match="not a publishable snapshot"):
             validate_snapshot(conn)
+
+
+def test_2006_preview_keeps_YAC_and_first_downs_with_unknown_targets(source, tmp_path, fake_export):
+    report = preview.prepare_receiving_preview(source, tmp_path / "preview.duckdb", tmp_path / "exports", [2006],
+                                                rscript=Path(sys.executable), library=tmp_path)
+    assert report["seasons"]["2006"]["targets"] == "unavailable"
+    assert report["seasons"]["2006"]["yac"] == "matched_weekly"
+    with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
+        assert conn.execute("SELECT SUM(att),SUM(yac),SUM(first_downs) FROM receiving_down_preview").fetchone() == (None, 200, 28)

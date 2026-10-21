@@ -16,7 +16,8 @@ stopifnot(requireNamespace("jsonlite", quietly = TRUE))
 stopifnot(as.character(packageVersion("nflfastR")) == "6.0.0")
 stopifnot(as.character(packageVersion("nflreadr")) == "1.5.1")
 stopifnot("pbp" %in% names(formals(nflfastR::calculate_stats)))
-metrics <- c("targets", "receptions", "receiving_yards", "receiving_tds")
+metrics <- c("targets", "receptions", "receiving_yards", "receiving_tds",
+             "receiving_yards_after_catch", "receiving_first_downs")
 selected <- c("player_id", "season", "season_type", metrics)
 timings <- list()
 record <- function(label, fn) {
@@ -101,7 +102,7 @@ jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 2L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    schema_version = 3L, season_type = "REG", excludes_two_point_attempts = TRUE,
     summary_level = "season", split_dimension = "down"
   ),
   run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),

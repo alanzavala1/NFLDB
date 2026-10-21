@@ -14,21 +14,23 @@ import numpy as np
 import pandas as pd
 
 from pipeline.source_results import SourceError
-from services.receiving_coverage import targets_unavailable
+from services.receiving_coverage import targets_unavailable, yac_unavailable
 
 
 EXPORT_CONTRACT = {
-    "schema_version": 2,
+    "schema_version": 3,
     "season_type": "REG",
     "excludes_two_point_attempts": True,
     "summary_level": "season",
     "split_dimension": "down",
 }
 VERSIONS = {"nflfastR": "6.0.0", "nflreadr": "1.5.1"}
-_COUNTS = {"targets": "att", "receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td"}
-_UNSUPPORTED = ("interceptions", "air_yards", "yac", "first_downs", "epa", "success_pct", "cpoe")
+_PRODUCTION = {"targets": "att", "receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td"}
+_COUNTS = {**_PRODUCTION, "receiving_yards_after_catch": "yac", "receiving_first_downs": "first_downs"}
+_UNSUPPORTED = ("interceptions", "air_yards", "epa", "success_pct", "cpoe")
 _COLUMNS = ("player_id", "season", "category", "split_dim", "split_value", "sort_order",
-            "att", "cmp", "yards", "td", *_UNSUPPORTED)
+            "att", "cmp", "yards", "td", "interceptions", "air_yards", "yac",
+            "first_downs", "epa", "success_pct", "cpoe")
 
 
 def _error(season: int, reason: str) -> SourceError:
@@ -41,7 +43,7 @@ def adapt_receiving_down(frame: pd.DataFrame, *, season: int,
 
     Observed target records are not a completeness claim. Do not infer admission
     from them: historical target gaps would discard usable receiving production.
-    A lateral can have yards/TD without a target/catch; negative yards are valid.
+    A lateral can have yards/TD without a target/catch; negative yards/YAC are valid.
     """
     if not isinstance(qualified_players, Collection) or isinstance(qualified_players, (str, bytes)) or any(
         not isinstance(player, str) or not player.strip() for player in qualified_players
@@ -75,12 +77,17 @@ def adapt_receiving_down(frame: pd.DataFrame, *, season: int,
     limits = np.iinfo(np.int32)
     if ((numeric < limits.min) | (numeric > limits.max)).any():
         raise _error(season, "export counts exceed player_splits integer storage")
-    if values[["targets", "receptions", "receiving_tds"]].lt(0).any().any():
-        raise _error(season, "export has negative target/catch/TD counts")
+    if values[["targets", "receptions", "receiving_tds", "receiving_first_downs"]].lt(0).any().any():
+        raise _error(season, "export has negative target/catch/TD/first-down counts")
+    if values.receiving_first_downs.gt(values.receptions).any():
+        raise _error(season, "receiving first downs exceed receptions")
     source[list(_COUNTS)] = values
     # The all-position calculator also emits zero receiving lines. Test activity
     # before target masking so unknown historical targets cannot become fake 0s.
-    active = values.ne(0).any(axis=1)
+    activity_fields = [*_PRODUCTION, "receiving_first_downs"]
+    if not yac_unavailable([season]):
+        activity_fields.append("receiving_yards_after_catch")
+    active = values[activity_fields].ne(0).any(axis=1)
     source = source.loc[identified & active & source.player_id.isin(qualified_players)]
     result = source[["player_id", "season", "split_value", *_COUNTS]].rename(columns=_COUNTS).copy()
     result["category"] = "receiving"
@@ -90,6 +97,8 @@ def adapt_receiving_down(frame: pd.DataFrame, *, season: int,
         result[column] = result[column].astype("Int64")
     if targets_unavailable([season]):
         result["att"] = pd.Series(pd.NA, index=result.index, dtype="Int64")
+    if yac_unavailable([season]):
+        result["yac"] = pd.Series(pd.NA, index=result.index, dtype="Int64")
     for column in _UNSUPPORTED:
         dtype = "Float64" if column in ("epa", "success_pct", "cpoe") else "Int64"
         result[column] = pd.Series(pd.NA, index=result.index, dtype=dtype)
