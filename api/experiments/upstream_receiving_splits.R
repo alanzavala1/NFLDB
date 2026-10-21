@@ -65,15 +65,22 @@ for (year in years) {
     repeat_full <- record(paste(year, "warm_full_calculation"), function() calculate(reg))
     stopifnot(isTRUE(all.equal(as.data.frame(full), as.data.frame(repeat_full))))
   }
-  buckets <- lapply(1:4, function(down) {
-    plays <- reg[reg$down %in% down, ]
-    stats <- record(paste(year, "down", down), function() calculate(plays))
-    stopifnot(isTRUE(attr(stats, "custom_pbp")))
-    frame <- as.data.frame(stats[selected])
-    frame$split_value <- as.character(down)
-    frame
-  })
-  write_frame(do.call(rbind, buckets), paste0("down-", year, ".csv"))
+  dimensions <- list(down = as.character(1:4), quarter = c(as.character(1:4), "OT"))
+  for (dimension in names(dimensions)) {
+    buckets <- lapply(dimensions[[dimension]], function(bucket) {
+      period <- if (dimension == "down") reg$down else reg$qtr
+      keep <- if (bucket == "OT") !is.na(period) & period > 4 else period %in% as.integer(bucket)
+      plays <- reg[keep, ]
+      # No invented zero rows when a season has no plays in a bucket.
+      if (nrow(plays) == 0L) return(NULL)
+      stats <- record(paste(year, dimension, bucket), function() calculate(plays))
+      stopifnot(isTRUE(attr(stats, "custom_pbp")))
+      frame <- as.data.frame(stats[selected])
+      frame$split_value <- bucket
+      frame
+    })
+    write_frame(do.call(rbind, buckets), paste0(dimension, "-", year, ".csv"))
+  }
   # Capture the raw records used by the upstream credit loader for a separate
   # comparison with our existing isolated Python prototype. Do not deduplicate.
   credits <- nflfastR:::load_playstats(year)
@@ -83,6 +90,7 @@ for (year in years) {
   input_records[[as.character(year)]] <- list(
     all_plays = nrow(pbp), regular_nonconversion_plays = nrow(reg),
     missing_down_plays = sum(!(reg$down %in% 1:4)),
+    missing_quarter_plays = sum(is.na(reg$qtr)),
     weekly_rows = nrow(weekly), raw_credit_rows = nrow(credits)
   )
 }
@@ -91,7 +99,7 @@ capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
 capture.output(nflfastR::calculate_stats, file = file.path(out, "installed-calculator.txt"))
 # Bind the consumed exports and captured source inputs before writing completion.
 files <- unlist(lapply(years, function(year) c(
-  paste0(c("context-", "weekly-", "overall-", "down-", "credits-"), year, ".csv"),
+  paste0(c("context-", "weekly-", "overall-", "down-", "quarter-", "credits-"), year, ".csv"),
   paste0(c("pbp-", "weekly-", "credits-"), year, ".rds")
 )))
 hashes <- setNames(lapply(files, function(name) {
@@ -104,8 +112,8 @@ jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 5L, season_type = "REG", excludes_two_point_attempts = TRUE,
-    summary_level = "season", split_dimension = "down"
+    schema_version = 6L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    summary_level = "season", split_dimensions = c("down", "quarter")
   ),
   run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),
   runtime = list(R = as.character(getRversion()), platform = R.version$platform,

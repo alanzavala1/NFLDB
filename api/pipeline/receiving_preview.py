@@ -47,7 +47,7 @@ def prepare_receiving_preview(source: Path, candidate: Path, output: Path,
                                log=print) -> dict:
     """Copy a closed source, run official R, then prepare a preview in a worker.
 
-    The new DB contains receiving_down_preview, not replacement player_splits.
+    The new DB contains Down/quarter preview tables, not replacement player_splits.
     Failed owned candidates are removed; export logs remain for inspection.
     Existing paths are refused. This is not the full candidate acceptance gate.
     """

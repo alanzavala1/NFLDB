@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 
 from pipeline.receiving_preview import file_sha256
-from pipeline.receiving_splits import VERSIONS, load_receiving_down_export, read_export_csv
+from pipeline.receiving_dimensions import DIMENSIONS
+from pipeline.receiving_splits import VERSIONS, load_receiving_split_export, read_export_csv
 from pipeline.snapshots import CandidateError
 from services.receiving_coverage import air_yards_unavailable, targets_unavailable, yac_unavailable
 
@@ -103,7 +104,7 @@ def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseli
     os.environ["NFL_TEST_MODE"] = "1"
     import splits_builder
 
-    report = {"format_version": 1, "status": "preview_only", "run_id": run_id,
+    report = {"format_version": 2, "status": "preview_only", "run_id": run_id,
               "source": str(source.resolve()), "source_sha256": baseline,
               "export_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
               "export_directory": str(exports.resolve()), "runtime": runtime,
@@ -112,17 +113,21 @@ def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseli
         available = {row[0] for row in conn.execute("DESCRIBE plays").fetchall()}
         conn.execute("BEGIN")
         try:
-            conn.execute("CREATE TABLE receiving_down_preview AS SELECT * FROM player_splits WHERE FALSE")
+            for dimension in DIMENSIONS:
+                conn.execute(f"CREATE TABLE receiving_{dimension}_preview AS SELECT * FROM player_splits WHERE FALSE")
             for season in seasons:
                 sql = splits_builder.qualification_ctes("receiving", season, available) + " SELECT player_id FROM qualified"
                 qualified = conn.execute(sql).df().player_id.tolist()
                 if not qualified:
                     raise CandidateError(f"receiving[{season}]: no qualified players for preview")
-                rows = load_receiving_down_export(exports, season=season, qualified_players=qualified, manifest=manifest)
                 weekly = read_export_csv(exports, manifest, f"weekly-{season}.csv", season=season)
-                report["seasons"][str(season)] = _check_totals(rows, weekly, season, qualified)
-                conn.register("preview_rows", rows)
-                conn.execute("INSERT INTO receiving_down_preview BY NAME SELECT * FROM preview_rows")
+                report["seasons"][str(season)] = {}
+                for dimension in DIMENSIONS:
+                    rows = load_receiving_split_export(exports, season=season, qualified_players=qualified,
+                                                       manifest=manifest, dimension=dimension)
+                    report["seasons"][str(season)][dimension] = _check_totals(rows, weekly, season, qualified)
+                    conn.register("preview_rows", rows)
+                    conn.execute(f"INSERT INTO receiving_{dimension}_preview BY NAME SELECT * FROM preview_rows")
             conn.execute("CREATE TABLE receiving_preview_preparation (record JSON)")
             conn.execute("INSERT INTO receiving_preview_preparation VALUES (?)", [json.dumps(report)])
             conn.execute("COMMIT")

@@ -374,7 +374,7 @@ before attempting publication.
 ## Official receiving split adapter
 
 `pipeline/receiving_splits.py` is the offline integration boundary for official
-nflfastR receiving counts. It reads a completed, versioned Down export from
+nflfastR receiving counts. It reads completed, versioned Down/quarter exports from
 `experiments/upstream_receiving_splits.R` and returns the existing `player_splits`
 column layout. The adapter has no R execution, network, database write or
 request-time dependency. The main rebuild does not call it yet; the separate
@@ -389,7 +389,7 @@ through the shared coverage policy, and preserves production.
 This is not a claim of complete target coverage in every other season.
 
 All source rows are checked before admission filtering: required fields, season,
-REG scope, down values, duplicate keys, finite integral counts, nonnegative
+REG scope, dimension/bucket values, duplicate keys, finite integral counts, nonnegative
 target/catch/TD/first-down counts and SQL integer range. Receiving first downs
 cannot exceed catches. Negative receiving yards, negative YAC, YAC greater than
 receiving yards and TD credits without catches/targets remain valid. Unidentified players and wholly
@@ -424,12 +424,21 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v5 manifest requires receiving EPA/air yards
+not replace complete live rows. The v6 manifest requires receiving EPA/air yards
 and target context, and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
 captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
 See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
+
+Down and quarter now use `adapt_receiving_splits` and
+`load_receiving_split_export` with an explicit dimension. The supported labels
+live in `pipeline/receiving_dimensions.py`: downs 1–4, quarters 1–4 and OT.
+Every period above four groups into OT, matching `splits_core.QUARTER_DIM`.
+Missing periods remain unknown. Quarter target populations do not require a
+known down; a usable quarter play must not disappear because down is missing.
+The producer filters each play context before invoking the official calculator,
+retaining all credited recipients. Absent buckets do not get invented zero rows.
 
 ## Receiving candidate preview
 
@@ -451,12 +460,13 @@ invocation ID and writes its completion marker last. Its log and exports remain
 available on failure; only the job's newly created candidate/WAL are removed.
 Interrupting R stops its process tree before cleanup. The worker refuses the
 source/default serving database, verifies the copied baseline and invocation,
-checks runtime records, and loads hash-verified Down, context and weekly CSV bytes.
+checks runtime records, and loads hash-verified Down, quarter, context and weekly CSV bytes.
 
-The candidate contains `receiving_down_preview` and one JSON record in
-`receiving_preview_preparation`. That record binds the copied source hash,
-export manifest hash, invocation ID, observed R/package versions and per-season
-checks. Every existing qualifying player must remain, and catches/yards/TD must
+The candidate contains `receiving_down_preview`, `receiving_quarter_preview` and
+one JSON record in `receiving_preview_preparation`. Format version 2 records
+checks under `seasons[year][dimension]`, binding the copied source hash, export
+manifest hash, invocation ID and observed R/package versions. Every existing
+qualifying player must remain in each dimension, and catches/yards/TD must
 match the exported weekly reference by player; modern targets are checked too.
 Known-gap targets and unsupported pre-2006 YAC must be NULL. Receiving first
 downs match weekly totals, as does YAC when supported. The report records
@@ -469,7 +479,7 @@ Qualification still uses the copied stored PBP;
 this preview is not a coordinated refresh of every source or dimension.
 
 Original `player_splits` rows remain intact. The main snapshot validator rejects
-either preview table: a receiving preview is not an accepted publication
+any preview table or preparation marker: a receiving preview is not an accepted publication
 candidate. `jobs.prepare`, serving, refresh/deploy workflows and snapshot
 promotion are unchanged. Full R dependency locking, coordinated source refresh,
 remaining dimensions/metrics and full-history reconciliation remain outstanding.

@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from pipeline.receiving_splits import (
-    EXPORT_CONTRACT, VERSIONS, adapt_receiving_down, load_receiving_down_export,
+    EXPORT_CONTRACT, VERSIONS, adapt_receiving_splits, load_receiving_split_export,
 )
 from pipeline.source_results import SourceError
 import splits_builder
@@ -28,7 +28,7 @@ def frame(season=2024):
 
 
 def adapt(source=None, season=2024, players=(GIBBS, JEFFERSON)):
-    return adapt_receiving_down(frame(season) if source is None else source,
+    return adapt_receiving_splits(frame(season) if source is None else source,
                                 context=CONTEXT.loc[CONTEXT.season.eq(season)],
                                 season=season, qualified_players=players)
 
@@ -128,7 +128,7 @@ def export(tmp_path):
 
 def test_completed_export_loads_without_r_or_network(export):
     directory, _ = export
-    result = load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+    result = load_receiving_split_export(directory, season=2024, qualified_players=[GIBBS])
     assert result.yards.sum() == 517
     assert result.player_id.unique().tolist() == [GIBBS]
     first_down = result.loc[result.split_value.eq("1")].iloc[0]
@@ -145,15 +145,16 @@ def test_real_lateral_only_bucket_preserves_yards_without_inventing_target_rates
 
 @pytest.mark.parametrize("field,value", [
     ("season_type", "POST"), ("summary_level", "week"), ("split_dimension", "quarter"),
+    ("split_dimensions", ["down"]), ("split_dimensions", ["quarter", "down"]),
     ("excludes_two_point_attempts", False), ("excludes_two_point_attempts", 1),
-    ("schema_version", 4), ("schema_version", True),
+    ("schema_version", 5), ("schema_version", True),
 ])
 def test_scope_drift_fails(export, field, value):
     directory, manifest = export
     manifest["receiving_export"][field] = value
     (directory / "run.json").write_text(json.dumps(manifest))
     with pytest.raises(SourceError):
-        load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+        load_receiving_split_export(directory, season=2024, qualified_players=[GIBBS])
 
 
 @pytest.mark.parametrize("field,value", [
@@ -165,7 +166,7 @@ def test_version_or_completion_metadata_drift_fails(export, field, value):
     manifest[field] = value
     (directory / "run.json").write_text(json.dumps(manifest))
     with pytest.raises(SourceError):
-        load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+        load_receiving_split_export(directory, season=2024, qualified_players=[GIBBS])
 
 
 @pytest.mark.parametrize("name", ["run.json", "down-2024.csv", "context-2024.csv"])
@@ -173,7 +174,7 @@ def test_partial_exports_fail(export, name):
     directory, _ = export
     (directory / name).unlink()
     with pytest.raises(SourceError):
-        load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+        load_receiving_split_export(directory, season=2024, qualified_players=[GIBBS])
 
 
 def test_changed_export_bytes_are_rejected_even_if_counts_still_parse(export):
@@ -181,7 +182,7 @@ def test_changed_export_bytes_are_rejected_even_if_counts_still_parse(export):
     path = directory / "down-2024.csv"
     path.write_bytes(path.read_bytes() + b"\n")
     with pytest.raises(SourceError, match="SHA256 mismatch"):
-        load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+        load_receiving_split_export(directory, season=2024, qualified_players=[GIBBS])
 
 
 def test_missing_export_hash_is_rejected(export):
@@ -189,7 +190,7 @@ def test_missing_export_hash_is_rejected(export):
     manifest.pop("files")
     (directory / "run.json").write_text(json.dumps(manifest))
     with pytest.raises(SourceError, match="missing SHA256"):
-        load_receiving_down_export(directory, season=2024, qualified_players=[GIBBS])
+        load_receiving_split_export(directory, season=2024, qualified_players=[GIBBS])
 
 
 def test_historical_YAC_is_unknown_even_with_a_positive_stray_value():

@@ -3,10 +3,12 @@ import numpy as np
 import pandas as pd
 
 from pipeline.source_results import SourceError
+from pipeline.receiving_dimensions import context_split_values
 from services.receiving_coverage import air_yards_unavailable, targets_unavailable
 
 
-def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season: int) -> pd.DataFrame:
+def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season: int,
+                             *, dimension: str = "down") -> pd.DataFrame:
     """Require complete matching target populations before exposing each field.
 
     Success is EPA > 0, calculated here because calculate_stats has no success
@@ -19,7 +21,7 @@ def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season
 
     flags = ["complete_pass", "incomplete_pass", "interception"]
     required = {"game_id", "play_id", "season", "season_type", "two_point_attempt",
-                "down", "receiver_player_id", "epa", "air_yards", *flags}
+                "receiver_player_id", "epa", "air_yards", *flags}
     if required - set(context.columns):
         fail("missing target context columns")
     plays = context.copy()
@@ -29,8 +31,7 @@ def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season
         fail("unexpected target context scope")
     if plays[["game_id", "play_id"]].isna().any().any() or plays.duplicated(["game_id", "play_id"]).any():
         fail("missing or duplicate play identity")
-    if not plays.down.dropna().isin([1, 2, 3, 4]).all():
-        fail("invalid context down")
+    plays["split_value"] = context_split_values(plays, dimension, season)
     for flag in [*flags, "two_point_attempt"]:
         if not plays[flag].dropna().isin([0, 1]).all():
             fail("invalid context attempt flags")
@@ -62,8 +63,7 @@ def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season
             plays["air_yards"] = air
         else:
             official_air = air
-    plays = plays.loc[plays[flags].eq(1).any(axis=1) & plays.receiver_player_id.notna() & plays.down.notna()].copy()
-    plays["split_value"] = plays.down.astype(int).astype(str)
+    plays = plays.loc[plays[flags].eq(1).any(axis=1) & plays.receiver_player_id.notna() & plays.split_value.notna()].copy()
     plays["positive_epa"] = plays.epa.gt(0).astype(int)
     grouped = plays.groupby(["receiver_player_id", "split_value"]).agg(
         target_plays=("play_id", "size"), epa_plays=("epa", "count"),

@@ -372,3 +372,69 @@ historical boundaries, partial weekly reporting and unchanged SQL production.
 Next small checkpoint: apply the validated receiving approach to another play
 context, starting with quarters. Full environment locking, coordinated source
 refresh/qualification and full-history/dimension validation remain outstanding.
+
+## Quarter split extension (October 21)
+
+Version 6 exports both `down` and `quarter` partitions from official
+`calculate_stats`. Quarters use the existing SQL labels 1–4 and OT; all periods
+above four share OT. The producer filters play context before calculation,
+retaining lateral recipients, and skips empty buckets instead of inventing zero
+rows. The manifest binds both CSVs and lists both dimensions explicitly.
+
+The adapter and loader are now `adapt_receiving_splits` and
+`load_receiving_split_export`; both accept the supported dimension. Shared
+bucket definitions/period validation live in `pipeline/receiving_dimensions.py`.
+The target-metric helper selects its population by that dimension: missing down
+does not erase a usable quarter play; missing quarter never becomes OT. The
+same historical masks and independent EPA/air-yard completeness checks apply.
+Rates are evaluated within each bucket, not summed across quarters.
+
+The worker writes separate `receiving_down_preview` and
+`receiving_quarter_preview` tables in one transaction. Each is reconciled to
+weekly counts with the same qualification list. Preparation format version 2
+stores `seasons[year][dimension]` reports. Failure of either partition removes
+the new candidate. The full snapshot validator rejects either preview table
+or the preparation marker, including a standalone quarter-only fragment.
+
+Actual ignored output: `data/receiving-preview-quarter-20261021.duckdb`, exports
+`data/upstream-r-trial/preview-export-v6/`:
+
+| Season | Eligible players | Quarter rows | OT rows | Available air-yard rows | Available EPA/tgt rows |
+|---|---:|---:|---:|---:|---:|
+| 2006 | 141 | 585 | 21 | 0 | 0 |
+| 2009 | 210 | 886 | 46 | 877 | 886 |
+| 2024 | 220 | 924 | 44 | 924 | 924 |
+
+Independent raw-credit replay matches every identified official player/quarter
+for targets, catches, yards, TDs, YAC, receiving first downs and air yards in
+all three seasons, including below-admission players. Quarter sums match whole
+season and weekly counts. Modern displayed EPA/success rates match PBP within
+their rounding precision when weighted by targets. Each available rate and air
+total also matches its fresh PBP bucket. The 2009 air gaps affect nine quarter
+buckets; changing the grouping does not restore missing inputs.
+
+Real regression fixtures retain Gibbs/Jefferson 2024 and Gonzalez 2006. Jefferson
+2024 OT: 1 target, 1 catch, 20 yards, 11 air yards, 1.4133 EPA/tgt and 100%
+Success. Gibbs's quarter counts still total 63 targets, 52 catches, 517 yards,
+4 TD, 593 YAC and 24 receiving first downs. Gonzalez retains 73/900/5, 319 YAC,
+54 receiving first downs and NULL targets/rates/air. Synthetic tests cover
+multiple OT periods, no OT, missing down, missing/invalid periods, a separately
+credited lateral player, changed/missing quarter exports and rollback cleanup.
+
+All 27 bound hashes verify. Every original `player_splits` row is unchanged by
+bidirectional EXCEPT ALL; all Down preview rows in the three samples are exactly
+unchanged from v5. Source SHA256 remains
+`b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`; no source or
+preview WAL. These checks establish scoped provider consistency, not independent
+NFL correctness or full historical coverage. Evidence is ignored
+`data/upstream-r-trial/quarter-preview-verification.json`, `verify_quarter_inputs.R`,
+`verify_quarter_preview.py`, `quarter-verification.log` and `preview-job-v6.log`.
+No source replacement, serving/refresh integration, push, deployment or accepted
+full candidate. Next small context: home/away receiving splits. Complete R
+locking, coordinated fresh source/qualification, remaining dimensions and full
+historical validation are still required before publication.
+
+Validation: 827 backend tests passed, 2 skipped (80.10s), including real frozen
+quarter/OT outputs, target-context edge cases, actual worker rollback and the
+full-gate preview rejection. Source fingerprint and absence of source/preview
+WALs were rechecked after the suite. No active jobs remain.

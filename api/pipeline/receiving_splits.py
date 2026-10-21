@@ -1,6 +1,6 @@
 """Offline boundary from official nflfastR exports to player_splits rows.
 
-Receiving Down preview. No R execution, downloads, database writes or new
+Receiving Down/quarter preview. No R execution, downloads, database writes or new
 qualification rules. Callers supply the players admitted by the existing build.
 Unsupported metrics are NULL; this output must not replace complete live rows.
 """
@@ -14,16 +14,17 @@ import numpy as np
 import pandas as pd
 
 from pipeline.source_results import SourceError
+from pipeline.receiving_dimensions import DIMENSIONS
 from pipeline.receiving_target_metrics import receiving_target_metrics
 from services.receiving_coverage import targets_unavailable, yac_unavailable
 
 
 EXPORT_CONTRACT = {
-    "schema_version": 5,
+    "schema_version": 6,
     "season_type": "REG",
     "excludes_two_point_attempts": True,
     "summary_level": "season",
-    "split_dimension": "down",
+    "split_dimensions": list(DIMENSIONS),
 }
 VERSIONS = {"nflfastR": "6.0.0", "nflreadr": "1.5.1"}
 _PRODUCTION = {"targets": "att", "receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td"}
@@ -36,17 +37,20 @@ _COLUMNS = ("player_id", "season", "category", "split_dim", "split_value", "sort
 
 
 def _error(season: int, reason: str) -> SourceError:
-    return SourceError("nflfastR_receiving_down", season, reason)
+    return SourceError("nflfastR_receiving_splits", season, reason)
 
 
-def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: int,
-                         qualified_players: Collection[str]) -> pd.DataFrame:
+def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season: int,
+                           qualified_players: Collection[str], dimension: str = "down") -> pd.DataFrame:
     """Validate all source rows, then map admitted players' observed counts.
 
     Observed target records are not a completeness claim. Do not infer admission
     from them: historical target gaps would discard usable receiving production.
     A lateral can have yards/TD without a target/catch; negative yards/YAC are valid.
     """
+    if dimension not in DIMENSIONS:
+        raise _error(season, "unsupported split dimension")
+    buckets = DIMENSIONS[dimension]
     if not isinstance(qualified_players, Collection) or isinstance(qualified_players, (str, bytes)) or any(
         not isinstance(player, str) or not player.strip() for player in qualified_players
     ):
@@ -60,15 +64,15 @@ def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: 
     if source[["season", "season_type"]].isna().any().any() or not source.season.eq(season).all() or not source.season_type.eq("REG").all():
         raise _error(season, "export contains unexpected season or season_type")
     source["split_value"] = source.split_value.astype("string")
-    if not source.split_value.isin(["1", "2", "3", "4"]).all():
-        raise _error(season, "export contains invalid down values")
+    if not source.split_value.isin(buckets).all():
+        raise _error(season, f"export contains invalid {dimension} values")
     identified = source.player_id.notna()
     if not source.loc[identified, "player_id"].map(
         lambda player: isinstance(player, str) and bool(player) and player == player.strip()
     ).all():
         raise _error(season, "export contains invalid player IDs")
     if source.loc[identified].duplicated(["player_id", "season", "split_value"]).any():
-        raise _error(season, "export contains duplicate player/down rows")
+        raise _error(season, "export contains duplicate player/bucket rows")
     try:
         values = source[list(_COUNTS)].apply(pd.to_numeric, errors="raise")
         numeric = values.to_numpy(dtype=float, na_value=np.nan)
@@ -84,7 +88,7 @@ def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: 
     if values.receiving_first_downs.gt(values.receptions).any():
         raise _error(season, "receiving first downs exceed receptions")
     source[list(_COUNTS)] = values
-    source[list(_TARGET_METRICS)] = receiving_target_metrics(source, context, season)
+    source[list(_TARGET_METRICS)] = receiving_target_metrics(source, context, season, dimension=dimension)
     # The all-position calculator also emits zero receiving lines. Test activity
     # before target masking so unknown historical targets cannot become fake 0s.
     activity_fields = [*_PRODUCTION, "receiving_first_downs"]
@@ -94,8 +98,8 @@ def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: 
     source = source.loc[identified & active & source.player_id.isin(qualified_players)]
     result = source[["player_id", "season", "split_value", *_COUNTS, *_TARGET_METRICS]].rename(columns=_COUNTS).copy()
     result["category"] = "receiving"
-    result["split_dim"] = "down"
-    result["sort_order"] = result.split_value.astype("Int64")
+    result["split_dim"] = dimension
+    result["sort_order"] = result.split_value.map({value: index for index, value in enumerate(buckets, 1)}).astype("Int64")
     for column in ("season", *_COUNTS.values()):
         result[column] = result[column].astype("Int64")
     if targets_unavailable([season]):
@@ -108,15 +112,17 @@ def adapt_receiving_down(frame: pd.DataFrame, *, context: pd.DataFrame, season: 
     return result[list(_COLUMNS)].sort_values(["player_id", "sort_order"]).reset_index(drop=True)
 
 
-def load_receiving_down_export(directory: Path, *, season: int,
+def load_receiving_split_export(directory: Path, *, season: int,
                                qualified_players: Collection[str],
-                               manifest: dict | None = None) -> pd.DataFrame:
+                               manifest: dict | None = None, dimension: str = "down") -> pd.DataFrame:
     """Read a completed, versioned R trial export; fail closed on scope drift.
 
     Read verified bytes rather than reopening files after their hash check.
     Digests detect changed files; they are not publisher authentication or a
     substitute for candidate reconciliation.
     """
+    if dimension not in DIMENSIONS:
+        raise _error(season, "unsupported split dimension")
     try:
         if manifest is None:
             manifest = json.loads((directory / "run.json").read_text(encoding="utf-8"))
@@ -132,11 +138,12 @@ def load_receiving_down_export(directory: Path, *, season: int,
         seasons = manifest.get("seasons")
         if not isinstance(seasons, list) or season not in seasons:
             raise _error(season, "requested season is absent from completion marker")
-        frame = read_export_csv(directory, manifest, f"down-{season}.csv", season=season)
+        frame = read_export_csv(directory, manifest, f"{dimension}-{season}.csv", season=season)
         context = read_export_csv(directory, manifest, f"context-{season}.csv", season=season)
     except (OSError, ValueError) as error:
         raise _error(season, f"cannot read completed export: {error}") from error
-    return adapt_receiving_down(frame, context=context, season=season, qualified_players=qualified_players)
+    return adapt_receiving_splits(frame, context=context, season=season,
+                                  qualified_players=qualified_players, dimension=dimension)
 
 
 def read_export_csv(directory: Path, manifest: dict, name: str, *, season: int) -> pd.DataFrame:
