@@ -90,16 +90,43 @@ full-history or production throughput benchmark.
 Against the 220 players already stored in 2024 Down splits, changed bucket
 counts are: targets 3, catches 0, yards 18, TD 5. For 152 stored players in 2004:
 targets 521, catches 0, yards 5, TD 0. These diagnostic differences are not all
-classified as lateral fixes; the three modern target differences need review
-before migration. Historical stored targets were derived from incomplete PBP;
+classified as lateral fixes; the three modern target differences were reviewed
+below. Historical stored targets were derived from incomplete PBP;
 the new raw zero counts must remain unavailable in user-facing historical views.
+
+## Target difference review (October 21)
+
+All three changed 2024 target buckets among stored split players come from two
+plays with updated receiver IDs and descriptions in the trial PBP snapshot:
+
+| Game / play | Original stored PBP receiver | Trial PBP receiver | Individual target credit |
+|---|---|---|---|
+| `2024_05_MIA_NE` / `1975` | Odell Beckham | Tyreek Hill | Tyreek Hill |
+| `2024_05_NYJ_MIN` / `2914` | Allen Lazard | Garrett Wilson | Garrett Wilson |
+
+Both plays are incompletions. The changed stored buckets are Hill third down
++1 target, Lazard second down -1, Wilson second down +1. Beckham is outside the
+existing stored split-player population, explaining why two corrections produce
+three changes in that comparison rather than four. No catches, receiving yards
+or touchdowns change on these plays.
+
+Across **all identified players** in 2024 REG nonconversion plays with down 1–4,
+target credits agree with targets inferred from the trial PBP at player/play
+level: zero differences. This explains these changes as source snapshot updates,
+not special target mathematics in R. It does not establish target availability
+in other seasons or independently verify the NFL's original intended receiver.
+
+Ignored evidence: `data/upstream-r-trial/results/target-review-2024.json`,
+`target-context-2024.csv`, `player-names-2024.csv`, and the read-only diagnostic
+`data/upstream-r-trial/review_targets.py`. Original source DB remains unchanged.
 
 ## Boundary before integration
 
-The supported upstream calculator is viable for this sample and merits an
+The integration direction is to use the maintained official calculator for
+supported receiving counts. The next implementation checkpoint is a small
 offline adapter. Before production: lock the R environment/build, define input
-and output contracts, preserve qualification and historical null policies,
-review target disagreements, and evaluate other dimensions and full history.
+and output contracts, preserve qualification and historical null policies, and
+evaluate other dimensions and full history.
 Receiving EPA, success rates and target-specific dimensions still need explicit
 definitions. No metric/rating/comparables correctness is established here.
 
