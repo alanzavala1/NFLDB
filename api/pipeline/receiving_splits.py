@@ -20,7 +20,7 @@ from services.receiving_coverage import targets_unavailable, yac_unavailable
 
 
 EXPORT_CONTRACT = {
-    "schema_version": 9,
+    "schema_version": 10,
     "season_type": "REG",
     "excludes_two_point_attempts": True,
     "summary_level": "season",
@@ -41,12 +41,15 @@ def _error(season: int, reason: str) -> SourceError:
 
 
 def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season: int,
-                           qualified_players: Collection[str], dimension: str = "down") -> pd.DataFrame:
+                           qualified_players: Collection[str], dimension: str = "down",
+                           allow_empty: bool = False) -> pd.DataFrame:
     """Validate all source rows, then map admitted players' observed counts.
 
     Observed target records are not a completeness claim. Do not infer admission
     from them: historical target gaps would discard usable receiving production.
     A lateral can have yards/TD without a target/catch; negative yards/YAC are valid.
+    Only a caller that has validated the classified/excluded references may allow
+    an empty export; missing/truncated ordinary exports still fail closed.
     """
     if dimension not in DIMENSIONS:
         raise _error(season, "unsupported split dimension")
@@ -59,7 +62,7 @@ def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season
     if missing := required - set(frame.columns):
         raise _error(season, f"export is missing columns {sorted(missing)}")
     source = frame.copy()
-    if source.empty:
+    if source.empty and not allow_empty:
         raise _error(season, "receiving export is empty")
     if source[["season", "season_type"]].isna().any().any() or not source.season.eq(season).all() or not source.season_type.eq("REG").all():
         raise _error(season, "export contains unexpected season or season_type")
@@ -69,7 +72,7 @@ def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season
     identified = source.player_id.notna()
     if not source.loc[identified, "player_id"].map(
         lambda player: isinstance(player, str) and bool(player) and player == player.strip()
-    ).all():
+    ).astype(bool).all():
         raise _error(season, "export contains invalid player IDs")
     if source.loc[identified].duplicated(["player_id", "season", "split_value"]).any():
         raise _error(season, "export contains duplicate player/bucket rows")
@@ -126,24 +129,29 @@ def load_receiving_split_export(directory: Path, *, season: int,
     try:
         if manifest is None:
             manifest = json.loads((directory / "run.json").read_text(encoding="utf-8"))
-        if not isinstance(manifest, dict):
-            raise _error(season, "completion marker must be an object")
-        contract = manifest.get("receiving_export")
-        if (contract != EXPORT_CONTRACT
-                or type(contract.get("schema_version")) is not int
-                or type(contract.get("excludes_two_point_attempts")) is not bool):
-            raise _error(season, "unsupported export scope or schema version")
-        if any(manifest.get(package) != version for package, version in VERSIONS.items()):
-            raise _error(season, "unsupported calculator package versions")
-        seasons = manifest.get("seasons")
-        if not isinstance(seasons, list) or season not in seasons:
-            raise _error(season, "requested season is absent from completion marker")
+        validate_export_manifest(manifest, season)
         frame = read_export_csv(directory, manifest, f"{dimension}-{season}.csv", season=season)
         context = read_export_csv(directory, manifest, f"context-{season}.csv", season=season)
     except (OSError, ValueError) as error:
         raise _error(season, f"cannot read completed export: {error}") from error
     return adapt_receiving_splits(frame, context=context, season=season,
                                   qualified_players=qualified_players, dimension=dimension)
+
+
+def validate_export_manifest(manifest: dict, season: int) -> None:
+    """Shared version/scope boundary for ordinary and coverage-aware readers."""
+    if not isinstance(manifest, dict):
+        raise _error(season, "completion marker must be an object")
+    contract = manifest.get("receiving_export")
+    if (contract != EXPORT_CONTRACT
+            or type(contract.get("schema_version")) is not int
+            or type(contract.get("excludes_two_point_attempts")) is not bool):
+        raise _error(season, "unsupported export scope or schema version")
+    if any(manifest.get(package) != version for package, version in VERSIONS.items()):
+        raise _error(season, "unsupported calculator package versions")
+    seasons = manifest.get("seasons")
+    if not isinstance(seasons, list) or season not in seasons:
+        raise _error(season, "requested season is absent from completion marker")
 
 
 def read_export_csv(directory: Path, manifest: dict, name: str, *, season: int) -> pd.DataFrame:

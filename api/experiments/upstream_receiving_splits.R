@@ -70,29 +70,45 @@ for (year in years) {
     stopifnot(isTRUE(all.equal(as.data.frame(full), as.data.frame(repeat_full))))
   }
   for (dimension in names(dimensions)) {
-    buckets <- lapply(dimensions[[dimension]], function(bucket) {
-      if (dimension == "home_away") {
-        keep <- reg$posteam_type %in% bucket
-      } else if (dimension == "shotgun") {
-        keep <- reg$shotgun %in% (if (bucket == "shotgun") 1L else 0L)
-      } else if (dimension == "field_zone") {
-        spot <- reg$yardline_100
-        keep <- !is.na(spot) & switch(bucket,
-          own_territory = spot > 50,
-          opp_territory = spot > 20 & spot <= 50,
-          red_zone = spot <= 20
-        )
-      } else {
-        period <- if (dimension == "down") reg$down else reg$qtr
-        keep <- if (bucket == "OT") !is.na(period) & period > 4 else period %in% as.integer(bucket)
-      }
-      plays <- reg[keep, ]
-      # No invented zero rows when a season has no plays in a bucket.
-      if (nrow(plays) == 0L) return(NULL)
-      stats <- record(paste(year, dimension, bucket), function() calculate(plays))
+    # One assignment per play drives the exported membership and every subset.
+    # Python independently derives these labels from the bound context export.
+    labels <- rep(NA_character_, nrow(reg))
+    for (bucket in dimensions[[dimension]]) {
+      keep <- switch(dimension,
+        home_away = reg$posteam_type %in% bucket,
+        shotgun = reg$shotgun %in% (if (bucket == "shotgun") 1L else 0L),
+        field_zone = !is.na(reg$yardline_100) & switch(bucket,
+          own_territory = reg$yardline_100 > 50,
+          opp_territory = reg$yardline_100 > 20 & reg$yardline_100 <= 50,
+          red_zone = reg$yardline_100 <= 20),
+        {
+          period <- if (dimension == "down") reg$down else reg$qtr
+          if (bucket == "OT") !is.na(period) & period > 4 else period %in% as.integer(bucket)
+        }
+      )
+      stopifnot(!anyNA(keep), all(is.na(labels[keep])))
+      labels[keep] <- bucket
+    }
+    membership <- as.data.frame(reg[c("game_id", "play_id")])
+    membership$split_value <- labels
+    write_frame(membership, paste0("membership-", dimension, "-", year, ".csv"))
+    empty <- as.data.frame(full[0, selected])
+    subset_stats <- function(keep, label) {
+      if (!any(keep)) return(empty)
+      # The full result is already the official reference for this exact set.
+      if (all(keep)) return(as.data.frame(full[selected]))
+      stats <- record(paste(year, dimension, label), function() calculate(reg[keep, ]))
       stopifnot(isTRUE(attr(stats, "custom_pbp")))
-      frame <- as.data.frame(stats[selected])
-      frame$split_value <- bucket
+      as.data.frame(stats[selected])
+    }
+    write_frame(subset_stats(!is.na(labels), "classified"),
+                paste0("classified-", dimension, "-", year, ".csv"))
+    write_frame(subset_stats(is.na(labels), "excluded"),
+                paste0("excluded-", dimension, "-", year, ".csv"))
+    buckets <- lapply(dimensions[[dimension]], function(bucket) {
+      # No invented zero rows when a season has no plays in a bucket.
+      frame <- subset_stats(labels %in% bucket, bucket)
+      frame$split_value <- rep(bucket, nrow(frame))
       frame
     })
     write_frame(do.call(rbind, buckets), paste0(dimension, "-", year, ".csv"))
@@ -119,6 +135,8 @@ capture.output(nflfastR::calculate_stats, file = file.path(out, "installed-calcu
 # Bind the consumed exports and captured source inputs before writing completion.
 files <- unlist(lapply(years, function(year) c(
   paste0(c("context-", "weekly-", "overall-", paste0(names(dimensions), "-"), "credits-"), year, ".csv"),
+  unlist(lapply(c("membership", "classified", "excluded"), function(kind)
+    paste0(kind, "-", names(dimensions), "-", year, ".csv"))),
   paste0(c("pbp-", "weekly-", "credits-"), year, ".rds")
 )))
 hashes <- setNames(lapply(files, function(name) {
@@ -131,7 +149,7 @@ jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 9L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    schema_version = 10L, season_type = "REG", excludes_two_point_attempts = TRUE,
     summary_level = "season", split_dimensions = names(dimensions)
   ),
   run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),

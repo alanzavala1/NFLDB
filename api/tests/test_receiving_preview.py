@@ -13,6 +13,7 @@ import pytest
 
 from pipeline import receiving_preview as preview
 from pipeline.receiving_splits import EXPORT_CONTRACT, VERSIONS
+from pipeline.receiving_dimensions import DIMENSIONS, context_split_values
 from pipeline.snapshots import CandidateError
 import splits_builder
 
@@ -55,14 +56,6 @@ def fake_export(monkeypatch):
                     "receiving_export": deepcopy(EXPORT_CONTRACT), "files": {},
                     "runtime": {"R": "4.6.1", "platform": "test fixture", "packages": dict(VERSIONS)}}
         for year in seasons:
-            count = 0 if year in range(2003, 2009) else 7
-            yac = 0 if year < 2006 else 50
-            frame = pd.DataFrame([dict(player_id="receiver", season=year, season_type="REG",
-                                       targets=count, receptions=7, receiving_yards=70,
-                                       receiving_tds=0, receiving_yards_after_catch=yac,
-                                       receiving_first_downs=7, receiving_epa=3.5,
-                                       receiving_air_yards=count * 2,
-                                       split_value=str(down)) for down in range(1, 5)])
             context = pd.DataFrame([dict(game_id="game", play_id=index, season=year,
                                         season_type="REG", two_point_attempt=0,
                                         receiver_player_id="receiver", down=index % 4 + 1,
@@ -74,51 +67,71 @@ def fake_export(monkeypatch):
                                         epa=0.5, air_yards=2) for index in range(28)])
             if fault == "missing_air":
                 context.loc[0, "air_yards"] = None
-            if fault == "missing_player":
-                frame["player_id"] = "unqualified"
-            quarter = pd.DataFrame([dict(player_id="receiver", season=year, season_type="REG",
-                                         targets=0 if count == 0 else catches, receptions=catches,
-                                         receiving_yards=catches * 10, receiving_tds=0,
-                                         receiving_yards_after_catch=0 if year < 2006 else quarter_yac,
-                                         receiving_first_downs=catches, receiving_epa=catches * 0.5,
-                                         receiving_air_yards=0 if count == 0 else catches * 2,
-                                         split_value=bucket)
-                                    for bucket, catches, quarter_yac in (("1", 24, 170), ("OT", 4, 30))])
-            if fault == "wrong_quarter":
-                quarter.loc[0, "receiving_yards"] += 1
-            home_away = quarter.copy()
-            home_away["split_value"] = home_away.split_value.map({"1": "home", "OT": "away"})
-            if fault == "wrong_home_away":
-                home_away.loc[0, "receiving_yards"] += 1
-            shotgun = quarter.copy()
-            shotgun["split_value"] = shotgun.split_value.map({"1": "shotgun", "OT": "under_center"})
-            if fault == "wrong_shotgun":
-                shotgun.loc[0, "receiving_yards"] += 1
-            field_zone = quarter.copy()
-            field_zone["split_value"] = field_zone.split_value.map({"1": "own_territory", "OT": "red_zone"})
-            if fault == "wrong_field_zone":
-                field_zone.loc[0, "receiving_yards"] += 1
-            weekly = pd.DataFrame([dict(player_id="receiver", season=year, season_type="REG",
-                                        targets=count * 4, receptions=28, receiving_yards=280, receiving_tds=0,
-                                        receiving_yards_after_catch=yac * 4, receiving_first_downs=28,
-                                        receiving_air_yards=count * 8)])
+            if fault == "partial_context":
+                context.loc[24:, "yardline_100"] = None
+            if fault == "unavailable_context":
+                context["yardline_100"] = float("nan")
+            credits = pd.DataFrame([dict(
+                player_id="receiver", season=year, season_type="REG",
+                targets=0 if year in range(2003, 2009) else 1,
+                receptions=1, receiving_yards=10, receiving_tds=0,
+                receiving_yards_after_catch=0 if year < 2006 else (8 if index in (2, 3, 24, 25) else 7),
+                receiving_first_downs=1, receiving_epa=0.5,
+                receiving_air_yards=0 if year in range(2003, 2009) else 2,
+            ) for index in range(28)])
+            def summarize(keep):
+                return credits.loc[keep].groupby(["player_id", "season", "season_type"], as_index=False).sum()
+            weekly = summarize(credits.index >= 0).assign(week=1)
+            if fault == "self_consistent_wrong_total":
+                credits.loc[0, "receiving_yards"] += 1
+            overall = summarize(credits.index >= 0)
+            exports = {f"context-{year}.csv": context, f"overall-{year}.csv": overall,
+                       f"weekly-{year}.csv": weekly}
+            for dimension, buckets in DIMENSIONS.items():
+                labels = context_split_values(context, dimension, year)
+                membership = context[["game_id", "play_id"]].assign(split_value=labels)
+                classified = summarize(labels.notna())
+                excluded = summarize(labels.isna())
+                parts = [summarize(labels.eq(bucket).fillna(False)).assign(split_value=bucket)
+                         for bucket in buckets if labels.eq(bucket).any()]
+                frame = pd.concat(parts, ignore_index=True) if parts else overall.iloc[:0].assign(split_value=pd.Series(dtype="string"))
+                if fault == f"wrong_{dimension}" or (dimension == "down" and fault == "wrong_partition"):
+                    frame.loc[0, "receiving_yards"] += 1
+                if dimension == "down":
+                    if fault == "missing_player":
+                        frame["player_id"] = "unqualified"
+                    if fault == "wrong_membership":
+                        membership.loc[0, "split_value"] = "2"
+                    if fault == "duplicate_membership":
+                        membership = pd.concat([membership, membership.iloc[[0]]], ignore_index=True)
+                    if fault == "wrong_classified":
+                        classified.loc[0, "receiving_yards"] += 1
+                    if fault == "wrong_excluded":
+                        excluded = overall.copy()
+                    if fault == "empty_buckets":
+                        frame = frame.iloc[:0]
+                exports.update({f"{dimension}-{year}.csv": frame,
+                                f"membership-{dimension}-{year}.csv": membership,
+                                f"classified-{dimension}-{year}.csv": classified,
+                                f"excluded-{dimension}-{year}.csv": excluded})
             if fault == "wrong_totals":
                 weekly["receiving_yards"] = 281
             if fault == "missing_scope":
-                weekly = weekly.drop(columns="season_type")
+                exports[f"weekly-{year}.csv"] = weekly.drop(columns="season_type")
             if fault == "wrong_YAC" and year >= 2006:
                 weekly["receiving_yards_after_catch"] += 1
             if fault == "wrong_first_downs":
                 weekly["receiving_first_downs"] += 1
             if fault == "wrong_air":
                 weekly["receiving_air_yards"] += 1
-            for name, data in ((f"down-{year}.csv", frame), (f"weekly-{year}.csv", weekly),
-                               (f"context-{year}.csv", context), (f"quarter-{year}.csv", quarter),
-                               (f"home_away-{year}.csv", home_away), (f"shotgun-{year}.csv", shotgun),
-                               (f"field_zone-{year}.csv", field_zone)):
+            if fault == "duplicate_weekly":
+                exports[f"weekly-{year}.csv"] = pd.concat([weekly, weekly], ignore_index=True)
+            for name, data in exports.items():
                 path = output / name
                 data.to_csv(path, index=False)
                 manifest["files"][name] = preview.file_sha256(path)
+            if fault == "missing_partition_hash":
+                manifest["files"].pop(f"classified-down-{year}.csv")
         if fault == "stale_run":
             manifest["run_id"] = "old-job"
         if fault == "wrong_versions":
@@ -147,6 +160,16 @@ def fake_export(monkeypatch):
             path.write_bytes(path.read_bytes() + b"\n")
         if fault == "missing_field_zone_export":
             (output / f"field_zone-{seasons[0]}.csv").unlink()
+        if fault == "changed_membership_bytes":
+            path = output / f"membership-down-{seasons[0]}.csv"
+            path.write_bytes(path.read_bytes() + b"\n")
+        if fault == "changed_reference_bytes":
+            path = output / f"classified-down-{seasons[0]}.csv"
+            path.write_bytes(path.read_bytes() + b"\n")
+        if fault == "missing_reference_export":
+            (output / f"excluded-down-{seasons[0]}.csv").unlink()
+        if fault == "missing_overall_export":
+            (output / f"overall-{seasons[0]}.csv").unlink()
     monkeypatch.setattr(preview, "_run_export", produce)
 
 
@@ -165,12 +188,17 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
     assert report["export_manifest_sha256"] == preview.file_sha256(tmp_path / "exports/run.json")
     assert report["seasons"]["2004"]["down"]["targets"] == "unavailable"
     assert report["seasons"]["2004"]["down"]["yac"] == "unavailable"
-    assert report["seasons"]["2024"]["down"]["yac"] == "matched_weekly"
-    assert report["format_version"] == 2
-    assert report["seasons"]["2024"]["quarter"]["production_matches_weekly"]
-    assert report["seasons"]["2024"]["home_away"]["production_matches_weekly"]
-    assert report["seasons"]["2024"]["shotgun"]["production_matches_weekly"]
-    assert report["seasons"]["2024"]["field_zone"]["production_matches_weekly"]
+    assert report["seasons"]["2024"]["down"]["yac"] == "matched_classified"
+    assert report["format_version"] == 3
+    assert report["whole_references"]["2024"]["production_matches_weekly"]
+    assert report["seasons"]["2024"]["down"]["coverage"]["status"] == "complete"
+    assert report["seasons"]["2024"]["down"]["coverage"]["plays"] == {
+        "overall": 28, "classified": 28, "excluded": 0,
+    }
+    assert report["seasons"]["2024"]["quarter"]["production_matches_classified"]
+    assert report["seasons"]["2024"]["home_away"]["production_matches_classified"]
+    assert report["seasons"]["2024"]["shotgun"]["production_matches_classified"]
+    assert report["seasons"]["2024"]["field_zone"]["production_matches_classified"]
     with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
         assert conn.execute("SELECT season,SUM(att),SUM(cmp),SUM(yards),SUM(td) FROM receiving_down_preview GROUP BY season ORDER BY season").fetchall() == [(2004, None, 28, 280, 0), (2024, 28, 28, 280, 0)]
         assert conn.execute("SELECT player_id,yards FROM player_splits ORDER BY player_id").fetchall() == [("older", 88), ("receiver", 60)]
@@ -187,6 +215,18 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
 
 @pytest.mark.parametrize("fault", [
     'wrong_totals',
+    'self_consistent_wrong_total',
+    'wrong_membership',
+    'duplicate_membership',
+    'wrong_classified',
+    'wrong_excluded',
+    'empty_buckets',
+    'missing_partition_hash',
+    'changed_membership_bytes',
+    'changed_reference_bytes',
+    'missing_reference_export',
+    'missing_overall_export',
+    'duplicate_weekly',
     'missing_player',
     'missing_scope',
     'changed_bytes',
@@ -326,7 +366,7 @@ def test_2006_preview_keeps_YAC_and_first_downs_with_unknown_targets(source, tmp
     report = preview.prepare_receiving_preview(source, tmp_path / "preview.duckdb", tmp_path / "exports", [2006],
                                                 rscript=Path(sys.executable), library=tmp_path)
     assert report["seasons"]["2006"]["down"]["targets"] == "unavailable"
-    assert report["seasons"]["2006"]["down"]["yac"] == "matched_weekly"
+    assert report["seasons"]["2006"]["down"]["yac"] == "matched_classified"
     with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
         assert conn.execute("SELECT SUM(att),SUM(yac),SUM(first_downs) FROM receiving_down_preview").fetchone() == (None, 200, 28)
 
@@ -335,7 +375,36 @@ def test_missing_target_air_yards_preserves_rates_and_reports_partial_coverage(s
     monkeypatch.setenv("PREVIEW_TEST_FAULT", "missing_air")
     report = run(source, tmp_path)
     assert report["seasons"]["2024"]["down"]["air_yards"] == {
-        "available_rows": 3, "unavailable_rows": 1, "players_matched_weekly": 0,
+        "available_rows": 3, "unavailable_rows": 1, "players_matched_classified": 0,
     }
     with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
         assert conn.execute("SELECT air_yards,epa,success_pct,cmp,yards FROM receiving_down_preview WHERE season=2024 AND split_value='1'").fetchone() == (None, 0.5, 100.0, 7, 70)
+
+
+@pytest.mark.parametrize("fault,covered,excluded,status", [
+    ("partial_context", 24, 4, "partial"),
+    ("unavailable_context", 0, 28, "unavailable"),
+])
+def test_missing_context_only_limits_its_view_and_retains_global_receiving_production(
+    source, tmp_path, fake_export, monkeypatch, fault, covered, excluded, status,
+):
+    monkeypatch.setenv("PREVIEW_TEST_FAULT", fault)
+    before = preview.file_sha256(source)
+    report = run(source, tmp_path)
+    assert preview.file_sha256(source) == before
+    assert report["whole_references"]["2024"]["production_matches_weekly"]
+    field = report["seasons"]["2024"]["field_zone"]
+    coverage = field["coverage"]
+    assert coverage["status"] == status
+    assert coverage["plays"] == {"overall": 28, "classified": covered, "excluded": excluded}
+    assert coverage["qualified_production"]["classified"]["receiving_yards"] == covered * 10
+    assert coverage["qualified_production"]["excluded"]["receiving_yards"] == excluded * 10
+    assert coverage["qualified_production"]["overall"]["receiving_yards"] == 280
+    assert field["represented_players"] == int(covered > 0)
+    assert coverage["qualified_without_classified_production"] == ([] if covered else ["receiver"])
+    with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
+        assert conn.execute("SELECT SUM(cmp),SUM(yards) FROM receiving_down_preview WHERE season=2024").fetchone() == (28, 280)
+        assert conn.execute("SELECT SUM(cmp),SUM(yards) FROM receiving_field_zone_preview WHERE season=2024").fetchone() == ((covered, covered * 10) if covered else (None, None))
+        assert conn.execute("SELECT att FROM receiving_down_preview WHERE season=2004").df().att.isna().all()
+        assert conn.execute("SELECT yards FROM player_splits WHERE player_id='receiver'").fetchone() == (60,)
+    assert not Path(str(tmp_path / "preview.duckdb") + ".wal").exists()

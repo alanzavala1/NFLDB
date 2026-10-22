@@ -1,8 +1,9 @@
 # Receiving migration checklist
 
 Inventory checked October 21, 2026 against the receiving builder, frontend
-configuration and isolated export schema 9. This is the completion contract for
-the receiving migration; it does not authorize deployment or feature removal.
+configuration; the coverage integration uses isolated export schema 10. This is
+the completion contract for the receiving migration; it does not authorize
+deployment or feature removal.
 
 ## Current boundary
 
@@ -32,9 +33,9 @@ additional views are separate scope.
 Latest field-position preview checked 2006, 2009 and 2024, preserving earlier
 Down/quarter/home-away/shotgun outputs. Earlier trials also examined 2002,
 2004, 2007 and 2008 in specific scopes. These samples are not a full-history gate.
-Latest backend checkpoint: 907 passed, 2 skipped, including 32 partition-validation
-tests. The current preview export remains schema 9; the validation foundation is
-isolated until producer/worker integration.
+Latest backend checkpoint: 922 passed, 2 skipped. The schema 10 integration was
+run for 2006/2009/2024: all 81 bound files verify; the five preview tables match
+the prior schema 9 preview exactly; canonical/source data remain unchanged.
 
 ## Remaining ordinary play-context views: 7
 
@@ -127,11 +128,11 @@ These are properties of the stored snapshot, not proof of current upstream
 availability, semantic correctness or complete charting of individual credits.
 Each field needs its own coverage check even when a charting row exists.
 
-## Coverage-aware validation: foundation implemented
+## Coverage-aware validation: integrated into the preview
 
-The current preview worker reconciles every dimension against whole-season
-weekly counts. That works for the five proven partitions, but cannot serve as
-the acceptance rule for partially classified or optionally charted views.
+The preview worker now separately checks whole-season counts against weekly
+references and each dimension against its exact classified population. Excluded
+receiving production must account for the difference from the full total.
 
 `api/pipeline/receiving_partition_validation.py` now provides the pure acceptance
 rule. It verifies independently derived versus exported game/play membership,
@@ -150,12 +151,25 @@ join row. Complete and wholly unavailable populations, missing/duplicate keys,
 per-player errors hidden by grand totals, lateral credits, negative yards and
 historical masks also have regression coverage.
 
-**Next checkpoint:** connect this rule to the actual preview producer/worker,
-with hash-bound membership and classified/excluded reference exports. The current
-worker still requires whole-weekly equality. No partial-context view is enabled,
-no existing export version changes, and none of the 12 remaining views is marked
-implemented by these isolated controls. Preserve the independent whole-reference
-versus weekly check when connecting the subset rule.
+The R producer now emits hash-bound membership and classified/excluded references
+for all five existing preview dimensions (export schema 10). The Python worker
+validates and records them before adapting rows. Format 3 reports distinguish
+whole-weekly checks from classified-reference checks and describe excluded scope.
+Partially or wholly missing context no longer forces a whole-season equality
+claim for that particular view. Global admission, field-specific masks and the
+strict nonpublishable-preview boundary remain.
+
+The real run preserved 141/210/220 qualified players respectively in all five
+views. Down/home-away/field-zone exclude some REG nonconversion plays with
+unknown context, but those excluded populations carry no qualified receiving
+production in these samples. Quarter/shotgun classify every play. A partial
+play-population status therefore does not automatically mean receiving totals
+are incomplete. Synthetic worker cases separately prove that nonzero excluded
+receiving production and wholly unavailable context are handled correctly.
+
+**Next checkpoint:** add `game_script` (leading/tied/trailing), using the same
+export/validation flow. None of the 12 remaining views is marked implemented by
+this integration; FTN source binding and feed-specific policy remain future work.
 
 - [x] Define a per-season/dimension coverage record: supported/unavailable reason,
   source revision, classified/unclassified play scope and credited production.
@@ -167,16 +181,18 @@ versus weekly check when connecting the subset rule.
   equality remains required for complete partitions.
 - [x] Keep admission independent of context availability: a missing optional
   view must not make an otherwise eligible player disappear globally.
-- [ ] Connect per-field NULLs and actual zeroes through the partial preview path, with explicit unsupported
-  seasons/feeds. Do not relax the full candidate acceptance gate to get a pass.
+- [x] Preserve per-field NULLs and actual zeroes through supported partial preview
+  dimensions, with explicit unsupported historical metrics and empty populations.
+  Optional-feed policies remain with the future charting views. Do not relax the
+  full candidate acceptance gate to get a pass.
 - [x] Add a real missing-context example and an unusable-charting example to verify
   the rule before adding the remaining views. A wholly missing optional feed is
   additionally covered by a synthetic unavailable-population test.
-- [ ] Wire the validated contract into hash-bound producer exports and worker
+- [x] Wire the validated contract into hash-bound producer exports and worker
   reports, retaining whole-season reference/weekly checks and safe DB lifecycle.
 
-Checked items above describe the isolated validation contract and controls,
-not an integrated or publishable receiving build.
+Checked items above describe the isolated preview integration and controls,
+not the main offline rebuild or a publishable receiving build.
 
 ## Before exposing new receiving rows to users
 

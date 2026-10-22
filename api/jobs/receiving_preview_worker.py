@@ -6,78 +6,12 @@ import os
 from pathlib import Path
 
 import duckdb
-import numpy as np
-import pandas as pd
 
 from pipeline.receiving_preview import file_sha256
 from pipeline.receiving_dimensions import DIMENSIONS
-from pipeline.receiving_splits import VERSIONS, load_receiving_split_export, read_export_csv
+from pipeline.receiving_splits import VERSIONS, read_export_csv, validate_export_manifest
+from pipeline.receiving_preview_validation import load_receiving_preview_partition, validate_whole_receiving
 from pipeline.snapshots import CandidateError
-from services.receiving_coverage import air_yards_unavailable, targets_unavailable, yac_unavailable
-
-
-def _check_totals(rows: pd.DataFrame, weekly: pd.DataFrame, season: int,
-                  qualified: list[str]) -> dict:
-    counts = {"receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td",
-              "receiving_first_downs": "first_downs"}
-    required = {"player_id", "season", "season_type", "targets", "receiving_yards_after_catch", "receiving_air_yards", *counts}
-    if not required.issubset(weekly.columns) or weekly.empty:
-        raise CandidateError(f"weekly[{season}]: missing receiving reference data")
-    if weekly[["season", "season_type"]].isna().any().any() or not weekly.season.eq(season).all() or not weekly.season_type.eq("REG").all():
-        raise CandidateError(f"weekly[{season}]: unexpected reference scope")
-    values = weekly[["targets", "receiving_yards_after_catch", "receiving_air_yards", *counts]].apply(pd.to_numeric, errors="raise")
-    numeric = values.to_numpy(dtype=float, na_value=np.nan)
-    if not np.isfinite(numeric).all() or not (numeric == np.trunc(numeric)).all():
-        raise CandidateError(f"weekly[{season}]: invalid reference counts")
-    if values[["targets", "receptions", "receiving_tds", "receiving_first_downs"]].lt(0).any().any():
-        raise CandidateError(f"weekly[{season}]: negative reference counts")
-    if values.receiving_first_downs.gt(values.receptions).any():
-        raise CandidateError(f"weekly[{season}]: first downs exceed receptions")
-    weekly = weekly.copy()
-    weekly[values.columns] = values
-    if set(rows.player_id) != set(qualified):
-        raise CandidateError(f"receiving[{season}]: qualified player missing from preview")
-    if targets_unavailable([season]):
-        if rows.att.notna().any():
-            raise CandidateError(f"receiving[{season}]: historical targets must be NULL")
-    else:
-        counts["targets"] = "att"
-    if yac_unavailable([season]):
-        if rows.yac.notna().any():
-            raise CandidateError(f"receiving[{season}]: unsupported historical YAC must be NULL")
-    else:
-        counts["receiving_yards_after_catch"] = "yac"
-    for source, target in counts.items():
-        expected = weekly[weekly.player_id.isin(qualified)].groupby("player_id")[source].sum()
-        actual = rows.groupby("player_id")[target].sum()
-        a, b = actual.align(expected, fill_value=0)
-        if not a.eq(b).all():
-            raise CandidateError(f"receiving[{season}]: {source} does not match weekly totals")
-    air_matches = 0
-    if air_yards_unavailable([season]):
-        if rows.air_yards.notna().any():
-            raise CandidateError(f"receiving[{season}]: unsupported historical air yards must be NULL")
-    else:
-        grouped = rows.groupby("player_id")
-        complete = grouped.air_yards.count().eq(grouped.size())
-        players = complete[complete].index
-        actual = grouped.air_yards.sum(min_count=1).reindex(players)
-        expected = weekly.groupby("player_id").receiving_air_yards.sum().reindex(players)
-        if not actual.eq(expected).all():
-            raise CandidateError(f"receiving[{season}]: receiving_air_yards does not match weekly totals")
-        air_matches = len(players)
-    return {"players": len(qualified), "rows": len(rows), "production_matches_weekly": True,
-            "targets": "unavailable" if targets_unavailable([season]) else "matched_weekly",
-            "yac": "unavailable" if yac_unavailable([season]) else "matched_weekly",
-            "first_downs": "matched_weekly",
-            "air_yards": {"available_rows": int(rows.air_yards.notna().sum()),
-                          "unavailable_rows": int(rows.air_yards.isna().sum()),
-                          "players_matched_weekly": air_matches},
-            "target_rates": {"definition": "original target role; EPA/tgt and percent EPA > 0",
-                             "epa_rows": int(rows.epa.notna().sum()),
-                             "success_rows": int(rows.success_pct.notna().sum()),
-                             "unavailable_epa_rows": int(rows.epa.isna().sum()),
-                             "unavailable_success_rows": int(rows.success_pct.isna().sum())}}
 
 
 def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseline: str) -> dict:
@@ -104,11 +38,11 @@ def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseli
     os.environ["NFL_TEST_MODE"] = "1"
     import splits_builder
 
-    report = {"format_version": 2, "status": "preview_only", "run_id": run_id,
+    report = {"format_version": 3, "status": "preview_only", "run_id": run_id,
               "source": str(source.resolve()), "source_sha256": baseline,
               "export_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
               "export_directory": str(exports.resolve()), "runtime": runtime,
-              "qualification": "existing stored PBP rules", "seasons": {}}
+              "qualification": "existing stored PBP rules", "whole_references": {}, "seasons": {}}
     with duckdb.connect(str(candidate)) as conn:
         available = {row[0] for row in conn.execute("DESCRIBE plays").fetchall()}
         conn.execute("BEGIN")
@@ -120,12 +54,21 @@ def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseli
                 qualified = conn.execute(sql).df().player_id.tolist()
                 if not qualified:
                     raise CandidateError(f"receiving[{season}]: no qualified players for preview")
+                validate_export_manifest(manifest, season)
                 weekly = read_export_csv(exports, manifest, f"weekly-{season}.csv", season=season)
+                overall = read_export_csv(exports, manifest, f"overall-{season}.csv", season=season)
+                context = read_export_csv(exports, manifest, f"context-{season}.csv", season=season)
+                whole_check = validate_whole_receiving(overall, weekly, season, qualified)
+                whole_check["source_revisions"] = {name: manifest["files"][name] for name in
+                                                  (f"overall-{season}.csv", f"weekly-{season}.csv")}
+                report["whole_references"][str(season)] = whole_check
                 report["seasons"][str(season)] = {}
                 for dimension in DIMENSIONS:
-                    rows = load_receiving_split_export(exports, season=season, qualified_players=qualified,
-                                                       manifest=manifest, dimension=dimension)
-                    report["seasons"][str(season)][dimension] = _check_totals(rows, weekly, season, qualified)
+                    rows, partition_report = load_receiving_preview_partition(
+                        exports, manifest, context=context, overall=overall, season=season,
+                        dimension=dimension, qualified=qualified,
+                    )
+                    report["seasons"][str(season)][dimension] = partition_report
                     conn.register("preview_rows", rows)
                     conn.execute(f"INSERT INTO receiving_{dimension}_preview BY NAME SELECT * FROM preview_rows")
             conn.execute("CREATE TABLE receiving_preview_preparation (record JSON)")

@@ -221,3 +221,18 @@ def test_lateral_recipient_without_target_or_catch_keeps_yards_and_touchdown():
     assert report["qualified_without_classified_production"] == ["excluded"]
     assert report["qualified_production"]["overall"]["receiving_yards"] == 78
     assert report["qualified_production"]["classified"]["receiving_tds"] == 1
+
+
+def test_opposing_lateral_yards_do_not_erase_observed_bucket_rows():
+    args = control()
+    template = args["overall"].iloc[[0]].copy()
+    template["player_id"] = "lateral"
+    template[list(COUNT_FIELDS)] = 0
+    positive = template.assign(receiving_yards=5, receiving_yards_after_catch=5, split_value="short")
+    negative = template.assign(receiving_yards=-5, receiving_yards_after_catch=-5, split_value="deep")
+    omitted = template.assign(targets=1, receptions=1, receiving_yards=10)
+    args.update(bucket_stats=pd.concat([positive, negative]), classified=template,
+                excluded=omitted, overall=omitted.copy(), qualified_players=["lateral"])
+    report = validate_receiving_partition(**args)
+    assert report["qualified_without_classified_production"] == []
+    assert report["qualified_production"]["classified"]["receiving_yards"] == 0

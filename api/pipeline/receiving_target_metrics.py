@@ -37,7 +37,7 @@ def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season
             fail("invalid context attempt flags")
     if not plays.receiver_player_id.dropna().map(
         lambda value: isinstance(value, str) and bool(value) and value == value.strip()
-    ).all():
+    ).astype(bool).all():
         fail("invalid context receiver identity")
     try:
         plays["epa"] = pd.to_numeric(plays.epa, errors="raise")

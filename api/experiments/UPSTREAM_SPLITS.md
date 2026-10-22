@@ -709,3 +709,87 @@ tests. The source SHA256 remains
 source WAL. Ignored regeneration artifacts are `partition-controls.log`,
 `receiving-partition-controls.json`, the charting CSV and captured credit RDS
 files in `data/upstream-r-trial/`. The private simplification plan stays excluded.
+
+## Coverage-aware producer/worker integration (October 21, 2026)
+
+The preview job now executes the conservation contract during preparation.
+Export schema 10 adds three files per dimension/season:
+
+- `membership-{dimension}-{year}.csv`: every REG nonconversion game/play key,
+  with the selected label or a missing label for excluded plays.
+- `classified-{dimension}-{year}.csv`: official calculation over the classified
+  union, independently of the per-bucket calculations.
+- `excluded-{dimension}-{year}.csv`: official calculation over the excluded union.
+
+The producer assigns a label once per play, asserts disjoint assignment, and uses
+that vector for membership and official subset calls. The Python classifier then
+derives its own expected labels from the verified context export. Whole-result
+reuse is allowed only when the subset is exactly the full play set. Empty
+populations retain headers and generate no invented zero player rows. New files
+are SHA256-bound before the completion marker is written last.
+
+`pipeline/receiving_preview_validation.py` owns verified partition loading and
+adapted/whole-reference checks. The worker now delegates those checks rather
+than carrying its former inline whole-weekly comparison for every dimension.
+It reads the shared whole/context/weekly frames once from verified bytes. The
+strict official whole-season versus weekly gate remains separate; weekly keys
+must be unique by player/week. Applicable targets, catches, yards, TD, YAC,
+receiving first downs and observed air sums are compared for globally admitted
+players. Historical target/YAC/air policies and target-role rate gates remain.
+Equal raw air sums still do not establish per-target completeness.
+
+Every dimension validates exact membership, bucket/classified count equality
+and classified-plus-excluded/whole equality before admission filtering, including
+unidentified credits. Adapted rows then reconcile to the classified reference.
+A player whose entire production is excluded may have no row in this view,
+while remaining globally admitted and represented by the whole reference and
+other usable views. Opposing lateral yards in different buckets may cancel in
+the union; observed nonzero bucket rows still survive. Nullable string/empty
+export handling was corrected for genuine empty classified/excluded populations.
+
+Preparation record format 3 separates `whole_references[year]` from
+`seasons[year][dimension]`, with per-dimension coverage statuses, reasons, play
+counts, verified input hashes, classified/excluded/overall qualified production
+and players without classified production. Count statuses are `matched_classified`
+rather than a misleading weekly-match claim for a potentially partial view.
+The available-air player count likewise describes classified-reference matching.
+
+Actual run: ignored `data/receiving-preview-coverage-20261021.duckdb`, with
+`data/upstream-r-trial/preview-export-v10/`:
+
+| Season | Qualified players in each view | Down rows | Quarter rows | Home/away rows | Shotgun rows | Field-zone rows |
+|---|---:|---:|---:|---:|---:|---:|
+| 2006 | 141 | 492 | 585 | 282 | 270 | 419 |
+| 2009 | 210 | 766 | 886 | 420 | 418 | 630 |
+| 2024 | 220 | 813 | 924 | 440 | 436 | 659 |
+
+All 81 bound file hashes verify. The strict whole-weekly and all 15 partition
+checks pass. Each of the five preview tables is identical by bidirectional
+EXCEPT ALL to the prior field-zone preview, and canonical `player_splits` is
+identical to the source. Down/home-away/field-zone have excluded play populations
+but zero qualified receiving production on those excluded plays in these samples;
+quarter/shotgun classify every play. Coverage status refers to the stated play
+population, not an automatic claim of incomplete receiving totals.
+
+The earlier real missing-depth and unusable-charting controls remain pure
+conservation controls. New real-worker lifecycle tests use a deterministic
+producer to exercise partial context with nonzero excluded receiving production
+and wholly unavailable context, preserving unrelated views, masks and canonical
+rows. Faults cover wrong membership, duplicate keys, changed/missing reference
+bytes/hashes, empty-but-required bucket output, wrong classified/excluded totals,
+duplicate weekly rows and self-consistent wrong subset/whole counts that must
+still fail against the independent weekly reference. All existing cleanup,
+path-binding and nonpublishable-preview checks remain in force.
+
+Validation: 922 backend tests passed, 2 skipped (118.95s). The source SHA256 is
+unchanged at `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
+source/candidate have no WAL. The unchanged full snapshot gate explicitly rejects
+this actual preview. Ignored evidence: `verify_coverage_preview.py`,
+`coverage-preview-verification.json`, `coverage-verification.log`,
+`coverage-integration-tests.xml`, `coverage-integration-tests.log` and
+`preview-job-v10.log` under `data/upstream-r-trial/`.
+
+The 12 remaining dimensions, FTN build input binding, full R locking/portable
+build, coordinated fresh qualification, complete historical checks and main
+pipeline/API/UI integration remain. Next bounded view is `game_script`
+(leading/tied/trailing). No source replacement, publication, push or deployment.

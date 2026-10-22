@@ -23,10 +23,14 @@ def _fail(reason: str) -> None:
     raise CandidateError(f"receiving partition: {reason}")
 
 
-def _counts(frame: pd.DataFrame, season: int, *, bucketed: bool = False) -> pd.DataFrame:
+def validate_official_counts(frame: pd.DataFrame, season: int, *, bucketed: bool = False,
+                             weekly: bool = False) -> pd.DataFrame:
+    """Validate raw reference counts before grouping; retain unidentified credits."""
     required = {"player_id", "season", "season_type", *COUNT_FIELDS}
     if bucketed:
         required.add("split_value")
+    if weekly:
+        required.add("week")
     if required - set(frame.columns):
         _fail("missing official count columns")
     if (frame[["season", "season_type"]].isna().any().any()
@@ -34,9 +38,19 @@ def _counts(frame: pd.DataFrame, season: int, *, bucketed: bool = False) -> pd.D
         _fail("unexpected official count scope")
     if not frame.player_id.dropna().map(
         lambda value: isinstance(value, str) and bool(value) and value == value.strip()
-    ).all():
+    ).astype(bool).all():
         _fail("invalid official player identity")
     keys = ["player_id", "split_value"] if bucketed else ["player_id"]
+    if weekly:
+        keys = ["player_id", "week"]
+        try:
+            weeks = pd.to_numeric(frame.week, errors="raise").to_numpy(dtype=float, na_value=np.nan)
+        except (TypeError, ValueError):
+            _fail("invalid weekly reference week")
+        if not np.isfinite(weeks).all() or (weeks < 1).any() or not (weeks == np.trunc(weeks)).all():
+            _fail("invalid weekly reference week")
+        frame = frame.copy()
+        frame["week"] = weeks
     if frame.duplicated(keys).any():
         _fail("duplicate official player/bucket rows")
     try:
@@ -123,8 +137,8 @@ def validate_receiving_partition(
     if not joined._merge.eq("both").all() or not same.all():
         _fail("exported membership differs from independently classified play IDs")
 
-    raw = _counts(bucket_stats, season, bucketed=True)
-    covered, omitted, full = (_counts(frame, season) for frame in (classified, excluded, overall))
+    raw = validate_official_counts(bucket_stats, season, bucketed=True)
+    covered, omitted, full = (validate_official_counts(frame, season) for frame in (classified, excluded, overall))
     if raw.split_value.isna().any() or not raw.split_value.isin(buckets).all():
         _fail("invalid official bucket")
     for bucket in buckets:
@@ -150,7 +164,9 @@ def validate_receiving_partition(
     qualified = set(qualified_players)
     if not qualified.issubset(full_players):
         _fail("qualified player missing from whole receiving reference")
-    covered_players = set(covered.loc[covered[activity].ne(0).any(axis=1), "player_id"])
+    # Opposing lateral yardage in different buckets may cancel in the union.
+    # Such observed bucket rows still belong in the classified output.
+    covered_players = set(raw.loc[raw[activity].ne(0).any(axis=1), "player_id"])
     production = {}
     for name, frame in (("classified", covered), ("excluded", omitted), ("overall", full)):
         production[name] = {key: int(value) for key, value in

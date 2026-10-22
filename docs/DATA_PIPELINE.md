@@ -375,9 +375,9 @@ before attempting publication.
 
 The [receiving migration checklist](RECEIVING_MIGRATION.md) inventories all 17
 existing views, the five implemented previews, remaining data requirements and
-the coverage/UI/full-build conditions for integration. The pure partial-context
-validator is tested against real missing-depth and unusable-charting controls;
-its next checkpoint is hash-bound producer/worker integration.
+the coverage/UI/full-build conditions for integration. Partial-context validation
+now runs in the preview producer/worker, using hash-bound membership and official
+classified/excluded references. The remaining views use this shared contract.
 
 `pipeline/receiving_splits.py` is the offline integration boundary for official
 nflfastR receiving counts. It reads completed, versioned per-dimension exports from
@@ -430,8 +430,9 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v9 manifest requires receiving EPA/air yards
-and target context, and records the R environment and SHA256 digests of
+not replace complete live rows. The v10 manifest requires receiving EPA/air yards,
+target context, per-dimension membership and classified/excluded references,
+and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
 captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
@@ -492,23 +493,50 @@ invocation ID and writes its completion marker last. Its log and exports remain
 available on failure; only the job's newly created candidate/WAL are removed.
 Interrupting R stops its process tree before cleanup. The worker refuses the
 source/default serving database, verifies the copied baseline and invocation,
-checks runtime records, and loads hash-verified dimension, context and weekly CSV bytes.
+checks runtime records, and loads hash-verified dimension, context, whole/weekly,
+membership and classified/excluded CSV bytes.
 
 The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
 `receiving_home_away_preview`, `receiving_shotgun_preview`,
 `receiving_field_zone_preview` and one JSON record in
-`receiving_preview_preparation`. Format version 2 records
-checks under `seasons[year][dimension]`, binding the copied source hash, export
-manifest hash, invocation ID and observed R/package versions. Every existing
-qualifying player must remain in each dimension, and catches/yards/TD must
-match the exported weekly reference by player; modern targets are checked too.
-Known-gap targets and unsupported pre-2006 YAC must be NULL. Receiving first
-downs match weekly totals, as does YAC when supported. The report records
-available and unavailable rate-row counts. Weekly EPA includes conversions;
-the preview's EPA does not, so these numerators cannot be compared directly.
-It also records available/unavailable air-yard rows and how many players have
-complete air-yard splits reconciled to weekly totals. A player's partial sum
-is never reported as a complete weekly match.
+`receiving_preview_preparation`. Format version 3 records whole-season versus
+weekly count checks under `whole_references[year]` and dimension checks under
+`seasons[year][dimension]`, binding the copied source hash, export manifest hash,
+invocation ID and observed R/package versions.
+
+`pipeline/receiving_preview_validation.py` verifies the official whole-season
+counts against weekly data for qualified players, including supported targets,
+YAC, first downs and observed air sums. Weekly player/week keys must be unique.
+For each dimension it independently derives labels from context, checks the R
+producer's exact game/play membership, and validates official bucket sums against
+the official classified union. Classified plus excluded counts must equal the
+whole official reference **for every player, before admission filtering**.
+Unidentified credits remain in that comparison. These checks use the pure
+`receiving_partition_validation.py` contract, not another credit calculator.
+
+The producer assigns each play once and uses those same labels to select all
+official calculations. It exports complete membership, including unknown labels,
+and header-only references for empty populations. A classified reference may reuse
+the full official result only when the selected play set is exactly the full set.
+Each subset file is bound to the completion manifest and read from verified bytes.
+Missing files/hashes, changed bytes, invalid counts, duplicate/join-multiplied keys
+or failed conservation reject the preview and trigger the existing safe cleanup.
+
+A dimension's `coverage` record describes all REG nonconversion play counts,
+input revisions, exclusion reason and qualified classified/excluded/whole receiving
+production. Missing context may occur on nonreceiving plays, so partial play
+coverage does not by itself imply missing receiving production. Globally qualified
+players may have no production in one classified view; their absence is reported
+explicitly and does not remove them from other views or the whole reference.
+A verified empty classified population produces no invented zero rows.
+
+Adapted counts reconcile to the classified reference, with `matched_classified`
+statuses. Known-gap targets and unsupported pre-2006 YAC stay NULL. The report
+records available/unavailable rate and air-yard rows, and players whose complete
+available air sums match the classified reference. Agreement between raw air sums
+does not establish per-target completeness or unmask a missing metric. Weekly EPA
+includes conversions; the preview's EPA does not, so these numerators cannot be
+compared directly. Existing target-role rate and independent air gates remain.
 Qualification still uses the copied stored PBP;
 this preview is not a coordinated refresh of every source or dimension.
 
