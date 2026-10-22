@@ -23,7 +23,8 @@ selected <- c("player_id", "season", "season_type", metrics)
 dimensions <- list(down = as.character(1:4), quarter = c(as.character(1:4), "OT"),
                    home_away = c("home", "away"), shotgun = c("shotgun", "under_center"),
                    field_zone = c("own_territory", "opp_territory", "red_zone"),
-                   game_script = c("leading", "tied", "trailing"))
+                   game_script = c("leading", "tied", "trailing"),
+                   no_huddle = c("huddle", "no_huddle"))
 timings <- list()
 record <- function(label, fn) {
   cat(format(Sys.time(), tz = "UTC"), label, "START\n")
@@ -54,7 +55,7 @@ for (year in years) {
   saveRDS(weekly, file.path(out, paste0("weekly-", year, ".rds")))
   reg <- pbp[pbp$season_type %in% "REG" & !(pbp$two_point_attempt %in% 1), ]
   stopifnot(!anyDuplicated(reg[c("game_id", "play_id")]))
-  write_frame(reg[c("game_id", "play_id", "season", "season_type", "down", "qtr", "shotgun", "yardline_100", "score_differential",
+  write_frame(reg[c("game_id", "play_id", "season", "season_type", "down", "qtr", "shotgun", "yardline_100", "score_differential", "no_huddle",
                     "posteam_type", "posteam", "home_team", "away_team", "location",
                     "two_point_attempt", "receiver_player_id", "complete_pass",
                     "incomplete_pass", "interception", "epa", "air_yards",
@@ -78,6 +79,7 @@ for (year in years) {
       keep <- switch(dimension,
         home_away = reg$posteam_type %in% bucket,
         shotgun = reg$shotgun %in% (if (bucket == "shotgun") 1L else 0L),
+        no_huddle = reg$no_huddle %in% (if (bucket == "no_huddle") 1L else 0L),
         game_script = !is.na(reg$score_differential) & switch(bucket,
           leading = reg$score_differential > 0,
           tied = reg$score_differential == 0,
@@ -132,6 +134,7 @@ for (year in years) {
     missing_shotgun_plays = sum(is.na(reg$shotgun)),
     missing_field_zone_plays = sum(is.na(reg$yardline_100)),
     missing_game_script_plays = sum(is.na(reg$score_differential)),
+    missing_no_huddle_plays = sum(is.na(reg$no_huddle)),
     weekly_rows = nrow(weekly), raw_credit_rows = nrow(credits)
   )
 }
@@ -155,7 +158,7 @@ jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 11L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    schema_version = 12L, season_type = "REG", excludes_two_point_attempts = TRUE,
     summary_level = "season", split_dimensions = names(dimensions)
   ),
   run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),

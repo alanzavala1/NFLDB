@@ -8,7 +8,8 @@ from pipeline.source_results import SourceError
 DIMENSIONS = {"down": ("1", "2", "3", "4"), "quarter": ("1", "2", "3", "4", "OT"),
               "home_away": ("home", "away"), "shotgun": ("shotgun", "under_center"),
               "field_zone": ("own_territory", "opp_territory", "red_zone"),
-              "game_script": ("leading", "tied", "trailing")}
+              "game_script": ("leading", "tied", "trailing"),
+              "no_huddle": ("huddle", "no_huddle")}
 
 
 def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> pd.Series:
@@ -21,7 +22,7 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
         raise SourceError("nflfastR_receiving_splits", season, "unsupported split dimension")
     field = {"down": "down", "quarter": "qtr", "home_away": "posteam_type",
              "shotgun": "shotgun", "field_zone": "yardline_100",
-             "game_script": "score_differential"}[dimension]
+             "game_script": "score_differential", "no_huddle": "no_huddle"}[dimension]
     if field not in context:
         raise SourceError("nflfastR_receiving_splits", season, f"missing context {field}")
     if dimension == "home_away":
@@ -57,10 +58,11 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
         result.loc[values.le(50).fillna(False)] = "opp_territory"
         result.loc[values.le(20).fillna(False)] = "red_zone"
         return result
-    if dimension == "shotgun":
+    if dimension in ("shotgun", "no_huddle"):
         if not values.dropna().isin([0, 1]).all():
-            raise SourceError("nflfastR_receiving_splits", season, "invalid context shotgun")
-        return values.map({1: "shotgun", 0: "under_center"}).astype("string")
+            raise SourceError("nflfastR_receiving_splits", season, f"invalid context {field}")
+        labels = {1: "shotgun", 0: "under_center"} if dimension == "shotgun" else {0: "huddle", 1: "no_huddle"}
+        return values.map(labels).astype("string")
     if (not np.isfinite(observed).all() or not (observed == np.trunc(observed)).all()
             or (observed < 1).any() or (observed > np.iinfo(np.int32).max).any()
             or (dimension == "down" and (observed > 4).any())):

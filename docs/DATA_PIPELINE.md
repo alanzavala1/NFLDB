@@ -374,7 +374,7 @@ before attempting publication.
 ## Official receiving split adapter
 
 The [receiving migration checklist](RECEIVING_MIGRATION.md) inventories all 17
-existing views, the six implemented previews, remaining data requirements and
+existing views, the seven implemented previews, remaining data requirements and
 the coverage/UI/full-build conditions for integration. Partial-context validation
 now runs in the preview producer/worker, using hash-bound membership and official
 classified/excluded references. The remaining views use this shared contract.
@@ -430,7 +430,7 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v11 manifest requires receiving EPA/air yards,
+not replace complete live rows. The v12 manifest requires receiving EPA/air yards,
 target context, per-dimension membership and classified/excluded references,
 and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
@@ -438,11 +438,12 @@ captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
 See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
 
-Down, quarter, home/away, shotgun, field position and game script use `adapt_receiving_splits` and
+Down, quarter, home/away, shotgun, field position, game script and no-huddle use `adapt_receiving_splits` and
 `load_receiving_split_export` with an explicit dimension. The supported labels
 live in `pipeline/receiving_dimensions.py`: downs 1–4, quarters 1–4 and OT,
 designated `home`/`away` sides, `shotgun`/`under_center` formation labels,
-the three field zones and `leading`/`tied`/`trailing` game-script labels.
+the three field zones, `leading`/`tied`/`trailing` game-script labels and
+`huddle`/`no_huddle` tempo labels.
 Every period above four groups into OT, matching `splits_core.QUARTER_DIM`.
 Missing periods remain unknown. Quarter target populations do not require a
 known down; a usable quarter play must not disappear because down is missing.
@@ -484,6 +485,15 @@ fail. Classification does not require a known down, quarter or field position.
 The existing classified/excluded references, eligibility and field-specific
 target/YAC/air/rate policies apply unchanged.
 
+Tempo uses the recorded `no_huddle` flag: 0 maps to `huddle` (sort 1), 1 to
+`no_huddle` (2), matching `splits_core.NO_HUDDLE_DIM`. Unknown stays unclassified;
+nonmissing values outside 0/1 fail. Shotgun and tempo share the same binary-flag
+validation rule. This does not infer pace from elapsed clock time. All recipients
+inherit their play's flag before official credit calculation; target-based
+rates still describe the original target role. Classified/excluded conservation,
+historical masks and independent air coverage apply without requiring another
+dimension's context to be known.
+
 ## Receiving candidate preview
 
 From `api/`, `python -m jobs.receiving_preview` provides one explicit path through
@@ -509,7 +519,8 @@ membership and classified/excluded CSV bytes.
 
 The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
 `receiving_home_away_preview`, `receiving_shotgun_preview`,
-`receiving_field_zone_preview`, `receiving_game_script_preview` and one JSON record in
+`receiving_field_zone_preview`, `receiving_game_script_preview`,
+`receiving_no_huddle_preview` and one JSON record in
 `receiving_preview_preparation`. Format version 3 records whole-season versus
 weekly count checks under `whole_references[year]` and dimension checks under
 `seasons[year][dimension]`, binding the copied source hash, export manifest hash,

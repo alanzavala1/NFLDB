@@ -1,14 +1,14 @@
 # Receiving migration checklist
 
 Inventory checked October 21, 2026 against the receiving builder, frontend
-configuration; the game-script preview uses isolated export schema 11. This is
-the completion contract for the receiving migration; it does not authorize
-deployment or feature removal.
+configuration, updated October 22 for tempo; the preview uses isolated export
+schema 12. This is the completion contract for the receiving migration; it does
+not authorize deployment or feature removal.
 
 ## Current boundary
 
-There are **17 existing receiving split views: 6 implemented in the new preview,
-11 remaining**. The main builder and website still use the existing path.
+There are **17 existing receiving split views: 7 implemented in the new preview,
+10 remaining**. The main builder and website still use the existing path.
 Preview success does not mean the source database has been migrated.
 
 The existing category builder exposes 15 PBP views and two additional FTN
@@ -30,36 +30,36 @@ additional views are separate scope.
 | [x] | `shotgun` | Provider flag 1/0; unknown is not under center | Expand history/source checks; integrate |
 | [x] | `field_zone` | Pre-play own territory, opponent territory, red zone | Expand history/source checks; integrate |
 | [x] | `game_script` | Pre-play leading/tied/trailing from the offense's perspective | Expand history/source checks; integrate |
+| [x] | `no_huddle` | Recorded 0 huddle / 1 no-huddle flag | Expand history/source checks; integrate |
 
-Latest game-script preview checked 2006, 2009 and 2024, preserving earlier
-Down/quarter/home-away/shotgun/field-position outputs. Earlier trials also examined 2002,
+Latest tempo preview checked 2006, 2009 and 2024, preserving earlier
+Down/quarter/home-away/shotgun/field-position/game-script outputs. Earlier trials also examined 2002,
 2004, 2007 and 2008 in specific scopes. These samples are not a full-history gate.
-The schema 11 game-script run verifies all 93 bound files. Its five existing
-preview tables match the prior schema 10 preview exactly; canonical/source data
-remain unchanged. New game-script rows total 423/627/660 for 141/210/220 admitted
+The schema 12 tempo run verifies all 105 bound files. Its six existing
+preview tables match the prior schema 11 preview exactly; canonical/source data
+remain unchanged. New tempo rows total 220/378/429 for 141/210/220 admitted
 players respectively. The seven observed count fields match a separate raw-credit
-replay for all identified players, and score context matches the saved PBP.
+replay for all identified players, and tempo context matches the saved PBP.
 Current whole-weekly and classified/excluded checks pass. These samples do not
 certify full historical coverage or replace the main builder.
-Latest backend validation: 939 passed, 2 skipped (142.19s).
+Latest backend validation: 957 passed, 2 skipped (126.17s).
 
-## Remaining ordinary play-context views: 6
+## Remaining ordinary play-context views: 5
 
 Each uses the selected play's context before calculating individual credits.
 Lateral recipients retain their credits and the same play-context label.
 
 | State | Key | Source and current grouping | Required work |
 |---|---|---|---|
-| [ ] | `no_huddle` | `no_huddle`: 0 huddle, 1 no-huddle | Validate binary values; never turn missing into huddle; audit history |
 | [ ] | `game_state` | `wp`: 0.05–0.95 inclusive competitive, otherwise garbage | Validate 0–1 range and coverage; use the existing probability field and thresholds |
 | [ ] | `roof` | `roof`: dome/closed → dome, outdoors/open → outdoors | Explicit alias map; unknown stays unclassified, not outdoors |
 | [ ] | `surface` | `surface`: currently exact grass → grass, every other nonempty label → turf | Review and document known aliases, including hybrid-looking labels; audit blanks/unrecognized values; do not silently introduce a new classification |
 | [ ] | `opponent` | `defteam`, with season-sensitive franchise abbreviations | Reuse team aliases/relocation mapping; preserve NULL sort order and frontend volume sorting; validate team IDs |
 | [ ] | `opp_division` | Division lookup from opponent | Validate aliases; explicitly document current-franchise versus historical division membership before full-history claims—the existing lookup is static, not season-aware |
 
-Recommended implementation order after the completed game-script checkpoint:
-tempo/state, stadium/surface, then opponent/division. These are
-small work packages using the same shared flow, not six separate architectures.
+Recommended implementation order after the completed tempo checkpoint:
+game state, stadium/surface, then opponent/division. These are
+small work packages using the same shared flow, not five separate architectures.
 
 ## Pass-context views requiring definition/coverage review: 3
 
@@ -157,7 +157,7 @@ per-player errors hidden by grand totals, lateral credits, negative yards and
 historical masks also have regression coverage.
 
 The R producer now emits hash-bound membership and classified/excluded references
-for every implemented preview dimension (export schema 11). The Python worker
+for every implemented preview dimension (export schema 12). The Python worker
 validates and records them before adapting rows. Format 3 reports distinguish
 whole-weekly checks from classified-reference checks and describe excluded scope.
 Partially or wholly missing context no longer forces a whole-season equality
@@ -178,8 +178,15 @@ production in those excluded populations. That is recorded as partial play
 coverage even though the receiving totals reconcile fully. Missing-score worker
 tests also exercise excluded catches/yards and wholly unavailable views.
 
-**Next checkpoint:** add `no_huddle` (huddle/no-huddle), using the same
-export/validation flow. None of the 11 remaining views is marked implemented by
+Tempo also uses this contract: all REG nonconversion plays in the three pilot
+samples have a recorded 0/1 flag, so no tempo production is excluded. Missing
+and wholly unavailable flag cases remain covered by real-worker tests with a
+deterministic producer. This records provider completeness for these samples,
+not independent certification of every historical huddle flag.
+
+**Next checkpoint:** add `game_state` (competitive/garbage), preserving the current
+win-probability field and thresholds through the same export/validation flow.
+None of the 10 remaining views is marked implemented by
 this integration; FTN source binding and feed-specific policy remain future work.
 
 - [x] Define a per-season/dimension coverage record: supported/unavailable reason,

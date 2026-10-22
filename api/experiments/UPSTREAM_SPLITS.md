@@ -875,3 +875,77 @@ in ignored `game-script-tests.xml` / `game-script-tests.log`. All 650 old contex
 fixture rows/fields are unchanged; only the score column was added. Source SHA256
 remains `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
 source/candidate have no WAL. No active jobs remain.
+
+## Receiving huddle/no-huddle preview (October 22, 2026)
+
+Export schema 12 adds `no_huddle` through the existing dimension catalog,
+producer, adapter, coverage checks and transactional worker. The recorded
+provider flag maps 0 to `huddle` (sort 1) and 1 to `no_huddle` (sort 2), matching
+`splits_core.NO_HUDDLE_DIM`. Missing stays unclassified, and invalid nonmissing
+values outside 0/1 fail. Shotgun and tempo now share their binary-flag validation
+rule. Tempo is not inferred from clock intervals or another context field.
+
+All credited players inherit the selected play's tempo, including recipients
+with lateral yards/TD and no target or catch. Ordinary receiving admission,
+historical masks, target-role rates and independent air coverage are unchanged.
+The worker automatically creates `receiving_no_huddle_preview`; manifest-bound
+membership/classified/excluded references and the whole-weekly check remain
+mandatory. The strict snapshot gate rejects the new preview table independently
+of its preparation marker.
+
+Actual ignored run: `data/receiving-preview-no-huddle-20261022.duckdb`, with
+`data/upstream-r-trial/preview-export-v12/`:
+
+| Season | Admitted players | Huddle rows | No-huddle rows | Available air rows | Available EPA/tgt rows |
+|---|---:|---:|---:|---:|---:|
+| 2006 | 141 | 141 | 79 | 0 | 0 |
+| 2009 | 210 | 210 | 168 | 369 of 378 | 378 |
+| 2024 | 220 | 220 | 209 | 429 | 429 |
+
+Absent buckets do not get invented zero rows. All admitted players remain
+represented. All 105 bound file hashes verify. The prior six preview tables are
+identical by bidirectional EXCEPT ALL to the v11 game-script preview; canonical
+`player_splits` is identical to the original source. Whole/weekly and all seven
+dimensions' classified/excluded conservation checks pass.
+
+Independent read-only replay of the captured official credit records matches
+targets, catches, yards, TD, YAC, receiving first downs and observed air sums
+for every identified player/tempo, including below-admission players. Exported
+tempo flags match hash-verified full PBP snapshots. Available rates and air
+metrics match original-target populations, and weighted displayed modern rates
+match whole-target rates within rounding bounds. All REG nonconversion plays
+in these three samples have valid recorded tempo flags. That supports complete
+recorded play coverage here; it does not independently certify provider charting
+or every other historical season.
+
+Eight frozen official player/tempo rows cover Gonzalez 2006/2009 and
+Jefferson/Gibbs 2024. The shared 650-row context fixture gains `no_huddle` from
+hash-verified cached 2004/2006/2009/2024 PBP; relevant flags also match fresh v12
+inputs. Historical targets/rates/air stay NULL for 2006 while supported YAC and
+receiving production survive. Incomplete 2009 air remains NULL independently.
+
+Synthetic SQL/adapter tests cover valid zero versus unknown, invalid flag values,
+missing columns, wrong labels, label order, absent buckets, unrelated missing
+context and zero-target/catch lateral credits. Historical controls separately
+exercise pre-2006 YAC versus 2006 supported YAC. Real-worker lifecycle tests
+exercise partial tempo with excluded receiving production and wholly unavailable
+tempo, preserving other views and global admission. Wrong, missing or changed
+tempo exports reject the owned candidate through existing cleanup.
+
+Ignored evidence under `data/upstream-r-trial/`: `preview-job-v12.log`,
+`verify_no_huddle_inputs.R`, `verify_no_huddle_preview.py`,
+`verify_no_huddle_credits.py`, `no-huddle-preview-verification.json`,
+`no-huddle-credit-verification.json`, corresponding logs,
+`extract_no_huddle_context.R` and `freeze_no_huddle_fixture.py`.
+
+There are now seven implemented preview views and ten remaining. Next bounded
+view is `game_state`, retaining the existing win-probability field and thresholds.
+Main build/serving integration, all-history validation, coordinated fresh
+qualification, complete R locking and API/UI missing-data treatment remain later.
+No source replacement, publication, push or deployment.
+
+Tempo validation: 957 backend tests passed, 2 skipped (126.17s). Ignored
+`no-huddle-tests.xml` / `no-huddle-tests.log` record the suite. All 650 existing
+context fixture rows/fields are unchanged; only the tempo flag was added. Source
+SHA256 remains `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
+source/candidate have no WAL. No active jobs remain.
