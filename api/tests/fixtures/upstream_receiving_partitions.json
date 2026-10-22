@@ -1,0 +1,735 @@
+{
+  "missing_pass_context": {
+    "season": 2009,
+    "scope": "three selected real REG nonconversion completions; not season totals",
+    "versions": {
+      "nflfastR": "6.0.0",
+      "nflreadr": "1.5.1"
+    },
+    "source_revisions": {
+      "pbp-2009.rds": "2a4f177e72e13db3544753d38cd6fca16f77dc5f6b1d16a2253e25fc6a7694cf",
+      "partition-control-credits-2009.rds": "84b37ba65cde84dacfad9f37565b57f0a0220ae663b60dec6ab093018e6f76b4"
+    },
+    "missing_reason": "missing original-pass depth",
+    "buckets": [
+      "short",
+      "deep"
+    ],
+    "qualified_players": [
+      "00-0024242",
+      "00-0020337"
+    ],
+    "context": [
+      {
+        "game_id": "2009_01_PHI_CAR",
+        "play_id": 4173,
+        "season": 2009,
+        "season_type": "REG",
+        "two_point_attempt": 0,
+        "receiver_player_id": "00-0024242",
+        "receiver_player_name": "D.Williams",
+        "complete_pass": 1,
+        "receiving_yards": 5,
+        "pass_length": null,
+        "pass_location": null
+      },
+      {
+        "game_id": "2009_01_PHI_CAR",
+        "play_id": 58,
+        "season": 2009,
+        "season_type": "REG",
+        "two_point_attempt": 0,
+        "receiver_player_id": "00-0020337",
+        "receiver_player_name": "S.Smith",
+        "complete_pass": 1,
+        "receiving_yards": 8,
+        "pass_length": "short",
+        "pass_location": "right"
+      },
+      {
+        "game_id": "2009_01_PHI_CAR",
+        "play_id": 1876,
+        "season": 2009,
+        "season_type": "REG",
+        "two_point_attempt": 0,
+        "receiver_player_id": "00-0024242",
+        "receiver_player_name": "D.Williams",
+        "complete_pass": 1,
+        "receiving_yards": 20,
+        "pass_length": "deep",
+        "pass_location": "middle"
+      }
+    ],
+    "membership": [
+      {
+        "game_id": "2009_01_PHI_CAR",
+        "play_id": 4173,
+        "split_value": null
+      },
+      {
+        "game_id": "2009_01_PHI_CAR",
+        "play_id": 58,
+        "split_value": "short"
+      },
+      {
+        "game_id": "2009_01_PHI_CAR",
+        "play_id": 1876,
+        "split_value": "deep"
+      }
+    ],
+    "bucket_stats": [
+      {
+        "player_id": "00-0004161",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "short"
+      },
+      {
+        "player_id": "00-0020337",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 8,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 10,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": -2,
+        "split_value": "short"
+      },
+      {
+        "player_id": "00-0021956",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "short"
+      },
+      {
+        "player_id": "00-0004161",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "deep"
+      },
+      {
+        "player_id": "00-0024242",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 20,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 1,
+        "receiving_air_yards": 20,
+        "split_value": "deep"
+      },
+      {
+        "player_id": "00-0024286",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "deep"
+      },
+      {
+        "player_id": null,
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "deep"
+      }
+    ],
+    "classified": [
+      {
+        "player_id": "00-0004161",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0020337",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 8,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 10,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": -2
+      },
+      {
+        "player_id": "00-0021956",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0024242",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 20,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 1,
+        "receiving_air_yards": 20
+      },
+      {
+        "player_id": "00-0024286",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": null,
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      }
+    ],
+    "excluded": [
+      {
+        "player_id": "00-0024242",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 5,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0025708",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0026920",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      }
+    ],
+    "overall": [
+      {
+        "player_id": "00-0004161",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0020337",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 8,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 10,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": -2
+      },
+      {
+        "player_id": "00-0021956",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0024242",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 2,
+        "receptions": 2,
+        "receiving_yards": 25,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 1,
+        "receiving_air_yards": 20
+      },
+      {
+        "player_id": "00-0024286",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0025708",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0026920",
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": null,
+        "season": 2009,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      }
+    ]
+  },
+  "unusable_charting_field": {
+    "season": 2024,
+    "scope": "three selected real REG nonconversion completions; not season totals",
+    "versions": {
+      "nflfastR": "6.0.0",
+      "nflreadr": "1.5.1"
+    },
+    "source_revisions": {
+      "pbp-2024.rds": "52e5a8501d4ad461dd7fea872c29e932ea62c507b6d54e5cd9607e2f620d43ac",
+      "partition-charting-2024.csv": "7706c8e195a3ef714b73562b263c6264aa139b6cbab46570f55b30c2e91e018b",
+      "partition-control-credits-2024.rds": "62523220f9754d04438aff2b793c5937e29d78b2f45336515db91597c77660ac"
+    },
+    "missing_reason": "rush count outside supported 1-11 range",
+    "buckets": [
+      "standard_rush",
+      "blitz"
+    ],
+    "qualified_players": [
+      "00-0038996",
+      "00-0039146",
+      "00-0037816"
+    ],
+    "context": [
+      {
+        "game_id": "2024_07_HOU_GB",
+        "play_id": 981,
+        "season": 2024,
+        "season_type": "REG",
+        "two_point_attempt": 0,
+        "receiver_player_id": "00-0038996",
+        "receiver_player_name": "T.Kraft",
+        "complete_pass": 1,
+        "receiving_yards": 14,
+        "pass_length": "short",
+        "pass_location": "middle",
+        "n_pass_rushers": 45
+      },
+      {
+        "game_id": "2024_07_HOU_GB",
+        "play_id": 347,
+        "season": 2024,
+        "season_type": "REG",
+        "two_point_attempt": 0,
+        "receiver_player_id": "00-0039146",
+        "receiver_player_name": "J.Reed",
+        "complete_pass": 1,
+        "receiving_yards": 4,
+        "pass_length": "short",
+        "pass_location": "left",
+        "n_pass_rushers": 4
+      },
+      {
+        "game_id": "2024_07_HOU_GB",
+        "play_id": 79,
+        "season": 2024,
+        "season_type": "REG",
+        "two_point_attempt": 0,
+        "receiver_player_id": "00-0037816",
+        "receiver_player_name": "R.Doubs",
+        "complete_pass": 1,
+        "receiving_yards": 23,
+        "pass_length": "deep",
+        "pass_location": "left",
+        "n_pass_rushers": 5
+      }
+    ],
+    "membership": [
+      {
+        "game_id": "2024_07_HOU_GB",
+        "play_id": 981,
+        "split_value": null
+      },
+      {
+        "game_id": "2024_07_HOU_GB",
+        "play_id": 347,
+        "split_value": "standard_rush"
+      },
+      {
+        "game_id": "2024_07_HOU_GB",
+        "play_id": 79,
+        "split_value": "blitz"
+      }
+    ],
+    "bucket_stats": [
+      {
+        "player_id": "00-0034966",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "standard_rush"
+      },
+      {
+        "player_id": "00-0036264",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "standard_rush"
+      },
+      {
+        "player_id": "00-0039146",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 4,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 9,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": -5,
+        "split_value": "standard_rush"
+      },
+      {
+        "player_id": "00-0034966",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "blitz"
+      },
+      {
+        "player_id": "00-0036264",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "blitz"
+      },
+      {
+        "player_id": "00-0037816",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 23,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 6,
+        "receiving_first_downs": 1,
+        "receiving_air_yards": 17,
+        "split_value": "blitz"
+      },
+      {
+        "player_id": null,
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0,
+        "split_value": "blitz"
+      }
+    ],
+    "classified": [
+      {
+        "player_id": "00-0034966",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0036264",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0037816",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 23,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 6,
+        "receiving_first_downs": 1,
+        "receiving_air_yards": 17
+      },
+      {
+        "player_id": "00-0039146",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 4,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 9,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": -5
+      },
+      {
+        "player_id": null,
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      }
+    ],
+    "excluded": [
+      {
+        "player_id": "00-0036264",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0038996",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 14,
+        "receiving_tds": 1,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 1,
+        "receiving_air_yards": 14
+      },
+      {
+        "player_id": null,
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      }
+    ],
+    "overall": [
+      {
+        "player_id": "00-0034966",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0036264",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      },
+      {
+        "player_id": "00-0037816",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 23,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 6,
+        "receiving_first_downs": 1,
+        "receiving_air_yards": 17
+      },
+      {
+        "player_id": "00-0038996",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 14,
+        "receiving_tds": 1,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 1,
+        "receiving_air_yards": 14
+      },
+      {
+        "player_id": "00-0039146",
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 1,
+        "receptions": 1,
+        "receiving_yards": 4,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 9,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": -5
+      },
+      {
+        "player_id": null,
+        "season": 2024,
+        "season_type": "REG",
+        "targets": 0,
+        "receptions": 0,
+        "receiving_yards": 0,
+        "receiving_tds": 0,
+        "receiving_yards_after_catch": 0,
+        "receiving_first_downs": 0,
+        "receiving_air_yards": 0
+      }
+    ]
+  }
+}

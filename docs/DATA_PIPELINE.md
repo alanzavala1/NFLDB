@@ -375,8 +375,9 @@ before attempting publication.
 
 The [receiving migration checklist](RECEIVING_MIGRATION.md) inventories all 17
 existing views, the five implemented previews, remaining data requirements and
-the coverage/UI/full-build conditions for integration. Its next checkpoint is
-coverage-aware validation for partially classified views.
+the coverage/UI/full-build conditions for integration. The pure partial-context
+validator is tested against real missing-depth and unusable-charting controls;
+its next checkpoint is hash-bound producer/worker integration.
 
 `pipeline/receiving_splits.py` is the offline integration boundary for official
 nflfastR receiving counts. It reads completed, versioned per-dimension exports from

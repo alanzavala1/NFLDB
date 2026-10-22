@@ -645,3 +645,67 @@ NFL correctness or full historical certification.
 Validation: 875 backend tests passed, 2 skipped (103.24s). Source fingerprint
 and absence of source/candidate WALs were rechecked after the suite. No active
 jobs remain. This completes the user-selected field-position checkpoint.
+
+## Partial-context conservation controls (October 21, 2026)
+
+The next bounded checkpoint implements a pure validation contract in
+`pipeline/receiving_partition_validation.py`. It receives independently classified
+play context, the producer's explicit membership, official per-bucket results and
+three official reference calculations: classified union, excluded union and whole
+population. It checks unique game/play keys and exact membership before comparing
+all seven observed receiving count fields by player. Bucket sums must equal the
+classified reference; classified plus excluded must equal the whole reference.
+Checks include players outside admission and unidentified-player credits. Missing
+classification cannot make a supplied globally qualified player disappear from
+the whole reference. Players with only excluded production are reported explicitly.
+
+This is validation, not a second receiving calculator. It does not infer unknown
+context, turn missing metric values into zero, replace eligibility rules, certify
+historical targets or validate target-role rates. Historical mask flags remain in
+the coverage report. Input revisions are SHA256 records supplied by the verified
+reader; this pure function checks their shape, not publisher authenticity.
+
+`experiments/receiving_partition_controls.R` generated two frozen controls with
+actual nflfastR 6.0.0/nflreadr 1.5.1 calls. The full PBP RDS inputs were checked
+against the completed v9 manifest before reading. FTN was exported read-only from
+the unchanged source DB to ignored `data/upstream-r-trial/partition-charting-2024.csv`
+and hash-checked before the R join. Duplicate charting keys or a multiplying join
+fail. The control records hashes for PBP, charting where used and the actual
+official credit inputs captured in that R process.
+
+Frozen output: `tests/fixtures/upstream_receiving_partitions.json`. Each control
+contains **three selected real REG nonconversion completions**, not a whole game
+or season. Supplied player lists select the sampled receivers for these controls;
+they are not a new minimum-volume qualification rule.
+
+| Control | Classified receiving production | Excluded receiving production | Whole sample |
+|---|---|---|---|
+| 2009 missing original-pass depth | 2 catches, 28 yards | 1 catch, 5 yards | 3 catches, 33 yards |
+| 2024 unsupported rush count | 2 catches, 27 yards, 0 TD | 1 catch, 14 yards, 1 TD | 3 catches, 41 yards, 1 TD |
+
+The 2009 unknown-depth play is `2009_01_PHI_CAR`, play 4173 (D. Williams).
+The charting control is `2024_07_HOU_GB`, play 981 (T. Kraft touchdown), with
+`n_pass_rushers=45`. The charting row exists, but that value is outside the existing
+1–11 classification contract; it is neither a standard rush nor proof of a blitz.
+The receiving catch/yards/TD survive in excluded and overall counts. Kraft has no
+classified production in this three-play sample and remains globally represented.
+This demonstrates provider consistency, not independent NFL correctness or a
+claim that all charting gaps have this cause.
+
+Additional tests cover wholly unavailable optional context, complete partitions,
+relabeled/missing/extra/duplicate play identities, duplicate summary rows, wrong
+season/scope, changed counts, per-player errors concealed by equal grand totals,
+unidentified credits, zero-target/catch lateral recipients, negative production
+and invalid/unknown count values. Counts must be supplied; missing counts fail
+rather than becoming zero. Empty references retain explicit schema.
+
+Integration is the next checkpoint. No producer/worker schema change, preview DB
+rebuild, serving/UI integration, source replacement or publication was performed.
+The existing five preview dimensions and strict full-snapshot gate remain as-is.
+
+Validation: 907 backend tests passed, 2 skipped, including 32 new conservation
+tests. The source SHA256 remains
+`b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`, with no
+source WAL. Ignored regeneration artifacts are `partition-controls.log`,
+`receiving-partition-controls.json`, the charting CSV and captured credit RDS
+files in `data/upstream-r-trial/`. The private simplification plan stays excluded.

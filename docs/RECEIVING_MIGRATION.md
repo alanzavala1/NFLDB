@@ -32,8 +32,9 @@ additional views are separate scope.
 Latest field-position preview checked 2006, 2009 and 2024, preserving earlier
 Down/quarter/home-away/shotgun outputs. Earlier trials also examined 2002,
 2004, 2007 and 2008 in specific scopes. These samples are not a full-history gate.
-Latest backend checkpoint: 875 passed, 2 skipped; no new suite was needed for
-this documentation/read-only inventory.
+Latest backend checkpoint: 907 passed, 2 skipped, including 32 partition-validation
+tests. The current preview export remains schema 9; the validation foundation is
+isolated until producer/worker integration.
 
 ## Remaining ordinary play-context views: 7
 
@@ -126,25 +127,56 @@ These are properties of the stored snapshot, not proof of current upstream
 availability, semantic correctness or complete charting of individual credits.
 Each field needs its own coverage check even when a charting row exists.
 
-## Next checkpoint: coverage-aware validation
+## Coverage-aware validation: foundation implemented
 
 The current preview worker reconciles every dimension against whole-season
 weekly counts. That works for the five proven partitions, but cannot serve as
 the acceptance rule for partially classified or optionally charted views.
 
-- [ ] Define a per-season/dimension coverage record: supported/unavailable reason,
+`api/pipeline/receiving_partition_validation.py` now provides the pure acceptance
+rule. It verifies independently derived versus exported game/play membership,
+unique keys and disjoint buckets; compares official bucket counts to an official
+calculation over the classified union; and compares classified plus excluded
+counts to the whole official reference, by player before admission filtering.
+It retains unidentified credits in the comparison. The result records exact
+input hashes, play counts, exclusion reason and qualified production on both
+sides. A globally admitted player may legitimately have no classified production.
+Observed-count equality does not certify targets, air coverage or rates.
+
+Two frozen official-calculator controls exercise natural gaps: a 2009 completion
+with missing pass depth, and a 2024 touchdown with an unsupported 45-rusher FTN
+value. The latter is an unusable field in an existing charting row, not a missing
+join row. Complete and wholly unavailable populations, missing/duplicate keys,
+per-player errors hidden by grand totals, lateral credits, negative yards and
+historical masks also have regression coverage.
+
+**Next checkpoint:** connect this rule to the actual preview producer/worker,
+with hash-bound membership and classified/excluded reference exports. The current
+worker still requires whole-weekly equality. No partial-context view is enabled,
+no existing export version changes, and none of the 12 remaining views is marked
+implemented by these isolated controls. Preserve the independent whole-reference
+versus weekly check when connecting the subset rule.
+
+- [x] Define a per-season/dimension coverage record: supported/unavailable reason,
   source revision, classified/unclassified play scope and credited production.
-- [ ] Reconcile classified buckets to official calculation on **the exact same
+- [x] Reconcile classified buckets to official calculation on **the exact same
   classified play IDs**, preserving individual recipient credits.
-- [ ] Separately reconcile classified plus excluded production to whole-season
-  production. Prove bucket membership is disjoint and the join does not multiply
-  records. Whole-season equality remains required for complete partitions.
-- [ ] Keep admission independent of context availability: a missing optional
+- [x] Separately reconcile classified plus excluded production to the whole
+  reference population (the full season for a season build). Prove bucket
+  membership is disjoint and the join does not multiply records. Whole-season
+  equality remains required for complete partitions.
+- [x] Keep admission independent of context availability: a missing optional
   view must not make an otherwise eligible player disappear globally.
-- [ ] Preserve per-field NULLs and actual zeroes, with explicit unsupported
+- [ ] Connect per-field NULLs and actual zeroes through the partial preview path, with explicit unsupported
   seasons/feeds. Do not relax the full candidate acceptance gate to get a pass.
-- [ ] Add a real missing-context example and a missing-charting example to verify
-  the rule before adding the remaining views.
+- [x] Add a real missing-context example and an unusable-charting example to verify
+  the rule before adding the remaining views. A wholly missing optional feed is
+  additionally covered by a synthetic unavailable-population test.
+- [ ] Wire the validated contract into hash-bound producer exports and worker
+  reports, retaining whole-season reference/weekly checks and safe DB lifecycle.
+
+Checked items above describe the isolated validation contract and controls,
+not an integrated or publishable receiving build.
 
 ## Before exposing new receiving rows to users
 
