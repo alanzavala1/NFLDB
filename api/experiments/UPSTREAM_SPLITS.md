@@ -793,3 +793,85 @@ The 12 remaining dimensions, FTN build input binding, full R locking/portable
 build, coordinated fresh qualification, complete historical checks and main
 pipeline/API/UI integration remain. Next bounded view is `game_script`
 (leading/tied/trailing). No source replacement, publication, push or deployment.
+
+## Receiving game-script preview (October 21, 2026)
+
+Export schema 11 adds `game_script` through the existing dimension catalog,
+producer subset calls, adapter, coverage validation and transactional worker.
+The only new context input is `score_differential`, the pre-play offense score
+minus defense score. Labels/order match `splits_core.game_script_dim`:
+
+- Positive: `leading`, sort order 1.
+- Zero: `tied`, sort order 2.
+- Negative: `trailing`, sort order 3.
+
+Finite integral score differences within signed 32-bit storage are accepted.
+Missing remains unclassified; invalid nonmissing values fail. A touchdown that
+changes the lead stays under the play's starting state, and all credited lateral
+recipients share that state. Score classification is independent of down, quarter
+and field position. Eligibility, historical target/YAC/air masks, target-role
+rates and unsupported-metric behavior are unchanged.
+
+The producer exports score context, membership and actual classified/excluded
+official references. The worker automatically creates `receiving_game_script_preview`
+and records the same format 3 coverage proof and adapted-reference checks. Main
+snapshot acceptance still rejects this table, independently of the marker.
+
+Actual ignored run: `data/receiving-preview-game-script-20261021.duckdb`, with
+`data/upstream-r-trial/preview-export-v11/`:
+
+| Season | Admitted players | Leading rows | Tied rows | Trailing rows | Available air rows | Available EPA/tgt rows |
+|---|---:|---:|---:|---:|---:|---:|
+| 2006 | 141 | 141 | 141 | 141 | 0 | 0 |
+| 2009 | 210 | 207 | 210 | 210 | 617 of 627 | 627 |
+| 2024 | 220 | 220 | 220 | 220 | 660 | 660 |
+
+Absent buckets are not invented. All admitted players remain represented.
+All 93 bound file hashes verify. The previous five preview tables and canonical
+`player_splits` are unchanged by bidirectional EXCEPT ALL. Whole/weekly counts
+and all six dimensions' classified/excluded conservation checks pass.
+
+Read-only checks also replay identified-player targets, catches, yards, TD,
+YAC, receiving first downs and air sums directly from the captured official
+credit records. Every player/game-script count matches, including below-admission
+players. Exported scores match hash-verified full PBP snapshots; where both
+scores are known they equal `posteam_score - defteam_score` before the play.
+Available rates and air metrics match their PBP target populations, and weighted
+displayed modern rates reproduce whole-target rates within rounding bounds.
+This is scoped provider consistency, not independent NFL correctness or full
+historical certification.
+
+Missing-score plays number 2,321/2,255/2,588 across these three REG nonconversion
+populations. They carry zero qualified receiving production in these samples.
+The coverage record correctly describes partial play coverage while the
+receiving totals reconcile fully. Synthetic real-worker cases separately verify
+partial score context with excluded receiving catches/yards and a wholly
+unavailable game-script view, keeping unrelated views and global admission.
+
+Frozen official examples cover Gonzalez 2006/2009 and Jefferson/Gibbs 2024.
+The shared 650-row context fixture gains score differences extracted from
+hash-verified cached 2004/2006/2009/2024 PBP; all relevant scores also match the
+fresh v11 source. Historical targets/rates/air stay NULL for 2006; incomplete
+2009 air stays NULL while catches/yards/TD/YAC and EPA remain usable. Synthetic
+tests check score sign/zero, nullable unknowns, invalid values, sort order,
+missing columns, invalid labels, absent buckets, unrelated missing context,
+SQL round trips and a lateral touchdown that changes the lead. Missing, changed
+or incorrect game-script exports reject the owned candidate through the existing
+safe cleanup path.
+
+Ignored evidence under `data/upstream-r-trial/`: `preview-job-v11.log`,
+`verify_game_script_inputs.R`, `verify_game_script_preview.py`,
+`verify_game_script_credits.py`, `game-script-preview-verification.json`,
+`game-script-credit-verification.json`, corresponding logs,
+`extract_game_script_context.R` and `freeze_game_script_fixture.py`.
+
+There are now six implemented preview views and eleven remaining. Next bounded
+view is `no_huddle`. Main ingestion/serving integration, all-history checks,
+coordinated fresh qualification, R environment locking and API/UI treatment
+remain later work. No source replacement, publication, push or deployment.
+
+Validation: 939 backend tests passed, 2 skipped (142.19s), with JUnit/log output
+in ignored `game-script-tests.xml` / `game-script-tests.log`. All 650 old context
+fixture rows/fields are unchanged; only the score column was added. Source SHA256
+remains `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
+source/candidate have no WAL. No active jobs remain.

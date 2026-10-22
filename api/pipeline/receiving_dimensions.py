@@ -7,7 +7,8 @@ from pipeline.source_results import SourceError
 
 DIMENSIONS = {"down": ("1", "2", "3", "4"), "quarter": ("1", "2", "3", "4", "OT"),
               "home_away": ("home", "away"), "shotgun": ("shotgun", "under_center"),
-              "field_zone": ("own_territory", "opp_territory", "red_zone")}
+              "field_zone": ("own_territory", "opp_territory", "red_zone"),
+              "game_script": ("leading", "tied", "trailing")}
 
 
 def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> pd.Series:
@@ -19,7 +20,8 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
     if dimension not in DIMENSIONS:
         raise SourceError("nflfastR_receiving_splits", season, "unsupported split dimension")
     field = {"down": "down", "quarter": "qtr", "home_away": "posteam_type",
-             "shotgun": "shotgun", "field_zone": "yardline_100"}[dimension]
+             "shotgun": "shotgun", "field_zone": "yardline_100",
+             "game_script": "score_differential"}[dimension]
     if field not in context:
         raise SourceError("nflfastR_receiving_splits", season, f"missing context {field}")
     if dimension == "home_away":
@@ -34,6 +36,18 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
         observed = values.dropna().to_numpy(dtype=float)
     except (TypeError, ValueError) as error:
         raise SourceError("nflfastR_receiving_splits", season, f"invalid context {field}") from error
+    if dimension == "game_script":
+        limits = np.iinfo(np.int32)
+        if (not np.isfinite(observed).all() or not (observed == np.trunc(observed)).all()
+                or (observed < limits.min).any() or (observed > limits.max).any()):
+            raise SourceError("nflfastR_receiving_splits", season, "invalid context score_differential")
+        # Offense's score minus defense's score before the play, including the
+        # original score state when a completion/lateral changes the lead.
+        result = pd.Series(pd.NA, index=values.index, dtype="string")
+        for condition, label in ((values.gt(0), "leading"), (values.eq(0), "tied"),
+                                 (values.lt(0), "trailing")):
+            result.loc[condition.fillna(False)] = label
+        return result
     if dimension == "field_zone":
         if not np.isfinite(observed).all() or (observed < 0).any() or (observed > 100).any():
             raise SourceError("nflfastR_receiving_splits", season, "invalid context yardline_100")

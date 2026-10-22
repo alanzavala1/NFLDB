@@ -374,7 +374,7 @@ before attempting publication.
 ## Official receiving split adapter
 
 The [receiving migration checklist](RECEIVING_MIGRATION.md) inventories all 17
-existing views, the five implemented previews, remaining data requirements and
+existing views, the six implemented previews, remaining data requirements and
 the coverage/UI/full-build conditions for integration. Partial-context validation
 now runs in the preview producer/worker, using hash-bound membership and official
 classified/excluded references. The remaining views use this shared contract.
@@ -430,7 +430,7 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v10 manifest requires receiving EPA/air yards,
+not replace complete live rows. The v11 manifest requires receiving EPA/air yards,
 target context, per-dimension membership and classified/excluded references,
 and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
@@ -438,10 +438,11 @@ captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
 See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
 
-Down, quarter, home/away, shotgun and field position use `adapt_receiving_splits` and
+Down, quarter, home/away, shotgun, field position and game script use `adapt_receiving_splits` and
 `load_receiving_split_export` with an explicit dimension. The supported labels
 live in `pipeline/receiving_dimensions.py`: downs 1–4, quarters 1–4 and OT,
-designated `home`/`away` sides, and `shotgun`/`under_center` formation labels.
+designated `home`/`away` sides, `shotgun`/`under_center` formation labels,
+the three field zones and `leading`/`tied`/`trailing` game-script labels.
 Every period above four groups into OT, matching `splits_core.QUARTER_DIM`.
 Missing periods remain unknown. Quarter target populations do not require a
 known down; a usable quarter play must not disappear because down is missing.
@@ -473,6 +474,16 @@ change it. Missing spots remain unknown, finite fractional spots are accepted,
 and nonnumeric/nonfinite values or distances outside 0–100 fail. All credited
 recipients, including lateral recipients, share the play's starting field zone.
 
+Game script uses pre-play `score_differential`, the offense's score minus the
+defense's score. Positive is `leading` (sort 1), zero is `tied` (2), negative is
+`trailing` (3), matching `splits_core.game_script_dim`. A touchdown that changes
+the lead remains under the state before that play. All credited recipients share
+that context, including lateral recipients. Missing score is unclassified, never
+tied or trailing; nonnumeric/nonfinite, fractional or out-of-storage-range values
+fail. Classification does not require a known down, quarter or field position.
+The existing classified/excluded references, eligibility and field-specific
+target/YAC/air/rate policies apply unchanged.
+
 ## Receiving candidate preview
 
 From `api/`, `python -m jobs.receiving_preview` provides one explicit path through
@@ -498,7 +509,7 @@ membership and classified/excluded CSV bytes.
 
 The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
 `receiving_home_away_preview`, `receiving_shotgun_preview`,
-`receiving_field_zone_preview` and one JSON record in
+`receiving_field_zone_preview`, `receiving_game_script_preview` and one JSON record in
 `receiving_preview_preparation`. Format version 3 records whole-season versus
 weekly count checks under `whole_references[year]` and dimension checks under
 `seasons[year][dimension]`, binding the copied source hash, export manifest hash,

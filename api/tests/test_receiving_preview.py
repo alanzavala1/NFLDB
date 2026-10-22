@@ -63,6 +63,7 @@ def fake_export(monkeypatch):
                                         posteam_type="home" if index < 24 else "away",
                                         shotgun=1 if index < 24 else 0,
                                         yardline_100=75 if index < 24 else 20,
+                                        score_differential=7 if index < 20 else 0 if index < 24 else -3,
                                         complete_pass=1, incomplete_pass=0, interception=0,
                                         epa=0.5, air_yards=2) for index in range(28)])
             if fault == "missing_air":
@@ -71,6 +72,10 @@ def fake_export(monkeypatch):
                 context.loc[24:, "yardline_100"] = None
             if fault == "unavailable_context":
                 context["yardline_100"] = float("nan")
+            if fault == "partial_game_script_context":
+                context.loc[24:, "score_differential"] = None
+            if fault == "unavailable_game_script_context":
+                context["score_differential"] = float("nan")
             credits = pd.DataFrame([dict(
                 player_id="receiver", season=year, season_type="REG",
                 targets=0 if year in range(2003, 2009) else 1,
@@ -170,6 +175,11 @@ def fake_export(monkeypatch):
             (output / f"excluded-down-{seasons[0]}.csv").unlink()
         if fault == "missing_overall_export":
             (output / f"overall-{seasons[0]}.csv").unlink()
+        if fault == "changed_game_script_bytes":
+            path = output / f"game_script-{seasons[0]}.csv"
+            path.write_bytes(path.read_bytes() + b"\n")
+        if fault == "missing_game_script_export":
+            (output / f"game_script-{seasons[0]}.csv").unlink()
     monkeypatch.setattr(preview, "_run_export", produce)
 
 
@@ -199,6 +209,7 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
     assert report["seasons"]["2024"]["home_away"]["production_matches_classified"]
     assert report["seasons"]["2024"]["shotgun"]["production_matches_classified"]
     assert report["seasons"]["2024"]["field_zone"]["production_matches_classified"]
+    assert report["seasons"]["2024"]["game_script"]["coverage"]["status"] == "complete"
     with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
         assert conn.execute("SELECT season,SUM(att),SUM(cmp),SUM(yards),SUM(td) FROM receiving_down_preview GROUP BY season ORDER BY season").fetchall() == [(2004, None, 28, 280, 0), (2024, 28, 28, 280, 0)]
         assert conn.execute("SELECT player_id,yards FROM player_splits ORDER BY player_id").fetchall() == [("older", 88), ("receiver", 60)]
@@ -210,6 +221,7 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
         assert conn.execute("SELECT split_value,sort_order,att,cmp,yards,epa FROM receiving_home_away_preview WHERE season=2024 ORDER BY sort_order").fetchall() == [("home", 1, 24, 24, 240, 0.5), ("away", 2, 4, 4, 40, 0.5)]
         assert conn.execute("SELECT split_value,sort_order,att,cmp,yards,epa FROM receiving_shotgun_preview WHERE season=2024 ORDER BY sort_order").fetchall() == [("shotgun", 1, 24, 24, 240, 0.5), ("under_center", 2, 4, 4, 40, 0.5)]
         assert conn.execute("SELECT split_value,sort_order,att,cmp,yards,epa FROM receiving_field_zone_preview WHERE season=2024 ORDER BY sort_order").fetchall() == [("own_territory", 1, 24, 24, 240, 0.5), ("red_zone", 3, 4, 4, 40, 0.5)]
+        assert conn.execute("SELECT split_value,sort_order,att,cmp,yards,epa FROM receiving_game_script_preview WHERE season=2024 ORDER BY sort_order").fetchall() == [("leading", 1, 20, 20, 200, 0.5), ("tied", 2, 4, 4, 40, 0.5), ("trailing", 3, 4, 4, 40, 0.5)]
     assert not Path(str(tmp_path / "preview.duckdb") + ".wal").exists()
 
 
@@ -247,6 +259,9 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
     'wrong_field_zone',
     'changed_field_zone_bytes',
     'missing_field_zone_export',
+    'wrong_game_script',
+    'changed_game_script_bytes',
+    'missing_game_script_export',
 ])
 def test_failed_validation_removes_owned_candidate_preserves_original_and_exports(source, tmp_path, fake_export, monkeypatch, fault):
     monkeypatch.setenv("PREVIEW_TEST_FAULT", fault)
@@ -351,6 +366,7 @@ def test_worker_refuses_changed_baseline_before_opening_it(source, tmp_path, mon
     'receiving_home_away_preview',
     'receiving_shotgun_preview',
     'receiving_field_zone_preview',
+    'receiving_game_script_preview',
     'receiving_future_preview',
     'receiving_preview_preparation',
 ])
@@ -381,19 +397,21 @@ def test_missing_target_air_yards_preserves_rates_and_reports_partial_coverage(s
         assert conn.execute("SELECT air_yards,epa,success_pct,cmp,yards FROM receiving_down_preview WHERE season=2024 AND split_value='1'").fetchone() == (None, 0.5, 100.0, 7, 70)
 
 
-@pytest.mark.parametrize("fault,covered,excluded,status", [
-    ("partial_context", 24, 4, "partial"),
-    ("unavailable_context", 0, 28, "unavailable"),
+@pytest.mark.parametrize("fault,dimension,covered,excluded,status", [
+    ("partial_context", "field_zone", 24, 4, "partial"),
+    ("unavailable_context", "field_zone", 0, 28, "unavailable"),
+    ("partial_game_script_context", "game_script", 24, 4, "partial"),
+    ("unavailable_game_script_context", "game_script", 0, 28, "unavailable"),
 ])
 def test_missing_context_only_limits_its_view_and_retains_global_receiving_production(
-    source, tmp_path, fake_export, monkeypatch, fault, covered, excluded, status,
+    source, tmp_path, fake_export, monkeypatch, fault, dimension, covered, excluded, status,
 ):
     monkeypatch.setenv("PREVIEW_TEST_FAULT", fault)
     before = preview.file_sha256(source)
     report = run(source, tmp_path)
     assert preview.file_sha256(source) == before
     assert report["whole_references"]["2024"]["production_matches_weekly"]
-    field = report["seasons"]["2024"]["field_zone"]
+    field = report["seasons"]["2024"][dimension]
     coverage = field["coverage"]
     assert coverage["status"] == status
     assert coverage["plays"] == {"overall": 28, "classified": covered, "excluded": excluded}
@@ -404,7 +422,7 @@ def test_missing_context_only_limits_its_view_and_retains_global_receiving_produ
     assert coverage["qualified_without_classified_production"] == ([] if covered else ["receiver"])
     with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
         assert conn.execute("SELECT SUM(cmp),SUM(yards) FROM receiving_down_preview WHERE season=2024").fetchone() == (28, 280)
-        assert conn.execute("SELECT SUM(cmp),SUM(yards) FROM receiving_field_zone_preview WHERE season=2024").fetchone() == ((covered, covered * 10) if covered else (None, None))
+        assert conn.execute(f"SELECT SUM(cmp),SUM(yards) FROM receiving_{dimension}_preview WHERE season=2024").fetchone() == ((covered, covered * 10) if covered else (None, None))
         assert conn.execute("SELECT att FROM receiving_down_preview WHERE season=2004").df().att.isna().all()
         assert conn.execute("SELECT yards FROM player_splits WHERE player_id='receiver'").fetchone() == (60,)
     assert not Path(str(tmp_path / "preview.duckdb") + ".wal").exists()
