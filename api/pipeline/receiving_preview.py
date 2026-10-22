@@ -18,10 +18,17 @@ def file_sha256(path: Path) -> str:
 
 
 def _run_export(rscript: Path, library: Path, output: Path, seasons: list[int], run_id: str) -> None:
+    from pipeline.receiving_inputs import prepare_receiving_inputs
+    prepare_receiving_inputs(output, seasons)
     api = Path(__file__).resolve().parents[1]
+    producer = output / "producer.R"
+    # Rscript can read its source progressively. Freeze this invocation's bytes
+    # so a concurrent editor cannot change the code beneath the running process.
+    with producer.open("xb") as stream:
+        stream.write((api / "experiments/upstream_receiving_splits.R").read_bytes())
     env = os.environ.copy()
     env.update(R_LIBS_USER=str(library), LC_ALL="C", NFL_RECEIVING_RUN_ID=run_id)
-    command = [str(rscript), "--vanilla", str(api / "experiments/upstream_receiving_splits.R"),
+    command = [str(rscript), "--vanilla", str(producer),
                str(output), *(str(year) for year in seasons)]
     options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
     with (output / "R-job.log").open("xb") as log:

@@ -14,6 +14,7 @@ import pytest
 from pipeline import receiving_preview as preview
 from pipeline.receiving_splits import EXPORT_CONTRACT, VERSIONS
 from pipeline.receiving_dimensions import DIMENSIONS, context_split_values
+from pipeline.receiving_context_rules import export_definitions
 from pipeline.snapshots import CandidateError
 import splits_builder
 
@@ -55,6 +56,13 @@ def fake_export(monkeypatch):
         manifest = {**VERSIONS, "seasons": seasons, "run_id": run_id,
                     "receiving_export": deepcopy(EXPORT_CONTRACT), "files": {},
                     "runtime": {"R": "4.6.1", "platform": "test fixture", "packages": dict(VERSIONS)}}
+        definitions = output / "definitions.json"
+        definitions.write_text(json.dumps(export_definitions(DIMENSIONS)))
+        manifest["files"][definitions.name] = preview.file_sha256(definitions)
+        producer = output / "producer.R"
+        producer.write_text("# deterministic test export producer")
+        manifest["files"][producer.name] = preview.file_sha256(producer)
+        charting_outcomes = {}
         for year in seasons:
             context = pd.DataFrame([dict(game_id="game", play_id=index, season=year,
                                         season_type="REG", two_point_attempt=0,
@@ -65,6 +73,14 @@ def fake_export(monkeypatch):
                                         yardline_100=75 if index < 24 else 20,
                                         score_differential=7 if index < 20 else 0 if index < 24 else -3,
                                         no_huddle=0 if index < 24 else 1,
+                                        wp=0.5 if index < 24 else 0.99,
+                                        roof="outdoors", surface="grass", defteam="BUF",
+                                        pass_length="short" if index < 24 else "deep",
+                                        pass_location="right" if index < 24 else "left",
+                                        qb_hit=0 if index < 24 else 1,
+                                        is_play_action=(0 if index < 24 else 1) if year >= 2022 else None,
+                                        n_pass_rushers=(4 if index < 24 else 5) if year >= 2022 else None,
+                                        ftn_matched=int(year >= 2022),
                                         complete_pass=1, incomplete_pass=0, interception=0,
                                         epa=0.5, air_yards=2) for index in range(28)])
             if fault == "missing_air":
@@ -81,6 +97,29 @@ def fake_export(monkeypatch):
                 context.loc[24:, "no_huddle"] = None
             if fault == "unavailable_no_huddle_context":
                 context["no_huddle"] = float("nan")
+            if fault == "partial_depth":
+                context.loc[24:, "pass_length"] = None
+            if fault == "unavailable_depth":
+                context["pass_length"] = None
+            if fault == "unknown_surface":
+                context.loc[24:, "surface"] = "unreviewed material"
+            if year >= 2022 and fault in ("charting_gap", "charting_unavailable"):
+                selected = context.index >= (24 if fault == "charting_gap" else 0)
+                context.loc[selected, ["is_play_action", "n_pass_rushers"]] = None
+                context.loc[selected, "ftn_matched"] = 0
+            if year >= 2022 and fault == "rush_outlier":
+                context.loc[24:, "n_pass_rushers"] = 45
+            ftn = context[["season", "game_id", "play_id", "is_play_action", "n_pass_rushers"]].copy() if year >= 2022 else pd.DataFrame(columns=["season", "game_id", "play_id", "is_play_action", "n_pass_rushers"])
+            if year >= 2022 and fault in ("charting_gap", "charting_unavailable"):
+                ftn = ftn.loc[context.ftn_matched.eq(1)]
+            charting_outcomes[str(year)] = {"source": "ftn_charting", "season": year,
+                                             "status": "loaded" if year >= 2022 else "unsupported", "rows": len(ftn)}
+            if year >= 2022 and fault == "charting_unavailable":
+                charting_outcomes[str(year)]["status"] = "not_found"
+            if year >= 2022 and fault == "ftn_join_mismatch":
+                ftn.loc[0, "is_play_action"] = 1
+            if year >= 2022 and fault == "duplicate_ftn":
+                ftn = pd.concat([ftn, ftn.iloc[[0]]], ignore_index=True)
             credits = pd.DataFrame([dict(
                 player_id="receiver", season=year, season_type="REG",
                 targets=0 if year in range(2003, 2009) else 1,
@@ -96,7 +135,7 @@ def fake_export(monkeypatch):
                 credits.loc[0, "receiving_yards"] += 1
             overall = summarize(credits.index >= 0)
             exports = {f"context-{year}.csv": context, f"overall-{year}.csv": overall,
-                       f"weekly-{year}.csv": weekly}
+                       f"weekly-{year}.csv": weekly, f"ftn-{year}.csv": ftn}
             for dimension, buckets in DIMENSIONS.items():
                 labels = context_split_values(context, dimension, year)
                 membership = context[["game_id", "play_id"]].assign(split_value=labels)
@@ -106,6 +145,8 @@ def fake_export(monkeypatch):
                          for bucket in buckets if labels.eq(bucket).any()]
                 frame = pd.concat(parts, ignore_index=True) if parts else overall.iloc[:0].assign(split_value=pd.Series(dtype="string"))
                 if fault == f"wrong_{dimension}" or (dimension == "down" and fault == "wrong_partition"):
+                    if frame.empty:
+                        frame = overall.iloc[:1].assign(split_value=buckets[0])
                     frame.loc[0, "receiving_yards"] += 1
                 if dimension == "down":
                     if fault == "missing_player":
@@ -142,6 +183,9 @@ def fake_export(monkeypatch):
                 manifest["files"][name] = preview.file_sha256(path)
             if fault == "missing_partition_hash":
                 manifest["files"].pop(f"classified-down-{year}.csv")
+        charting_path = output / "ftn-inputs.json"
+        charting_path.write_text(json.dumps(charting_outcomes))
+        manifest["files"][charting_path.name] = preview.file_sha256(charting_path)
         if fault == "stale_run":
             manifest["run_id"] = "old-job"
         if fault == "wrong_versions":
@@ -275,6 +319,18 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
     'changed_game_script_bytes',
     'missing_game_script_export',
     'wrong_no_huddle',
+    'wrong_game_state',
+    'wrong_roof',
+    'wrong_surface',
+    'wrong_opponent',
+    'wrong_opp_division',
+    'wrong_target_depth',
+    'wrong_target_direction',
+    'wrong_pressure',
+    'wrong_play_action',
+    'wrong_blitz',
+    'ftn_join_mismatch',
+    'duplicate_ftn',
     'changed_no_huddle_bytes',
     'missing_no_huddle_export',
 ])
@@ -329,6 +385,7 @@ def test_missing_R_setup_fails_before_creating_candidate(source, tmp_path):
 
 
 def test_interrupted_R_tree_is_stopped_and_waited_for(tmp_path, monkeypatch):
+    monkeypatch.setattr("pipeline.receiving_inputs.prepare_receiving_inputs", lambda *args: None)
     calls = []
     class Interrupted:
         pid = 123456
@@ -348,6 +405,30 @@ def test_interrupted_R_tree_is_stopped_and_waited_for(tmp_path, monkeypatch):
     with pytest.raises(KeyboardInterrupt):
         preview._run_export(Path(sys.executable), tmp_path, tmp_path, [2024], "fixture")
     assert calls == ["wait", "stop tree", "wait"]
+
+
+def test_r_invocation_freezes_source_bytes_before_starting(tmp_path, monkeypatch):
+    api = tmp_path / "api"
+    (api / "pipeline").mkdir(parents=True)
+    (api / "experiments").mkdir()
+    output = tmp_path / "output"
+    output.mkdir()
+    source = api / "experiments/upstream_receiving_splits.R"
+    source.write_text("print('original invocation')")
+    original = source.read_bytes()
+    monkeypatch.setattr(preview, "__file__", str(api / "pipeline/receiving_preview.py"))
+    monkeypatch.setattr("pipeline.receiving_inputs.prepare_receiving_inputs", lambda *args: None)
+    class Done:
+        def wait(self):
+            return 0
+    def start(command, **kwargs):
+        assert Path(command[2]) == output / "producer.R"
+        source.write_text("print('edited during build')")
+        assert (output / "producer.R").read_bytes() == original
+        return Done()
+    monkeypatch.setattr(preview.subprocess, "Popen", start)
+    preview._run_export(Path(sys.executable), tmp_path, output, [2024], "fixture")
+    assert (output / "producer.R").read_bytes() == original
 
 
 def test_worker_has_no_default_db_fallback(monkeypatch, tmp_path):
@@ -376,13 +457,7 @@ def test_worker_refuses_changed_baseline_before_opening_it(source, tmp_path, mon
 
 
 @pytest.mark.parametrize("table", [
-    'receiving_down_preview',
-    'receiving_quarter_preview',
-    'receiving_home_away_preview',
-    'receiving_shotgun_preview',
-    'receiving_field_zone_preview',
-    'receiving_game_script_preview',
-    'receiving_no_huddle_preview',
+    *(f"receiving_{dim}_preview" for dim in DIMENSIONS),
     'receiving_future_preview',
     'receiving_preview_preparation',
 ])
@@ -420,6 +495,12 @@ def test_missing_target_air_yards_preserves_rates_and_reports_partial_coverage(s
     ("unavailable_game_script_context", "game_script", 0, 28, "unavailable"),
     ("partial_no_huddle_context", "no_huddle", 24, 4, "partial"),
     ("unavailable_no_huddle_context", "no_huddle", 0, 28, "unavailable"),
+    ("partial_depth", "target_depth", 24, 4, "partial"),
+    ("unavailable_depth", "target_depth", 0, 28, "unavailable"),
+    ("unknown_surface", "surface", 24, 4, "partial"),
+    ("charting_gap", "play_action", 24, 4, "partial"),
+    ("charting_unavailable", "play_action", 0, 28, "unavailable"),
+    ("rush_outlier", "blitz", 24, 4, "partial"),
 ])
 def test_missing_context_only_limits_its_view_and_retains_global_receiving_production(
     source, tmp_path, fake_export, monkeypatch, fault, dimension, covered, excluded, status,

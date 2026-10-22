@@ -1,6 +1,7 @@
 # Official receiving export producer; never imports or writes a database.
 # Rscript --vanilla experiments/upstream_receiving_splits.R OUTPUT_DIR [SEASONS...]
 # R_LIBS_USER may point at a separate experiment-only package library.
+# jobs.receiving_preview prepares definitions.json and bound FTN inputs first.
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1L) stop("Supply an experiment output directory")
 out <- args[[1L]]
@@ -20,11 +21,8 @@ metrics <- c("targets", "receptions", "receiving_yards", "receiving_tds",
              "receiving_yards_after_catch", "receiving_first_downs", "receiving_epa",
              "receiving_air_yards")
 selected <- c("player_id", "season", "season_type", metrics)
-dimensions <- list(down = as.character(1:4), quarter = c(as.character(1:4), "OT"),
-                   home_away = c("home", "away"), shotgun = c("shotgun", "under_center"),
-                   field_zone = c("own_territory", "opp_territory", "red_zone"),
-                   game_script = c("leading", "tied", "trailing"),
-                   no_huddle = c("huddle", "no_huddle"))
+definitions <- jsonlite::read_json(file.path(out, "definitions.json"), simplifyVector = TRUE)
+dimensions <- definitions$dimensions
 timings <- list()
 record <- function(label, fn) {
   cat(format(Sys.time(), tz = "UTC"), label, "START\n")
@@ -55,8 +53,18 @@ for (year in years) {
   saveRDS(weekly, file.path(out, paste0("weekly-", year, ".rds")))
   reg <- pbp[pbp$season_type %in% "REG" & !(pbp$two_point_attempt %in% 1), ]
   stopifnot(!anyDuplicated(reg[c("game_id", "play_id")]))
+  charting <- read.csv(file.path(out, paste0("ftn-", year, ".csv")))
+  stopifnot(all(charting$season %in% year), !anyDuplicated(charting[c("game_id", "play_id")]))
+  charting$ftn_matched <- rep(1L, nrow(charting))
+  reg$.source_order <- seq_len(nrow(reg))
+  reg <- merge(as.data.frame(reg), charting, by = c("game_id", "play_id", "season"), all.x = TRUE, sort = FALSE)
+  reg <- reg[order(reg$.source_order), ]
+  stopifnot(nrow(reg) == sum(pbp$season_type %in% "REG" & !(pbp$two_point_attempt %in% 1)))
+  reg$ftn_matched[is.na(reg$ftn_matched)] <- 0L
   write_frame(reg[c("game_id", "play_id", "season", "season_type", "down", "qtr", "shotgun", "yardline_100", "score_differential", "no_huddle",
                     "posteam_type", "posteam", "home_team", "away_team", "location",
+                    "wp", "roof", "surface", "defteam", "pass_length", "pass_location", "qb_hit",
+                    "is_play_action", "n_pass_rushers", "ftn_matched",
                     "two_point_attempt", "receiver_player_id", "complete_pass",
                     "incomplete_pass", "interception", "epa", "air_yards",
                     "receiving_yards", "pass_touchdown")], paste0("context-", year, ".csv"))
@@ -75,11 +83,33 @@ for (year in years) {
     # One assignment per play drives the exported membership and every subset.
     # Python independently derives these labels from the bound context export.
     labels <- rep(NA_character_, nrow(reg))
+    if (dimension %in% c("opponent", "opp_division")) {
+      opponent <- reg$defteam
+      for (alias in names(definitions$modern_aliases)) opponent[opponent %in% alias] <- definitions$modern_aliases[[alias]]
+      if (dimension == "opp_division") {
+        opponent <- unname(unlist(definitions$divisions)[opponent])
+      } else {
+        for (relocation_index in seq_len(nrow(definitions$relocations))) {
+          relocation <- definitions$relocations[relocation_index, ]
+          if (year <= as.integer(relocation[[3L]])) opponent[opponent %in% relocation[[1L]]] <- relocation[[2L]]
+        }
+      }
+    }
     for (bucket in dimensions[[dimension]]) {
       keep <- switch(dimension,
         home_away = reg$posteam_type %in% bucket,
         shotgun = reg$shotgun %in% (if (bucket == "shotgun") 1L else 0L),
         no_huddle = reg$no_huddle %in% (if (bucket == "no_huddle") 1L else 0L),
+        roof = reg$roof %in% names(definitions$roofs)[unlist(definitions$roofs) == bucket],
+        surface = reg$surface %in% names(definitions$surfaces)[unlist(definitions$surfaces) == bucket],
+        game_state = !is.na(reg$wp) & (if (bucket == "competitive") reg$wp >= 0.05 & reg$wp <= 0.95 else reg$wp < 0.05 | reg$wp > 0.95),
+        opponent = opponent %in% bucket,
+        opp_division = opponent %in% bucket,
+        target_depth = reg$pass_length %in% bucket,
+        target_direction = reg$pass_location %in% bucket,
+        pressure = year >= definitions$pressure_first_season & reg$qb_hit %in% (if (bucket == "pressured") 1L else 0L),
+        play_action = year >= definitions$ftn_first_season & reg$is_play_action %in% (if (bucket == "play_action") 1L else 0L),
+        blitz = year >= definitions$ftn_first_season & !is.na(reg$n_pass_rushers) & (if (bucket == "blitz") reg$n_pass_rushers >= 5 & reg$n_pass_rushers <= 11 else reg$n_pass_rushers >= 1 & reg$n_pass_rushers <= 4),
         game_script = !is.na(reg$score_differential) & switch(bucket,
           leading = reg$score_differential > 0,
           tied = reg$score_differential == 0,
@@ -142,12 +172,12 @@ write_frame(do.call(rbind, timings), "timings.csv")
 capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
 capture.output(nflfastR::calculate_stats, file = file.path(out, "installed-calculator.txt"))
 # Bind the consumed exports and captured source inputs before writing completion.
-files <- unlist(lapply(years, function(year) c(
+files <- c("producer.R", "definitions.json", "ftn-inputs.json", unlist(lapply(years, function(year) c(
   paste0(c("context-", "weekly-", "overall-", paste0(names(dimensions), "-"), "credits-"), year, ".csv"),
   unlist(lapply(c("membership", "classified", "excluded"), function(kind)
     paste0(kind, "-", names(dimensions), "-", year, ".csv"))),
-  paste0(c("pbp-", "weekly-", "credits-"), year, ".rds")
-)))
+  paste0(c("pbp-", "weekly-", "credits-"), year, ".rds"), paste0("ftn-", year, ".csv")
+))))
 hashes <- setNames(lapply(files, function(name) {
   digest::digest(file = file.path(out, name), algo = "sha256", serialize = FALSE)
 }), files)
@@ -158,7 +188,7 @@ jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 12L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    schema_version = 13L, season_type = "REG", excludes_two_point_attempts = TRUE,
     summary_level = "season", split_dimensions = names(dimensions)
   ),
   run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),

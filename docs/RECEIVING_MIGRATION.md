@@ -1,14 +1,14 @@
 # Receiving migration checklist
 
 Inventory checked October 21, 2026 against the receiving builder, frontend
-configuration, updated October 22 for tempo; the preview uses isolated export
-schema 12. This is the completion contract for the receiving migration; it does
-not authorize deployment or feature removal.
+configuration, updated October 22 for all remaining views; the preview uses
+isolated export schema 13. This is the completion contract for the receiving
+migration; it does not authorize deployment or feature removal.
 
 ## Current boundary
 
-There are **17 existing receiving split views: 7 implemented in the new preview,
-10 remaining**. The main builder and website still use the existing path.
+There are **17 existing receiving split views, all implemented in the new preview**.
+The main builder and website still use the existing path.
 Preview success does not mean the source database has been migrated.
 
 The existing category builder exposes 15 PBP views and two additional FTN
@@ -20,7 +20,7 @@ Definitions and labels below are the current code's behavior, not certification
 that every historical value is complete. The dimension inventory is finite;
 additional views are separate scope.
 
-## Implemented in the preview
+## Original seven preview views
 
 | State | Key | Grouping | Remaining release obligation |
 |---|---|---|---|
@@ -32,59 +32,70 @@ additional views are separate scope.
 | [x] | `game_script` | Pre-play leading/tied/trailing from the offense's perspective | Expand history/source checks; integrate |
 | [x] | `no_huddle` | Recorded 0 huddle / 1 no-huddle flag | Expand history/source checks; integrate |
 
-Latest tempo preview checked 2006, 2009 and 2024, preserving earlier
-Down/quarter/home-away/shotgun/field-position/game-script outputs. Earlier trials also examined 2002,
-2004, 2007 and 2008 in specific scopes. These samples are not a full-history gate.
-The schema 12 tempo run verifies all 105 bound files. Its six existing
-preview tables match the prior schema 11 preview exactly; canonical/source data
-remain unchanged. New tempo rows total 220/378/429 for 141/210/220 admitted
-players respectively. The seven observed count fields match a separate raw-credit
-replay for all identified players, and tempo context matches the saved PBP.
-Current whole-weekly and classified/excluded checks pass. These samples do not
-certify full historical coverage or replace the main builder.
-Latest backend validation: 957 passed, 2 skipped (126.17s).
+The final preview exercises 2004, 2009 and 2024, including natural historical
+pass-context gaps, early QB-hit exclusions and supported/unsupported FTN inputs.
+Earlier trials also checked 2002/2006/2007/2008 in bounded scopes. These are
+representative controls, not a full-history acceptance gate. Main build, API/UI
+integration and publication remain separate finish lines below.
 
-## Remaining ordinary play-context views: 5
+Final validation: **1,022 backend tests passed, 2 skipped** (194.49s). All 231
+bound files and all 51 season/view conservation checks verify. Independent
+raw-credit replay matches every identified player/bucket; the source/canonical
+rows remain unchanged. The original seven outputs match v12 for shared
+2009/2024 seasons. The actual candidate remains rejected by the publication gate.
+See [executed context results](../api/experiments/RECEIVING_CONTEXT_VIEWS.md).
+
+## Additional ordinary play-context views: implemented
 
 Each uses the selected play's context before calculating individual credits.
 Lateral recipients retain their credits and the same play-context label.
 
+| State | Key | Source and current grouping | Implemented rule / release condition |
+|---|---|---|---|
+| [x] | `game_state` | `wp`: 0.05–0.95 inclusive competitive, otherwise garbage | Finite 0–1 validation and missing coverage; existing thresholds preserved |
+| [x] | `roof` | `roof`: dome/closed → dome, outdoors/open → outdoors | Explicit alias map; unknown stays unclassified, not outdoors |
+| [x] | `surface` | Exact grass versus reviewed non-grass aliases | Known legacy aliases preserved; blanks/unreviewed labels excluded and reported |
+| [x] | `opponent` | `defteam`, with season-sensitive franchise abbreviations | Reuse team aliases/relocation mapping; preserve NULL sort order and frontend volume sorting; validate team IDs |
+| [x] | `opp_division` | Division lookup from opponent | Validated aliases and explicitly current-franchise division membership; not historical alignment |
+
+These views share the same official calculator, adapter and coverage gate.
+Roof uses explicit aliases. Surface preserves the legacy exact-grass grouping
+for reviewed observed labels, including hybrid-looking `dessograss` in turf;
+blank or unreviewed labels are excluded. Opponent uses season-sensitive franchise
+aliases and NULL sort order. Division deliberately preserves current-franchise
+membership, including before 2002; it is not historical division alignment.
+
+## Pass-context views: implemented with explicit definitions
+
 | State | Key | Source and current grouping | Required work |
 |---|---|---|---|
-| [ ] | `game_state` | `wp`: 0.05–0.95 inclusive competitive, otherwise garbage | Validate 0–1 range and coverage; use the existing probability field and thresholds |
-| [ ] | `roof` | `roof`: dome/closed → dome, outdoors/open → outdoors | Explicit alias map; unknown stays unclassified, not outdoors |
-| [ ] | `surface` | `surface`: currently exact grass → grass, every other nonempty label → turf | Review and document known aliases, including hybrid-looking labels; audit blanks/unrecognized values; do not silently introduce a new classification |
-| [ ] | `opponent` | `defteam`, with season-sensitive franchise abbreviations | Reuse team aliases/relocation mapping; preserve NULL sort order and frontend volume sorting; validate team IDs |
-| [ ] | `opp_division` | Division lookup from opponent | Validate aliases; explicitly document current-franchise versus historical division membership before full-history claims—the existing lookup is static, not season-aware |
+| [x] | `target_depth` | `pass_length`: short/deep | Define this as the original pass's depth, not each lateral recipient's route; preserve credited production on classified plays; report missing classification |
+| [x] | `target_direction` | `pass_location`: left/middle/right | Same original-pass context rule; keep missing direction unclassified; preserve receiving totals outside classified views |
+| [x] | `pressure` | `qb_hit`: 0 clean, 1 pressured in existing code | State QB hit versus no QB hit accurately; a no-hit play is not proof of a clean pocket. Audit early zeros and availability; do not call this full pressure charting |
 
-Recommended implementation order after the completed tempo checkpoint:
-game state, stadium/surface, then opponent/division. These are
-small work packages using the same shared flow, not five separate architectures.
-
-## Pass-context views requiring definition/coverage review: 3
-
-| State | Key | Source and current grouping | Required work |
-|---|---|---|---|
-| [ ] | `target_depth` | `pass_length`: short/deep | Define this as the original pass's depth, not each lateral recipient's route; preserve credited production on classified plays; report missing classification |
-| [ ] | `target_direction` | `pass_location`: left/middle/right | Same original-pass context rule; keep missing direction unclassified; preserve receiving totals outside classified views |
-| [ ] | `pressure` | `qb_hit`: 0 clean, 1 pressured in existing code | State QB hit versus no QB hit accurately; a no-hit play is not proof of a clean pocket. Audit early zeros and availability; do not call this full pressure charting |
-
-Keep machine keys compatible where practical. Review visible descriptions before
+Machine keys remain compatible. Review visible descriptions before
 integration so users understand original-pass attribution and the QB-hit proxy.
-Do not invent lateral route depth/direction or reconstruct unknown targets from
-receiving production. In the 2003–08 gap, usable catches/yards/TD may survive a
+Pressure is recorded QB hit versus no recorded hit, not a clean-pocket detector.
+The preview marks that entire view unavailable before 2006 rather than certifying
+early zero flags. Do not invent lateral route depth/direction or reconstruct
+unknown targets from receiving production. In the 2003–08 gap, usable catches/yards/TD may survive a
 classified view while targets and target-based rates remain unavailable.
 
-## Optional charting views: 2
+## Optional charting views: implemented
 
-FTN is a separate charting feed joined on **game ID and play ID**, with a
-configured first supported season of 2022. Presence of the table is not proof
-that a particular season or play is covered.
+FTN is a separate charting feed joined on **season, game ID and play ID**, with
+a configured first supported season of 2022. The preview downloads it through
+the existing vendor source owner and binds normalized CSVs, per-season source
+outcomes and URLs into the completion manifest. Python independently verifies
+the exported join against those exact charting bytes before calculation output
+is accepted. Duplicate keys, malformed fields, changed bytes and inconsistent
+outcomes fail. Expected outages create explicit unavailable views. Presence of
+the table is not proof that a particular season or play is covered.
 
 | State | Key | Source and current grouping | Required work |
 |---|---|---|---|
-| [ ] | `play_action` | `is_play_action`: true play-action, false no_pa | Bind charting inputs to the build; require unique join keys; distinguish false from uncharted; report classified/excluded scope |
-| [ ] | `blitz` | `n_pass_rushers`: 1–4 standard_rush, 5–11 blitz | Validate integral counts; preserve the current five-plus-rushers definition; do not substitute `n_blitzers`; unknown/out-of-range rush counts are not standard rush |
+| [x] | `play_action` | `is_play_action`: true play-action, false no_pa | Bind charting inputs to the build; require unique join keys; distinguish false from uncharted; report classified/excluded scope |
+| [x] | `blitz` | `n_pass_rushers`: 1–4 standard_rush, 5–11 blitz | Validate integral counts; preserve the current five-plus-rushers definition; do not substitute `n_blitzers`; unknown/out-of-range rush counts are not standard rush |
 
 Validate these against the charted subset, then separately account for uncharted
 receiving production. Missing optional feeds must have an explicit unavailable
@@ -157,7 +168,7 @@ per-player errors hidden by grand totals, lateral credits, negative yards and
 historical masks also have regression coverage.
 
 The R producer now emits hash-bound membership and classified/excluded references
-for every implemented preview dimension (export schema 12). The Python worker
+for every implemented preview dimension (export schema 13). The Python worker
 validates and records them before adapting rows. Format 3 reports distinguish
 whole-weekly checks from classified-reference checks and describe excluded scope.
 Partially or wholly missing context no longer forces a whole-season equality
@@ -184,10 +195,24 @@ and wholly unavailable flag cases remain covered by real-worker tests with a
 deterministic producer. This records provider completeness for these samples,
 not independent certification of every historical huddle flag.
 
-**Next checkpoint:** add `game_state` (competitive/garbage), preserving the current
-win-probability field and thresholds through the same export/validation flow.
-None of the 10 remaining views is marked implemented by
-this integration; FTN source binding and feed-specific policy remain future work.
+**Next checkpoint:** finish the receiving migration outside the preview:
+API/UI NULL and partial-scope handling, reproducible R environment, coordinated
+fresh sources/qualification, full-history/full-candidate validation, then main
+build integration. No existing view remains unimplemented. Source unavailability
+continues to mean an evidenced source/season/context gap, not unfinished code.
+
+The shared catalog is generated from pure Python definitions and consumed by R;
+the worker verifies its exact values/hash. `team_definitions.py` owns franchise
+constants without importing the database; `config.py` preserves existing exports.
+The official whole-season and exact classified/excluded calculations remain the
+statistical authority. Python validates and adapts them, not a parallel serving
+calculator. FTN and known early QB-hit limitations cannot erase usable counts in
+other views or the whole receiving reference.
+
+The preview freezes the producer script before starting R and binds its SHA256
+to the manifest. A build therefore executes one captured script even if the
+checkout is edited concurrently. Full tests cover that race as well as wrong
+definitions, corrupted charting bytes, false/unknown flags and duplicate joins.
 
 - [x] Define a per-season/dimension coverage record: supported/unavailable reason,
   source revision, classified/unclassified play scope and credited production.
@@ -238,7 +263,7 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
 
 **Receiving migration ready for a publication review:**
 
-- [ ] Complete preview coverage for the 17 views and the receiving metric contract:
+- [x] Implement preview coverage for the 17 views and the receiving metric contract:
   catches, yards, TD, supported targets/YAC/first downs/air, target-role EPA and
   positive-EPA success; category-inapplicable interceptions/CPOE remain NULL.
 - [ ] Retain known policies: targets/rates unavailable 2003–08, preview YAC before

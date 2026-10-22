@@ -8,6 +8,7 @@ from pipeline.receiving_partition_validation import validate_official_counts, va
 from pipeline.receiving_splits import adapt_receiving_splits, read_export_csv, validate_export_manifest
 from pipeline.snapshots import CandidateError
 from services.receiving_coverage import air_yards_unavailable, targets_unavailable, yac_unavailable
+from pipeline.receiving_context_rules import POLICIES
 
 
 _BASE_COUNTS = {"receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td",
@@ -106,6 +107,9 @@ def load_receiving_preview_partition(directory: Path, manifest: dict, *, context
     validate_export_manifest(manifest, season)
     frames = {}
     names = [f"context-{season}.csv", f"overall-{season}.csv"]
+    names.extend(["definitions.json", "producer.R"])
+    if dimension in ("play_action", "blitz"):
+        names.extend(["ftn-inputs.json", f"ftn-{season}.csv"])
     for kind in ("buckets", "membership", "classified", "excluded"):
         name = f"{dimension}-{season}.csv" if kind == "buckets" else f"{kind}-{dimension}-{season}.csv"
         frames[kind] = read_export_csv(directory, manifest, name, season=season)
@@ -119,6 +123,12 @@ def load_receiving_preview_partition(directory: Path, manifest: dict, *, context
         source_revisions={name: manifest["files"][name] for name in names},
         missing_reason=f"missing {dimension} play context",
     )
+    coverage["definition"] = POLICIES.get(dimension, "Existing situational split definition")
+    if dimension == "pressure" and season < 2006:
+        coverage["reason"] = "QB-hit coverage not established before 2006"
+    if dimension in ("play_action", "blitz"):
+        coverage["reason"] = ("FTN charting unsupported before 2022" if season < 2022 else
+                              "Uncharted play or missing/unsupported charting field" if coverage["plays"]["excluded"] else None)
     rows = adapt_receiving_splits(frames["buckets"], context=context, season=season,
                                   qualified_players=qualified, dimension=dimension, allow_empty=True)
     return rows, _validate_adapted(rows, frames["classified"], coverage, season, qualified)

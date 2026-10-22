@@ -85,9 +85,11 @@ _COMMON_DIMS = [core.DOWN_DIM, core.game_script_dim(1), core.QUARTER_DIM,
 
 
 def _opponent_dims() -> list[tuple[str, str, str, str]]:
-    """Opponent (defteam) and the opponent's division. DIVISIONS maps current
-    AND historical abbreviations, so relocated teams (OAK/LV, SD/LAC, …) bucket
-    correctly across 27 seasons."""
+    """Opponent and current-franchise division, including historical aliases.
+
+    This preserves current division membership for old seasons; it does not
+    reconstruct pre-2002 alignment.
+    """
     order = ["AFC East", "AFC North", "AFC South", "AFC West",
              "NFC East", "NFC North", "NFC South", "NFC West"]
     div_when = " ".join(f"WHEN '{t}' THEN '{d}'" for t, d in DIVISIONS.items())

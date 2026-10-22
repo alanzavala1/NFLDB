@@ -12,6 +12,7 @@ from pipeline.receiving_dimensions import DIMENSIONS
 from pipeline.receiving_splits import VERSIONS, read_export_csv, validate_export_manifest
 from pipeline.receiving_preview_validation import load_receiving_preview_partition, validate_whole_receiving
 from pipeline.snapshots import CandidateError
+from pipeline.receiving_inputs import verify_receiving_inputs
 
 
 def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseline: str) -> dict:
@@ -58,6 +59,7 @@ def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseli
                 weekly = read_export_csv(exports, manifest, f"weekly-{season}.csv", season=season)
                 overall = read_export_csv(exports, manifest, f"overall-{season}.csv", season=season)
                 context = read_export_csv(exports, manifest, f"context-{season}.csv", season=season)
+                ftn_outcome = verify_receiving_inputs(exports, manifest, context, season)
                 whole_check = validate_whole_receiving(overall, weekly, season, qualified)
                 whole_check["source_revisions"] = {name: manifest["files"][name] for name in
                                                   (f"overall-{season}.csv", f"weekly-{season}.csv")}
@@ -69,6 +71,10 @@ def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseli
                         dimension=dimension, qualified=qualified,
                     )
                     report["seasons"][str(season)][dimension] = partition_report
+                    if dimension in ("play_action", "blitz"):
+                        partition_report["coverage"]["charting_source"] = ftn_outcome
+                        if ftn_outcome["status"] != "loaded":
+                            partition_report["coverage"]["reason"] = f"FTN {ftn_outcome['status']}: {ftn_outcome.get('detail', '')}".rstrip(": ")
                     conn.register("preview_rows", rows)
                     conn.execute(f"INSERT INTO receiving_{dimension}_preview BY NAME SELECT * FROM preview_rows")
             conn.execute("CREATE TABLE receiving_preview_preparation (record JSON)")

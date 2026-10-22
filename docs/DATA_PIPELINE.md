@@ -374,7 +374,7 @@ before attempting publication.
 ## Official receiving split adapter
 
 The [receiving migration checklist](RECEIVING_MIGRATION.md) inventories all 17
-existing views, the seven implemented previews, remaining data requirements and
+existing views, all 17 implemented previews, remaining data requirements and
 the coverage/UI/full-build conditions for integration. Partial-context validation
 now runs in the preview producer/worker, using hash-bound membership and official
 classified/excluded references. The remaining views use this shared contract.
@@ -430,7 +430,7 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v12 manifest requires receiving EPA/air yards,
+not replace complete live rows. The v13 manifest requires receiving EPA/air yards,
 target context, per-dimension membership and classified/excluded references,
 and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
@@ -438,7 +438,7 @@ captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
 See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
 
-Down, quarter, home/away, shotgun, field position, game script and no-huddle use `adapt_receiving_splits` and
+All 17 views use `adapt_receiving_splits` and
 `load_receiving_split_export` with an explicit dimension. The supported labels
 live in `pipeline/receiving_dimensions.py`: downs 1–4, quarters 1–4 and OT,
 designated `home`/`away` sides, `shotgun`/`under_center` formation labels,
@@ -517,6 +517,11 @@ source/default serving database, verifies the copied baseline and invocation,
 checks runtime records, and loads hash-verified dimension, context, whole/weekly,
 membership and classified/excluded CSV bytes.
 
+The Python job freezes `producer.R` into the new export directory before starting
+R and records its exact SHA256. The worker verifies those bytes along with the
+shared definitions and charting inputs. Concurrent edits to the checkout cannot
+alter a running producer's source.
+
 The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
 `receiving_home_away_preview`, `receiving_shotgun_preview`,
 `receiving_field_zone_preview`, `receiving_game_script_preview`,
@@ -567,7 +572,45 @@ any `receiving_*_preview` table or preparation marker, including unknown future
 preview dimensions: a receiving preview is not an accepted publication
 candidate. `jobs.prepare`, serving, refresh/deploy workflows and snapshot
 promotion are unchanged. Full R dependency locking, coordinated source refresh,
-remaining dimensions/metrics and full-history reconciliation remain outstanding.
+API/UI integration and full-history reconciliation remain outstanding.
+
+### Complete preview context catalog
+
+The remaining views now share the same calculation and acceptance flow:
+
+- `game_state` uses recorded `wp`, with 0.05–0.95 inclusive competitive;
+  otherwise garbage time. Nonmissing probability must be finite and within 0–1.
+- `roof` maps dome/closed and outdoors/open explicitly. `surface` preserves
+  exact grass versus reviewed non-grass aliases, including hybrids, with blank
+  and unreviewed labels excluded. This is the existing grouping, not a new
+  assertion about surface materials.
+- `opponent` uses era-sensitive franchise aliases and NULL sort order;
+  `opp_division` preserves current-franchise alignment, including old seasons.
+  The latter is explicitly not historical division membership.
+- `target_depth` and `target_direction` describe the original pass. Every
+  credited recipient inherits that play context; a lateral route is not inferred.
+- `pressure` keeps existing keys but means recorded QB hit, not every pressure
+  or a clean-pocket detector. Coverage before 2006 is unavailable in the preview.
+- `play_action` and `blitz` use FTN, supported from 2022. Blitz preserves the
+  1–4 versus 5–11 pass-rusher rule, with missing/out-of-range counts excluded.
+
+`receiving_context_rules.py` owns these definitions and classification policies.
+The Python job writes a shared definitions JSON for R; the worker verifies it
+against the current builder. Pure franchise constants live in `team_definitions.py`,
+with compatible exports from `config.py`, so offline classifiers do not open
+the database simply to read team aliases.
+
+`receiving_inputs.py` uses the existing vendor-source owner to download and
+normalize FTN inputs. Each season has a bound CSV and explicit source outcome/
+URL. Expected missing/failed feeds become unavailable charting views; malformed
+schemas, duplicate keys or invalid flags fail. R left-joins on season/game/play,
+and Python independently verifies every joined value and matched/unmatched key
+against the same input bytes. False play action is distinct from an uncharted
+play. FTN metadata/revisions accompany those views' coverage records.
+
+This completes view implementation in the isolated preview. It does not replace
+the main snapshot build, source DB or live API/UI. All-history checks, coherent
+fresh qualification, R locking and the existing release gates still apply.
 
 ## Remaining serving writes
 

@@ -3,13 +3,14 @@ import numpy as np
 import pandas as pd
 
 from pipeline.source_results import SourceError
+from pipeline.receiving_context_rules import EXTRA_DIMENSIONS, extra_context_values
 
 
 DIMENSIONS = {"down": ("1", "2", "3", "4"), "quarter": ("1", "2", "3", "4", "OT"),
               "home_away": ("home", "away"), "shotgun": ("shotgun", "under_center"),
               "field_zone": ("own_territory", "opp_territory", "red_zone"),
               "game_script": ("leading", "tied", "trailing"),
-              "no_huddle": ("huddle", "no_huddle")}
+              "no_huddle": ("huddle", "no_huddle"), **EXTRA_DIMENSIONS}
 
 
 def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> pd.Series:
@@ -20,6 +21,8 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
     """
     if dimension not in DIMENSIONS:
         raise SourceError("nflfastR_receiving_splits", season, "unsupported split dimension")
+    if dimension in EXTRA_DIMENSIONS:
+        return extra_context_values(context, dimension, season)
     field = {"down": "down", "quarter": "qtr", "home_away": "posteam_type",
              "shotgun": "shotgun", "field_zone": "yardline_100",
              "game_script": "score_differential", "no_huddle": "no_huddle"}[dimension]

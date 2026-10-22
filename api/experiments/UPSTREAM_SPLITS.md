@@ -949,3 +949,8 @@ Tempo validation: 957 backend tests passed, 2 skipped (126.17s). Ignored
 context fixture rows/fields are unchanged; only the tempo flag was added. Source
 SHA256 remains `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
 source/candidate have no WAL. No active jobs remain.
+
+The next checkpoint completes all ten remaining context/charting views through
+the same preview flow. Its definitions, charting provenance, immutable-producer
+fix and validation results are recorded separately in
+[the complete context catalog](RECEIVING_CONTEXT_VIEWS.md).

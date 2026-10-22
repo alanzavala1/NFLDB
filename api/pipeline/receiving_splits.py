@@ -20,7 +20,7 @@ from services.receiving_coverage import targets_unavailable, yac_unavailable
 
 
 EXPORT_CONTRACT = {
-    "schema_version": 12,
+    "schema_version": 13,
     "season_type": "REG",
     "excludes_two_point_attempts": True,
     "summary_level": "season",
@@ -103,6 +103,8 @@ def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season
     result["category"] = "receiving"
     result["split_dim"] = dimension
     result["sort_order"] = result.split_value.map({value: index for index, value in enumerate(buckets, 1)}).astype("Int64")
+    if dimension == "opponent":
+        result["sort_order"] = pd.Series(pd.NA, index=result.index, dtype="Int64")
     for column in ("season", *_COUNTS.values()):
         result[column] = result[column].astype("Int64")
     if targets_unavailable([season]):
@@ -156,6 +158,12 @@ def validate_export_manifest(manifest: dict, season: int) -> None:
 
 def read_export_csv(directory: Path, manifest: dict, name: str, *, season: int) -> pd.DataFrame:
     """Parse only the exact CSV bytes whose SHA256 matches the completion record."""
+    return pd.read_csv(io.BytesIO(read_export_bytes(directory, manifest, name, season=season)),
+                       dtype={"player_id": "string", "split_value": "string"})
+
+
+def read_export_bytes(directory: Path, manifest: dict, name: str, *, season: int) -> bytes:
+    """Verify shared JSON inputs and CSVs with the same immutable-byte boundary."""
     if Path(name).name != name:
         raise _error(season, "export name must be a plain filename")
     hashes = manifest.get("files")
@@ -165,4 +173,4 @@ def read_export_csv(directory: Path, manifest: dict, name: str, *, season: int) 
     data = (directory / name).read_bytes()
     if hashlib.sha256(data).hexdigest() != expected:
         raise _error(season, f"SHA256 mismatch for {name}")
-    return pd.read_csv(io.BytesIO(data), dtype={"player_id": "string", "split_value": "string"})
+    return data
