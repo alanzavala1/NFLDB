@@ -373,6 +373,11 @@ before attempting publication.
 
 ## Official receiving split adapter
 
+The [receiving migration checklist](RECEIVING_MIGRATION.md) inventories all 17
+existing views, the five implemented previews, remaining data requirements and
+the coverage/UI/full-build conditions for integration. Its next checkpoint is
+coverage-aware validation for partially classified views.
+
 `pipeline/receiving_splits.py` is the offline integration boundary for official
 nflfastR receiving counts. It reads completed, versioned per-dimension exports from
 `experiments/upstream_receiving_splits.R` and returns the existing `player_splits`
