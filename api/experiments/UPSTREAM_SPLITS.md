@@ -574,3 +574,74 @@ Assistant model/streaming work remains deferred.
 Validation: 860 backend tests passed, 2 skipped (84.83s). Source fingerprint and
 absence of source/candidate WALs were rechecked after the suite. No active jobs
 remain; private simplification notes remain excluded from Git.
+
+## Field-position split extension (October 21)
+
+Version 9 adds `field_zone` to the shared producer/adapter/worker loop, using
+the play's starting `yardline_100` (distance to the opponent's goal line):
+
+- `own_territory`: greater than 50; sort order 1.
+- `opp_territory`: greater than 20 through 50; sort order 2.
+- `red_zone`: 20 or less; sort order 3.
+
+This matches `splits_core.FIELD_ZONE_DIM`, including exactly midfield and the
+opponent's 20-yard line. The zones are disjoint and describe the pre-play spot,
+not where a catch or lateral ends. The accepted domain is finite 0–100; valid
+fractional spots remain precise. Unknown stays unknown, while invalid/out-of-range
+spots fail. Lateral recipients inherit the same play context before official
+credit calculation. The historical masks, target-role rates, independent air
+coverage, qualification and REG/nonconversion scope are unchanged.
+
+The worker automatically creates `receiving_field_zone_preview` in the same
+transaction and records `seasons[year][field_zone]`. Every admitted player must
+survive and the zones must match weekly counts by player. Missing, changed or
+incorrect field-zone exports reject the candidate. The generic preview gate
+already rejects this table independently of its preparation marker.
+
+Actual ignored output: `data/receiving-preview-field-zone-20261021.duckdb`,
+exports `data/upstream-r-trial/preview-export-v9/`:
+
+| Season | Eligible players | Own rows | Opponent rows | Red-zone rows | Available air-yard rows | Available EPA/tgt rows |
+|---|---:|---:|---:|---:|---:|---:|
+| 2006 | 141 | 141 | 141 | 137 | 0 | 0 |
+| 2009 | 210 | 210 | 210 | 210 | 621 of 630 | 630 |
+| 2024 | 220 | 220 | 220 | 219 | 659 | 659 |
+
+Absent zones do not get invented zero rows. All eligible players remain in at
+least one zone. Independent raw-credit replay matches every identified official
+player/zone for targets, catches, yards, TD, YAC, receiving first downs and air,
+including below-admission players. Zone sums match whole-season and weekly
+counts. Available target metrics match fresh PBP, and weighted displayed rates
+match whole-target rates within rounding precision. Exported field positions
+match the bound full PBP inputs. No source target play lacks field position in
+the three samples; this does not certify all historical seasons.
+
+Real frozen fixtures cover Gonzalez 2006/2009 and Gibbs/Jefferson 2024. Reviewed
+season totals survive each partition, with historical targets/rates/air NULL
+in 2006. Gonzalez 2009 retains all counts/EPA while one incomplete air-yard
+zone remains NULL. Synthetic cases check exact 20/50 boundaries, fractional
+and endpoint spots, nullable unknowns, bad ranges, absent zones, unrelated
+missing context and a 75-yard lateral TD whose entire production stays in
+the play's starting own-territory bucket. SQL round trips exercise the actual
+`player_splits` schema.
+
+All 36 bound file hashes verify. Canonical `player_splits` and all four previous
+Down/quarter/home-away/shotgun previews are unchanged by bidirectional EXCEPT
+ALL. Source SHA256 remains
+`b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`; source and
+candidate have no WAL. Evidence is ignored
+`data/upstream-r-trial/field-zone-preview-verification.json`,
+`verify_field_zone_inputs.R`, `verify_field_zone_preview.py`,
+`field-zone-verification.log` and `preview-job-v9.log`.
+
+Scope confirmed by the user: finish the field-position checkpoint only. The
+remaining receiving contexts, complete R locking/build, coordinated fresh
+source/qualification and full-history/full-candidate validation are later
+work. No source replacement, main ingestion/serving integration, accepted
+publication candidate, push or deployment. Assistant model/streaming remains
+deferred. The results establish scoped provider consistency, not independent
+NFL correctness or full historical certification.
+
+Validation: 875 backend tests passed, 2 skipped (103.24s). Source fingerprint
+and absence of source/candidate WALs were rechecked after the suite. No active
+jobs remain. This completes the user-selected field-position checkpoint.

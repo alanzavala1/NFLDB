@@ -1,0 +1,19 @@
+{
+  "source": "Official nflfastR 6.0.0 / nflreadr 1.5.1 calculate_stats, October 21, 2026 v9 preview",
+  "scope": "REG nonconversion pre-play field position; <=20 red zone, <=50 opponent territory, >50 own territory",
+  "columns": ["player_id", "season", "season_type", "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_yards_after_catch", "receiving_first_downs", "receiving_epa", "receiving_air_yards", "split_value"],
+  "rows": [
+    ["00-0006101", 2006, "REG", 0, 43, 556, 0, 191, 30, 46.9250565716065, 0, "own_territory"],
+    ["00-0006101", 2006, "REG", 0, 22, 295, 2, 107, 19, 31.8675267407089, 0, "opp_territory"],
+    ["00-0006101", 2006, "REG", 0, 8, 49, 3, 21, 5, 10.5144451979722, 0, "red_zone"],
+    ["00-0006101", 2009, "REG", 64, 41, 389, 0, 101, 19, 5.64345793664688, 526, "own_territory"],
+    ["00-0006101", 2009, "REG", 46, 30, 347, 1, 100, 23, 24.76176426511, 380, "opp_territory"],
+    ["00-0006101", 2009, "REG", 25, 12, 131, 5, 39, 12, 10.02583019908, 176, "red_zone"],
+    ["00-0036322", 2024, "REG", 79, 58, 948, 2, 319, 32, 43.4505541489343, 936, "own_territory"],
+    ["00-0039139", 2024, "REG", 33, 30, 320, 0, 359, 15, 15.0100807048148, -47, "own_territory"],
+    ["00-0036322", 2024, "REG", 49, 30, 467, 2, 141, 20, 18.6279587959093, 577, "opp_territory"],
+    ["00-0039139", 2024, "REG", 17, 12, 145, 1, 169, 6, 2.68426528878355, 38, "opp_territory"],
+    ["00-0036322", 2024, "REG", 26, 15, 118, 6, 27, 10, 2.11459865826757, 169, "red_zone"],
+    ["00-0039139", 2024, "REG", 13, 10, 52, 3, 65, 3, -2.72661520771452, -2, "red_zone"]
+  ]
+}

@@ -6,7 +6,8 @@ from pipeline.source_results import SourceError
 
 
 DIMENSIONS = {"down": ("1", "2", "3", "4"), "quarter": ("1", "2", "3", "4", "OT"),
-              "home_away": ("home", "away"), "shotgun": ("shotgun", "under_center")}
+              "home_away": ("home", "away"), "shotgun": ("shotgun", "under_center"),
+              "field_zone": ("own_territory", "opp_territory", "red_zone")}
 
 
 def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> pd.Series:
@@ -17,7 +18,8 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
     """
     if dimension not in DIMENSIONS:
         raise SourceError("nflfastR_receiving_splits", season, "unsupported split dimension")
-    field = {"down": "down", "quarter": "qtr", "home_away": "posteam_type", "shotgun": "shotgun"}[dimension]
+    field = {"down": "down", "quarter": "qtr", "home_away": "posteam_type",
+             "shotgun": "shotgun", "field_zone": "yardline_100"}[dimension]
     if field not in context:
         raise SourceError("nflfastR_receiving_splits", season, f"missing context {field}")
     if dimension == "home_away":
@@ -32,6 +34,15 @@ def context_split_values(context: pd.DataFrame, dimension: str, season: int) -> 
         observed = values.dropna().to_numpy(dtype=float)
     except (TypeError, ValueError) as error:
         raise SourceError("nflfastR_receiving_splits", season, f"invalid context {field}") from error
+    if dimension == "field_zone":
+        if not np.isfinite(observed).all() or (observed < 0).any() or (observed > 100).any():
+            raise SourceError("nflfastR_receiving_splits", season, "invalid context yardline_100")
+        # Distance to the opponent's goal line, using the pre-play ball spot.
+        result = pd.Series(pd.NA, index=values.index, dtype="string")
+        result.loc[values.notna()] = "own_territory"
+        result.loc[values.le(50).fillna(False)] = "opp_territory"
+        result.loc[values.le(20).fillna(False)] = "red_zone"
+        return result
     if dimension == "shotgun":
         if not values.dropna().isin([0, 1]).all():
             raise SourceError("nflfastR_receiving_splits", season, "invalid context shotgun")

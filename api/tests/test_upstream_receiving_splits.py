@@ -148,8 +148,9 @@ def test_real_lateral_only_bucket_preserves_yards_without_inventing_target_rates
     ("split_dimensions", ["down"]), ("split_dimensions", ["quarter", "down"]),
     ("split_dimensions", ["down", "quarter"]),
     ("split_dimensions", ["down", "quarter", "home_away"]),
+    ("split_dimensions", ["down", "quarter", "home_away", "shotgun"]),
     ("excludes_two_point_attempts", False), ("excludes_two_point_attempts", 1),
-    ("schema_version", 7), ("schema_version", True),
+    ("schema_version", 8), ("schema_version", True),
 ])
 def test_scope_drift_fails(export, field, value):
     directory, manifest = export

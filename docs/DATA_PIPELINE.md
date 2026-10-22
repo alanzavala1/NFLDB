@@ -424,14 +424,14 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v8 manifest requires receiving EPA/air yards
+not replace complete live rows. The v9 manifest requires receiving EPA/air yards
 and target context, and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
 captured manifest in the preview worker. This detects changed exports; it does
 not authenticate the publisher or independently establish source correctness.
 See the [actual R trial and adapter results](../api/experiments/UPSTREAM_SPLITS.md).
 
-Down, quarter, home/away and shotgun use `adapt_receiving_splits` and
+Down, quarter, home/away, shotgun and field position use `adapt_receiving_splits` and
 `load_receiving_split_export` with an explicit dimension. The supported labels
 live in `pipeline/receiving_dimensions.py`: downs 1–4, quarters 1–4 and OT,
 designated `home`/`away` sides, and `shotgun`/`under_center` formation labels.
@@ -457,6 +457,15 @@ new formation classifier. The same target/air completeness rules and historical
 masks apply, without requiring another dimension's context fields. Export
 filenames and the manifest's dimension list now derive from one R catalog.
 
+Field position uses pre-play `yardline_100`, the distance to the opponent's goal
+line. More than 50 is own territory, more than 20 through 50 is opponent territory,
+and 20 or less is red zone. Labels/order match `splits_core.FIELD_ZONE_DIM`.
+Midfield therefore belongs to opponent territory and the opponent's 20 to red
+zone. Every valid spot has exactly one label; the catch/end location does not
+change it. Missing spots remain unknown, finite fractional spots are accepted,
+and nonnumeric/nonfinite values or distances outside 0–100 fail. All credited
+recipients, including lateral recipients, share the play's starting field zone.
+
 ## Receiving candidate preview
 
 From `api/`, `python -m jobs.receiving_preview` provides one explicit path through
@@ -480,7 +489,8 @@ source/default serving database, verifies the copied baseline and invocation,
 checks runtime records, and loads hash-verified dimension, context and weekly CSV bytes.
 
 The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
-`receiving_home_away_preview`, `receiving_shotgun_preview` and one JSON record in
+`receiving_home_away_preview`, `receiving_shotgun_preview`,
+`receiving_field_zone_preview` and one JSON record in
 `receiving_preview_preparation`. Format version 2 records
 checks under `seasons[year][dimension]`, binding the copied source hash, export
 manifest hash, invocation ID and observed R/package versions. Every existing
