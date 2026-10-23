@@ -128,6 +128,18 @@ def _category_dims(category: str, has_ftn: bool = False) -> list[tuple[str, str,
 
 # ── Per-category SQL ──────────────────────────────────────────────────────────
 
+def _base_source(category: str, has_ftn: bool = False) -> str:
+    """One source predicate for both complete split rows and admission-only SQL."""
+    ftn_join = ("LEFT JOIN ftn_charting f ON plays.game_id = f.game_id AND plays.play_id = f.play_id"
+                if has_ftn else "")
+    condition = {
+        "passing": "(pass_attempt = 1 OR COALESCE(sack, 0) = 1) AND passer_player_id IS NOT NULL",
+        "rushing": "rush_attempt = 1 AND rusher_player_id IS NOT NULL",
+        "receiving": f"{core.PASS_ATTEMPT} AND receiver_player_id IS NOT NULL",
+    }[category]
+    return f"FROM plays {ftn_join} WHERE {condition}"
+
+
 def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) -> tuple[str, str]:
     """Return (base_select, metric_select) for a category. base_select feeds
     the `base` CTE; metric_select is the aggregation projection in each block.
@@ -135,8 +147,6 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
     # FTN charting (play-action, pass-rush count, box count) lives in its own
     # table joined by game_id + play_id; null for pre-2022 / unmatched plays.
     ftn_cols = "is_play_action, n_pass_rushers, n_defense_box," if has_ftn else ""
-    ftn_join = ("LEFT JOIN ftn_charting f ON plays.game_id = f.game_id AND plays.play_id = f.play_id"
-                if has_ftn else "")
     if category == "passing":
         # Keep the dropback base for official counting stats (older valid
         # attempts can lack play_type). Filter only the EPA numerator to the
@@ -158,8 +168,7 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
             complete_pass, incomplete_pass, interception, sack, play_type,
             passing_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, qb_epa, cpoe, {success_col}
-        FROM plays {ftn_join}
-        WHERE (pass_attempt = 1 OR COALESCE(sack, 0) = 1) AND passer_player_id IS NOT NULL"""
+        {_base_source(category, has_ftn)}"""
         metrics = f"""
             COUNT(*) FILTER (WHERE {core.PASS_ATTEMPT})        AS att,
             SUM(complete_pass)                AS cmp,
@@ -180,8 +189,7 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
             yardline_100, posteam_type, first_down,
             roof, surface, no_huddle, wp, {ftn_cols}
             rushing_yards, rush_touchdown, epa, {success_col}
-        FROM plays {ftn_join}
-        WHERE rush_attempt = 1 AND rusher_player_id IS NOT NULL"""
+        {_base_source(category, has_ftn)}"""
         metrics = """
             COUNT(*)                       AS att,
             CAST(NULL AS BIGINT)           AS cmp,
@@ -202,8 +210,7 @@ def _base_and_metrics(category: str, success_col: str, has_ftn: bool = False) ->
             qb_hit, roof, surface, no_huddle, wp, {ftn_cols}
             complete_pass, receiving_yards, pass_touchdown,
             air_yards, yards_after_catch, epa, {success_col}
-        FROM plays {ftn_join}
-        WHERE {core.PASS_ATTEMPT} AND receiver_player_id IS NOT NULL"""
+        {_base_source(category, has_ftn)}"""
         metrics = """
             COUNT(*)                            AS att,
             SUM(complete_pass)                  AS cmp,
@@ -229,9 +236,19 @@ def _ftn_available(conn) -> bool:
         return False
 
 
-def qualification_ctes(category: str, season: int, available: set[str], has_ftn: bool = False) -> str:
-    """Shared source filtering and admission for materialization and validation."""
-    base_select, _ = _base_and_metrics(category, core.success_col(available), has_ftn)
+def qualification_ctes(category: str, season: int, available: set[str], has_ftn: bool = False,
+                       *, minimal: bool = False) -> str:
+    """Shared admission; minimal mode needs only identity and eligibility fields.
+
+    The normal base retains metric/context columns for split materialization.
+    Both modes use the same source predicate, season/scope and volume threshold.
+    """
+    if minimal:
+        identity = {"passing": "passer_player_id", "rushing": "rusher_player_id",
+                    "receiving": "receiver_player_id"}[category]
+        base_select = f"{identity} AS player_id {_base_source(category, has_ftn)}"
+    else:
+        base_select, _ = _base_and_metrics(category, core.success_col(available), has_ftn)
     return f"""
     WITH base AS (
         SELECT {base_select}

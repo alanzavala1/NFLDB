@@ -538,10 +538,12 @@ The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
 `receiving_home_away_preview`, `receiving_shotgun_preview`,
 `receiving_field_zone_preview`, `receiving_game_script_preview`,
 `receiving_no_huddle_preview` and one JSON record in
-`receiving_preview_preparation`. Format version 3 records whole-season versus
+`receiving_preview_preparation`. Format version 4 records whole-season versus
 weekly count checks under `whole_references[year]` and dimension checks under
 `seasons[year][dimension]`, binding the copied source hash, export manifest hash,
-invocation ID and observed R/package versions.
+invocation ID and observed R/package versions. `qualifications[year]` records
+admitted IDs and their qualifying-play counts, the bound context revision and
+the canonical eligibility SQL fingerprint.
 
 `pipeline/receiving_preview_validation.py` verifies the official whole-season
 counts against weekly data for qualified players, including supported targets,
@@ -576,14 +578,37 @@ available air sums match the classified reference. Agreement between raw air sum
 does not establish per-target completeness or unmask a missing metric. Weekly EPA
 includes conversions; the preview's EPA does not, so these numerators cannot be
 compared directly. Existing target-role rate and independent air gates remain.
-Qualification still uses the copied stored PBP;
-this preview is not a coordinated refresh of every source or dimension.
+Qualification now uses the same bound fresh PBP context as the official
+calculations. `receiving_qualification.py` validates scope, unique game/play keys,
+attempt flags and receiver IDs, then registers the context as `plays` in an
+isolated in-memory DuckDB connection. It calls the existing
+`splits_builder.qualification_ctes(..., minimal=True)`: at least 25 original-
+receiver attempt plays in the REG season, excluding two-point attempts. Minimal
+and normal modes share the source predicate, season filters and volume threshold;
+the minimal mode avoids requiring metric/context columns unrelated to admission.
+No official-target totals or optional charting fields decide eligibility. Copied
+database `plays` cannot influence admission and remain unchanged. This aligns
+receiving preview inputs; other candidate analytics still use the copied database
+until the main fresh-source build is integrated.
+
+October 23 verification rebuilt 2004 and 2024 with the locked R library and
+fresh inputs. Independent R counts from captured full PBP snapshots matched
+every admitted ID and qualifying-play count: 152 and 220 players respectively,
+with no additions/removals versus the copied baseline in these samples. Every
+one of the 34 season/view outputs matched the prior audited preview exactly;
+all 157 bound input/export files verified. Source/canonical split rows stayed
+unchanged and the full gate still rejected the preview. Boundary, duplicate,
+historical/optional-context and stale/absent-copied-play tests passed; the full
+backend suite passed 1,052 tests with 2 skips. Ignored evidence is under
+`api/data/upstream-r-trial/`: `fresh-qualification-build.log`,
+`audit_fresh_qualification.R`, `verify_fresh_qualification.py`,
+`fresh-qualification-verification.json` and `fresh-qualification-backend.xml`.
 
 Original `player_splits` rows remain intact. The main snapshot validator rejects
 any `receiving_*_preview` table or preparation marker, including unknown future
 preview dimensions: a receiving preview is not an accepted publication
 candidate. `jobs.prepare`, serving, refresh/deploy workflows and snapshot
-promotion are unchanged. Coordinated source refresh, API/UI integration,
+promotion are unchanged. Main-build coordinated source refresh, API/UI integration,
 full-history reconciliation and verification on other build platforms remain
 outstanding. The dependency lock does not freeze changing NFL feeds.
 
@@ -622,8 +647,9 @@ against the same input bytes. False play action is distinct from an uncharted
 play. FTN metadata/revisions accompany those views' coverage records.
 
 This completes view implementation in the isolated preview. It does not replace
-the main snapshot build, source DB or live API/UI. All-history checks, coherent
-fresh qualification, R locking and the existing release gates still apply.
+the main snapshot build, source DB or live API/UI. All-history checks, integration
+of the fresh receiving path and the existing release gates still apply. The R
+dependency lock and same-input receiving qualification are implemented above.
 
 ## Remaining serving writes
 

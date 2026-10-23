@@ -115,6 +115,8 @@ def fake_export(monkeypatch):
                 context.loc[selected, "ftn_matched"] = 0
             if year >= 2022 and fault == "rush_outlier":
                 context.loc[24:, "n_pass_rushers"] = 45
+            if fault == "fresh_below_qualification":
+                context.loc[24:, "receiver_player_id"] = "other_receiver"
             ftn = context[["season", "game_id", "play_id", "is_play_action", "n_pass_rushers"]].copy() if year >= 2022 else pd.DataFrame(columns=["season", "game_id", "play_id", "is_play_action", "n_pass_rushers"])
             if year >= 2022 and fault in ("charting_gap", "charting_unavailable"):
                 ftn = ftn.loc[context.ftn_matched.eq(1)]
@@ -134,6 +136,8 @@ def fake_export(monkeypatch):
                 receiving_first_downs=1, receiving_epa=0.5,
                 receiving_air_yards=0 if year in range(2003, 2009) else 2,
             ) for index in range(28)])
+            if fault == "fresh_below_qualification":
+                credits.loc[24:, "player_id"] = "other_receiver"
             def summarize(keep):
                 return credits.loc[keep].groupby(["player_id", "season", "season_type"], as_index=False).sum()
             weekly = summarize(credits.index >= 0).assign(week=1)
@@ -259,7 +263,11 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
     assert report["seasons"]["2004"]["down"]["targets"] == "unavailable"
     assert report["seasons"]["2004"]["down"]["yac"] == "unavailable"
     assert report["seasons"]["2024"]["down"]["yac"] == "matched_classified"
-    assert report["format_version"] == 3
+    assert report["format_version"] == 4
+    assert report["qualification"] == "existing rules applied to bound fresh PBP context"
+    assert report["qualifications"]["2024"]["qualifying_plays"] == {"receiver": 28}
+    assert report["qualifications"]["2024"]["source_revisions"] == {
+        "context-2024.csv": preview.file_sha256(tmp_path / "exports/context-2024.csv")}
     assert report["whole_references"]["2024"]["production_matches_weekly"]
     assert report["seasons"]["2024"]["down"]["coverage"]["status"] == "complete"
     assert report["seasons"]["2024"]["down"]["coverage"]["plays"] == {
@@ -303,6 +311,7 @@ def test_real_worker_adds_preview_only_and_records_exact_source_and_manifest(sou
     'duplicate_weekly',
     'missing_player',
     'missing_scope',
+    'fresh_below_qualification',
     'changed_bytes',
     'stale_run',
     'wrong_versions',
@@ -359,6 +368,27 @@ def test_R_failure_removes_candidate_keeps_failure_log(source, tmp_path, fake_ex
     assert preview.file_sha256(source) == before
     assert not (tmp_path / "preview.duckdb").exists()
     assert (tmp_path / "exports/R-job.log").read_text() == "fixture R failure"
+
+
+@pytest.mark.parametrize("stored_plays", ["different_players", "below_threshold", "absent"])
+def test_qualification_uses_fresh_context_even_if_copied_plays_disagree_or_are_absent(
+    source, tmp_path, fake_export, stored_plays,
+):
+    with duckdb.connect(str(source)) as conn:
+        if stored_plays == "different_players":
+            conn.execute("UPDATE plays SET receiver_player_id='stored_only'")
+        elif stored_plays == "below_threshold":
+            conn.execute("DELETE FROM plays WHERE down=1")
+        else:
+            conn.execute("DROP TABLE plays")
+    before = preview.file_sha256(source)
+    report = run(source, tmp_path)
+    assert preview.file_sha256(source) == before
+    assert report["qualifications"]["2004"]["qualifying_plays"] == {"receiver": 28}
+    assert report["qualifications"]["2024"]["qualifying_plays"] == {"receiver": 28}
+    with duckdb.connect(str(tmp_path / "preview.duckdb"), read_only=True) as conn:
+        assert conn.execute("SELECT DISTINCT player_id FROM receiving_down_preview").fetchall() == [("receiver",)]
+        assert conn.execute("SELECT yards FROM player_splits WHERE player_id='receiver'").fetchone() == (60,)
 
 
 @pytest.mark.parametrize("name", ["preview.duckdb", "preview.duckdb.wal", "exports"])

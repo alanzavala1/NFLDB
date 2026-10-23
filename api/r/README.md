@@ -73,8 +73,10 @@ claim of permanent artifact archival or bit-identical cross-platform binaries.
 
 NFL feeds can change independently of packages. The preview retains hashes and
 copies of consumed inputs, but this setup does not turn it into a fully frozen
-offline replay, refresh qualification with those inputs, validate every season,
-or make the preview publishable. Those remain receiving migration work.
+offline replay, validate every season, or make the preview publishable. The
+preview now qualifies players from the same bound fresh play context used in the
+calculation, preserving the existing rule. The copied database's other analytics
+still need the main fresh-source build integration.
 
 ## Deliberate dependency updates
 

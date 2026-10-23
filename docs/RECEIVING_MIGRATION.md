@@ -1,8 +1,8 @@
 # Receiving migration checklist
 
 Inventory checked October 21, 2026 against the receiving builder, frontend
-configuration, updated October 23 for the locked R environment; the preview uses
-isolated export schema 14. This is the completion contract for the receiving
+configuration, updated October 23 for locked R and fresh-input qualification;
+the preview uses isolated export schema 14. This is the completion contract for the receiving
 migration; it does not authorize deployment or feature removal.
 
 ## Current boundary
@@ -196,7 +196,7 @@ deterministic producer. This records provider completeness for these samples,
 not independent certification of every historical huddle flag.
 
 **Next checkpoint:** finish the receiving migration outside the preview:
-coordinate fresh sources and qualification, validate every played season, then
+validate every played season using the aligned receiving inputs, then
 integrate the main build with API/UI NULL and partial-scope handling and pass
 the full candidate gates. No existing view remains unimplemented. Source unavailability
 continues to mean an evidenced source/season/context gap, not unfinished code.
@@ -277,9 +277,13 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
 - [ ] Verify the chosen production build platform and its system dependencies.
   Linux/macOS restoration has not been executed; this R package lock does not
   pin operating system libraries or guarantee permanent artifact availability.
-- [ ] Refresh all required sources and qualification together, preserving the
-  existing admission policy. Replace the preview's copied-old-PBP qualification
-  with a coherent fresh build; never use sparse raw target credits as eligibility.
+- [x] Replace the preview's copied-old-PBP qualification with the same bound
+  fresh play context used by the calculator, preserving the existing admission
+  policy. Record admitted IDs/counts and context/SQL fingerprints. Sparse official
+  target credits and optional split context do not determine eligibility.
+- [ ] Integrate required-source refresh and qualification in the main candidate
+  build. Receiving preview alignment does not refresh the copied database's other
+  categories, analytics or source metadata.
 - [ ] Validate every played season in the candidate, not only the pilot samples.
   The local DB currently has plays labeled 1999–2026; resolve the newest played
   season's required reference coverage rather than omitting it from checks.

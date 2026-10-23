@@ -13,6 +13,7 @@ from pipeline.receiving_splits import VERSIONS, read_export_csv, validate_export
 from pipeline.receiving_preview_validation import load_receiving_preview_partition, validate_whole_receiving
 from pipeline.snapshots import CandidateError
 from pipeline.receiving_inputs import verify_receiving_inputs
+from pipeline.receiving_qualification import qualify_receiving_context
 
 
 def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseline: str) -> dict:
@@ -34,32 +35,30 @@ def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseli
         raise CandidateError("R completion marker has no runtime package record")
     if any(runtime["packages"].get(name) != version for name, version in VERSIONS.items()):
         raise CandidateError("Runtime package versions differ from calculator contract")
-    # Legacy config may query schedules during import. Preview qualification uses
-    # our explicit connection, so disable that unrelated lookup in this worker.
+    # Legacy config may query schedules during import. Qualification uses fresh
+    # bound plays in memory, so disable that unrelated lookup in this worker.
     os.environ["NFL_TEST_MODE"] = "1"
-    import splits_builder
-
-    report = {"format_version": 3, "status": "preview_only", "run_id": run_id,
+    report = {"format_version": 4, "status": "preview_only", "run_id": run_id,
               "source": str(source.resolve()), "source_sha256": baseline,
               "export_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
               "export_directory": str(exports.resolve()), "runtime": runtime,
-              "qualification": "existing stored PBP rules", "whole_references": {}, "seasons": {}}
+              "qualification": "existing rules applied to bound fresh PBP context",
+              "qualifications": {}, "whole_references": {}, "seasons": {}}
     with duckdb.connect(str(candidate)) as conn:
-        available = {row[0] for row in conn.execute("DESCRIBE plays").fetchall()}
         conn.execute("BEGIN")
         try:
             for dimension in DIMENSIONS:
                 conn.execute(f"CREATE TABLE receiving_{dimension}_preview AS SELECT * FROM player_splits WHERE FALSE")
             for season in seasons:
-                sql = splits_builder.qualification_ctes("receiving", season, available) + " SELECT player_id FROM qualified"
-                qualified = conn.execute(sql).df().player_id.tolist()
-                if not qualified:
-                    raise CandidateError(f"receiving[{season}]: no qualified players for preview")
                 validate_export_manifest(manifest, season)
                 weekly = read_export_csv(exports, manifest, f"weekly-{season}.csv", season=season)
                 overall = read_export_csv(exports, manifest, f"overall-{season}.csv", season=season)
                 context = read_export_csv(exports, manifest, f"context-{season}.csv", season=season)
                 ftn_outcome = verify_receiving_inputs(exports, manifest, context, season)
+                qualified, qualification = qualify_receiving_context(context, season, manifest["files"][f"context-{season}.csv"])
+                if not qualified:
+                    raise CandidateError(f"receiving[{season}]: no qualified players for preview")
+                report["qualifications"][str(season)] = qualification
                 whole_check = validate_whole_receiving(overall, weekly, season, qualified)
                 whole_check["source_revisions"] = {name: manifest["files"][name] for name in
                                                   (f"overall-{season}.csv", f"weekly-{season}.csv")}
