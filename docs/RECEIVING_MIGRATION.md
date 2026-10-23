@@ -1,8 +1,8 @@
 # Receiving migration checklist
 
 Inventory checked October 21, 2026 against the receiving builder, frontend
-configuration, updated October 22 for all remaining views; the preview uses
-isolated export schema 13. This is the completion contract for the receiving
+configuration, updated October 23 for the locked R environment; the preview uses
+isolated export schema 14. This is the completion contract for the receiving
 migration; it does not authorize deployment or feature removal.
 
 ## Current boundary
@@ -168,7 +168,7 @@ per-player errors hidden by grand totals, lateral credits, negative yards and
 historical masks also have regression coverage.
 
 The R producer now emits hash-bound membership and classified/excluded references
-for every implemented preview dimension (export schema 13). The Python worker
+for every implemented preview dimension (export schema 14). The Python worker
 validates and records them before adapting rows. Format 3 reports distinguish
 whole-weekly checks from classified-reference checks and describe excluded scope.
 Partially or wholly missing context no longer forces a whole-season equality
@@ -196,9 +196,9 @@ deterministic producer. This records provider completeness for these samples,
 not independent certification of every historical huddle flag.
 
 **Next checkpoint:** finish the receiving migration outside the preview:
-API/UI NULL and partial-scope handling, reproducible R environment, coordinated
-fresh sources/qualification, full-history/full-candidate validation, then main
-build integration. No existing view remains unimplemented. Source unavailability
+coordinate fresh sources and qualification, validate every played season, then
+integrate the main build with API/UI NULL and partial-scope handling and pass
+the full candidate gates. No existing view remains unimplemented. Source unavailability
 continues to mean an evidenced source/season/context gap, not unfinished code.
 
 The shared catalog is generated from pure Python definitions and consumed by R;
@@ -269,8 +269,14 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
 - [ ] Retain known policies: targets/rates unavailable 2003–08, preview YAC before
   2006 unavailable, and air unavailable when either air or target coverage fails.
   Do not silently certify all other seasons solely from these date boundaries.
-- [ ] Lock the complete R environment and provide a portable offline build path;
-  R remains in data preparation, with the serving backend staying Python.
+- [x] Lock the complete R dependency graph and provide repeatable setup for the
+  existing offline preview build. `api/r/renv.lock` pins R 4.6.1 and 49 packages;
+  `restore.R` restores them and the build checks the frozen lock before downloads.
+  A fresh Windows x64 library with cache reuse disabled was exercised with the
+  real calculator. R remains in preparation; serving stays Python.
+- [ ] Verify the chosen production build platform and its system dependencies.
+  Linux/macOS restoration has not been executed; this R package lock does not
+  pin operating system libraries or guarantee permanent artifact availability.
 - [ ] Refresh all required sources and qualification together, preserving the
   existing admission policy. Replace the preview's copied-old-PBP qualification
   with a coherent fresh build; never use sparse raw target credits as eligibility.

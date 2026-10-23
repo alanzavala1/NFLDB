@@ -107,7 +107,7 @@ def load_receiving_preview_partition(directory: Path, manifest: dict, *, context
     validate_export_manifest(manifest, season)
     frames = {}
     names = [f"context-{season}.csv", f"overall-{season}.csv"]
-    names.extend(["definitions.json", "producer.R"])
+    names.extend(["definitions.json", "producer.R", "environment.R", "renv.lock"])
     if dimension in ("play_action", "blitz"):
         names.extend(["ftn-inputs.json", f"ftn-{season}.csv"])
     for kind in ("buckets", "membership", "classified", "excluded"):

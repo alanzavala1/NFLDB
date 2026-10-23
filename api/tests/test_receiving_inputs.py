@@ -1,5 +1,6 @@
 """Optional FTN inputs stay explicit, validated, and bound to consumed bytes."""
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -15,13 +16,22 @@ def fixture():
                               is_play_action=False, n_pass_rushers=4)])
 
 
+def bind_environment(directory):
+    for name in ("environment.R", "renv.lock"):
+        (directory / name).write_bytes((Path(__file__).resolve().parents[1] / "r" / name).read_bytes())
+    lock = json.loads((directory / "renv.lock").read_text())
+    return {"R": lock["R"]["Version"],
+            "locked_packages": {name: record["Version"] for name, record in lock["Packages"].items()}}
+
+
 def prepare(tmp_path, monkeypatch, frame=None, outcome=None):
     feed = VendorFeed("ftn_charting", fixture() if frame is None else frame,
                       [outcome or SourceOutcome("ftn_charting", 2024, "loaded", 1)])
     monkeypatch.setattr("pipeline.vendor_sources.fetch_vendor", lambda *args: feed)
     prepare_receiving_inputs(tmp_path, [2024])
     (tmp_path / "producer.R").write_text("# frozen fixture producer")
-    manifest = {"files": {p.name: file_sha256(p) for p in tmp_path.iterdir()}}
+    runtime = bind_environment(tmp_path)
+    manifest = {"files": {p.name: file_sha256(p) for p in tmp_path.iterdir()}, "runtime": runtime}
     context = fixture().assign(ftn_matched=1)
     return manifest, context
 
@@ -39,7 +49,8 @@ def test_missing_optional_feed_is_recorded_not_converted_to_false(tmp_path, monk
     monkeypatch.setattr("pipeline.vendor_sources.fetch_vendor", lambda *args: feed)
     prepare_receiving_inputs(tmp_path, [2024])
     (tmp_path / "producer.R").write_text("# frozen fixture producer")
-    manifest = {"files": {p.name: file_sha256(p) for p in tmp_path.iterdir()}}
+    runtime = bind_environment(tmp_path)
+    manifest = {"files": {p.name: file_sha256(p) for p in tmp_path.iterdir()}, "runtime": runtime}
     context = fixture().assign(ftn_matched=0, is_play_action=float("nan"), n_pass_rushers=float("nan"))
     record = verify_receiving_inputs(tmp_path, manifest, context, 2024)
     assert record["status"] == "failed" and record["detail"] == "TimeoutError"
@@ -63,10 +74,18 @@ def test_malformed_charting_stops_the_build(fault):
         validate_ftn(frame, 2024)
 
 
-@pytest.mark.parametrize("fault", ["bytes", "definitions", "outcome", "joined_flag", "joined_match"])
+@pytest.mark.parametrize("fault", ["bytes", "definitions", "outcome", "joined_flag", "joined_match",
+                                  "lock_bytes", "environment_bytes", "runtime_r", "runtime_package"])
 def test_valid_hashes_alone_cannot_certify_wrong_sources_or_joined_context(tmp_path, monkeypatch, fault):
     manifest, context = prepare(tmp_path, monkeypatch)
-    if fault == "bytes":
+    if fault in ("lock_bytes", "environment_bytes"):
+        path = tmp_path / ("renv.lock" if fault == "lock_bytes" else "environment.R")
+        path.write_bytes(path.read_bytes() + b"\n")
+    elif fault == "runtime_r":
+        manifest["runtime"]["R"] = "0.0.0"
+    elif fault == "runtime_package":
+        manifest["runtime"]["locked_packages"]["dplyr"] = "0.0.0"
+    elif fault == "bytes":
         with (tmp_path / "ftn-2024.csv").open("a") as stream:
             stream.write("\n")
     elif fault == "definitions":

@@ -430,7 +430,7 @@ A verified zero-target lateral-only bucket has zero target air yards and NULL
 target-based rates. The existing serving mask is unchanged.
 
 Category-inapplicable interceptions and CPOE remain NULL. These partial rows must
-not replace complete live rows. The v13 manifest requires receiving EPA/air yards,
+not replace complete live rows. The v14 manifest requires receiving EPA/air yards,
 target context, per-dimension membership and classified/excluded references,
 and records the R environment and SHA256 digests of
 exports/source snapshots. Loaders parse the exact bytes they verified, using one
@@ -498,14 +498,20 @@ dimension's context to be known.
 
 From `api/`, `python -m jobs.receiving_preview` provides one explicit path through
 copy, official R export, conversion, scoped reconciliation and metadata storage.
-It requires an installed Rscript and separate R library. For the local trial:
+It requires R 4.6.1 and a separate library restored from `api/r/renv.lock`.
+See the [offline R setup](../api/r/README.md) for prerequisites, dependency checks
+and the clean-library verification. From `api/`, for the local installation:
 
 ```powershell
+$env:LC_ALL = 'C'
+& data/upstream-r-trial/R-4.6.1/bin/Rscript.exe --vanilla `
+  r/restore.R data/receiving-r-library
+if ($LASTEXITCODE -ne 0) { throw 'R setup failed' }
 uv run --locked python -m jobs.receiving_preview `
   --source data/nfl.duckdb --candidate data/receiving-preview-example.duckdb `
   --exports data/receiving-preview-example-exports --seasons 2004 2024 `
   --rscript data/upstream-r-trial/R-4.6.1/bin/Rscript.exe `
-  --r-library data/upstream-r-trial/library
+  --r-library data/receiving-r-library
 ```
 
 Source must be closed with no WAL; candidate and export paths must be new. The
@@ -517,10 +523,16 @@ source/default serving database, verifies the copied baseline and invocation,
 checks runtime records, and loads hash-verified dimension, context, whole/weekly,
 membership and classified/excluded CSV bytes.
 
-The Python job freezes `producer.R` into the new export directory before starting
-R and records its exact SHA256. The worker verifies those bytes along with the
+The Python job freezes `producer.R`, `environment.R` and `renv.lock` into the new
+export directory. Before downloading inputs it checks the exact R version,
+all 49 locked package versions, recursive import coverage and compiled package
+loading, excluding user/site libraries. R rechecks the environment during the
+export. The manifest binds these files and records the verified package set;
+the worker verifies the frozen bytes and runtime/lock agreement along with
 shared definitions and charting inputs. Concurrent edits to the checkout cannot
-alter a running producer's source.
+alter the running producer or its dependency specification. Failures retain
+`R-environment.log` or `R-job.log`. The restore path has been exercised on Windows
+x64; Linux/macOS system dependencies and portability remain unverified.
 
 The candidate contains `receiving_down_preview`, `receiving_quarter_preview`,
 `receiving_home_away_preview`, `receiving_shotgun_preview`,
@@ -571,8 +583,9 @@ Original `player_splits` rows remain intact. The main snapshot validator rejects
 any `receiving_*_preview` table or preparation marker, including unknown future
 preview dimensions: a receiving preview is not an accepted publication
 candidate. `jobs.prepare`, serving, refresh/deploy workflows and snapshot
-promotion are unchanged. Full R dependency locking, coordinated source refresh,
-API/UI integration and full-history reconciliation remain outstanding.
+promotion are unchanged. Coordinated source refresh, API/UI integration,
+full-history reconciliation and verification on other build platforms remain
+outstanding. The dependency lock does not freeze changing NFL feeds.
 
 ### Complete preview context catalog
 

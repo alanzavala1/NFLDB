@@ -1,6 +1,6 @@
 # Official receiving export producer; never imports or writes a database.
 # Rscript --vanilla experiments/upstream_receiving_splits.R OUTPUT_DIR [SEASONS...]
-# R_LIBS_USER may point at a separate experiment-only package library.
+# NFL_RECEIVING_LIBRARY points at the locked offline package library.
 # jobs.receiving_preview prepares definitions.json and bound FTN inputs first.
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1L) stop("Supply an experiment output directory")
@@ -13,6 +13,8 @@ out <- normalizePath(out, winslash = "/", mustWork = TRUE)
 completion <- file.path(out, "run.json")
 if (file.exists(completion)) file.remove(completion)
 options(timeout = 300, nflreadr.cache = "memory")
+source(file.path(out, "environment.R"))
+environment_lock <- verify_receiving_environment(file.path(out, "renv.lock"), Sys.getenv("NFL_RECEIVING_LIBRARY"))
 stopifnot(requireNamespace("jsonlite", quietly = TRUE))
 stopifnot(as.character(packageVersion("nflfastR")) == "6.0.0")
 stopifnot(as.character(packageVersion("nflreadr")) == "1.5.1")
@@ -172,7 +174,7 @@ write_frame(do.call(rbind, timings), "timings.csv")
 capture.output(sessionInfo(), file = file.path(out, "session-info.txt"))
 capture.output(nflfastR::calculate_stats, file = file.path(out, "installed-calculator.txt"))
 # Bind the consumed exports and captured source inputs before writing completion.
-files <- c("producer.R", "definitions.json", "ftn-inputs.json", unlist(lapply(years, function(year) c(
+files <- c("producer.R", "environment.R", "renv.lock", "definitions.json", "ftn-inputs.json", unlist(lapply(years, function(year) c(
   paste0(c("context-", "weekly-", "overall-", paste0(names(dimensions), "-"), "credits-"), year, ".csv"),
   unlist(lapply(c("membership", "classified", "excluded"), function(kind)
     paste0(kind, "-", names(dimensions), "-", year, ".csv"))),
@@ -184,16 +186,18 @@ hashes <- setNames(lapply(files, function(name) {
 packages <- setNames(lapply(loadedNamespaces(), function(name) {
   as.character(packageVersion(name))
 }), loadedNamespaces())
+verify_receiving_environment(file.path(out, "renv.lock"), Sys.getenv("NFL_RECEIVING_LIBRARY"))
 jsonlite::write_json(list(
   seasons = as.list(years), nflfastR = as.character(packageVersion("nflfastR")),
   nflreadr = as.character(packageVersion("nflreadr")),
   receiving_export = list(
-    schema_version = 13L, season_type = "REG", excludes_two_point_attempts = TRUE,
+    schema_version = 14L, season_type = "REG", excludes_two_point_attempts = TRUE,
     summary_level = "season", split_dimensions = names(dimensions)
   ),
   run_id = Sys.getenv("NFL_RECEIVING_RUN_ID", unset = NA_character_),
   runtime = list(R = as.character(getRversion()), platform = R.version$platform,
-                 packages = packages),
+                 packages = packages,
+                 locked_packages = lapply(environment_lock$Packages, function(record) record$Version)),
   files = hashes,
   scope = "REG, excluding two-point attempts; identified-player comparisons done separately",
   inputs = input_records, completed_utc = format(Sys.time(), tz = "UTC", usetz = TRUE)

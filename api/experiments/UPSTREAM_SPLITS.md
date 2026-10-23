@@ -15,7 +15,11 @@ optional shortcuts/file associations disabled; it was not added to PATH.
 
 The R runner checks the two nflverse package versions. Transitive package
 versions, runtime details, calculator body, input snapshots and fingerprints
-are recorded in ignored output. This is not a locked production R environment.
+were recorded in ignored output. This initial environment was not locked.
+The October 23 checkpoint adds a full dependency lock and repeatable setup:
+see [the current R environment instructions](../r/README.md). Use that setup
+and `jobs.receiving_preview` for new builds; the direct commands below describe
+the original trial and are not the current prepared-input entry point.
 
 ## Running
 
@@ -954,3 +958,10 @@ The next checkpoint completes all ten remaining context/charting views through
 the same preview flow. Its definitions, charting provenance, immutable-producer
 fix and validation results are recorded separately in
 [the complete context catalog](RECEIVING_CONTEXT_VIEWS.md).
+
+October 23 adds export schema 14: the same 17-view calculation now runs against
+`api/r/renv.lock`, with explicit R/runtime checks and hash-bound copies of the
+lock and environment check script. See [the reproducible setup](../r/README.md)
+for its clean-library check, commands and platform limits. This replaces the
+unlocked experiment installation as the supported setup for new previews;
+prior manifests remain historical evidence.

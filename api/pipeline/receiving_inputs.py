@@ -58,6 +58,12 @@ def validate_ftn(frame: pd.DataFrame, season: int) -> None:
 
 def verify_receiving_inputs(directory: Path, manifest: dict, context: pd.DataFrame, season: int) -> dict:
     read_export_bytes(directory, manifest, "producer.R", season=season)
+    read_export_bytes(directory, manifest, "environment.R", season=season)
+    lock = json.loads(read_export_bytes(directory, manifest, "renv.lock", season=season))
+    expected = {name: record["Version"] for name, record in lock["Packages"].items()}
+    runtime = manifest.get("runtime", {})
+    if runtime.get("R") != lock["R"]["Version"] or runtime.get("locked_packages") != expected:
+        raise CandidateError("Receiving R runtime differs from bound dependency lock")
     definitions = json.loads(read_export_bytes(directory, manifest, "definitions.json", season=season))
     if definitions != export_definitions(DIMENSIONS):
         raise CandidateError("Receiving definitions differ from this builder")

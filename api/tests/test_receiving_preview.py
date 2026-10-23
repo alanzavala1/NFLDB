@@ -62,6 +62,12 @@ def fake_export(monkeypatch):
         producer = output / "producer.R"
         producer.write_text("# deterministic test export producer")
         manifest["files"][producer.name] = preview.file_sha256(producer)
+        for name in ("environment.R", "renv.lock"):
+            path = output / name
+            path.write_bytes((Path(preview.__file__).resolve().parents[1] / "r" / name).read_bytes())
+            manifest["files"][name] = preview.file_sha256(path)
+        lock = json.loads((output / "renv.lock").read_text())
+        manifest["runtime"]["locked_packages"] = {name: record["Version"] for name, record in lock["Packages"].items()}
         charting_outcomes = {}
         for year in seasons:
             context = pd.DataFrame([dict(game_id="game", play_id=index, season=year,
@@ -385,6 +391,7 @@ def test_missing_R_setup_fails_before_creating_candidate(source, tmp_path):
 
 
 def test_interrupted_R_tree_is_stopped_and_waited_for(tmp_path, monkeypatch):
+    monkeypatch.setattr(preview, "_check_environment", lambda *args: None)
     monkeypatch.setattr("pipeline.receiving_inputs.prepare_receiving_inputs", lambda *args: None)
     calls = []
     class Interrupted:
@@ -411,12 +418,16 @@ def test_r_invocation_freezes_source_bytes_before_starting(tmp_path, monkeypatch
     api = tmp_path / "api"
     (api / "pipeline").mkdir(parents=True)
     (api / "experiments").mkdir()
+    (api / "r").mkdir()
+    for name in ("environment.R", "renv.lock"):
+        (api / "r" / name).write_text("frozen environment fixture")
     output = tmp_path / "output"
     output.mkdir()
     source = api / "experiments/upstream_receiving_splits.R"
     source.write_text("print('original invocation')")
     original = source.read_bytes()
     monkeypatch.setattr(preview, "__file__", str(api / "pipeline/receiving_preview.py"))
+    monkeypatch.setattr(preview, "_check_environment", lambda *args: None)
     monkeypatch.setattr("pipeline.receiving_inputs.prepare_receiving_inputs", lambda *args: None)
     class Done:
         def wait(self):
@@ -424,11 +435,40 @@ def test_r_invocation_freezes_source_bytes_before_starting(tmp_path, monkeypatch
     def start(command, **kwargs):
         assert Path(command[2]) == output / "producer.R"
         source.write_text("print('edited during build')")
+        (api / "r/renv.lock").write_text("edited during build")
         assert (output / "producer.R").read_bytes() == original
+        assert (output / "renv.lock").read_text() == "frozen environment fixture"
         return Done()
     monkeypatch.setattr(preview.subprocess, "Popen", start)
     preview._run_export(Path(sys.executable), tmp_path, output, [2024], "fixture")
     assert (output / "producer.R").read_bytes() == original
+
+
+def test_environment_failure_stops_before_input_downloads_and_cleans_candidate(source, tmp_path, monkeypatch):
+    def fail(*args):
+        raise CandidateError("R environment check failed")
+    monkeypatch.setattr(preview, "_check_environment", fail)
+    monkeypatch.setattr("pipeline.receiving_inputs.prepare_receiving_inputs",
+                        lambda *args: pytest.fail("Downloaded inputs before checking R dependencies"))
+    before = preview.file_sha256(source)
+    with pytest.raises(CandidateError, match="environment check failed"):
+        preview.prepare_receiving_preview(source, tmp_path / "preview.duckdb", tmp_path / "exports", [2024],
+                                          rscript=Path(sys.executable), library=tmp_path)
+    assert preview.file_sha256(source) == before
+    assert not (tmp_path / "preview.duckdb").exists()
+    assert (tmp_path / "exports/renv.lock").is_file()
+
+
+def test_environment_check_uses_frozen_files_and_retains_failure_log(tmp_path, monkeypatch):
+    def check(command, **kwargs):
+        assert command == ["Rscript", "--vanilla", str(tmp_path / "environment.R"),
+                           str(tmp_path / "renv.lock"), str(tmp_path / "library")]
+        kwargs["stdout"].write(b"wrong dependency version")
+        return subprocess.CompletedProcess(command, 1)
+    monkeypatch.setattr(preview.subprocess, "run", check)
+    with pytest.raises(CandidateError, match="run r/restore.R"):
+        preview._check_environment(Path("Rscript"), tmp_path / "library", tmp_path, {})
+    assert (tmp_path / "R-environment.log").read_text() == "wrong dependency version"
 
 
 def test_worker_has_no_default_db_fallback(monkeypatch, tmp_path):

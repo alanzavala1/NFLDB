@@ -20,7 +20,7 @@ from services.receiving_coverage import targets_unavailable, yac_unavailable
 
 
 EXPORT_CONTRACT = {
-    "schema_version": 13,
+    "schema_version": 14,
     "season_type": "REG",
     "excludes_two_point_attempts": True,
     "summary_level": "season",

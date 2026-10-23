@@ -19,15 +19,19 @@ def file_sha256(path: Path) -> str:
 
 def _run_export(rscript: Path, library: Path, output: Path, seasons: list[int], run_id: str) -> None:
     from pipeline.receiving_inputs import prepare_receiving_inputs
-    prepare_receiving_inputs(output, seasons)
     api = Path(__file__).resolve().parents[1]
     producer = output / "producer.R"
     # Rscript can read its source progressively. Freeze this invocation's bytes
     # so a concurrent editor cannot change the code beneath the running process.
-    with producer.open("xb") as stream:
-        stream.write((api / "experiments/upstream_receiving_splits.R").read_bytes())
+    for name, source in (("producer.R", api / "experiments/upstream_receiving_splits.R"),
+                         ("environment.R", api / "r/environment.R"), ("renv.lock", api / "r/renv.lock")):
+        with (output / name).open("xb") as stream:
+            stream.write(source.read_bytes())
     env = os.environ.copy()
-    env.update(R_LIBS_USER=str(library), LC_ALL="C", NFL_RECEIVING_RUN_ID=run_id)
+    env.update(R_LIBS_USER=str(library), NFL_RECEIVING_LIBRARY=str(library),
+               LC_ALL="C", NFL_RECEIVING_RUN_ID=run_id)
+    _check_environment(rscript, library, output, env)
+    prepare_receiving_inputs(output, seasons)
     command = [str(rscript), "--vanilla", str(producer),
                str(output), *(str(year) for year in seasons)]
     options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
@@ -47,6 +51,16 @@ def _run_export(rscript: Path, library: Path, output: Path, seasons: list[int], 
             raise
     if code:
         raise CandidateError(f"R export failed ({code}); see {output / 'R-job.log'}")
+
+
+def _check_environment(rscript: Path, library: Path, output: Path, env: dict) -> None:
+    """Check frozen dependencies before either Python or R downloads inputs."""
+    with (output / "R-environment.log").open("xb") as log:
+        result = subprocess.run([str(rscript), "--vanilla", str(output / "environment.R"),
+                                 str(output / "renv.lock"), str(library)],
+                                env=env, stdout=log, stderr=subprocess.STDOUT, check=False)
+    if result.returncode:
+        raise CandidateError(f"R environment check failed; see {output / 'R-environment.log'}; run r/restore.R")
 
 
 def prepare_receiving_preview(source: Path, candidate: Path, output: Path,
