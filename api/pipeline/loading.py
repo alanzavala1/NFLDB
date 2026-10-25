@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from config import FIRST_SEASON
 from pipeline.awards import load_player_awards
 from pipeline.context_sources import fetch_schedules, fetch_rosters
-from pipeline.source_results import SourceError, SourceOutcome, RawLoad, SeasonalFeed
+from pipeline.source_results import SourceError, SourceOutcome, RawLoad
 from pipeline.sources import PLAYS_KEEP_COLUMNS, fetch_play_by_play, fetch_weekly_stats
 from pipeline.vendor_sources import ADVANCED_SOURCES, SUPPLEMENTAL_SOURCES, fetch_vendor
 from pipeline.storage import (
@@ -13,10 +13,22 @@ from pipeline.storage import (
 
 if TYPE_CHECKING:
     from pipeline.receiving_core_inputs import ReceivingCoreInputs
+    from pipeline.receiving_core_collection import ReceivingCoreCollection
+
+
+def _weekly_scope(conn, seasons: list[int]) -> tuple[bool, list[int]]:
+    legacy = weekly_schema_is_legacy(conn)
+    if not legacy:
+        return False, list(seasons)
+    # Replacing an old schema drops its whole table. An older-season refresh
+    # must not discard newer weekly seasons already stored there.
+    latest_stored = conn.execute('SELECT MAX(season) FROM weekly_player_stats').fetchone()[0]
+    latest = max(max(seasons), latest_stored if latest_stored is not None else max(seasons))
+    return True, list(range(FIRST_SEASON, int(latest) + 1))
 
 
 def load_and_store_raw(conn, seasons: list[int], log=print, *,
-                       core_inputs: "ReceivingCoreInputs | None" = None):
+                       core_inputs: "ReceivingCoreInputs | ReceivingCoreCollection | None" = None):
     log(f"Loading play-by-play for {seasons}...")
     weekly_feed = None
     if core_inputs is None:
@@ -25,12 +37,8 @@ def load_and_store_raw(conn, seasons: list[int], log=print, *,
         # A legacy weekly migration refreshes all history. Require those same
         # captures up front rather than silently downloading a different revision
         # or discovering missing years after replacing plays/schedules.
-        wanted = list(range(FIRST_SEASON, max(seasons) + 1)) if weekly_schema_is_legacy(conn) else seasons
-        captured_plays, weekly_feed = core_inputs.feeds(wanted)
-        feed = SeasonalFeed(
-            captured_plays.data.loc[captured_plays.data.season.isin(seasons)].copy(),
-            sorted(set(seasons)), [],
-        )
+        _, wanted = _weekly_scope(conn, seasons)
+        feed, weekly_feed = core_inputs.load_feeds(seasons, wanted)
         log(f"  reusing captured inputs: {core_inputs.revision()}")
     plays = feed.data
 
@@ -92,10 +100,8 @@ def load_weekly_player_stats(
     the renamed ones NULL. Rebuilding means fetching the full history, because
     dropping the table would otherwise discard the seasons not being ingested.
     """
-    legacy = weekly_schema_is_legacy(conn)
-    wanted = list(seasons)
+    legacy, wanted = _weekly_scope(conn, seasons)
     if legacy:
-        wanted = list(range(FIRST_SEASON, max(seasons) + 1))
         log(f"  legacy weekly schema (pre-stats_player rename) — rebuilding "
             f"{len(wanted)} seasons from the new feed")
 

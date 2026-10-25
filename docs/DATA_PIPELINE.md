@@ -665,6 +665,8 @@ See [shared receiving inputs](RECEIVING_BUILD_INTEGRATION.md) for the frozen
 conversion, revision records, representative checks and current limits. This
 aligns inputs; canonical receiving split replacement and coverage/API/UI work
 remain pending. The full candidate gate and preview rejection are unchanged.
+Separate captured runs can be assembled into one compatible historical input
+collection with `jobs.receiving_core_inputs --bundles ... --output ...`.
 
 The app is not read-only yet. These paths must be retired together with verified
 replacement preparation:

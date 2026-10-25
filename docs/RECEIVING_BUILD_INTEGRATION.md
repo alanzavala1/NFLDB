@@ -3,7 +3,8 @@
 The [all-history receiving audit](RECEIVING_HISTORY_VALIDATION.md) validated the
 official calculator's available-data results for 1999–2026. The first integration
 checkpoint connects its captured **inputs** to the ordinary offline build.
-Replacing the canonical receiving split rows is still pending.
+Replacing the canonical receiving split rows is still pending. Converted runs
+can now be grouped into one revision-bound collection for historical updates.
 
 ## Why this boundary comes first
 
@@ -77,8 +78,31 @@ candidate and season arguments. This option aligns inputs; it **does not switch
 receiving split calculation**. The existing local source has a legacy weekly
 table, so a 2026-only bundle cannot migrate that source: the full historical
 weekly range is required. Do not bypass that check or the full candidate gate.
-A bundle currently belongs to one receiving run, which may contain multiple
-seasons; combining the existing separate per-season audit runs is not yet supported.
+A bundle belongs to one receiving run, which may contain multiple seasons.
+Group separate converted runs without copying or recalculating their data:
+
+```powershell
+uv run --locked python -m jobs.receiving_core_inputs --bundles data/receiving-core-1999-20261025 data/receiving-core-2000-20261025 --output data/receiving-core-example-collection
+```
+
+The example contains two seasons; a full historical migration needs the whole
+required range. Pass the resulting collection directory to the same
+`jobs.prepare --core-inputs PATH` option. Creating/reading a collection requires
+no R executable. Keep its referenced bundles and original receiving exports.
+
+The collection index lists absolute bundle paths, their exact completion-marker
+hashes and disjoint season ownership. It refuses overlapping years and different
+producer/split-definition/conversion/environment/lock/column policies. Every season's inputs and
+receiving references are validated before a completion index is written. Later
+reads recheck the index and child revisions; missing requested years fail before
+any per-season table reads or fallback downloads.
+
+The loader validates historical PBP one season at a time and retains only the
+play seasons being refreshed. A weekly-schema migration can therefore load its
+full history of weekly stats without concatenating all historical play frames.
+Its required range includes newer weekly seasons already stored in an old
+schema: refreshing an older year must not discard those newer rows when the
+whole old table is replaced.
 
 ## Executed checks, October 25, 2026
 
@@ -129,10 +153,64 @@ candidate rejection is in `api/data/receiving-core-candidate-gate-20261025.log`.
 
 ## Next checkpoint
 
-Integrate the validated official receiving rows and their whole-season,
+The historical input collection and core-only schema migration are now verified
+as described below. Integrate the validated official receiving rows and their whole-season,
 per-view and per-field coverage records into candidate preparation, preserving
-passing/rushing behavior. Plan for the legacy full-history migration and its
-bound inputs. Carry source gaps and NULLs through API/UI aggregation before
+passing/rushing behavior. Carry source gaps and NULLs through API/UI aggregation before
 exposing new rows, then pass full real-data candidate/HTTP and downstream checks.
 The preview rejection guard stays until that replacement is ready. No source
 replacement, serving change, push or deployment is part of this checkpoint.
+
+## Historical collection and migration check, October 25, 2026
+
+All 28 saved runs, 1999–2026, were converted and independently matched back to
+their bound receiving context/weekly references. They contain **1,296,179 full
+PBP rows and 482,717 raw weekly rows**. No official split calculations or source
+downloads were repeated. One collection now indexes the compatible converted
+bundles, preserving every original run's revision.
+
+A separate copy of the local source exercised the real raw loader and
+player-game composition. Its first 2026 refresh performed the legacy weekly
+schema replacement using all 28 years. Each historical play season was then
+refreshed and composed individually from its captured inputs. PBP/weekly network
+fetches were forbidden; schedules/rosters came from read-only stored controls.
+
+Results:
+
+- All **84 receiving-count checks** (catches, yards and TDs for 28 seasons)
+  passed with zero mismatches, including preserved zero-target production.
+- The copy holds 482,180 identified weekly rows after the existing orphan filter,
+  and 482,216 composed player-game rows. Extra player-game rows include PBP-derived
+  activity; these totals are not required to be identical.
+- 7,058 supplied REG games remain represented. The known three missing games
+  in 1999–2000 remain explicit, and conversion does not repair target/context gaps.
+- Canonical `player_splits` rows match the source in both directions. Other
+  analytics and the new receiving materializer were not rebuilt for this control.
+- The source SHA256 stayed unchanged. The copied DB closed without a WAL and
+  was deliberately marked as a preview. The unchanged full gate rejects it:
+  `Receiving-only preview is not a publishable snapshot`.
+- The final backend suite passed **1,099 tests, two skipped**. Collection tests
+  cover ambiguous seasons, mixed policies, changed index/bundles/source bytes,
+  missing years, scoped loading, old-schema replacement, newer-year preservation
+  during an older refresh, and the ordinary candidate worker/CLI path.
+
+Final review also tightened split-definition compatibility. The existing real
+28-season index passed that check, and all 88 focused input/collection/ingestion
+and candidate checks passed afterward. This review did not change data or calculations.
+
+This proves the core-input migration, not full receiving integration or release
+readiness. It does not certify fresh schedule/roster/vendor sources, derived
+ratings/comparables, API/UI scope handling or a complete publishable candidate.
+
+Ignored evidence:
+
+- `api/data/receiving-core-history-conversions-20261025.{json,log}`: all 28
+  conversion outcomes and original bundle hashes.
+- `api/data/receiving-core-history-collection-20261025/run.json`: completed
+  collection index, SHA256
+  `237f23f204f7a85ef0a1ef70a92807d6e805f5e4ba7d7500b128a7dd4ef1c355`.
+- `api/data/receiving-core-history-migration-preview-20261025.duckdb`: unpublishable
+  core-only copy, with preview marker and per-season migration proof.
+- `api/data/receiving-core-history-migration-proof-20261025.{json,log}`: source
+  safety, per-season outcomes, missing-game references and zero-mismatch checks.
+- `api/data/receiving-core-collection-final-tests-20261025.{xml,log}`: final suite.

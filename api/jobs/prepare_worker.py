@@ -19,8 +19,8 @@ def prepare(seasons: list[int], *, core_inputs: Path | None = None) -> None:
         from ingest import run_ingest
         options = {}
         if core_inputs is not None:
-            from pipeline.receiving_core_inputs import ReceivingCoreInputs
-            options['core_inputs'] = ReceivingCoreInputs(core_inputs)
+            from pipeline.receiving_core_collection import open_core_inputs
+            options['core_inputs'] = open_core_inputs(core_inputs)
         with database.write_lock:
             outcomes = run_ingest(seasons, log=lambda message: print(message, flush=True), **options)
             conn = database.get_connection()

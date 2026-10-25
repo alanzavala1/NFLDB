@@ -44,6 +44,8 @@ def bundle(tmp_path):
         exports / "weekly-2024.csv", index=False)
     for name in ("pbp-2024.rds", "weekly-2024.rds"):
         (exports / name).write_bytes(b"deterministic captured RDS fixture")
+    (exports / "producer.R").write_text("# fixture calculator producer")
+    (exports / "definitions.json").write_text("{}")
     for path in exports.iterdir():
         manifest["files"][path.name] = file_sha256(path)
     (exports / "run.json").write_text(json.dumps(manifest))

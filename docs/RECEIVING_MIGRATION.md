@@ -286,7 +286,10 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
   build. Receiving preview alignment does not refresh the copied database's other
   categories, analytics or source metadata.
   The [shared-input checkpoint](RECEIVING_BUILD_INTEGRATION.md) now lets the
-  ordinary build consume captured plays/weekly feeds and persist their revisions.
+  ordinary build consume captured plays/weekly feeds from single runs or a
+  compatible historical collection, and persist their revisions. The real core
+  loader/player-game migration passed all 28 years on an unpublishable copy,
+  including replacement of the legacy weekly schema without redownloading inputs.
   Canonical split replacement, other-source coherence and a full real candidate
   run remain pending; this item is intentionally not marked complete.
 - [x] Run the receiving preview and independent checks for every played season,

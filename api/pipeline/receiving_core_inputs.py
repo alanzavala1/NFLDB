@@ -20,6 +20,28 @@ from pipeline.source_results import SeasonalFeed, SourceError
 from pipeline.sources import PLAYS_KEEP_COLUMNS, WEEKLY_REQUIRED_COLUMNS
 
 
+def load_scoped_feeds(reader, play_seasons: list[int], weekly_seasons: list[int], available: list[int]):
+    """Validate one season at a time; retain only the plays actually requested.
+
+    A weekly-schema migration may need decades of stats for a one-season play
+    refresh. Do not concatenate all that historical PBP just to discard it.
+    """
+    wanted = set(play_seasons) | set(weekly_seasons)
+    if not wanted or any(type(year) is not int or year not in available for year in wanted):
+        raise SourceError("receiving_core_inputs", None,
+                          f"bundle must cover every requested season; available {available}, requested {sorted(wanted)}")
+    plays, weekly = [], []
+    for year in sorted(wanted):
+        play_feed, weekly_feed = reader(year)
+        if year in play_seasons:
+            plays.append(play_feed.data)
+        if year in weekly_seasons:
+            weekly.append(weekly_feed.data)
+    def feed(frames, seasons):
+        return SeasonalFeed(pd.concat(frames, ignore_index=True) if frames else None, sorted(set(seasons)), [])
+    return feed(plays, play_seasons), feed(weekly, weekly_seasons)
+
+
 def _read_table(directory: Path, manifest: dict, name: str, season: int) -> pd.DataFrame:
     record = manifest["tables"][name]
     types = {"character": "string", "integer": "Int64", "double": "float64", "logical": "boolean"}
@@ -79,6 +101,7 @@ class ReceivingCoreInputs:
                 or len(set(years)) != len(years)
                 or years != self.receiving_manifest.get("seasons")):
             raise SourceError("receiving_core_inputs", None, "bundle seasons differ from receiving run")
+        self.seasons = sorted(years)
         if file_sha256(self.source / "run.json") != self.manifest["files"]["receiving-run.json"]:
             raise SourceError("receiving_core_inputs", None, "receiving completion record changed")
         for name in ("bridge.R", "environment.R", "renv.lock", "columns.json"):
@@ -134,6 +157,9 @@ class ReceivingCoreInputs:
 
     def revision(self) -> str:
         return f"receiving core bundle SHA256 {self.manifest_sha256}; receiving run SHA256 {self.manifest['files']['receiving-run.json']}"
+
+    def load_feeds(self, play_seasons: list[int], weekly_seasons: list[int]):
+        return load_scoped_feeds(lambda year: self.feeds([year]), play_seasons, weekly_seasons, self.seasons)
 
 
 def export_core_inputs(exports: Path, output: Path, *, rscript: Path, library: Path) -> ReceivingCoreInputs:
