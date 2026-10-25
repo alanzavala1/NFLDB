@@ -612,6 +612,12 @@ promotion are unchanged. Main-build coordinated source refresh, API/UI integrati
 full-history reconciliation and verification on other build platforms remain
 outstanding. The dependency lock does not freeze changing NFL feeds.
 
+For a completed per-season preview, `experiments.receiving_history_audit` adds
+independent captured-PBP/credit/rate checks and a completed-schedule game check.
+It returns a nonzero completeness result for missing games while retaining the
+verified available-game output. See the [history validation report](RECEIVING_HISTORY_VALIDATION.md)
+for the 1999–2026 sweep, known upstream game gaps, commands and evidence.
+
 ### Complete preview context catalog
 
 The remaining views now share the same calculation and acceptance flow:

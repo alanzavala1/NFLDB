@@ -196,8 +196,9 @@ deterministic producer. This records provider completeness for these samples,
 not independent certification of every historical huddle flag.
 
 **Next checkpoint:** finish the receiving migration outside the preview:
-validate every played season using the aligned receiving inputs, then
-integrate the main build with API/UI NULL and partial-scope handling and pass
+the [1999–2026 audit](RECEIVING_HISTORY_VALIDATION.md) has completed all 28 seasons
+and 476 season/view checks, with three documented missing games in 1999–2000.
+Integrate the main build with API/UI NULL and partial-scope handling and pass
 the full candidate gates. No existing view remains unimplemented. Source unavailability
 continues to mean an evidenced source/season/context gap, not unfinished code.
 
@@ -284,9 +285,13 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
 - [ ] Integrate required-source refresh and qualification in the main candidate
   build. Receiving preview alignment does not refresh the copied database's other
   categories, analytics or source metadata.
-- [ ] Validate every played season in the candidate, not only the pilot samples.
-  The local DB currently has plays labeled 1999–2026; resolve the newest played
-  season's required reference coverage rather than omitting it from checks.
+- [x] Run the receiving preview and independent checks for every played season,
+  1999–2026, including 94 completed 2026 games through October 22. All 476
+  season/view calculations pass; 26 seasons have complete game coverage.
+- [ ] Carry the audit's source gaps into publication policy and API/UI scope.
+  1999 is missing one game and 2000 two games; their observed data is validated,
+  not certified complete. 2026 surface context is absent for 29 supplied games.
+  Keep usable receiving production and expose these limits explicitly.
 - [ ] Integrate the official receiving path into the ordinary offline build,
   remove its replaced receiving calculation, and preserve passing/rushing paths.
 - [ ] Pass the unchanged full candidate/HTTP gates with revision-bound results,
