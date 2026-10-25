@@ -63,16 +63,19 @@ def test_failed_build_stops_preparation_before_later_builds_and_success_log(
 
 @pytest.mark.parametrize('has_plays', [False, True])
 @pytest.mark.parametrize('requested', [[2024], [2024, 2027]])
-def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, has_plays, requested):
+@pytest.mark.parametrize('use_captured', [False, True])
+def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, has_plays, requested, use_captured):
     import ingest
 
     connection = object()
     plays = pd.DataFrame({'season': [2024]})
+    inputs = object() if use_captured else None
     calls = []
     monkeypatch.setattr(ingest, 'get_connection', lambda: connection)
 
-    def load_raw(conn, seasons, log):
+    def load_raw(conn, seasons, log, **options):
         assert conn is connection and seasons == requested
+        assert options == ({'core_inputs': inputs} if use_captured else {})
         calls.append('raw')
         return RawLoad(plays if has_plays else None, [SourceOutcome('schedules', 2024, 'loaded', 1)])
 
@@ -94,7 +97,7 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
         calls.append('analytics')
 
     monkeypatch.setattr(ingest, 'prepare_analytics', prepare)
-    outcomes = ingest.run_ingest(requested, log=lambda message: None)
+    outcomes = ingest.run_ingest(requested, log=lambda message: None, core_inputs=inputs)
     assert outcomes == [SourceOutcome('schedules', 2024, 'loaded', 1)]
     assert calls == (['raw', 'player_stats', 'load_advanced_stats',
                       'load_supplemental_data', 'analytics'] if has_plays else ['raw'])

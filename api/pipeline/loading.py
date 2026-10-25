@@ -1,18 +1,37 @@
 """Coordinate source validation and storage; football calculations live separately."""
+from typing import TYPE_CHECKING
+
 from config import FIRST_SEASON
 from pipeline.awards import load_player_awards
 from pipeline.context_sources import fetch_schedules, fetch_rosters
-from pipeline.source_results import SourceError, SourceOutcome, RawLoad
+from pipeline.source_results import SourceError, SourceOutcome, RawLoad, SeasonalFeed
 from pipeline.sources import PLAYS_KEEP_COLUMNS, fetch_play_by_play, fetch_weekly_stats
 from pipeline.vendor_sources import ADVANCED_SOURCES, SUPPLEMENTAL_SOURCES, fetch_vendor
 from pipeline.storage import (
     upsert_by_season, replace_table, weekly_schema_is_legacy, store_weekly_stats,
 )
 
+if TYPE_CHECKING:
+    from pipeline.receiving_core_inputs import ReceivingCoreInputs
 
-def load_and_store_raw(conn, seasons: list[int], log=print):
+
+def load_and_store_raw(conn, seasons: list[int], log=print, *,
+                       core_inputs: "ReceivingCoreInputs | None" = None):
     log(f"Loading play-by-play for {seasons}...")
-    feed = fetch_play_by_play(seasons, log=log)
+    weekly_feed = None
+    if core_inputs is None:
+        feed = fetch_play_by_play(seasons, log=log)
+    else:
+        # A legacy weekly migration refreshes all history. Require those same
+        # captures up front rather than silently downloading a different revision
+        # or discovering missing years after replacing plays/schedules.
+        wanted = list(range(FIRST_SEASON, max(seasons) + 1)) if weekly_schema_is_legacy(conn) else seasons
+        captured_plays, weekly_feed = core_inputs.feeds(wanted)
+        feed = SeasonalFeed(
+            captured_plays.data.loc[captured_plays.data.season.isin(seasons)].copy(),
+            sorted(set(seasons)), [],
+        )
+        log(f"  reusing captured inputs: {core_inputs.revision()}")
     plays = feed.data
 
     log("Loading schedules...")
@@ -47,13 +66,22 @@ def load_and_store_raw(conn, seasons: list[int], log=print):
 
     log(f"Loading weekly player stats...")
     outcomes = feed.outcomes('plays') + schedule_feed.outcomes('schedules') + roster_feed.outcomes('rosters')
-    outcomes.extend(load_weekly_player_stats(conn, seasons, log=log, required_seasons=feed.loaded_seasons))
+    weekly_options = {} if weekly_feed is None else {"captured_feed": weekly_feed}
+    outcomes.extend(load_weekly_player_stats(conn, seasons, log=log, required_seasons=feed.loaded_seasons,
+                                              **weekly_options))
+    if core_inputs is not None:
+        # Store provenance alongside the existing source outcomes; the ordinary
+        # candidate worker already persists these in snapshot_preparation.
+        outcomes = [SourceOutcome(item.source, item.season, item.status, item.rows,
+                                  core_inputs.revision() if item.source in ('plays', 'weekly_player_stats')
+                                  else item.detail) for item in outcomes]
 
     return RawLoad(plays, outcomes)
 
 
 def load_weekly_player_stats(
     conn, seasons: list[int], log=print, *, required_seasons: list[int] | None = None,
+    captured_feed=None,
 ) -> list[SourceOutcome]:
     """Official weekly player stats, the source of truth counting stats reconcile to.
 
@@ -71,7 +99,12 @@ def load_weekly_player_stats(
         log(f"  legacy weekly schema (pre-stats_player rename) — rebuilding "
             f"{len(wanted)} seasons from the new feed")
 
-    feed = fetch_weekly_stats(wanted, log=log)
+    if captured_feed is not None:
+        if set(captured_feed.loaded_seasons) != set(wanted) or captured_feed.not_found_seasons:
+            raise SourceError('weekly_player_stats', None, 'captured inputs do not cover the weekly refresh')
+        feed = captured_feed
+    else:
+        feed = fetch_weekly_stats(wanted, log=log)
     required_missing = sorted(set(required_seasons or []) - set(feed.loaded_seasons))
     if required_missing:
         raise SourceError('weekly_player_stats', required_missing[0],

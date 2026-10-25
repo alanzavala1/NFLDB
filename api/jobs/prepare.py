@@ -16,8 +16,11 @@ def main(argv=None) -> None:
     parser.add_argument('--source', type=Path, required=True, help='Existing, closed database')
     parser.add_argument('--candidate', type=Path, required=True, help='New working database path')
     parser.add_argument('--seasons', type=int, nargs='+', required=True)
+    parser.add_argument('--core-inputs', type=Path,
+                        help='Reuse captured plays/weekly inputs; does not enable new receiving splits')
     args = parser.parse_args(argv)
-    prepare_candidate(args.source, args.candidate, args.seasons)
+    options = {} if args.core_inputs is None else {'core_inputs': args.core_inputs}
+    prepare_candidate(args.source, args.candidate, args.seasons, **options)
 
 
 if __name__ == '__main__':

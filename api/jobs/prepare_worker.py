@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 
-def prepare(seasons: list[int]) -> None:
+def prepare(seasons: list[int], *, core_inputs: Path | None = None) -> None:
     # Never allow an internal worker invocation to fall back to the serving DB.
     path = os.environ.get('NFL_DB_PATH')
     if not path or not Path(path).is_absolute() or not Path(path).is_file():
@@ -17,8 +17,12 @@ def prepare(seasons: list[int]) -> None:
         raise RuntimeError('Database was imported before the candidate path was configured')
     try:
         from ingest import run_ingest
+        options = {}
+        if core_inputs is not None:
+            from pipeline.receiving_core_inputs import ReceivingCoreInputs
+            options['core_inputs'] = ReceivingCoreInputs(core_inputs)
         with database.write_lock:
-            outcomes = run_ingest(seasons, log=lambda message: print(message, flush=True))
+            outcomes = run_ingest(seasons, log=lambda message: print(message, flush=True), **options)
             conn = database.get_connection()
             # A schedules-only refresh skips supplemental loading/analytics.
             # These local serving prerequisites must still be prepared offline.
@@ -42,7 +46,9 @@ def prepare(seasons: list[int]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seasons', type=int, nargs='+', required=True)
-    prepare(parser.parse_args().seasons)
+    parser.add_argument('--core-inputs', type=Path)
+    args = parser.parse_args()
+    prepare(args.seasons, core_inputs=args.core_inputs)
 
 
 if __name__ == '__main__':

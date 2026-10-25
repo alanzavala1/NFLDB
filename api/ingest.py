@@ -11,10 +11,11 @@ from pipeline.player_stats import build_player_game_stats
 from pipeline.source_results import SourceOutcome
 
 
-def run_ingest(seasons: list[int], log=print) -> list[SourceOutcome]:
+def run_ingest(seasons: list[int], log=print, *, core_inputs=None) -> list[SourceOutcome]:
     """Load source feeds, build player stats, then prepare analytics for the batch."""
     conn = get_connection()
-    raw = load_and_store_raw(conn, seasons, log=log)
+    options = {} if core_inputs is None else {"core_inputs": core_inputs}
+    raw = load_and_store_raw(conn, seasons, log=log, **options)
     plays = raw.plays
     outcomes = list(raw.outcomes)
 

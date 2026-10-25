@@ -285,6 +285,10 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
 - [ ] Integrate required-source refresh and qualification in the main candidate
   build. Receiving preview alignment does not refresh the copied database's other
   categories, analytics or source metadata.
+  The [shared-input checkpoint](RECEIVING_BUILD_INTEGRATION.md) now lets the
+  ordinary build consume captured plays/weekly feeds and persist their revisions.
+  Canonical split replacement, other-source coherence and a full real candidate
+  run remain pending; this item is intentionally not marked complete.
 - [x] Run the receiving preview and independent checks for every played season,
   1999–2026, including 94 completed 2026 games through October 22. All 476
   season/view calculations pass; 26 seasons have complete game coverage.

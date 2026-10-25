@@ -61,8 +61,11 @@ def _run_job(candidate: Path, module: str, arguments: list[str], *, read_only=Fa
         raise subprocess.CalledProcessError(code, command)
 
 
-def _run_worker(candidate: Path, seasons: list[int]) -> None:
-    _run_job(candidate, 'jobs.prepare_worker', ['--seasons', *(str(s) for s in seasons)])
+def _run_worker(candidate: Path, seasons: list[int], *, core_inputs: Path | None = None) -> None:
+    arguments = ['--seasons', *(str(s) for s in seasons)]
+    if core_inputs is not None:
+        arguments.extend(['--core-inputs', str(core_inputs)])
+    _run_job(candidate, 'jobs.prepare_worker', arguments)
 
 
 def _run_validation(candidate: Path) -> None:
@@ -121,7 +124,8 @@ def validate_preparation(candidate: Path, seasons: list[int]) -> None:
         conn.close()
 
 
-def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=print) -> Path:
+def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=print, *,
+                      core_inputs: Path | None = None) -> Path:
     """Copy a closed snapshot, prepare and validate in isolated processes.
 
     Never replaces source. Failed candidates are removed after the worker exits.
@@ -132,6 +136,8 @@ def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=pri
     if not seasons or any(type(s) is not int or s < 1999 for s in seasons):
         raise ValueError('Provide at least one integer season from 1999 onward')
     seasons = sorted(set(seasons))
+    if core_inputs is not None:
+        core_inputs = Path(core_inputs).resolve()
     if source == candidate.resolve():
         raise CandidateError('Source and candidate must be different paths')
     if candidate.exists() or candidate.is_symlink() or _wal(candidate).exists():
@@ -140,7 +146,8 @@ def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=pri
     log(f'Copying {source} to {candidate}')
     _copy_source(source, candidate)
     try:
-        _run_worker(candidate, seasons)
+        options = {} if core_inputs is None else {'core_inputs': core_inputs}
+        _run_worker(candidate, seasons, **options)
         validate_preparation(candidate, seasons)
         _run_validation(candidate)
     except BaseException:
