@@ -77,6 +77,25 @@ def _feed_frame(season: int, week: int = 1) -> pd.DataFrame:
     return pd.DataFrame([row])
 
 
+@pytest.mark.parametrize(('display', 'short', 'expected'), [
+    ('Full Name', 'F.Name', 'Full Name'),
+    (None, 'P.Franklin', 'P.Franklin'),
+    ('  ', 'P.Franklin', 'P.Franklin'),
+    (None, None, '00-0002024'),
+])
+def test_weekly_identity_keeps_available_name_and_all_production(display, short, expected):
+    frame = _feed_frame(2024).assign(game_id='2024_01_KC_BAL',
+        player_display_name=display, player_name=short, receptions=1, receiving_yards=17)
+    frame[['player_display_name', 'player_name']] = frame[['player_display_name', 'player_name']].astype('string')
+    with duckdb.connect(':memory:') as conn:
+        conn.register('feed', frame)
+        conn.execute('CREATE TABLE weekly_player_stats AS SELECT * FROM feed')
+        row = player_stats.build_offensive_stats_from_weekly(conn, [2024], log=lambda _: None).iloc[0]
+        assert row['player_name'] == expected
+        assert row['player_id'] == '00-0002024'
+        assert (row['receptions'], row['rec_yards']) == (1, 17)
+
+
 def test_a_season_that_fails_to_download_is_not_deleted(monkeypatch):
     """A 404 on one season must not take that season's stored rows with it.
 

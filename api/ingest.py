@@ -9,10 +9,11 @@ from pipeline.analytics import prepare_analytics
 from pipeline.loading import load_and_store_raw, load_advanced_stats, load_supplemental_data
 from pipeline.player_stats import build_player_game_stats
 from pipeline.receiving_build import has_official_receiving
+from pipeline.receiving_inputs import verify_stored_ftn
 from pipeline.source_results import SourceOutcome
 
 
-def run_ingest(seasons: list[int], log=print, *, core_inputs=None) -> list[SourceOutcome]:
+def run_ingest(seasons: list[int], log=print, *, core_inputs=None, rebuild_all_analytics=False) -> list[SourceOutcome]:
     """Load source feeds, build player stats, then prepare analytics for the batch."""
     conn = get_connection()
     if core_inputs is None and has_official_receiving(conn):
@@ -49,12 +50,19 @@ def run_ingest(seasons: list[int], log=print, *, core_inputs=None) -> list[Sourc
             build_player_game_stats(conn, historical, [season], log=log)
             analytics_seasons.add(season)
 
-    log(f"\nLoading advanced stats for {seasons}...")
-    outcomes.extend(load_advanced_stats(conn, seasons, log=log))
+    if rebuild_all_analytics:
+        analytics_seasons.update(row[0] for row in conn.execute(
+            "SELECT DISTINCT season FROM plays WHERE season_type='REG'").fetchall())
+        log(f"\nFull analytics rebuild: {sorted(analytics_seasons)}")
+    advanced_seasons = sorted(analytics_seasons) if rebuild_all_analytics else seasons
+    log(f"\nLoading advanced stats for {advanced_seasons}...")
+    outcomes.extend(load_advanced_stats(conn, advanced_seasons, log=log))
 
     log(f"\nLoading supplemental vendor data for {seasons}...")
     outcomes.extend(load_supplemental_data(conn, seasons, log=log))
 
+    if rebuild_all_analytics and core_inputs is not None:
+        verify_stored_ftn(conn, core_inputs, sorted(analytics_seasons))
     analytics_options = {} if core_inputs is None else {"receiving_inputs": core_inputs}
     prepare_analytics(sorted(analytics_seasons), log=log, **analytics_options)
     return outcomes

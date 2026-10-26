@@ -64,13 +64,17 @@ def build_offensive_stats_from_weekly(conn, seasons: list[int], log=print) -> pd
                 AND (sch.home_team = {era_team} OR sch.away_team = {era_team})
         """
 
-    name_col = 'player_display_name' if 'player_display_name' in cols else 'player_name'
+    # Some historical rows have only the abbreviated source name. Choose per
+    # row, rather than discarding that name because the display column exists.
+    name_fields = [f"NULLIF(TRIM(w.{name}), '')" for name in
+                   ('player_display_name', 'player_name') if name in cols]
+    name_expr = 'COALESCE(' + ', '.join([*name_fields, 'w.player_id']) + ')'
 
     sql = f"""
         SELECT
             {game_id_expr}                                              AS game_id,
             w.player_id,
-            w.{name_col}                                                AS player_name,
+            {name_expr}                                                 AS player_name,
             w.team                                                      AS team,
             w.season,
             w.week,

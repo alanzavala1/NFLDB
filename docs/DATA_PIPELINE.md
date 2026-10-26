@@ -46,6 +46,18 @@ them. Global calibration means that loading a new season can change a game's
 percentile compared with the wider history; rebuilding only that new season
 would mix scales. Those global rebuilds therefore run once per ingest batch.
 
+`jobs.prepare --rebuild-all-analytics` expands seasonal analytics and advanced
+feed refreshes to every stored REG season while downloading core inputs only
+for the requested seasons. Supplemental seasonal feeds keep the requested scope.
+It does not independently rebuild unchanged historical player-game rows; their
+ordinary rebuild trigger remains a refreshed play/weekly season. With captured
+receiving inputs, the collection must cover the expanded history, and stored
+FTN game/play keys, play-action flags and pass-rusher counts must match each
+bound capture before any analytics builder runs. This preserves the full FTN
+feed's additional fields for other calculations. An outage that would retain
+conflicting old charting fails this check. The flag changes preparation scope,
+not the publication gate.
+
 ## Core seasonal downloads
 
 `api/pipeline/sources.py` owns downloading play-by-play and official weekly
@@ -677,6 +689,11 @@ checks exact stored rows/metadata, preserves player-game counts and exercises
 receiving HTTP. Success explicitly reports `publication_ready: false`.
 Separate captured runs can be assembled into one compatible historical input
 collection with `jobs.receiving_core_inputs --bundles ... --output ...`.
+
+The [October 26 coordinated rebuild](RECEIVING_BUILD_INTEGRATION.md#coordinated-refresh-october-26-2026)
+refreshes the current captured inputs and context before rebuilding dependent
+analytics across the stored history. It is a separate development proof; the
+complete receiving-aware release gate remains outstanding.
 
 The app is not read-only yet. These paths must be retired together with verified
 replacement preparation:

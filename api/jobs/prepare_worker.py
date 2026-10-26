@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 
-def prepare(seasons: list[int], *, core_inputs: Path | None = None) -> None:
+def prepare(seasons: list[int], *, core_inputs: Path | None = None, rebuild_all_analytics=False) -> None:
     # Never allow an internal worker invocation to fall back to the serving DB.
     path = os.environ.get('NFL_DB_PATH')
     if not path or not Path(path).is_absolute() or not Path(path).is_file():
@@ -21,6 +21,8 @@ def prepare(seasons: list[int], *, core_inputs: Path | None = None) -> None:
         if core_inputs is not None:
             from pipeline.receiving_core_collection import open_core_inputs
             options['core_inputs'] = open_core_inputs(core_inputs)
+        if rebuild_all_analytics:
+            options['rebuild_all_analytics'] = True
         with database.write_lock:
             outcomes = run_ingest(seasons, log=lambda message: print(message, flush=True), **options)
             conn = database.get_connection()
@@ -47,8 +49,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seasons', type=int, nargs='+', required=True)
     parser.add_argument('--core-inputs', type=Path)
+    parser.add_argument('--rebuild-all-analytics', action='store_true')
     args = parser.parse_args()
-    prepare(args.seasons, core_inputs=args.core_inputs)
+    prepare(args.seasons, core_inputs=args.core_inputs, rebuild_all_analytics=args.rebuild_all_analytics)
 
 
 if __name__ == '__main__':

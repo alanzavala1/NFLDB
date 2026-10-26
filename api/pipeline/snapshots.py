@@ -61,10 +61,12 @@ def _run_job(candidate: Path, module: str, arguments: list[str], *, read_only=Fa
         raise subprocess.CalledProcessError(code, command)
 
 
-def _run_worker(candidate: Path, seasons: list[int], *, core_inputs: Path | None = None) -> None:
+def _run_worker(candidate: Path, seasons: list[int], *, core_inputs: Path | None = None, rebuild_all_analytics=False) -> None:
     arguments = ['--seasons', *(str(s) for s in seasons)]
     if core_inputs is not None:
         arguments.extend(['--core-inputs', str(core_inputs)])
+    if rebuild_all_analytics:
+        arguments.append('--rebuild-all-analytics')
     _run_job(candidate, 'jobs.prepare_worker', arguments)
 
 
@@ -125,7 +127,7 @@ def validate_preparation(candidate: Path, seasons: list[int]) -> None:
 
 
 def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=print, *,
-                      core_inputs: Path | None = None) -> Path:
+                      core_inputs: Path | None = None, rebuild_all_analytics=False) -> Path:
     """Copy a closed snapshot, prepare and validate in isolated processes.
 
     Never replaces source. Failed candidates are removed after the worker exits.
@@ -147,6 +149,8 @@ def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=pri
     _copy_source(source, candidate)
     try:
         options = {} if core_inputs is None else {'core_inputs': core_inputs}
+        if rebuild_all_analytics:
+            options['rebuild_all_analytics'] = True
         _run_worker(candidate, seasons, **options)
         validate_preparation(candidate, seasons)
         _run_validation(candidate)

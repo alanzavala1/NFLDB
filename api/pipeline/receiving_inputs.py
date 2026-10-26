@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+import duckdb
 import numpy as np
 import pandas as pd
 
@@ -93,3 +94,27 @@ def verify_receiving_inputs(directory: Path, manifest: dict, context: pd.DataFra
         if not (a.eq(b).fillna(False) | (a.isna() & b.isna())).all():
             raise CandidateError("FTN context differs from bound charting input")
     return record
+
+
+def verify_stored_ftn(conn, inputs, seasons: list[int]) -> None:
+    """All-category rebuilds must use the receiving capture's charting values.
+
+    Compare the shared projection, retaining the stored full feed's other fields
+    for passing/rushing/grades. Expected source outages cannot silently expose
+    older charting rows. This check does not download or replace data.
+    """
+    from pipeline.receiving_core_inputs import _same_rows
+    from pipeline.receiving_splits import read_export_csv
+    from pipeline.source_results import SourceError
+    tables = {row[0] for row in conn.execute("SHOW TABLES").fetchall()}
+    fields = ",".join(FTN_COLUMNS)
+    for season in seasons:
+        directory, manifest, _ = inputs.receiving_run(season)
+        expected = read_export_csv(directory, manifest, f"ftn-{season}.csv", season=season)
+        validate_ftn(expected, season)
+        try:
+            actual = (conn.execute(f"SELECT {fields} FROM ftn_charting WHERE season=?", [season]).df()
+                      if "ftn_charting" in tables else pd.DataFrame(columns=FTN_COLUMNS))
+            _same_rows(actual, expected, ["game_id", "play_id"], season)
+        except (SourceError, duckdb.Error) as error:
+            raise SourceError("ftn_charting", season, "stored fields differ from bound receiving inputs") from error

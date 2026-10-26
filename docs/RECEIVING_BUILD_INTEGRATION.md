@@ -8,8 +8,9 @@ and metric-availability records. Passing/rushing keep their existing SQL.
 
 This is an **offline integration**, not a publishable snapshot. The full gate
 rejects the new receiving marker until integration and receiving-aware release
-validation are ready. API/UI handling is now connected locally; full source,
-candidate and downstream checks remain. No serving database was replaced.
+validation are ready. API/UI handling and a coordinated offline rebuild are now
+connected locally; complete receiving-aware release checks remain outstanding.
+No serving database was replaced.
 
 ## Why this boundary comes first
 
@@ -141,6 +142,116 @@ controls. It stored all 16,551 plays and 6,551 identified weekly/player-game row
 (seven unidentified weekly rows dropped by the existing policy). Receptions,
 receiving yards and TD checks all had zero mismatches. Source DB SHA256 remained
 `b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`.
+
+## Coordinated refresh, October 26, 2026
+
+The previous development copy mixed 94 captured 2026 games with analytics from
+two games. A new owned copy refreshes current-season inputs before rebuilding
+analytics. It does not replace that copy or the original serving database.
+
+The pinned R environment produced a fresh 2026 capture and all 17 receiving
+views. Conversion reused those captured RDS files without downloading core data
+again. The new collection combines this bundle with the unchanged 1999–2025
+bundles. The normal adapters refresh 2026 schedules and rosters alongside it.
+The stored schedule and captured PBP now agree on **106 completed REG games**,
+with no current-season missing or unconfirmed game IDs. This describes the
+captured revision, not a promise that an upstream feed is permanently current.
+
+`--rebuild-all-analytics` is an explicit preparation option forwarded through
+`jobs.prepare`, its snapshot wrapper and the isolated worker. It refreshes
+advanced inputs and rebuilds seasonal analytics for every stored REG season;
+global ratings, O-line calibration and career comparables run once per batch.
+Only requested core seasons are downloaded. Supplemental seasonal feeds keep
+that requested scope. Unchanged historical player-game rows are not rebuilt
+automatically; ordinary play/weekly replacement still owns their rebuild trigger.
+
+For a captured full rebuild, `receiving_inputs.verify_stored_ftn` checks the
+stored feed against every bound receiving capture before analytics run. It
+compares game/play keys, play-action flags and pass-rusher counts, including
+empty expected feeds. Extra full-feed fields remain available to other
+calculations. Conflicting retained charting after an outage fails preparation.
+This makes shared charting agreement explicit without replacing the full feed
+with the receiving producer's five-column projection.
+
+The broader HTTP proof found a historical source-name bug: the weekly composer
+selected the display-name column whenever it existed, even when an individual
+row only had an abbreviated name. It now chooses the first nonblank display/
+abbreviated name, then the player ID when neither is supplied. The affected
+1999–2000 player-game rows were rebuilt offline; every key and non-name statistic
+was checked for exact preservation before rebuilding dependent analytics.
+
+The development rebuild uses the internal worker so evidence can be retained
+while publication remains intentionally blocked. It is not a supported way to
+promote a snapshot: the outer `jobs.prepare` still validates and deletes failed
+candidates, and `jobs.validate` still rejects the official integration marker.
+The release validator must adopt the receiving source-bound rules and complete
+the broader release checks before that guard can be removed.
+
+Ignored local artifacts:
+
+- `api/data/receiving-current-refresh-exports-20261026/`
+- `api/data/receiving-current-refresh-core-20261026/`
+- `api/data/receiving-refreshed-history-collection-20261026/`
+- `api/data/coordinated-analytics-refresh-20261026.duckdb`
+- `api/data/coordinated-analytics-refresh-20261026.log`
+- `api/data/coordinated-refresh-name-repair-20261026.log`
+
+The captured manifest SHA256 is
+`4f5c86f5ddb4859ebc4dddb64b7cda4f4048096220ba212c1f982758280173b2`;
+the current core bundle is
+`be3bc34bfb963b9da79c120618bd473fdce1a7563ed5dc1b00f26c057373f0a8`;
+the full collection is
+`5f3256729f31ec39d80143fd47eaf488725d58d97ee004a783e9dec53bc211e9`.
+
+### Coordinated rebuild checks
+
+The read-only development proof passed prepared-table schemas and lookup keys,
+finite/bounded ratings and grades, split-rate sanity, and game coverage for all
+28 stored REG seasons. All **106** current supplied games appear in player-game
+stats, player ratings and O-line grades. Current team analytics have 32 teams,
+power rankings have 224 team/week rows, team splits have 2,238 rows, and defensive
+splits have 12,989 rows. These tables were rebuilt together; coverage counts
+alone would not establish that provenance.
+
+All **73 representative HTTP requests** passed, including the 56 receiving
+requests. Every historical receiving split row and every historical player-game
+key/statistic matched the earlier verified copy exactly, excluding the intended
+player-name repair. Source/previous-development/candidate hashes stayed unchanged
+during the read-only proof, and all three closed files had no pending WAL.
+The original and previous development hashes above are unchanged. The new
+candidate SHA256 after rebuilding is
+`9de964a9e17597e8ba8383cec86eb96b25466bea7ce3517fab26aa1ba086641f`.
+
+The recorded optional gaps are empty 2026 PFR passing, season/weekly QBR feeds
+and 2012 snap counts. Existing rows are retained under the normal optional-feed
+policy; this rebuild does not certify those feeds as fresh. The publication
+guard still rejects this candidate as expected.
+
+Complete game coverage does not imply complete context for every view. For
+qualified 2026 receivers, the capture lacks surface labels for 1,066 catches /
+12,166 yards / 68 TDs, play-action classification for 295 / 3,368 / 17, and blitz
+classification for 300 / 3,408 / 18. Those counts stay in the independent whole
+totals and other supported views; affected views retain explicit exclusions.
+Other dimensions have partial play context without excluded receiving counts
+(for example, Down excludes 2,921 source plays but zero receiving production).
+No missing labels were inferred or redistributed.
+
+Evidence is in the ignored `api/data/coordinated-refresh-proof-20261026.{json,log}`
+and its read-only `verify_coordinated_refresh_20261026.py` runner.
+
+The final `jobs.validate_receiving` rerun after the name repair also passed all
+**28 seasons, 266,762 receiving rows, 5,633 qualified player-seasons and 476
+views**, with exact source-bound metadata, all 84 player-game receiving-count
+checks at zero mismatches, and 56 receiving HTTP checks. The known three missing
+historical games remain explicit. Its report still says `publication_ready:
+false`; the log is `api/data/coordinated-receiving-final-validation-20261026.log`.
+
+The final backend suite passed **1,203 tests, two skipped** (335.40s), including
+11 new full-rebuild/charting-coherence controls and four name-selection cases.
+Results are in `api/data/coordinated-refresh-final-backend-20261026.{xml,log}`.
+The final focused run passed 23 tests. Final source/previous-copy/candidate hashes
+were rechecked after all jobs closed; all matched the values recorded above and
+no WAL remained. No frontend files, deployment configuration or live data changed.
 
 Deterministic regression checks exercise real typed CSVs, DuckDB writes and
 candidate subprocesses: changed bytes/revisions, missing years, duplicate keys,

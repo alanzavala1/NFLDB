@@ -18,8 +18,12 @@ def main(argv=None) -> None:
     parser.add_argument('--seasons', type=int, nargs='+', required=True)
     parser.add_argument('--core-inputs', type=Path,
                         help='Use captured core inputs and official receiving exports (integration is not yet publishable)')
+    parser.add_argument('--rebuild-all-analytics', action='store_true',
+                        help='Refresh advanced inputs and rebuild analytics for every stored REG season')
     args = parser.parse_args(argv)
     options = {} if args.core_inputs is None else {'core_inputs': args.core_inputs}
+    if args.rebuild_all_analytics:
+        options['rebuild_all_analytics'] = True
     prepare_candidate(args.source, args.candidate, args.seasons, **options)
 
 
