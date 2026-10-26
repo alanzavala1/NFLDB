@@ -30,6 +30,21 @@ def test_target_role_includes_incompletions_and_interceptions_and_zero_is_not_su
     assert result.loc[1, "air_yards"] == 0
 
 
+@pytest.mark.parametrize("missing_epa", [False, True])
+def test_whole_population_is_independent_of_missing_down_context(missing_epa):
+    source, context = inputs()
+    source["split_value"] = "all"
+    context["down"] = None
+    if missing_epa:
+        context.loc[1, "epa"] = None
+    result = receiving_target_metrics(source, context, 2024, dimension=None)
+    assert result.air_yards.iloc[0] == 3
+    if missing_epa:
+        assert result[["epa", "success_pct"]].isna().all().all()
+    else:
+        assert result.iloc[0].tolist() == [0.3333, 33.3, 3]
+
+
 @pytest.mark.parametrize("fault", ["missing_epa", "target_mismatch", "missing_target", "historical"])
 def test_incomplete_populations_hide_only_rates(fault):
     source, context = inputs()

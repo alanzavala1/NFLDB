@@ -8,7 +8,7 @@ from services.receiving_coverage import air_yards_unavailable, targets_unavailab
 
 
 def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season: int,
-                             *, dimension: str = "down") -> pd.DataFrame:
+                             *, dimension: str | None = "down") -> pd.DataFrame:
     """Require complete matching target populations before exposing each field.
 
     Success is EPA > 0, calculated here because calculate_stats has no success
@@ -31,7 +31,9 @@ def receiving_target_metrics(source: pd.DataFrame, context: pd.DataFrame, season
         fail("unexpected target context scope")
     if plays[["game_id", "play_id"]].isna().any().any() or plays.duplicated(["game_id", "play_id"]).any():
         fail("missing or duplicate play identity")
-    plays["split_value"] = context_split_values(plays, dimension, season)
+    # None is the internal whole-population calculation, independent of every
+    # situational classifier. It is not an additional public export dimension.
+    plays["split_value"] = "all" if dimension is None else context_split_values(plays, dimension, season)
     for flag in [*flags, "two_point_attempt"]:
         if not plays[flag].dropna().isin([0, 1]).all():
             fail("invalid context attempt flags")

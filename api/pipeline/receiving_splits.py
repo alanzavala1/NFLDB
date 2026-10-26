@@ -28,7 +28,7 @@ EXPORT_CONTRACT = {
 }
 VERSIONS = {"nflfastR": "6.0.0", "nflreadr": "1.5.1"}
 _PRODUCTION = {"targets": "att", "receptions": "cmp", "receiving_yards": "yards", "receiving_tds": "td"}
-_COUNTS = {**_PRODUCTION, "receiving_yards_after_catch": "yac", "receiving_first_downs": "first_downs"}
+COUNT_COLUMNS = {**_PRODUCTION, "receiving_yards_after_catch": "yac", "receiving_first_downs": "first_downs"}
 _UNSUPPORTED = ("interceptions", "cpoe")
 _TARGET_METRICS = ("epa", "success_pct", "air_yards")
 _COLUMNS = ("player_id", "season", "category", "split_dim", "split_value", "sort_order",
@@ -43,6 +43,24 @@ def _error(season: int, reason: str) -> SourceError:
 def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season: int,
                            qualified_players: Collection[str], dimension: str = "down",
                            allow_empty: bool = False) -> pd.DataFrame:
+    """Adapt one of the 17 verified situational exports to canonical rows."""
+    if dimension not in DIMENSIONS:
+        raise _error(season, "unsupported split dimension")
+    return _adapt_receiving(frame, context=context, season=season,
+                            qualified_players=qualified_players, dimension=dimension,
+                            allow_empty=allow_empty)
+
+
+def adapt_receiving_overall(frame: pd.DataFrame, *, context: pd.DataFrame, season: int,
+                            qualified_players: Collection[str]) -> pd.DataFrame:
+    """Apply the same masks/population checks to the independent whole export."""
+    return _adapt_receiving(frame.assign(split_value="all"), context=context, season=season,
+                            qualified_players=qualified_players, dimension=None, allow_empty=False)
+
+
+def _adapt_receiving(frame: pd.DataFrame, *, context: pd.DataFrame, season: int,
+                      qualified_players: Collection[str], dimension: str | None,
+                      allow_empty: bool) -> pd.DataFrame:
     """Validate all source rows, then map admitted players' observed counts.
 
     Observed target records are not a completeness claim. Do not infer admission
@@ -51,14 +69,12 @@ def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season
     Only a caller that has validated the classified/excluded references may allow
     an empty export; missing/truncated ordinary exports still fail closed.
     """
-    if dimension not in DIMENSIONS:
-        raise _error(season, "unsupported split dimension")
-    buckets = DIMENSIONS[dimension]
+    buckets = ("all",) if dimension is None else DIMENSIONS[dimension]
     if not isinstance(qualified_players, Collection) or isinstance(qualified_players, (str, bytes)) or any(
         not isinstance(player, str) or not player.strip() for player in qualified_players
     ):
         raise _error(season, "qualified_players must contain nonempty player IDs")
-    required = {"player_id", "season", "season_type", "split_value", "receiving_epa", "receiving_air_yards", *_COUNTS}
+    required = {"player_id", "season", "season_type", "split_value", "receiving_epa", "receiving_air_yards", *COUNT_COLUMNS}
     if missing := required - set(frame.columns):
         raise _error(season, f"export is missing columns {sorted(missing)}")
     source = frame.copy()
@@ -77,7 +93,7 @@ def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season
     if source.loc[identified].duplicated(["player_id", "season", "split_value"]).any():
         raise _error(season, "export contains duplicate player/bucket rows")
     try:
-        values = source[list(_COUNTS)].apply(pd.to_numeric, errors="raise")
+        values = source[list(COUNT_COLUMNS)].apply(pd.to_numeric, errors="raise")
         numeric = values.to_numpy(dtype=float, na_value=np.nan)
     except (TypeError, ValueError) as error:
         raise _error(season, "export counts must be numeric") from error
@@ -90,7 +106,7 @@ def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season
         raise _error(season, "export has negative target/catch/TD/first-down counts")
     if values.receiving_first_downs.gt(values.receptions).any():
         raise _error(season, "receiving first downs exceed receptions")
-    source[list(_COUNTS)] = values
+    source[list(COUNT_COLUMNS)] = values
     source[list(_TARGET_METRICS)] = receiving_target_metrics(source, context, season, dimension=dimension)
     # The all-position calculator also emits zero receiving lines. Test activity
     # before target masking so unknown historical targets cannot become fake 0s.
@@ -99,13 +115,13 @@ def adapt_receiving_splits(frame: pd.DataFrame, *, context: pd.DataFrame, season
         activity_fields.append("receiving_yards_after_catch")
     active = values[activity_fields].ne(0).any(axis=1)
     source = source.loc[identified & active & source.player_id.isin(qualified_players)]
-    result = source[["player_id", "season", "split_value", *_COUNTS, *_TARGET_METRICS]].rename(columns=_COUNTS).copy()
+    result = source[["player_id", "season", "split_value", *COUNT_COLUMNS, *_TARGET_METRICS]].rename(columns=COUNT_COLUMNS).copy()
     result["category"] = "receiving"
-    result["split_dim"] = dimension
+    result["split_dim"] = "overall" if dimension is None else dimension
     result["sort_order"] = result.split_value.map({value: index for index, value in enumerate(buckets, 1)}).astype("Int64")
     if dimension == "opponent":
         result["sort_order"] = pd.Series(pd.NA, index=result.index, dtype="Int64")
-    for column in ("season", *_COUNTS.values()):
+    for column in ("season", *COUNT_COLUMNS.values()):
         result[column] = result[column].astype("Int64")
     if targets_unavailable([season]):
         result["att"] = pd.Series(pd.NA, index=result.index, dtype="Int64")

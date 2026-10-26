@@ -6,7 +6,8 @@ including postseason, rather than inventing zeroes or trusting legacy counts.
 Outside this known gap this policy leaves the existing source values unchanged;
 that is not a certification of every other season or of receiving EPA/ratings.
 Raw stored data and independently usable catches/yards/TDs are never changed.
-YAC and air-yard helpers are used only by the isolated preview, not serving.
+YAC/air-yard helpers also govern the prepared receiving API. Legacy profile
+and split endpoints retain their existing target-only mask until migration.
 """
 from collections.abc import Iterable
 
@@ -21,7 +22,7 @@ def targets_unavailable(seasons: Iterable[int]) -> bool:
 
 
 def yac_unavailable(seasons: Iterable[int]) -> bool:
-    """Preview policy: pre-2006 YAC lacks supported source records.
+    """Prepared receiving policy: pre-2006 YAC lacks supported source records.
 
     Separate from target coverage: 2006–08 has YAC despite missing targets.
     Later seasons still require reconciliation, not just this date check.
@@ -31,7 +32,7 @@ def yac_unavailable(seasons: Iterable[int]) -> bool:
 
 
 def air_yards_unavailable(seasons: Iterable[int]) -> bool:
-    """Preview requires both air-yard records and complete target attribution.
+    """Prepared receiving requires air records and complete target attribution.
 
     Pre-2006 air records are unsupported; 2003–08 targets are incomplete.
     Later seasons still require per-bucket coverage and reconciliation.

@@ -2,8 +2,10 @@
 from fastapi import APIRouter, HTTPException, Query
 from schemas.leaders import PlayerComparable
 from schemas.players import PlayerProfile, PlayerSplit, DefensiveSplit
+from schemas.receiving import PlayerReceivingSplits
 from services.player_profile import get_player_profile
 from services.receiving_coverage import mask_target_fields, targets_unavailable
+from services.receiving_splits import ReceivingDataError, read_player_receiving
 import comparables_builder
 import splits_builder
 import def_splits_builder
@@ -38,3 +40,12 @@ def get_player_splits(player_id: str):
 def get_player_def_splits(player_id: str):
     """A defender's event line conditioned on one situational dimension."""
     return def_splits_builder.read_or_materialize(player_id)
+
+
+@router.get("/players/{player_id}/receiving-splits", response_model=PlayerReceivingSplits)
+def get_player_receiving_splits(player_id: str):
+    """Prepared receiving totals, views and coverage in one read-only response."""
+    try:
+        return read_player_receiving(player_id)
+    except ReceivingDataError as error:
+        raise HTTPException(status_code=503, detail="Prepared receiving data is unavailable") from error

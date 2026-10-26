@@ -248,6 +248,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/players/{player_id}/receiving-splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Player Receiving Splits
+         * @description Prepared receiving totals, views and coverage in one read-only response.
+         */
+        get: operations["get_player_receiving_splits_api_players__player_id__receiving_splits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teams/{team}": {
         parameters: {
             query?: never;
@@ -1680,6 +1700,18 @@ export interface components {
             /** Awards */
             awards: components["schemas"]["PlayerAward"][];
         };
+        /** PlayerReceivingSplits */
+        PlayerReceivingSplits: {
+            /** Player Id */
+            player_id: string;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "Qualified regular-season receiving; observed production on supplied games";
+            /** Seasons */
+            seasons: components["schemas"]["ReceivingSeason"][];
+        };
         /**
          * PlayerSplit
          * @description One row of a player's stat line conditioned on a single situational
@@ -1753,6 +1785,119 @@ export interface components {
             away: number;
             /** Home */
             home: number;
+        };
+        /** ReceivingCounts */
+        ReceivingCounts: {
+            /** Att */
+            att: number | null;
+            /** Cmp */
+            cmp: number;
+            /** Yards */
+            yards: number;
+            /** Td */
+            td: number;
+            /** Yac */
+            yac: number | null;
+            /** First Downs */
+            first_downs: number;
+        };
+        /**
+         * ReceivingGameCoverage
+         * @description Supplied games versus recorded final scores; not a source freshness certificate.
+         */
+        ReceivingGameCoverage: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "complete" | "partial";
+            /** Supplied Games */
+            supplied_games: number;
+            /** Recorded Completed Games */
+            recorded_completed_games: number;
+            /** Missing Game Ids */
+            missing_game_ids: string[];
+            /** Unconfirmed Game Ids */
+            unconfirmed_game_ids: string[];
+            /** Reason */
+            reason: string | null;
+        };
+        /**
+         * ReceivingRow
+         * @description EPA per original target; success is percent of targets with EPA > 0.
+         */
+        ReceivingRow: {
+            /** Season */
+            season: number;
+            /** Category */
+            category: string;
+            /** Split Dim */
+            split_dim: string;
+            /** Split Value */
+            split_value: string;
+            /** Sort Order */
+            sort_order: number | null;
+            /** Att */
+            att: number | null;
+            /** Cmp */
+            cmp: number | null;
+            /** Yards */
+            yards: number | null;
+            /** Td */
+            td: number | null;
+            /** Interceptions */
+            interceptions: number | null;
+            /** Air Yards */
+            air_yards: number | null;
+            /** Yac */
+            yac: number | null;
+            /** First Downs */
+            first_downs: number | null;
+            /** Epa */
+            epa: number | null;
+            /** Success Pct */
+            success_pct: number | null;
+            /** Cpoe */
+            cpoe: number | null;
+            /** Unavailable Metrics */
+            unavailable_metrics: {
+                [key: string]: string;
+            };
+        };
+        /** ReceivingSeason */
+        ReceivingSeason: {
+            /** Season */
+            season: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "prepared" | "unverified";
+            /** Reason */
+            reason: string | null;
+            overall: components["schemas"]["ReceivingRow"] | null;
+            /** Rows */
+            rows: components["schemas"]["ReceivingRow"][];
+            game_coverage: components["schemas"]["ReceivingGameCoverage"] | null;
+            /** Views */
+            views: {
+                [key: string]: components["schemas"]["ReceivingViewCoverage"];
+            };
+        };
+        /** ReceivingViewCoverage */
+        ReceivingViewCoverage: {
+            /**
+             * Status
+             * @description Context coverage of all supplied season plays, not just this receiver.
+             * @enum {string}
+             */
+            status: "complete" | "partial" | "unavailable";
+            /** Reason */
+            reason: string | null;
+            /** Definition */
+            definition: string;
+            /** @description Only this receiver's verified production outside the view. */
+            excluded: components["schemas"]["ReceivingCounts"];
         };
         /**
          * RosterPlayer
@@ -2760,6 +2905,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DefensiveSplit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_player_receiving_splits_api_players__player_id__receiving_splits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerReceivingSplits"];
                 };
             };
             /** @description Validation Error */

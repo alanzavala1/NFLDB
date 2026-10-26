@@ -191,11 +191,21 @@ transaction; failures roll back both data and metadata:
 | `player_splits` | Existing long-format rows; official receiving counts and field-specific NULLs for qualified players |
 | `receiving_build_preparation` | One record per season: runtime/input revisions, qualification, whole reference checks, all view checks, exclusions, metric policies and candidate schedule coverage |
 | `receiving_whole_reference` | Qualified-player whole REG nonconversion reference; raw observed source values, explicitly not serving-ready |
+| `receiving_season_totals` | Independently prepared whole receiving rows with historical/population masks, correct per-target rates and verified per-player exclusions for all 17 views |
 
 The whole reference is separate from Down or other classified views. It is not
 safe to derive complete season totals from a view that excludes production.
 Raw reference targets/EPA are not automatically suitable for display; consumers
 must apply the recorded metric policies and covered-game scope.
+
+The builder now performs that preparation separately in `receiving_season_totals`.
+`adapt_receiving_overall` uses the same count adapter and original-target
+EPA/success/air completeness checks as the 17 views, with all supplied REG
+nonconversion plays in one internal group. It does not classify by Down, add an
+18th public export dimension or treat official EPA sums as per-target rates.
+Whole rows and per-player excluded counts are written in the same transaction
+as the split rows and preparation/reference records. The excluded counts come
+from hash-verified official excluded exports, not from missing database rows.
 
 Game coverage compares supplied REG game IDs with the candidate schedule's
 recorded completed games. It distinguishes missing PBP games from supplied games
@@ -344,3 +354,84 @@ Serving DB SHA256 remains
 the source core preview remains
 `a0a5e6ff2503bad4f08e3298145042b7ec024b2cd5d34362316df4fca558489f`.
 Nothing was pushed, deployed or promoted.
+
+## Coverage-aware receiving API
+
+`GET /api/players/{player_id}/receiving-splits` is an additive, read-only path.
+The existing `/splits` list and passing/rushing consumers retain their contracts.
+The new schema is `schemas/receiving.py`; its database reader is
+`services/receiving_splits.py`. Generated OpenAPI and TypeScript definitions
+include the contract, but the frontend does not consume it yet.
+
+Each prepared season contains:
+
+- `overall`: the independent whole receiving row, with supported counts and
+  separately checked target-based EPA/success/air values.
+- `rows`: the 17 situational views. Each row and the whole row have an
+  `unavailable_metrics` map explaining each NULL; NULL is never converted to zero.
+- `views`: season-wide play-context status/definition/reason, plus **this
+  player's** verified excluded counts. A season-wide partial status need not
+  mean this particular player lost production. Raw unsupported target/YAC
+  exclusions remain NULL under the same historical policies.
+- `game_coverage`: supplied versus recorded completed games, with separate
+  missing-play and unconfirmed-final-score IDs. These records do not certify
+  that the sources are current or that a full season has finished.
+
+The reader uses one independent cursor and a read transaction. It reads only
+database records; it never starts a builder, runs R or opens source export files.
+It verifies that each view's stored counts plus independently recorded excluded
+counts conserve the whole counts. Corrupt prepared records or lost split rows
+produce a controlled 503 instead of being relabelled as a source exclusion. Internal
+runtime/package/hash/path records and other players' qualification data are
+not exposed. EPA is a per-original-target rate, not the raw calculator sum.
+
+Legacy seasons without prepared totals are explicitly `unverified` with no
+new-path totals/rows. Their existing `/splits` response remains available;
+the new endpoint never fabricates a whole line by adding legacy Down buckets.
+Unknown/nonqualifying players have an empty `seasons` list. Below-threshold
+production remains available through the existing player profile/game logs.
+
+UI consumption, honest career aggregation, fresh source loading, downstream
+checks and complete receiving-aware release validation remain outstanding.
+Both preview and official-integration publication guards remain in force.
+
+### Executed receiving API check, October 25, 2026
+
+An owned copy of the prior verified integration database rebuilt all 28 years'
+receiving rows through the shared export verifier and production storage function.
+It added prepared whole rows and per-player exclusions for **5,622 qualified
+player-seasons**. All original **478,623 canonical split rows**, preparation
+records and raw reference records matched the original in both directions.
+This check reused the prior source-coherence proof; it did not repeat main
+ingestion or refresh schedules, rosters, vendors or other analytics.
+
+Representative receiving HTTP requests passed for every year, 1999–2026, against
+the closed copy reopened read-only. A final 28-request read-only check passed
+after the public charting explanation was sanitized. Historical masks and
+per-field explanations were retained; 2026 surface exclusions remained **721
+catches / 8,174 yards / 45 TDs**, with that production preserved in whole rows.
+The three missing historical games and 92 unconfirmed 2026 schedule scores remain
+explicit. Both the original serving database and prior integration database
+kept their bytes. HTTP reads left the new copy unchanged and without a WAL.
+The full publication guard still rejected the copy as expected.
+
+Validation passed: **1,144 backend tests, two skipped**; after final API
+explanation review, all **21 receiving HTTP controls** passed. Controls cover
+historical masks, partial/empty views, independent air/EPA availability,
+legacy fallback refusal, malformed records, a lost row in a partial view,
+schema validation rollback, sanitized provider diagnostics and read-only file
+immutability. The frontend production build passed; OpenAPI/TypeScript changes
+are generated contract additions only. No frontend consumer changed.
+
+Ignored evidence:
+
+- `api/data/receiving-api-proof-20261025.duckdb` and `.json`/`.log`: owned
+  integration copy, all-year results, exact-row comparisons and source hashes.
+- `api/data/receiving-api-final-http-proof-20261025.json`: final 28 read-only
+  responses and unchanged candidate SHA256.
+- `api/data/receiving-api-backend-tests-20261025.{xml,log}` and
+  `receiving-api-final-review-tests-20261025.{xml,log}`: backend and final HTTP checks.
+
+The API proof copy SHA256 is
+`dca943c62551afb9a1340105687e044d548fbba8b0a9faaef74f1604b6bb95db`.
+It remains an unpublishable development artifact. Nothing was pushed or deployed.

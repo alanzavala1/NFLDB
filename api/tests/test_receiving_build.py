@@ -8,7 +8,7 @@ import pytest
 
 import splits_builder
 from pipeline import receiving_preview
-from pipeline.receiving_build import PREPARATION_TABLE, REFERENCE_TABLE
+from pipeline.receiving_build import PREPARATION_TABLE, REFERENCE_TABLE, TOTALS_TABLE
 from pipeline.receiving_exports import load_receiving_season
 from pipeline.source_results import SeasonalFeed, SourceError
 from pipeline.validation import SnapshotValidationError, validate_snapshot
@@ -156,7 +156,8 @@ def test_failure_after_row_and_metadata_writes_rolls_back_everything(build_case,
     if already_official:
         splits_builder.materialize(2024, receiving_inputs=inputs)
     before = snapshot(conn)
-    metadata = conn.execute(f'SELECT record FROM {PREPARATION_TABLE}').fetchall() if already_official else None
+    metadata = {table: conn.execute(f'SELECT record FROM {table}').fetchall()
+                for table in (PREPARATION_TABLE, REFERENCE_TABLE, TOTALS_TABLE)} if already_official else None
     original = receiving_build.store_receiving
     def fail(*args):
         original(*args)
@@ -168,9 +169,11 @@ def test_failure_after_row_and_metadata_writes_rolls_back_everything(build_case,
         splits_builder.materialize(2024, receiving_inputs=inputs)
     assert snapshot(conn) == before
     if already_official:
-        assert conn.execute(f'SELECT record FROM {PREPARATION_TABLE}').fetchall() == metadata
+        for table, records in metadata.items():
+            assert conn.execute(f'SELECT record FROM {table}').fetchall() == records
     else:
-        assert PREPARATION_TABLE not in {row[0] for row in conn.execute('SHOW TABLES').fetchall()}
+        assert not {PREPARATION_TABLE, REFERENCE_TABLE, TOTALS_TABLE} & {
+            row[0] for row in conn.execute('SHOW TABLES').fetchall()}
 
 
 def test_legacy_request_or_maintenance_rebuild_cannot_overwrite_official_rows(build_case):

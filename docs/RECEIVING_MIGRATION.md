@@ -301,6 +301,10 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
   1999 is missing one game and 2000 two games; their observed data is validated,
   not certified complete. 2026 surface context is absent for 29 supplied games.
   Keep usable receiving production and expose these limits explicitly.
+  The additive receiving API now carries masked whole totals, per-row NULL
+  reasons, player-specific view exclusions and separate missing/unconfirmed
+  game records. Legacy seasons are explicitly unverified on that path.
+  Frontend consumption and career aggregation are still pending.
 - [ ] Integrate the official receiving path into the ordinary offline build,
   remove its replaced receiving calculation, and preserve passing/rushing paths.
   The captured-input build now uses the official path and stores coverage and
@@ -328,6 +332,7 @@ was performed by this inventory.
   `receiving_target_metrics.py`; `api/jobs/receiving_preview_worker.py`;
   `api/experiments/upstream_receiving_splits.R`.
 - Coverage/UI: `api/services/receiving_coverage.py`,
+  `api/services/receiving_splits.py`, `api/schemas/receiving.py`,
   `frontend/src/features/splits/aggregation.ts`, `metricFormatting.ts`.
 - Optional feed: `api/pipeline/vendor_sources.py`, `normalization.py`;
   opponent definitions: `api/config.py`.

@@ -16,11 +16,15 @@ from pipeline.snapshots import CandidateError
 
 PREPARATION_TABLE = "receiving_build_preparation"
 REFERENCE_TABLE = "receiving_whole_reference"
+TOTALS_TABLE = "receiving_season_totals"
 _DDL = """
 CREATE TABLE IF NOT EXISTS receiving_build_preparation (
     season INTEGER PRIMARY KEY, record JSON NOT NULL
 );
 CREATE TABLE IF NOT EXISTS receiving_whole_reference (
+    season INTEGER PRIMARY KEY, record JSON NOT NULL
+);
+CREATE TABLE IF NOT EXISTS receiving_season_totals (
     season INTEGER PRIMARY KEY, record JSON NOT NULL
 );
 """
@@ -114,7 +118,14 @@ def store_receiving(conn, season: int, prepared: PreparedReceiving) -> None:
             conn.unregister("official_receiving_rows")
     reference = prepared.exports.reference.astype(object)
     reference = reference.where(reference.notna(), None).to_dict(orient="records")
+    totals = prepared.exports.totals.astype(object)
+    totals = totals.where(totals.notna(), None).to_dict(orient="records")
+    for row in totals:
+        row["excluded_counts"] = prepared.exports.exclusions[row["player_id"]]
     for table, record in ((PREPARATION_TABLE, prepared.report),
+                          (TOTALS_TABLE, {"format_version": 1, "metric_policy_applied": True,
+                                          "scope": "observed whole REG nonconversion receiving on supplied games",
+                                          "rows": totals}),
                           (REFERENCE_TABLE, {"format_version": 1, "scope": "qualified-player whole REG nonconversion reference",
                                              "serving_ready": False, "rows": reference,
                                              "source_revisions": prepared.report["whole_reference"]["source_revisions"]})):

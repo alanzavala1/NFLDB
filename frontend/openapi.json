@@ -595,6 +595,46 @@
         }
       }
     },
+    "/api/players/{player_id}/receiving-splits": {
+      "get": {
+        "summary": "Get Player Receiving Splits",
+        "description": "Prepared receiving totals, views and coverage in one read-only response.",
+        "operationId": "get_player_receiving_splits_api_players__player_id__receiving_splits_get",
+        "parameters": [
+          {
+            "name": "player_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Player Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerReceivingSplits"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/teams/{team}": {
       "get": {
         "summary": "Get Team",
@@ -5502,6 +5542,33 @@
         "title": "PlayerProfile",
         "description": "Full /players/{id} payload."
       },
+      "PlayerReceivingSplits": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "scope": {
+            "type": "string",
+            "const": "Qualified regular-season receiving; observed production on supplied games",
+            "title": "Scope"
+          },
+          "seasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReceivingSeason"
+            },
+            "type": "array",
+            "title": "Seasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "scope",
+          "seasons"
+        ],
+        "title": "PlayerReceivingSplits"
+      },
       "PlayerSplit": {
         "properties": {
           "season": {
@@ -5784,6 +5851,408 @@
           "home"
         ],
         "title": "QuarterScore"
+      },
+      "ReceivingCounts": {
+        "properties": {
+          "att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Att"
+          },
+          "cmp": {
+            "type": "integer",
+            "title": "Cmp"
+          },
+          "yards": {
+            "type": "integer",
+            "title": "Yards"
+          },
+          "td": {
+            "type": "integer",
+            "title": "Td"
+          },
+          "yac": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yac"
+          },
+          "first_downs": {
+            "type": "integer",
+            "title": "First Downs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "att",
+          "cmp",
+          "yards",
+          "td",
+          "yac",
+          "first_downs"
+        ],
+        "title": "ReceivingCounts"
+      },
+      "ReceivingGameCoverage": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ],
+            "title": "Status"
+          },
+          "supplied_games": {
+            "type": "integer",
+            "title": "Supplied Games"
+          },
+          "recorded_completed_games": {
+            "type": "integer",
+            "title": "Recorded Completed Games"
+          },
+          "missing_game_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Game Ids"
+          },
+          "unconfirmed_game_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unconfirmed Game Ids"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "supplied_games",
+          "recorded_completed_games",
+          "missing_game_ids",
+          "unconfirmed_game_ids",
+          "reason"
+        ],
+        "title": "ReceivingGameCoverage",
+        "description": "Supplied games versus recorded final scores; not a source freshness certificate."
+      },
+      "ReceivingRow": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "split_dim": {
+            "type": "string",
+            "title": "Split Dim"
+          },
+          "split_value": {
+            "type": "string",
+            "title": "Split Value"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Att"
+          },
+          "cmp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cmp"
+          },
+          "yards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yards"
+          },
+          "td": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Td"
+          },
+          "interceptions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interceptions"
+          },
+          "air_yards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Yards"
+          },
+          "yac": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yac"
+          },
+          "first_downs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Downs"
+          },
+          "epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epa"
+          },
+          "success_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pct"
+          },
+          "cpoe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpoe"
+          },
+          "unavailable_metrics": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Unavailable Metrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "category",
+          "split_dim",
+          "split_value",
+          "sort_order",
+          "att",
+          "cmp",
+          "yards",
+          "td",
+          "interceptions",
+          "air_yards",
+          "yac",
+          "first_downs",
+          "epa",
+          "success_pct",
+          "cpoe",
+          "unavailable_metrics"
+        ],
+        "title": "ReceivingRow",
+        "description": "EPA per original target; success is percent of targets with EPA > 0."
+      },
+      "ReceivingSeason": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "prepared",
+              "unverified"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "overall": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReceivingRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ReceivingRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "game_coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReceivingGameCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "views": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReceivingViewCoverage"
+            },
+            "type": "object",
+            "title": "Views"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "status",
+          "reason",
+          "overall",
+          "rows",
+          "game_coverage",
+          "views"
+        ],
+        "title": "ReceivingSeason"
+      },
+      "ReceivingViewCoverage": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unavailable"
+            ],
+            "title": "Status",
+            "description": "Context coverage of all supplied season plays, not just this receiver."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "definition": {
+            "type": "string",
+            "title": "Definition"
+          },
+          "excluded": {
+            "$ref": "#/components/schemas/ReceivingCounts",
+            "description": "Only this receiver's verified production outside the view."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "reason",
+          "definition",
+          "excluded"
+        ],
+        "title": "ReceivingViewCoverage"
       },
       "RosterPlayer": {
         "properties": {

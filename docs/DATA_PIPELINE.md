@@ -664,7 +664,10 @@ calculator's captured full plays/weekly inputs in `jobs.prepare --core-inputs`.
 See [shared receiving inputs](RECEIVING_BUILD_INTEGRATION.md) for the frozen
 conversion, revision records and current limits. This also selects official
 receiving materialization and persists coverage/whole-reference records.
-API/UI scope handling and full release validation remain pending; the full gate
+An additive read-only receiving API now returns prepared independent whole
+totals, NULL reasons, player-specific exclusions and game coverage together.
+The frontend still needs to consume that contract and aggregate missing/partial
+values honestly. UI scope handling and full release validation remain pending; the full gate
 rejects the integration marker, and the existing preview rejection remains.
 Separate captured runs can be assembled into one compatible historical input
 collection with `jobs.receiving_core_inputs --bundles ... --output ...`.
