@@ -36,4 +36,7 @@ async def check_api(conn, seasons):
             payload = response.json()
             if not payload or (path.startswith('/api/team-analytics?') and not payload['league']):
                 raise SnapshotValidationError(f'{path}: unexpectedly empty response')
+    if 'receiving_build_preparation' in {row[0] for row in conn.execute('SHOW TABLES').fetchall()}:
+        from pipeline.receiving_api_checks import check_receiving_api
+        paths.extend(await check_receiving_api(conn, seasons))
     return paths

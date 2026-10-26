@@ -322,6 +322,12 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
 - [ ] Pass the unchanged full candidate/HTTP gates with revision-bound results,
   all historical/current coverage and receiving-total checks. Preview success is
   not a substitute. Ratings/comparables downstream effects must also be checked.
+  A repeatable `jobs.validate_receiving --database ... --core-inputs ...` now
+  checks every loaded season against its captured inputs and verifies receiving
+  HTTP output. The actual 28-season run passed all 266,157 rows/476 views, all
+  coverage/whole records, 84 player-game count checks and 56 receiving requests.
+  This is source-bound receiving validation, not complete candidate acceptance;
+  the full publication guard, fresh-source and downstream obligations remain.
 - [ ] Finish the UI/NULL/partial-scope checks above and a concrete release review.
 
 Publishing the validated snapshot, retiring runtime rebuilding and opening the

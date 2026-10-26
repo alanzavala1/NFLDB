@@ -438,3 +438,86 @@ Ignored evidence:
 The API proof copy SHA256 is
 `dca943c62551afb9a1340105687e044d548fbba8b0a9faaef74f1604b6bb95db`.
 It remains an unpublishable development artifact. Nothing was pushed or deployed.
+
+## Repeatable source-bound receiving validation
+
+The receiving check can now be rerun against a closed candidate using the same
+captured bundle/collection that prepared it. From `api/`:
+
+```powershell
+uv run --locked python -m jobs.validate_receiving `
+  --database data/receiving-api-proof-20261025.duckdb `
+  --core-inputs data/receiving-core-history-collection-20261025
+```
+
+This command opens DuckDB read-only and validates **every loaded REG season**;
+it has no selected-year shortcut. `pipeline/receiving_validation.py` uses the
+same source acceptance boundary as preparation to verify stored full PBP/weekly
+inputs, fresh-source admission, captured hashes/dependency lock/definitions,
+independent whole-versus-weekly counts, exact classified membership and excluded
+credits, historical NULL policies and original-target rate/air populations.
+It compares every canonical receiving row and all three stored receiving records
+with that source-bound replay. No mismatch allowance is used. Metadata comparison
+also preserves NULL/zero and Boolean/numeric distinctions.
+
+`receiving_build.receiving_records` is the shared pure record serializer; the
+validator does not write the replay results. Independent official whole/classified/
+excluded references remain the statistical authority. This is not another credit
+calculator, an R execution or a new source download. An internally consistent
+edit to stored splits, whole totals and coverage still fails against the bound
+exports. Missing/extra seasons, duplicate records, wrong schemas, changed bytes,
+lost rows, unsupported fields changed to zero and altered rates all fail.
+
+The existing zero-mismatch player-game receiving checks run for all identified
+player/week counts, including players below split admission. Catches, yards and
+TDs must match the stored weekly source. The full source replay separately binds
+those weekly fields to the captured inputs.
+
+`pipeline/receiving_api_checks.py` exercises receiving HTTP for every season using
+an ordinary player and a player with the largest recorded view exclusion. Empty
+admission has its own request. Responses must match whole/canonical rows,
+player-specific exclusions and missing/unconfirmed game records; every NULL
+metric needs an individual explanation. The general API checker also includes
+these requests when an official receiving preparation table is present.
+
+The standalone command intentionally reports `publication_ready: false`.
+It validates the receiving component, not complete snapshot freshness or other
+analytics. `jobs.validate` and its preview/official-integration rejection remain
+in force. Replacing the old Down-based receiving release checks, coordinating
+fresh schedules/vendors and verifying rebuilt downstream analytics are subsequent
+release work. This scoped command cannot promote a snapshot or change watermarks.
+
+### Executed validation, October 26, 2026
+
+The actual CLI passed against the previous verified development copy using all
+28 captured source seasons, **1999–2026**:
+
+- **266,157 receiving rows, 5,622 qualified player-seasons and 476 views** matched
+  the source-bound replay exactly, including all coverage/whole/reference records.
+- All **84 player-game count checks** had zero mismatches.
+- All **56 receiving HTTP requests** passed whole/row/explanation/coverage checks.
+- The known three missing 1999–2000 games and 92 unconfirmed stored 2026 final
+  scores remained explicit. They were not reclassified as complete coverage.
+- The development copy and original serving DB kept their exact bytes and had
+  no WALs. The unchanged full publication gate still rejected the copy.
+
+A read-only coverage inventory also confirms why this copy needs the coordinated
+analytics rebuild: its 2026 PBP and player-game rows cover 94 REG games, while
+player ratings and O-line grades cover only two. Team analytics have four rows,
+and 2026 defensive splits have none. These counts identify incomplete downstream
+preparation; matching historical row counts would not by itself prove freshness.
+The inventory is `api/data/receiving-validation-readiness-inventory-20261026.json`.
+
+The complete backend suite passed **1,188 tests, two skipped** (345.86s).
+The 43 new receiving-validation controls include deliberate corruption, changed
+source bytes/core rows, missing/extra season coverage, NULLs replaced with zero,
+false rate values, internally conserved wrong totals, changed HTTP output,
+below-admission game-log preservation and read-only success/failure. Existing
+builder, legacy snapshot and ordinary HTTP checks also passed. Backend results
+are in `api/data/receiving-validation-backend-20261026.{xml,log}`; focused results
+are in `receiving-validation-focused-20261026.{xml,log}`.
+
+Ignored evidence: `api/data/receiving-validation-cli-20261026.{json,log}` and
+`receiving-validation-proof-20261026.{json,log}`. The same copy remains at SHA256
+`dca943c62551afb9a1340105687e044d548fbba8b0a9faaef74f1604b6bb95db`; serving remains
+`b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`.

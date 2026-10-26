@@ -116,18 +116,22 @@ def store_receiving(conn, season: int, prepared: PreparedReceiving) -> None:
             conn.execute("INSERT INTO player_splits BY NAME SELECT * FROM official_receiving_rows")
         finally:
             conn.unregister("official_receiving_rows")
+    for table, record in receiving_records(prepared).items():
+        conn.execute(f"DELETE FROM {table} WHERE season=?", [season])
+        conn.execute(f"INSERT INTO {table} VALUES (?,?)", [season, json.dumps(record, allow_nan=False)])
+
+
+def receiving_records(prepared: PreparedReceiving) -> dict[str, dict]:
+    """One pure serialization contract for preparation and read-only replay."""
     reference = prepared.exports.reference.astype(object)
     reference = reference.where(reference.notna(), None).to_dict(orient="records")
     totals = prepared.exports.totals.astype(object)
     totals = totals.where(totals.notna(), None).to_dict(orient="records")
     for row in totals:
         row["excluded_counts"] = prepared.exports.exclusions[row["player_id"]]
-    for table, record in ((PREPARATION_TABLE, prepared.report),
-                          (TOTALS_TABLE, {"format_version": 1, "metric_policy_applied": True,
-                                          "scope": "observed whole REG nonconversion receiving on supplied games",
-                                          "rows": totals}),
-                          (REFERENCE_TABLE, {"format_version": 1, "scope": "qualified-player whole REG nonconversion reference",
-                                             "serving_ready": False, "rows": reference,
-                                             "source_revisions": prepared.report["whole_reference"]["source_revisions"]})):
-        conn.execute(f"DELETE FROM {table} WHERE season=?", [season])
-        conn.execute(f"INSERT INTO {table} VALUES (?,?)", [season, json.dumps(record, allow_nan=False)])
+    return {PREPARATION_TABLE: prepared.report,
+            TOTALS_TABLE: {"format_version": 1, "metric_policy_applied": True,
+                           "scope": "observed whole REG nonconversion receiving on supplied games", "rows": totals},
+            REFERENCE_TABLE: {"format_version": 1, "scope": "qualified-player whole REG nonconversion reference",
+                              "serving_ready": False, "rows": reference,
+                              "source_revisions": prepared.report["whole_reference"]["source_revisions"]}}

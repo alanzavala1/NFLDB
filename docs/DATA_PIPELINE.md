@@ -670,6 +670,11 @@ The receiving UI now consumes that contract and preserves missing metrics throug
 season/career comparisons, with per-view exclusions and game-coverage notes.
 Full release validation remains pending; the full gate
 rejects the integration marker, and the existing preview rejection remains.
+`jobs.validate_receiving --database ... --core-inputs ...` now provides the
+[source-bound receiving component check](RECEIVING_BUILD_INTEGRATION.md#repeatable-source-bound-receiving-validation)
+without changing either gate. It replays all loaded seasons from captured inputs,
+checks exact stored rows/metadata, preserves player-game counts and exercises
+receiving HTTP. Success explicitly reports `publication_ready: false`.
 Separate captured runs can be assembled into one compatible historical input
 collection with `jobs.receiving_core_inputs --bundles ... --output ...`.
 
