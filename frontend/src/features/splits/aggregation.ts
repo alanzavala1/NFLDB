@@ -1,5 +1,5 @@
 import type { PlayerSplit, TeamSplit, DefensiveSplit, PlayerGame } from '../../types'
-import type { PlayerCategory } from './types'
+import { receivingReasons } from './receivingAvailability'
 
 /** Sum a defender's event rows (counting stats only). */
 export function aggregateDefenseSplitRows(rows: DefensiveSplit[]): DefensiveSplit | null {
@@ -23,25 +23,32 @@ export function aggregateDefenseCareerByValue(rows: DefensiveSplit[]): Defensive
 }
 
 // ── Career aggregation (player) ──────────────────────────────────────────────
-// Counting stats sum; rate stats are attempt-weighted so a career row
-// reconciles with the player's overall line for the split.
+// Receiving counts require every included value. Rates require every positive
+// target-weighted value; zero-target lateral rows contribute counts, not rates.
 
 export function aggregatePlayerSplitRows(rows: PlayerSplit[]): PlayerSplit | null {
   if (rows.length === 0) return null
-  const sum = (f: (r: PlayerSplit) => number | null | undefined) => rows.reduce((a, r) => a + (f(r) ?? 0), 0)
+  const receiving = rows[0].category === 'receiving'
+  const sum = (f: (r: PlayerSplit) => number | null | undefined) => receiving && rows.some(r => f(r) == null)
+    ? null : rows.reduce((a, r) => a + (f(r) ?? 0), 0)
   const att = sum(r => r.att)
-  const missingTargets = rows[0].category === 'receiving' && rows.some(r => r.att === null)
   const wavg = (f: (r: PlayerSplit) => number | null | undefined) =>
-    att > 0 ? rows.reduce((a, r) => a + (f(r) ?? 0) * (r.att ?? 0), 0) / att : null
-  return {
+    att != null && att > 0 && !(receiving && rows.some(r => (r.att ?? 0) > 0 && f(r) == null))
+      ? rows.reduce((a, r) => a + (f(r) ?? 0) * (r.att ?? 0), 0) / att : null
+  const result: PlayerSplit = {
     season: rows[0].season, category: rows[0].category, split_dim: rows[0].split_dim,
     split_value: rows[0].split_value, sort_order: rows[0].sort_order,
-    att: missingTargets ? null : att, cmp: sum(r => r.cmp), yards: sum(r => r.yards), td: sum(r => r.td),
+    att, cmp: sum(r => r.cmp), yards: sum(r => r.yards), td: sum(r => r.td),
     interceptions: sum(r => r.interceptions), air_yards: sum(r => r.air_yards), yac: sum(r => r.yac),
     first_downs: sum(r => r.first_downs),
-    epa: missingTargets ? null : wavg(r => r.epa),
-    success_pct: missingTargets ? null : wavg(r => r.success_pct), cpoe: wavg(r => r.cpoe),
+    epa: wavg(r => r.epa), success_pct: wavg(r => r.success_pct), cpoe: wavg(r => r.cpoe),
   }
+  if (!receiving) return result
+  const unavailable_metrics = Object.fromEntries(Object.entries(result).filter(([field, value]) => value === null && field !== 'sort_order')
+    .map(([field]) => [field, [...new Set(rows.filter(row => row[field as keyof PlayerSplit] == null)
+      .map(row => receivingReasons(row)[field] ?? 'Unavailable for at least one included season or split row.'))].join(' ')]))
+  const explained = { ...result, unavailable_metrics }
+  return explained
 }
 
 /** Group a dimension's rows by split_value across seasons, aggregating each. */
@@ -75,7 +82,7 @@ export function aggregateTeamSplitRows(rows: TeamSplit[]): TeamSplit | null {
 // Map a singleEntity game-log row to the PlayerSplit shape so per-game rows reuse the
 // same columns. Rate fields the game log doesn't carry (success%, cpoe) are
 // null; epa is converted to a per-attempt average to match the split metric.
-export function gameToSplitRow(g: PlayerGame, cat: PlayerCategory): PlayerSplit {
+export function gameToSplitRow(g: PlayerGame, cat: 'passing' | 'rushing'): PlayerSplit {
   const base = {
     season: g.season, category: cat, split_dim: 'game', split_value: g.game_id, sort_order: g.week,
     att: null as number | null, cmp: null as number | null, yards: null as number | null, td: null as number | null,
@@ -84,6 +91,5 @@ export function gameToSplitRow(g: PlayerGame, cat: PlayerCategory): PlayerSplit 
     epa: null as number | null, success_pct: null as number | null, cpoe: null as number | null,
   }
   if (cat === 'passing') return { ...base, att: g.attempts, cmp: g.completions, yards: g.pass_yards, td: g.pass_tds, interceptions: g.interceptions_thrown, air_yards: g.air_yards, yac: g.yac, epa: g.attempts ? g.pass_epa / g.attempts : null }
-  if (cat === 'rushing') return { ...base, att: g.carries, yards: g.rush_yards, td: g.rush_tds, epa: g.carries ? g.rush_epa / g.carries : null }
-  return { ...base, att: g.targets, cmp: g.receptions, yards: g.rec_yards, td: g.rec_tds, air_yards: g.air_yards, yac: g.yac, epa: g.targets ? g.rec_epa / g.targets : null }
+  return { ...base, att: g.carries, yards: g.rush_yards, td: g.rush_tds, epa: g.carries ? g.rush_epa / g.carries : null }
 }

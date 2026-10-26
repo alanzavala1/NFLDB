@@ -1,15 +1,16 @@
 # Receiving migration checklist
 
 Inventory checked October 21, 2026 against the receiving builder, frontend
-configuration, updated October 23 for locked R and fresh-input qualification;
+configuration, updated October 26 for prepared API/UI integration;
 the preview uses isolated export schema 14. This is the completion contract for the receiving
 migration; it does not authorize deployment or feature removal.
 
 ## Current boundary
 
 There are **17 existing receiving split views, all implemented in the new preview**.
-The main builder and website still use the existing path.
-Preview success does not mean the source database has been migrated.
+The captured-input main build, read-only receiving API and receiving UI are
+connected locally. The live site/source database still use the previous snapshot.
+Full receiving-aware release validation remains required before publication.
 
 The existing category builder exposes 15 PBP views and two additional FTN
 charting views when that table exists. The frontend lists all 17. No existing
@@ -240,19 +241,22 @@ not the main offline rebuild or a publishable receiving build.
 
 ## Before exposing new receiving rows to users
 
-- [ ] Extend missing-data handling through API, per-season views, career totals,
-  comparisons and derived rates. `aggregatePlayerSplitRows` currently sums
-  missing air/YAC as zero and treats missing rate values as zero when target
-  counts are known. `per`/`pct` also default a missing numerator to zero.
-  These paths must not turn newly explicit gaps into fabricated totals/rates.
-- [ ] Specify complete versus partial totals and covered-season ranges. A partial
-  total may only be shown with a clear scope; do not present it as a full career.
-- [ ] Preserve usable counts when another field/context is unavailable, and show
+- [x] Extend missing-data handling through API, per-season views, career totals,
+  comparisons and derived rates. Receiving sums require known values; rates
+  require all positive target weights. `per`/`pct` require known numerators.
+  Absent career buckets preserve season-level unavailable fields rather than
+  silently dropping that year. Unverified years contribute NULL, never zero.
+- [x] Specify complete versus partial totals and covered-season ranges. Receiving
+  uses independent whole rows and labels qualified/supplied-game scope, per-view
+  classified totals, player exclusions and missing/unconfirmed game coverage.
+- [x] Preserve usable counts when another field/context is unavailable, and show
   an understandable reason. Keep existing category/season/REG and sorting
   contracts, with deliberate reviewed changes to inaccurate descriptions.
-- [ ] Check the frontend's Down-derived overall rows, target-dependent ratios,
+- [x] Check the frontend's Down-derived overall rows, target-dependent ratios,
   attribution notices, cached responses and generated API types against the
-  integrated source. Offline preview tables remain unservable until integration.
+  integrated source. Receiving no longer derives whole totals from Down or game
+  logs. Real prepared-response fixtures and 115 related checks (including 24
+  receiving/availability checks) pass; previews remain unpublishable until release gates.
 
 ## Finish lines
 
@@ -267,7 +271,7 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
 - [x] Implement preview coverage for the 17 views and the receiving metric contract:
   catches, yards, TD, supported targets/YAC/first downs/air, target-role EPA and
   positive-EPA success; category-inapplicable interceptions/CPOE remain NULL.
-- [ ] Retain known policies: targets/rates unavailable 2003–08, preview YAC before
+- [x] Retain known policies: targets/rates unavailable 2003–08, prepared YAC before
   2006 unavailable, and air unavailable when either air or target coverage fails.
   Do not silently certify all other seasons solely from these date boundaries.
 - [x] Lock the complete R dependency graph and provide repeatable setup for the
@@ -304,7 +308,8 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
   The additive receiving API now carries masked whole totals, per-row NULL
   reasons, player-specific view exclusions and separate missing/unconfirmed
   game records. Legacy seasons are explicitly unverified on that path.
-  Frontend consumption and career aggregation are still pending.
+  The UI now consumes these records, labels partial/qualified scope and preserves
+  missing values through career aggregation. Publication policy/full gates remain.
 - [ ] Integrate the official receiving path into the ordinary offline build,
   remove its replaced receiving calculation, and preserve passing/rushing paths.
   The captured-input build now uses the official path and stores coverage and

@@ -64,6 +64,10 @@ export type KickingStats     = Schemas['KickingStats']
 export type PlayerWpa        = Schemas['PlayerWpa']
 export type PlayerAdvStats   = Schemas['PlayerAdvStats']
 export type PlayerSplit      = Schemas['PlayerSplit']
+export type PlayerReceivingSplits = Schemas['PlayerReceivingSplits']
+export type ReceivingSeason  = Schemas['ReceivingSeason']
+export type ReceivingRow     = Schemas['ReceivingRow']
+export type ReceivingViewCoverage = Schemas['ReceivingViewCoverage']
 export type DefensiveSplit   = Schemas['DefensiveSplit']
 
 // Team analytics

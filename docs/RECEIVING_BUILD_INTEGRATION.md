@@ -7,8 +7,9 @@ split materializer replaces receiving rows and saves whole-reference, per-view
 and metric-availability records. Passing/rushing keep their existing SQL.
 
 This is an **offline integration**, not a publishable snapshot. The full gate
-rejects the new receiving marker until coverage-aware API/UI handling and the
-receiving-aware release validation are ready. No serving database was replaced.
+rejects the new receiving marker until integration and receiving-aware release
+validation are ready. API/UI handling is now connected locally; full source,
+candidate and downstream checks remain. No serving database was replaced.
 
 ## Why this boundary comes first
 
@@ -361,7 +362,8 @@ Nothing was pushed, deployed or promoted.
 The existing `/splits` list and passing/rushing consumers retain their contracts.
 The new schema is `schemas/receiving.py`; its database reader is
 `services/receiving_splits.py`. Generated OpenAPI and TypeScript definitions
-include the contract, but the frontend does not consume it yet.
+include the contract. The receiving lens now consumes it locally; see the
+[frontend checkpoint](FRONTEND_DATA.md#prepared-receiving-splits-and-coverage).
 
 Each prepared season contains:
 
@@ -391,8 +393,9 @@ the new endpoint never fabricates a whole line by adding legacy Down buckets.
 Unknown/nonqualifying players have an empty `seasons` list. Below-threshold
 production remains available through the existing player profile/game logs.
 
-UI consumption, honest career aggregation, fresh source loading, downstream
-checks and complete receiving-aware release validation remain outstanding.
+UI consumption and availability-aware career aggregation are connected locally.
+Fresh source loading, downstream checks and complete receiving-aware release
+validation remain outstanding.
 Both preview and official-integration publication guards remain in force.
 
 ### Executed receiving API check, October 25, 2026

@@ -3,10 +3,10 @@
 export const sgn = (v: number, d = 3) => `${v >= 0 ? '+' : ''}${v.toFixed(d)}`
 
 export const pct = (a: number | null | undefined, b: number | null | undefined) =>
-  b && b > 0 ? ((a ?? 0) / b) * 100 : null
+  a != null && b != null && b > 0 ? (a / b) * 100 : null
 
 export const per = (a: number | null | undefined, b: number | null | undefined) =>
-  b && b > 0 ? (a ?? 0) / b : null
+  a != null && b != null && b > 0 ? a / b : null
 
 export function passerRating(cmp: number, att: number, yds: number, td: number, int: number): number | null {
   if (att <= 0) return null

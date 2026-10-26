@@ -5,10 +5,22 @@ import type { SplitModel } from './createSplitModel'
 import { teamLogoUrl } from '../../utils/teams'
 import { aggregatePlayerSplitRows } from './aggregation'
 import { splitValueLabel } from './valueLabels'
+import { includeReceivingSeasons } from './receivingModel'
 
 export function createSectionData(model: SplitModel, expandedKeys: Set<string>) {
   const { gameDims, games, showDefensiveRanks, defensiveRanks, focusData, matchesDimension, mode, isCareer, aggregateValues,
-    season, aggregateRows, playerGames, splitRows } = model
+    season, aggregateRows, playerGames, splitRows, isReceiving } = model
+  function preparedRows(data: SplitRow[], dim: string): SplitRow[] {
+    if (isReceiving && dim === 'season') return data.filter(row => matchesDimension(row, 'overall')
+      && (isCareer || (row as PlayerSplit).season === season))
+      .map(row => ({ ...row, split_dim: 'season', split_value: String((row as PlayerSplit).season), sort_order: -(row as PlayerSplit).season }))
+    let rows = data.filter(row => matchesDimension(row, dim))
+    if (mode === 'players') {
+      if (isCareer) rows = aggregateValues(isReceiving ? includeReceivingSeasons(rows as PlayerSplit[], data as PlayerSplit[]) : rows)
+      else rows = rows.filter(row => (row as PlayerSplit).season === season)
+    }
+    return rows
+  }
   function sectionData(dim: string): { rows: SplitTableRow[]; total: SplitRow | null } {
     if (gameDims.has(dim)) {
       const groups = new Map<string, typeof games>()
@@ -43,11 +55,8 @@ export function createSectionData(model: SplitModel, expandedKeys: Set<string>) 
       return { rows: out, total: aggregatePlayerSplitRows(games.map(x => x.r)) }
     }
 
-    let rows: SplitRow[] = focusData.filter(s => matchesDimension(s, dim))
-    if (mode === 'players') {
-      if (isCareer) rows = aggregateValues(rows); else rows = rows.filter(s => (s as PlayerSplit).season === season)
-    }
-    const trows: SplitTableRow[] = rows.map(r => ({ key: r.split_value, label: splitValueLabel(dim, r.split_value), row: r }))
+    const rows = preparedRows(focusData, dim)
+    const trows: SplitTableRow[] = rows.map(r => ({ key: r.split_value, label: dim === 'season' ? r.split_value : splitValueLabel(dim, r.split_value), row: r }))
     return { rows: trows, total: aggregateRows(rows) }
   }
   type EntitySec = { map: Map<string, SplitRow>; total: SplitRow | null; groups?: Map<string, typeof games> }
@@ -63,10 +72,7 @@ export function createSectionData(model: SplitModel, expandedKeys: Set<string>) 
       for (const [k, grp] of groups) { const agg = aggregatePlayerSplitRows(grp.map(x => x.r)); if (agg) map.set(k, agg) }
       return { map, total: aggregatePlayerSplitRows(gs.map(x => x.r)), groups }
     }
-    let rows: SplitRow[] = (splitRows[idx] ?? []).filter(s => matchesDimension(s, dim))
-    if (mode === 'players') {
-      if (isCareer) rows = aggregateValues(rows); else rows = rows.filter(s => (s as PlayerSplit).season === season)
-    }
+    const rows = preparedRows(splitRows[idx] ?? [], dim)
     const map = new Map<string, SplitRow>(rows.map(r => [r.split_value, r]))
     return { map, total: aggregateRows(rows) }
   }

@@ -41,6 +41,10 @@ export async function mockSplits(page: Page) {
     return route.fulfill({ json: path.endsWith('/def-splits') ? defensiveSplits
       : offensiveSplits.map(row => path.includes('/other-player/') ? { ...row, yards: (row.yards ?? 0) * 2 } : row) })
   })
+  await page.route('**/api/players/*/receiving-splits', route => route.fulfill({ json: {
+    player_id: new URL(route.request().url()).pathname.split('/').at(-2),
+    scope: 'Qualified regular-season receiving; observed production on supplied games', seasons: [],
+  } }))
   await page.route(url => url.pathname.startsWith('/api/teams/'), route => {
     const url = new URL(route.request().url())
     if (url.pathname.endsWith('/splits')) return route.fulfill({ json: teamSplits })

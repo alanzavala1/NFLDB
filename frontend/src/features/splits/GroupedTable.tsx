@@ -2,10 +2,11 @@ import { Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import type { GroupedSectionData, EntityCard, Metric, SplitRow, GameRecordLite } from './types'
 import { bestSet } from './tableRanking'
+import { MetricValue } from './MetricValue'
 
 // Side-by-side: rows = split values, columns grouped by entity (each entity's
 // metrics). Sticky label column; best per metric across entities tinted.
-export function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defRkFor, expandable, expandShowSeason, expandedKeys, onToggleExpand, flip, sourceNoteEntityKeys }: {
+export function GroupedTable({ label, entities, metrics, keys, keyLabel, sections, defRkFor, expandable, expandShowSeason, expandedKeys, onToggleExpand, flip, totalLabel = 'Total' }: {
   label: string
   entities: EntityCard[]
   metrics: Metric<SplitRow>[]
@@ -18,7 +19,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
   expandedKeys: Set<string>
   onToggleExpand?: (k: string) => void
   flip: (hib: boolean | undefined) => boolean | undefined
-  sourceNoteEntityKeys?: Set<string>
+  totalLabel?: string
 }) {
   const sticky = 'sticky left-0 z-10 bg-surface-card'
   return (
@@ -38,7 +39,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
           </tr>
           <tr>
             {entities.map(e => metrics.map((m, mi) => (
-              <th key={e.key + m.key} aria-describedby={sourceNoteEntityKeys?.has(e.key) ? m.sourceNoteId : undefined} className={`py-1.5 px-3 text-[10px] font-semibold text-ink-dim uppercase tracking-wider text-right whitespace-nowrap border-b-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line' : ''}`}>{m.label}{m.sourceNoteId && sourceNoteEntityKeys?.has(e.key) && <sup aria-hidden="true">†</sup>}</th>
+              <th key={e.key + m.key} className={`py-1.5 px-3 text-[10px] font-semibold text-ink-dim uppercase tracking-wider text-right whitespace-nowrap border-b-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line' : ''}`}>{m.label}</th>
             )))}
           </tr>
         </thead>
@@ -60,7 +61,7 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
                     const r = s.map.get(k)
                     return metrics.map((m, mi) => {
                       const v = r ? m.value(r) : null
-                      return <td key={si + m.key} className={`py-2 px-3 text-right whitespace-nowrap tabular-nums border-t border-surface-line/50 ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : bestByMetric[mi].has(si) ? 'text-data-win font-bold bg-data-win/15' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
+                      return <td key={si + m.key} className={`py-2 px-3 text-right whitespace-nowrap tabular-nums border-t border-surface-line/50 ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : bestByMetric[mi].has(si) ? 'text-data-win font-bold bg-data-win/15' : 'text-ink'}`}><MetricValue metric={m} row={r} value={v} /></td>
                     })
                   })}
                 </tr>
@@ -100,10 +101,10 @@ export function GroupedTable({ label, entities, metrics, keys, keyLabel, section
             )
           })}
           <tr>
-            <td className={`${sticky} bg-surface-raise py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-ink-mid uppercase tracking-wider border-t-2 border-surface-line`}>Total</td>
+            <td className={`${sticky} bg-surface-raise py-2 pl-4 pr-3 whitespace-nowrap text-xs font-bold text-ink-mid uppercase tracking-wider border-t-2 border-surface-line`}>{totalLabel}</td>
             {sections.map((s, si) => metrics.map((m, mi) => {
               const v = s.total ? m.value(s.total) : null
-              return <td key={si + m.key} className={`py-2 px-3 text-right whitespace-nowrap tabular-nums font-bold bg-surface-raise/40 border-t-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
+              return <td key={si + m.key} className={`py-2 px-3 text-right whitespace-nowrap tabular-nums font-bold bg-surface-raise/40 border-t-2 border-surface-line ${mi === 0 ? 'border-l border-surface-line/50' : ''} ${v == null ? 'text-ink-dim' : 'text-ink'}`}><MetricValue metric={m} row={s.total} value={v} /></td>
             }))}
           </tr>
         </tbody>

@@ -6,9 +6,10 @@ import { mockTeamSections, teamProfile } from './fixtures/teamProfile'
 import { mockGame, gameDetail, gamePlayer, playerChart } from './fixtures/gameDetail'
 import { layoutGame, layoutLineup } from './fixtures/gameLayout'
 import { mockSplits, offensiveSplit } from './fixtures/splits'
+import { preparedSeason, receivingScope } from './fixtures/receiving'
 import { sumGames, aggregateSituational } from '../src/features/players/stats'
 import { aggregateTotals } from '../src/features/teams/stats'
-import { aggregatePlayerSplitRows, gameToSplitRow } from '../src/features/splits/aggregation'
+import { aggregatePlayerSplitRows } from '../src/features/splits/aggregation'
 import { STAT_TABS } from '../src/features/leaders/columns'
 import { REC_COLS } from '../src/features/teams/columns'
 
@@ -42,7 +43,6 @@ test('career, team and split totals propagate unavailable targets without losing
   expect(combined.epa).toBeNull()
   expect(combined.success_pct).toBeNull()
   expect(combined.cmp).toBe(8)
-  expect(gameToSplitRow(historical, 'receiving').att).toBeNull()
   expect(aggregateSituational({ 2004: { rz_targets: null, third_targets: null }, 2009: { rz_targets: 20, third_targets: 10 } }).rz_targets).toBeNull()
 })
 
@@ -121,19 +121,23 @@ test('game receiving line and chart explain target gaps without showing a partia
   await expect(popup.locator('.target-map')).toHaveCount(0)
 })
 
-test('receiving split careers retain affected game rows and unavailable totals', async ({ page }) => {
+test('receiving split careers retain prepared season production and unavailable combined totals', async ({ page }) => {
   await mockSplits(page)
   await page.route(url => /^\/api\/players\/[^/]+$/.test(url.pathname), route => route.fulfill({ json: profile }))
-  await page.route('**/api/players/*/splits', route => route.fulfill({ json: [split, { ...split, season: 2009, att: 20 }] }))
+  await page.route('**/api/players/*/receiving-splits', route => route.fulfill({ json: {
+    player_id: 'test-player', scope: receivingScope, seasons: [
+      preparedSeason({ ...split, yac: null, air_yards: null }), preparedSeason({ ...split, season: 2009, att: 20 }),
+    ],
+  } }))
   await page.goto('/splits?p=test-player&cat=receiving&season=0')
-  await expect(page.getByRole('complementary', { name: 'Receiving data availability' })).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Receiving coverage' })).toBeVisible()
   const season = page.getByRole('button', { name: /^By Season / }).locator('..')
   await expect(season.getByRole('cell', { name: /2004/ })).toBeVisible()
-  await expect(season.getByRole('cell', { name: '52', exact: true })).toBeVisible()
+  await expect(season.getByRole('cell', { name: '52', exact: true }).first()).toBeVisible()
   const table = season.getByRole('table')
-  const total = table.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Total', exact: true }) })
-  await expect(await cell(table, total, 'TGT')).toHaveText('—')
-  await expect(await cell(table, total, 'Catch%')).toHaveText('—')
+  const total = table.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Qualifying seasons', exact: true }) })
+  await expect((await cell(table, total, 'TGT')).getByRole('button')).toHaveAccessibleName('TGT unavailable. Show explanation')
+  await expect((await cell(table, total, 'Catch%')).getByRole('button')).toHaveAccessibleName('Catch% unavailable. Show explanation')
 })
 
 test('modern receiving data keeps numeric targets and rates without a gap notice', async ({ page }) => {

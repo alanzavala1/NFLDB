@@ -265,17 +265,17 @@ maps, and modal closing. Eight desktop/mobile captures match their pre-move
 screenshots pixel for pixel; a source audit also verifies unchanged calculations,
 constants, and CSS.
 
-Splits now uses `src/api/playerSplits.ts` for typed offensive and defensive
-player-splits requests and their canonical query options. Offensive categories
-share `['player-splits', playerId]` because that response contains every offensive
-category and season; the page filters and aggregates returned rows locally.
-Defense uses `['player-def-splits', playerId]`, a separate dataset and cache.
+Splits uses `src/api/playerSplits.ts` for typed requests and canonical query
+options. Passing/rushing share `['player-splits', playerId]`; receiving observes
+the prepared `/receiving-splits` response under `['player-receiving-splits', playerId]`.
+Defense uses `['player-def-splits', playerId]`. Each includes its available seasons;
+the page filters and aggregates returned rows locally without mixing caches.
 The former permanent freshness override is removed; normal five-minute freshness
 and thirty-minute cache retention apply. Requests consume Query's abort signal.
 
 Only the active comparison mode observes data: player mode observes selected
 players' splits/profiles, while team mode observes selected team/season splits.
-Offense and defense observe only the selected dataset. Removing an entity,
+Passing/rushing, receiving and defense observe only the selected dataset. Removing an entity,
 changing mode/category, or leaving the page cancels unneeded requests; separate
 cache keys isolate members and team seasons. Profiles and team splits reuse their
 previously migrated resource modules. Opponent ranks reuse league analytics only
@@ -283,9 +283,10 @@ for a non-career offensive player comparison with at least one selected player.
 
 `src/features/splits/SplitQueryFeedback.tsx` shows independent failures/retries
 for each member's splits/profile and the optional rank context, with warnings
-that preserve successful cached data. Season and Opponent sections follow profile
-request state because their rows come from game logs; situation sections follow
-split request state. Pending requests, failures, and successful empty selections
+that preserve successful cached data. Passing/rushing Season and Opponent sections
+follow profile request state because their rows come from game logs. Every receiving
+section follows the prepared receiving request; profiles provide display identity.
+Pending requests, failures, and successful empty selections
 have different messages. A failed comparison member does not hide usable members
 or their game logs. Season and remove-member controls have accessible labels.
 
@@ -304,7 +305,8 @@ rows, game records, entities, and the metric lens. `sectionData.tsx` prepares
 display rows and game links; `standouts.tsx` selects meaningful efficiency swings.
 Player, defender, and team definitions have separate config modules; aggregation,
 formatting/rating helpers, labels, ranking, presets, and types have named owners.
-The largest feature file is 125 lines.
+The extraction checkpoint's largest feature file was 125 lines; later receiving
+coverage, cell explanations and availability helpers have separate small modules.
 
 The feature extraction preserved statistical definitions, weighted rates,
 sorting/highlighting, game links, and comparison behavior. Empty search-result clearing belongs
@@ -315,9 +317,9 @@ season game-log totals, situations/sorts, ties, defense winner direction, groupe
 expansion, visibility, search/examples, and timer cleanup. Seven desktop/mobile
 captures match their pre-move screenshots pixel for pixel.
 
-The backend's current split endpoints can still
-materialize missing data on a GET; moving that work offline belongs to the backend
-milestone.
+Legacy split endpoints can still materialize missing data on a GET; retiring
+those writes belongs to the backend milestone. The new prepared receiving
+endpoint is a database-only reader and never starts a build.
 
 The Splits visual cleanup groups comparison, stat-category, and season controls,
 fits selected members into a responsive grid, and wraps long headings. Its search
@@ -539,7 +541,7 @@ remain separate from this play-by-play coverage policy.
 
 `tests/target-availability.spec.ts` covers null versus zero, mixed-career totals,
 target sorting, historical/modern leaderboards, profile rates, team totals,
-game charts and receiving split game rows, including a mobile layout capture.
+game charts and prepared receiving season rows, including a mobile layout capture.
 Backend `tests/test_receiving_coverage.py` exercises real HTTP serialization with
 an in-memory historical dataset and confirms the underlying counts are unchanged.
 
@@ -556,44 +558,64 @@ totals, game tables and popups. Its historical responses are controlled fixtures
 not a claim of deployed-data verification. The mobile running-back log retains
 its receiving counts without widening the document.
 
-### Receiving yardage source differences
+### Prepared receiving splits and coverage
 
-`features/splits/receivingAttribution.ts` compares each selected regular season's
-profile game-log receiving yards with receiving **Down** split yards. It uses one
-partition only, never sums multiple dimensions, and keeps career seasons separate
-so opposite differences cannot cancel. It waits for both datasets and does not
-treat absent split rows or null/nonfinite yards as measured zeroes. Empty or matching
-observations do not create a note. There is no extra request, source rewrite or
-candidate-gate change.
+The receiving lens now consumes the [coverage-aware API](RECEIVING_BUILD_INTEGRATION.md#coverage-aware-receiving-api).
+`receivingModel.ts` selects its rows/whole totals and carries season availability;
+`receivingAvailability.ts` maps missing source fields to the affected metrics.
+Head-to-head Overall and By Season use the independent prepared whole rows.
+By Opponent and all other views use the same prepared calculation. They no longer
+mix profile/game-log totals with old Down-derived receiving totals. The Gibbs-
+specific source-difference annotation and its hardcoded lateral workaround were
+removed: the actual official 2024 rows now retain all 517 yards, including the
+previously omitted 41. Player pages retain their game logs, linked from this lens;
+inline receiving game expansion is retired so it cannot mix sources into these totals.
 
-`ReceivingAttributionNote` shows the actual weekly total, play-by-play total and
-signed difference. It labels the two calculation sources and preserves all table
-values. Situational YDS, Y/R and Y/Tgt headers carry a dagger with an accessible
-description referencing the note. Season/Opponent/game-log columns keep their
-existing source values without those markers. Side-by-side situational tables mark
-only the affected player's columns; the shared summary refers to the named notes.
+`ReceivingCoverageNote.tsx` states regular-season/25-recorded-intended-receiver-play
+qualification, supplied-game scope and qualifying-season range. It separates
+missing PBP games from supplied games with unconfirmed stored final scores.
+Unverified seasons remain explicitly unavailable; the page never falls back to
+legacy Down totals. A successful empty response remains distinct from a request
+failure, and each comparison member has independent receiving retry feedback.
 
-The first reviewed explanation is Gibbs2024: current weekly517yards versus
-original-receiver Down splits476, explained by the20/21yard lateral credits in
-`2024_03_DET_ARI` and `2024_15_BUF_DET`. The note links to those games and names
-the cause only when the player, season and both observed totals match this reviewed
-case. Other mismatches have a neutral unexplained-difference message; matching
-numeric deltas for another player do not inherit Gibbs's explanation. Corrected
-totals automatically remove the note. This is a reviewed display annotation,
-not automatic play attribution or an exhaustive catalogue of known limitations.
+Each view has a `Shown total` for its classified population. Player-specific
+excluded counts and wholly unavailable views have visible notes; exclusions are
+retained in the season total. Season-wide context gaps with no excluded production
+for this player stay in collapsed details. Definitions explain the QB-hit proxy,
+original-pass depth/direction, current-franchise divisions and optional charting.
+Receiving standouts use the independent baseline and skip views with player-specific
+exclusions, unavailable coverage or unverified years.
 
-The original local snapshot still has an older497yard Gibbs game-log total and
-476 split yards. It correctly gets an observed21yard difference without claiming
-the specific41yard explanation. No snapshot refresh was performed here. The latest
-weekly517yard value has been verified separately; refreshing a candidate remains
-separate work.
+Receiving aggregation preserves NULL independently for targets, catches, yards,
+YAC, air yards, first downs and rates. Target-weighted rates require every
+positive-weight input; zero-target lateral rows contribute counts without changing
+the target denominator. Derived ratios require both numerator and denominator.
+Career buckets carry availability from included seasons even when a season has
+no active row in that bucket: supported absent activity contributes zero observed
+counts, unknown fields stay NULL, and an unverified season contributes all NULLs.
+These client-only availability rows do not calculate or redistribute credits.
+Displayed combined rates use the prepared rows' rounded rates and target weights.
 
-`tests/fixtures/receivingAttribution.json` contains minimal real2024 weekly game
-lines and stored Down observations for Gibbs and matching control Justin Jefferson
-(1533yards in both). `tests/receiving-attribution.spec.ts` verifies the reviewed
-case, control, other/older values, invalid/missing inputs, season/career scopes,
-postseason exclusion, unchanged numbers, affected comparison columns, keyboard
-disclosure and mobile/desktop layout. Existing target-coverage notes remain separate.
+`MetricValue.tsx` renders — with a keyboard/touch explanation for unavailable
+receiving cells in both table layouts. Native popovers appear above scroll
+containers, close with Escape or Close, and fit a 320-pixel viewport. Actual zero
+values stay numeric, missing values cannot win comparisons, and tables keep their
+horizontal scroll and sticky labels. Combined season footers say `Qualifying seasons`.
+
+The October 26 UI checkpoint passed **115 related Playwright checks**, including
+**24 receiving/availability checks**; production build and lint
+also passed. Real response fixtures in `tests/fixtures/receivingSplits.json` were
+captured read-only from the verified receiving copy: Gibbs/Jefferson 2024,
+Gonzalez 2004/2009 and a receiver with 2026 surface exclusions. Fixtures keep one
+stat row per line. Tests cover counts/rates, missing history and absent buckets,
+partial/unavailable/unverified scope, comparison failure, retry/cache/cancellation,
+keyboard/mobile popovers and 320/390-pixel overflow. Browser fixtures test UI
+behavior; backend credit/source verification remains the independent offline proof.
+Screenshots/traces and `frontend/test-results-receiving-*-20261026.log` are ignored.
+
+This is local integration. No source snapshot or deployment was changed. Fresh
+source loading, downstream analytics and full receiving-aware candidate/release
+validation remain outstanding; publication guards remain in force.
 
 ## Browser regression checks
 

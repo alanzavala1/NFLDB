@@ -6,7 +6,7 @@ import type { PlayerSplit, TeamSplit, DefensiveSplit } from '../../types'
 export type Metric<R> = {
   key: string
   label: string
-  sourceNoteId?: string
+  unavailableReason?: (r: R) => string
   value: (r: R) => number | null      // numeric — for ranking / best-in-row
   fmt: (v: number) => string          // display string
   higherIsBetter?: boolean            // undefined ⇒ neutral (no winner shading)

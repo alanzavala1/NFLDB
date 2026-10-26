@@ -6,6 +6,7 @@ import type { SplitQueryState } from './SplitQueryFeedback'
 import { EmptySplitState } from './SplitQueryFeedback'
 import { FilterChip } from './Controls'
 import { StatTable } from './StatTable'
+import { ReceivingViewNote } from './ReceivingCoverageNote'
 
 export function HeadToHead({ model, comparison, splitResults }: {
   model: SplitModel; comparison: ReturnType<typeof useComparisonState>; splitResults: SplitQueryState[]
@@ -24,6 +25,7 @@ export function HeadToHead({ model, comparison, splitResults }: {
       {situations.map(s => <FilterChip key={s.label} active={situation?.label === s.label} onClick={() => setSituation(s)}>{s.label}</FilterChip>)}
     </div>
     <p className="px-4 pb-3 text-xs text-ink-dim">Swipe or scroll tables sideways to see more stats. Row labels stay in view.</p>
+    {situation && <ReceivingViewNote model={model} dimension={situation.dim} />}
     {summaryRows.every(r => r.row == null)
       ? <div className="py-8 text-center border-t border-surface-line"><EmptySplitState queries={splitResults} /></div>
       : <div className="border-t border-surface-line"><StatTable firstCol={mode === 'players' ? 'Player' : 'Team'} rows={summaryRows} metrics={metrics} flip={flip} /></div>}

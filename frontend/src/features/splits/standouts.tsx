@@ -8,6 +8,7 @@ import { aggregatePlayerSplitRows } from './aggregation'
 import { splitValueLabel } from './valueLabels'
 import { teamLogoUrl } from '../../utils/teams'
 import { OVERALL_DIM } from './constants'
+import { receivingViewHasGaps } from './receivingModel'
 
 export function selectStandouts(model: SplitModel, entitySection: ReturnType<typeof createSectionData>['entitySection']) {
   const { singleEntity, mode, isDefense, playerLens, metrics, splitConfig, games } = model
@@ -16,7 +17,7 @@ export function selectStandouts(model: SplitModel, entitySection: ReturnType<typ
   const unit = playerLens === 'passing' ? 'att' : playerLens === 'rushing' ? 'car' : 'tgt'
   const met = (metrics as Metric<PlayerSplit>[]).find(m => m.key === headlineKey)
   if (!met) return null
-  const overall = entitySection(0, OVERALL_DIM).total as PlayerSplit | null
+  const overall = entitySection(0, model.isReceiving ? 'season' : OVERALL_DIM).total as PlayerSplit | null
   const base = overall ? met.value(overall) : null
   const overallAtt = splitVolume(overall)
   if (base == null || overallAtt <= 0) return null
@@ -25,6 +26,7 @@ export function selectStandouts(model: SplitModel, entitySection: ReturnType<typ
   const cands: Cand[] = []
   for (const d of splitConfig.dims) {
     if (d.key === 'opponent' || d.key === 'opp_division') continue
+    if (model.isReceiving && receivingViewHasGaps(model.receivingSeasons[0] ?? [], d.key)) continue
     for (const [val, row] of entitySection(0, d.key).map) {
       const v = met.value(row as PlayerSplit); const vol = splitVolume(row)
       if (v == null || vol < minVol) continue

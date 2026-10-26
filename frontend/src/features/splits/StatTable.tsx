@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import type { SplitTableRow, TableSort, Metric, SplitRow } from './types'
 import { bestSet, splitVolume } from './tableRanking'
+import { MetricValue } from './MetricValue'
 
 // A sortable table: rows (entities or split values) × metric columns.
-export function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defaultSort, naturalSort, onToggleExpand, expandedKeys }: {
+export function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defaultSort, naturalSort, onToggleExpand, expandedKeys, totalLabel = 'Total' }: {
   firstCol: string
   rows: SplitTableRow[]
   total?: SplitRow | null
@@ -14,6 +15,7 @@ export function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defa
   naturalSort?: boolean
   onToggleExpand?: (key: string) => void
   expandedKeys?: Set<string>
+  totalLabel?: string
 }) {
   const [sort, setSort] = useState<TableSort | null>(defaultSort ?? null)
   const metricByKey = useMemo(() => Object.fromEntries(metrics.map(m => [m.key, m])), [metrics])
@@ -57,7 +59,7 @@ export function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defa
             <th className={`${sticky} py-2 pl-4 pr-3 border-b-2 border-surface-line text-[11px] font-bold text-ink-mid uppercase tracking-wider text-left whitespace-nowrap`}>{firstCol}</th>
             {hasDefRk && <th aria-sort={sortDirection('__defrk')} className="border-b-2 border-surface-line text-[11px] font-bold text-ink-dim/70 uppercase tracking-wider whitespace-nowrap"><button onClick={() => clickSort('__defrk', 'asc')} className={sortButton}>Def Rk{arrow('__defrk')}</button></th>}
             {metrics.map(m => (
-              <th key={m.key} aria-describedby={m.sourceNoteId} aria-sort={sortDirection(m.key)} className="border-b-2 border-surface-line text-[11px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap"><button onClick={() => clickSort(m.key)} className={sortButton}>{m.label}{m.sourceNoteId && <sup aria-hidden="true">†</sup>}{arrow(m.key)}</button></th>
+              <th key={m.key} aria-sort={sortDirection(m.key)} className="border-b-2 border-surface-line text-[11px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap"><button onClick={() => clickSort(m.key)} className={sortButton}>{m.label}{arrow(m.key)}</button></th>
             ))}
           </tr>
         </thead>
@@ -78,7 +80,7 @@ export function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defa
                 const isBest = !r.sub && colBest.get(m.key)?.has(visibleRows.indexOf(r))
                 return (
                   <td key={m.key} className={`py-2 px-3 border-t border-surface-line/50 text-right whitespace-nowrap tabular-nums ${v == null ? 'text-ink-dim' : isBest ? 'text-data-win font-bold bg-data-win/15' : r.sub ? 'text-ink-mid' : 'text-ink'}`}>
-                    {v == null ? '—' : m.fmt(v)}
+                    <MetricValue metric={m} row={r.row} value={v} />
                   </td>
                 )
               })}
@@ -86,11 +88,11 @@ export function StatTable({ firstCol, rows, total, metrics, flip, hasDefRk, defa
           ))}
           {total && (
             <tr className="border-t-2 border-surface-line bg-surface-raise/50">
-              <td className={`${sticky} bg-surface-raise py-2 pl-4 pr-3 border-t-2 border-surface-line whitespace-nowrap text-xs font-bold text-ink-mid uppercase tracking-wider`}>Total</td>
+              <td className={`${sticky} bg-surface-raise py-2 pl-4 pr-3 border-t-2 border-surface-line whitespace-nowrap text-xs font-bold text-ink-mid uppercase tracking-wider`}>{totalLabel}</td>
               {hasDefRk && <td className="border-t-2 border-surface-line" />}
               {metrics.map(m => {
                 const v = m.value(total)
-                return <td key={m.key} className={`py-2 px-3 border-t-2 border-surface-line text-right whitespace-nowrap tabular-nums font-bold ${v == null ? 'text-ink-dim' : 'text-ink'}`}>{v == null ? '—' : m.fmt(v)}</td>
+                return <td key={m.key} className={`py-2 px-3 border-t-2 border-surface-line text-right whitespace-nowrap tabular-nums font-bold ${v == null ? 'text-ink-dim' : 'text-ink'}`}><MetricValue metric={m} row={total} value={v} /></td>
               })}
             </tr>
           )}
