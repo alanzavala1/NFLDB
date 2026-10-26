@@ -161,6 +161,12 @@ class ReceivingCoreInputs:
     def load_feeds(self, play_seasons: list[int], weekly_seasons: list[int]):
         return load_scoped_feeds(lambda year: self.feeds([year]), play_seasons, weekly_seasons, self.seasons)
 
+    def receiving_run(self, season: int) -> tuple[Path, dict, str]:
+        if season not in self.seasons:
+            raise SourceError("receiving_core_inputs", season, "no captured receiving run")
+        read_export_bytes(self.directory, self.manifest, "receiving-run.json", season=season)
+        return self.source, self.receiving_manifest, self.manifest["files"]["receiving-run.json"]
+
 
 def export_core_inputs(exports: Path, output: Path, *, rscript: Path, library: Path) -> ReceivingCoreInputs:
     """Convert existing full RDS captures once; preserve source exports and DBs."""

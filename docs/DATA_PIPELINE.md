@@ -659,12 +659,13 @@ dependency lock and same-input receiving qualification are implemented above.
 
 ## Remaining serving writes
 
-The first main-build receiving integration checkpoint now supports reusing the
+The main-build receiving integration now supports reusing the
 calculator's captured full plays/weekly inputs in `jobs.prepare --core-inputs`.
 See [shared receiving inputs](RECEIVING_BUILD_INTEGRATION.md) for the frozen
-conversion, revision records, representative checks and current limits. This
-aligns inputs; canonical receiving split replacement and coverage/API/UI work
-remain pending. The full candidate gate and preview rejection are unchanged.
+conversion, revision records and current limits. This also selects official
+receiving materialization and persists coverage/whole-reference records.
+API/UI scope handling and full release validation remain pending; the full gate
+rejects the integration marker, and the existing preview rejection remains.
 Separate captured runs can be assembled into one compatible historical input
 collection with `jobs.receiving_core_inputs --bundles ... --output ...`.
 

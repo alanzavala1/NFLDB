@@ -17,7 +17,7 @@ def main(argv=None) -> None:
     parser.add_argument('--candidate', type=Path, required=True, help='New working database path')
     parser.add_argument('--seasons', type=int, nargs='+', required=True)
     parser.add_argument('--core-inputs', type=Path,
-                        help='Reuse captured plays/weekly inputs; does not enable new receiving splits')
+                        help='Use captured core inputs and official receiving exports (integration is not yet publishable)')
     args = parser.parse_args(argv)
     options = {} if args.core_inputs is None else {'core_inputs': args.core_inputs}
     prepare_candidate(args.source, args.candidate, args.seasons, **options)

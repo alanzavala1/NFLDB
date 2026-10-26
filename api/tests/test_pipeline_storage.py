@@ -15,6 +15,31 @@ def test_create_then_replace_one_season_preserves_other_stored_season():
         assert conn.execute('SELECT season, attempts FROM player_game_stats ORDER BY season').fetchall() == [(2023, 10), (2024, 30)]
 
 
+def test_captured_plays_can_add_missing_typed_columns_without_discarding_history():
+    with duckdb.connect(':memory:') as conn:
+        conn.execute("CREATE TABLE plays AS SELECT 2023 AS season, 'historical' AS game_id")
+        fresh = pd.DataFrame({'season':[2024], 'game_id':['fresh'], 'ydstogo':[7.]})
+        upsert_by_season(conn, 'plays', fresh, [2024], evolve_schema=True)
+        assert conn.execute('SELECT season,game_id,ydstogo FROM plays ORDER BY season').fetchall() == [(2023,'historical',None),(2024,'fresh',7.)]
+        assert conn.execute('DESCRIBE plays').fetchall()[-1][1] == 'DOUBLE'
+
+
+def test_default_feed_storage_still_uses_existing_columns():
+    with duckdb.connect(':memory:') as conn:
+        conn.execute('CREATE TABLE feed (season INTEGER)')
+        upsert_by_season(conn, 'feed', pd.DataFrame({'season':[2024], 'optional':[7]}), [2024])
+        assert conn.execute('SELECT * FROM feed').fetchall() == [(2024,)]
+
+
+def test_captured_plays_widen_old_numeric_id_columns_instead_of_silently_nulling_ids():
+    with duckdb.connect(':memory:') as conn:
+        conn.execute('CREATE TABLE plays (season INTEGER,tackle_for_loss_2_player_id INTEGER,epa INTEGER)')
+        conn.execute('INSERT INTO plays VALUES (1999,NULL,1)')
+        fresh = pd.DataFrame({'season':[2001], 'tackle_for_loss_2_player_id':['00-0015106'], 'epa':[.25]})
+        upsert_by_season(conn, 'plays', fresh, [2001], evolve_schema=True)
+        assert conn.execute('SELECT * FROM plays ORDER BY season').fetchall() == [(1999,None,1.),(2001,'00-0015106',.25)]
+
+
 @pytest.mark.parametrize('table', ['pfr_pass', 'pfr_rush', 'pfr_rec', 'pfr_def', 'qbr_season', 'qbr_weekly'])
 def test_new_vendor_write_targets_are_created_without_optional_read_registry(table):
     with duckdb.connect(':memory:') as conn:

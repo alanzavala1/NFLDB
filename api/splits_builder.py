@@ -4,9 +4,8 @@ single situational dimension (down, pass depth, run gap, game script, ...).
 Design (mirrors team_analytics_builder / comparables_builder):
   - One LONG-format table `player_splits`: one row per
     (player_id, season, category, split_dim, split_value).
-  - A "split" is not a separate dataset — it's the same per-play data the
-    main stat line comes from, aggregated under a condition. So overall
-    always reconciles with the sum of its splits.
+  - A split groups a classified play population. Missing context can exclude
+    production, so whole receiving references and coverage are stored separately.
   - `materialize(season)` recomputes every player's splits for one season
     (called from ingest). The endpoint reads per player; if a player has no
     rows it lazily materializes their seasons, so the system self-heals.
@@ -14,7 +13,8 @@ Design (mirrors team_analytics_builder / comparables_builder):
 Three categories share one table via the `category` column:
   - passing   — QBs, keyed off passer_player_id
   - rushing   — ball carriers, keyed off rusher_player_id
-  - receiving — pass catchers, keyed off receiver_player_id
+  - receiving — official recipient credits in captured-input builds; original
+    receiver attempt plays still determine the existing admission threshold
 The metric columns are shared and category-overloaded (att = attempts /
 carries / targets; cmp = completions / receptions; NULL where N/A).
 """
@@ -276,18 +276,24 @@ def _category_sql(category: str, season: int, available: set[str], has_ftn: bool
 
 # ── Materialize + read API ───────────────────────────────────────────────────
 
-def materialize(season: int) -> int:
+def materialize(season: int, *, receiving_inputs=None) -> int:
     """Compute all-category splits for one season and persist. Returns rows written.
 
     Holds the write lock: called from the ingest worker (which already owns it)
     and from lazy request-thread materialization (which must wait its turn).
+    Captured inputs select official receiving with atomic coverage/reference
+    writes. Input-free compatibility builds cannot overwrite an official snapshot.
     """
     with write_lock:
-        return _materialize_locked(int(season))
+        return _materialize_locked(int(season), receiving_inputs=receiving_inputs)
 
 
-def _materialize_locked(s: int) -> int:
+def _materialize_locked(s: int, *, receiving_inputs=None) -> int:
     conn = get_connection()
+    from pipeline.receiving_build import has_official_receiving, prepare_receiving, store_receiving
+    if receiving_inputs is None and has_official_receiving(conn):
+        raise RuntimeError("Official receiving splits require captured offline inputs; legacy rebuilding is disabled")
+    prepared = prepare_receiving(conn, s, receiving_inputs) if receiving_inputs is not None else None
     ensure_table(conn)
 
     try:
@@ -298,23 +304,34 @@ def _materialize_locked(s: int) -> int:
         available = set()
     has_ftn = _ftn_available(conn)
 
-    conn.execute("DELETE FROM player_splits WHERE season = ?", [s])
-    cols = ", ".join(_COLUMNS)
-    for category in ("passing", "rushing", "receiving"):
-        sql = _category_sql(category, s, available, has_ftn)
-        try:
-            conn.execute(f"""
-                INSERT INTO player_splits ({cols})
-                SELECT player_id, {s} AS season, '{category}' AS category,
-                       split_dim, split_value, sort_order,
-                       att, cmp, yards, td, interceptions, air_yards, yac,
-                       first_downs, epa, success_pct, cpoe
-                FROM ({sql})
-            """)
-        except Exception as e:
-            if not is_missing_data_error(e):
-                raise
-            print(f"player_splits[{category}] materialize failed for season {s}: {e}")
+    if prepared is not None:
+        conn.execute("BEGIN")
+    try:
+        conn.execute("DELETE FROM player_splits WHERE season = ?", [s])
+        cols = ", ".join(_COLUMNS)
+        categories = ("passing", "rushing") if prepared is not None else ("passing", "rushing", "receiving")
+        for category in categories:
+            sql = _category_sql(category, s, available, has_ftn)
+            try:
+                conn.execute(f"""
+                    INSERT INTO player_splits ({cols})
+                    SELECT player_id, {s} AS season, '{category}' AS category,
+                           split_dim, split_value, sort_order,
+                           att, cmp, yards, td, interceptions, air_yards, yac,
+                           first_downs, epa, success_pct, cpoe
+                    FROM ({sql})
+                """)
+            except Exception as e:
+                if prepared is not None or not is_missing_data_error(e):
+                    raise
+                print(f"player_splits[{category}] materialize failed for season {s}: {e}")
+        if prepared is not None:
+            store_receiving(conn, s, prepared)
+            conn.execute("COMMIT")
+    except BaseException:
+        if prepared is not None:
+            conn.execute("ROLLBACK")
+        raise
 
     return conn.execute(
         "SELECT COUNT(*) FROM player_splits WHERE season = ?", [s]

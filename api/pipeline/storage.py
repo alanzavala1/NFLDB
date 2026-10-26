@@ -5,11 +5,13 @@ import pandas as pd
 from data_errors import is_missing_data_error, is_missing_table_error
 
 
-def upsert_by_season(conn, table: str, df: pd.DataFrame, seasons: list[int], log=print):
+def upsert_by_season(conn, table: str, df: pd.DataFrame, seasons: list[int], log=print, *, evolve_schema=False):
     """Create table if needed, replace data for the given seasons, then insert.
 
     Inserts only columns common to both the existing table and the new dataframe
     so season-to-season schema differences in nfl_data_py never wipe other seasons.
+    Captured core plays explicitly opt into schema evolution and strict casts;
+    missing columns and formerly numeric ID columns must not discard source values.
     """
     conn.register(f"{table}_df", df)
 
@@ -23,6 +25,24 @@ def upsert_by_season(conn, table: str, df: pd.DataFrame, seasons: list[int], log
     if existing_cols is None:
         conn.execute(f"CREATE TABLE {table} AS SELECT * FROM {table}_df")
     else:
+        if evolve_schema:
+            # Explicit opt-in for captured core plays: their checked projection
+            # must survive an older DB schema. Keep other feeds' existing policy.
+            for name, kind, *_ in conn.execute(f'DESCRIBE SELECT * FROM {table}_df').fetchall():
+                if name not in existing_cols:
+                    quoted = name.replace('"', '""')
+                    conn.execute(f'ALTER TABLE {table} ADD COLUMN "{quoted}" {kind}')
+                    existing_cols.append(name)
+            common = [name for name in existing_cols if name in df.columns]
+            names = ', '.join('"' + name.replace('"', '""') + '"' for name in common)
+            current = {row[0]: row[1] for row in conn.execute(f'DESCRIBE {table}').fetchall()}
+            # DuckDB's union type rules preserve text IDs stored in formerly
+            # all-NULL numeric columns, and widen numeric fields when needed.
+            promoted = conn.execute(f'DESCRIBE SELECT {names} FROM {table} UNION ALL SELECT {names} FROM {table}_df').fetchall()
+            for name, kind, *_ in promoted:
+                if current[name] != kind:
+                    quoted = name.replace('"', '""')
+                    conn.execute(f'ALTER TABLE {table} ALTER COLUMN "{quoted}" TYPE {kind}')
         placeholders = ", ".join("?" * len(seasons))
         try:
             conn.execute(f"DELETE FROM {table} WHERE season IN ({placeholders})", seasons)
@@ -34,7 +54,8 @@ def upsert_by_season(conn, table: str, df: pd.DataFrame, seasons: list[int], log
         col_types = {r[0]: r[1] for r in conn.execute(f"DESCRIBE {table}").fetchall()}
         common = [c for c in existing_cols if c in set(df.columns)]
         if common:
-            select_exprs = ", ".join(f'TRY_CAST("{c}" AS {col_types[c]}) AS "{c}"' for c in common)
+            cast = 'CAST' if evolve_schema else 'TRY_CAST'
+            select_exprs = ", ".join(f'{cast}("{c}" AS {col_types[c]}) AS "{c}"' for c in common)
             col_list = ", ".join(f'"{c}"' for c in common)
             conn.execute(f"INSERT INTO {table} ({col_list}) SELECT {select_exprs} FROM {table}_df")
         else:

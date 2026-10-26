@@ -9,11 +9,9 @@ import duckdb
 
 from pipeline.receiving_preview import file_sha256
 from pipeline.receiving_dimensions import DIMENSIONS
-from pipeline.receiving_splits import VERSIONS, read_export_csv, validate_export_manifest
-from pipeline.receiving_preview_validation import load_receiving_preview_partition, validate_whole_receiving
+from pipeline.receiving_splits import VERSIONS
+from pipeline.receiving_exports import load_receiving_season
 from pipeline.snapshots import CandidateError
-from pipeline.receiving_inputs import verify_receiving_inputs
-from pipeline.receiving_qualification import qualify_receiving_context
 
 
 def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseline: str) -> dict:
@@ -50,30 +48,11 @@ def prepare(source: Path, exports: Path, seasons: list[int], run_id: str, baseli
             for dimension in DIMENSIONS:
                 conn.execute(f"CREATE TABLE receiving_{dimension}_preview AS SELECT * FROM player_splits WHERE FALSE")
             for season in seasons:
-                validate_export_manifest(manifest, season)
-                weekly = read_export_csv(exports, manifest, f"weekly-{season}.csv", season=season)
-                overall = read_export_csv(exports, manifest, f"overall-{season}.csv", season=season)
-                context = read_export_csv(exports, manifest, f"context-{season}.csv", season=season)
-                ftn_outcome = verify_receiving_inputs(exports, manifest, context, season)
-                qualified, qualification = qualify_receiving_context(context, season, manifest["files"][f"context-{season}.csv"])
-                if not qualified:
-                    raise CandidateError(f"receiving[{season}]: no qualified players for preview")
-                report["qualifications"][str(season)] = qualification
-                whole_check = validate_whole_receiving(overall, weekly, season, qualified)
-                whole_check["source_revisions"] = {name: manifest["files"][name] for name in
-                                                  (f"overall-{season}.csv", f"weekly-{season}.csv")}
-                report["whole_references"][str(season)] = whole_check
-                report["seasons"][str(season)] = {}
-                for dimension in DIMENSIONS:
-                    rows, partition_report = load_receiving_preview_partition(
-                        exports, manifest, context=context, overall=overall, season=season,
-                        dimension=dimension, qualified=qualified,
-                    )
-                    report["seasons"][str(season)][dimension] = partition_report
-                    if dimension in ("play_action", "blitz"):
-                        partition_report["coverage"]["charting_source"] = ftn_outcome
-                        if ftn_outcome["status"] != "loaded":
-                            partition_report["coverage"]["reason"] = f"FTN {ftn_outcome['status']}: {ftn_outcome.get('detail', '')}".rstrip(": ")
+                prepared = load_receiving_season(exports, manifest, season, require_qualified=True)
+                report["qualifications"][str(season)] = prepared.qualification
+                report["whole_references"][str(season)] = prepared.whole
+                report["seasons"][str(season)] = prepared.dimensions
+                for dimension, rows in prepared.rows.items():
                     conn.register("preview_rows", rows)
                     conn.execute(f"INSERT INTO receiving_{dimension}_preview BY NAME SELECT * FROM preview_rows")
             conn.execute("CREATE TABLE receiving_preview_preparation (record JSON)")

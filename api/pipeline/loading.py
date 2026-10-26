@@ -65,7 +65,8 @@ def load_and_store_raw(conn, seasons: list[int], log=print, *,
         log(f"  no play-by-play assets for unplayed seasons {seasons} — continuing")
     else:
         log(f"  keeping {len(plays.columns)}/{len(PLAYS_KEEP_COLUMNS)} pbp columns")
-        upsert_by_season(conn, "plays", plays, feed.loaded_seasons, log=log)
+        options = {} if core_inputs is None else {"evolve_schema": True}
+        upsert_by_season(conn, "plays", plays, feed.loaded_seasons, log=log, **options)
 
     upsert_by_season(conn, "schedules", schedules, seasons, log=log)
 

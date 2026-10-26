@@ -1,10 +1,14 @@
-# Receiving build integration: shared core inputs
+# Receiving build integration
 
 The [all-history receiving audit](RECEIVING_HISTORY_VALIDATION.md) validated the
-official calculator's available-data results for 1999–2026. The first integration
-checkpoint connects its captured **inputs** to the ordinary offline build.
-Replacing the canonical receiving split rows is still pending. Converted runs
-can now be grouped into one revision-bound collection for historical updates.
+official calculator's available-data results for 1999–2026. The ordinary offline
+build now accepts its captured inputs and official receiving exports. Its player
+split materializer replaces receiving rows and saves whole-reference, per-view
+and metric-availability records. Passing/rushing keep their existing SQL.
+
+This is an **offline integration**, not a publishable snapshot. The full gate
+rejects the new receiving marker until coverage-aware API/UI handling and the
+receiving-aware release validation are ready. No serving database was replaced.
 
 ## Why this boundary comes first
 
@@ -27,7 +31,11 @@ Captured full PBP + weekly RDS ── official receiving exports (existing previ
                                        │
                           ordinary raw loader / player-game build
                                        │
-                          existing analytics and full candidate gates
+                          analytics / player split materializer
+                                       │
+                  official receiving exports + coverage/reference records
+                                       │
+                          full candidate gates (still reject integration)
 ```
 
 R remains outside request handling. Reading a prepared bundle does not execute
@@ -74,10 +82,14 @@ an existing output is refused. The original export directory must remain
 available because reading the bundle verifies its captured-source revisions.
 
 The ordinary build accepts `--core-inputs PATH` alongside its existing source,
-candidate and season arguments. This option aligns inputs; it **does not switch
-receiving split calculation**. The existing local source has a legacy weekly
+candidate and season arguments. This now aligns inputs **and selects the official
+receiving path**. The existing local source has a legacy weekly
 table, so a 2026-only bundle cannot migrate that source: the full historical
 weekly range is required. Do not bypass that check or the full candidate gate.
+For the first official receiving migration, refresh the full intended play history
+as well: copied older plays must match their captured source before receiving
+rows can be replaced. The command still removes candidates rejected by its full
+gate, so it cannot publish or retain an accepted receiving integration yet.
 A bundle belongs to one receiving run, which may contain multiple seasons.
 Group separate converted runs without copying or recalculating their data:
 
@@ -153,15 +165,73 @@ candidate rejection is in `api/data/receiving-core-candidate-gate-20261025.log`.
 
 ## Next checkpoint
 
-The historical input collection and core-only schema migration are now verified
-as described below. Integrate the validated official receiving rows and their whole-season,
-per-view and per-field coverage records into candidate preparation, preserving
-passing/rushing behavior. Carry source gaps and NULLs through API/UI aggregation before
+The captured-input and official-row paths are connected. Carry their stored
+source gaps and NULLs through API/UI aggregation before
 exposing new rows, then pass full real-data candidate/HTTP and downstream checks.
-The preview rejection guard stays until that replacement is ready. No source
-replacement, serving change, push or deployment is part of this checkpoint.
+The preview and integration rejection guards stay until that work is ready.
+Retire the legacy receiving compatibility path together with serving writes.
+No source replacement, serving change, push or deployment is part of this checkpoint.
+
+## Official receiving materialization
+
+`ingest.run_ingest` forwards the captured input owner to `prepare_analytics`,
+which passes it only to `splits_builder.materialize`. That builder first calls
+`pipeline.receiving_build.prepare_receiving` to verify the stored PBP projection,
+REG weekly receiving fields and admission counts against their bound inputs.
+`pipeline.receiving_exports.load_receiving_season` is the shared acceptance path
+for both the original preview worker and the ordinary materializer: the full
+weekly reference and all 17 classified/excluded partition checks run before writes.
+
+The materializer retains passing/rushing SQL and bypasses the old receiving SQL.
+It replaces a season's split rows and writes the following records in one SQL
+transaction; failures roll back both data and metadata:
+
+| Table | Meaning |
+|---|---|
+| `player_splits` | Existing long-format rows; official receiving counts and field-specific NULLs for qualified players |
+| `receiving_build_preparation` | One record per season: runtime/input revisions, qualification, whole reference checks, all view checks, exclusions, metric policies and candidate schedule coverage |
+| `receiving_whole_reference` | Qualified-player whole REG nonconversion reference; raw observed source values, explicitly not serving-ready |
+
+The whole reference is separate from Down or other classified views. It is not
+safe to derive complete season totals from a view that excludes production.
+Raw reference targets/EPA are not automatically suitable for display; consumers
+must apply the recorded metric policies and covered-game scope.
+
+Game coverage compares supplied REG game IDs with the candidate schedule's
+recorded completed games. It distinguishes missing PBP games from supplied games
+whose final scores are not yet recorded in that candidate. Neither is silently
+treated as certified complete. Missing games can also affect player admission.
+
+Once an official preparation marker exists, an input-free legacy materialization
+attempt raises before changing rows, including when it requests a different season.
+This prevents lazy/admin/maintenance paths from overwriting official receiving
+with the old calculation. The legacy SQL remains for compatibility with existing
+unmigrated databases until the serving-write migration is complete.
+`run_ingest` applies the same rule before loading any raw sources, so an input-free
+refresh cannot partially update the core tables before the split guard is reached.
+
+The full validator retains preview rejection and adds a separate rejection for
+`receiving_build_preparation`: API/UI and release validation remain unfinished.
+No existing reconciliation allowance was increased to admit the new rows.
+
+### Captured-play schema preservation
+
+The stored-input check found two preexisting storage problems: `ydstogo` was
+absent from the old plays table and silently omitted during refresh; the rare
+`tackle_for_loss_2_player_id` column was numeric, causing three supplied 2001 IDs
+to become NULL under `TRY_CAST`.
+
+Captured PBP loading now explicitly opts into adding missing typed columns,
+promoting common types using DuckDB's union rules, and strict `CAST` on insert.
+This preserves new columns, string IDs and fractional numeric values. Other
+feeds and the default compatibility storage path retain their existing policy.
+The receiving builder checks stored values after loading; it does not waive a
+mismatch because its counts happen to agree.
 
 ## Historical collection and migration check, October 25, 2026
+
+This earlier control covers core loading/player-game composition, before the
+official receiving replacement described in the following section.
 
 All 28 saved runs, 1999–2026, were converted and independently matched back to
 their bound receiving context/weekly references. They contain **1,296,179 full
@@ -214,3 +284,63 @@ Ignored evidence:
 - `api/data/receiving-core-history-migration-proof-20261025.{json,log}`: source
   safety, per-season outcomes, missing-game references and zero-mismatch checks.
 - `api/data/receiving-core-collection-final-tests-20261025.{xml,log}`: final suite.
+
+## Executed official receiving integration, October 25, 2026
+
+The actual main player-split materializer rebuilt all **28 seasons / 476 views**
+in a new copy of the core-migration preview. Each receiving view was compared
+in both directions with its original independently audited preview table:
+
+- **266,157 canonical receiving rows** matched those audited rows exactly,
+  including NULLs, metrics, membership and 5,622 qualified player-seasons.
+- **212,466 passing/rushing rows** matched the previous builder's calculations
+  on the same refreshed inputs. That control ran frozen code from `3af678b`;
+  it does not claim the older serving data was equally fresh.
+- Each season has a preparation record and a separate qualified-player whole
+  reference. The three missing 1999–2000 games remain explicit.
+- Current 2026 surface exclusions remain 721 catches, 8,174 yards and 45 TDs
+  in that view. Those values survive other views and the whole reference.
+- The stored schedule control only records final scores for two of the 94
+  supplied 2026 games. The new game-coverage record therefore marks 92 supplied
+  games as unconfirmed by that schedule; these are **not** 92 missing PBP games.
+  Fresh schedule/vendor loading remains a separate release requirement.
+- Both the source core preview and original serving DB kept their exact bytes.
+  The new copy closed without a WAL. The full validator rejects it with
+  `Official receiving integration awaits coverage-aware API/UI and complete release validation`.
+- The final backend suite passed **1,122 tests, two skipped**. Receiving build
+  controls cover coherence failures, historical masks, partial/unavailable views,
+  whole-reference retention, zero eligible receivers, transactional rollback of
+  rows and new/existing metadata, repeatability, old table column order and
+  refusal of legacy overwrites. Schema controls cover missing-column retention
+  and numeric-to-string ID/numeric-fraction promotion.
+  An additional early-ingestion guard verifies that legacy refreshes cannot
+  change raw sources before encountering the official-snapshot restriction.
+
+The proof refreshed stored PBP/weekly inputs from the same captured collection,
+with core network downloads forbidden. Schedules/rosters used read-only stored
+controls. It did not rebuild team analytics, ratings, grades, defense/team splits
+or comparables, and it did not pass complete candidate/HTTP publication gates.
+It establishes the receiving replacement and unchanged passing/rushing math,
+not general release readiness.
+
+The first comparison run exposed a bug in the verification script's positional
+insert into an older table column order. The corrected name-based comparison
+then caught the real 2001 ID storage issue described above. Both failed copies
+and logs were retained; the final v3 proof ran after the storage correction.
+Neither failed run modified its source or the serving database.
+
+Ignored final evidence:
+
+- `api/data/official-receiving-build-20261025-v3.duckdb`: integrated, explicitly
+  unpublishable copy, with all season coverage/reference records and proof.
+- `api/data/official-receiving-build-proof-20261025-v3.{json,log}`: 28-season
+  comparisons, scope/coverage, source hashes and full-gate rejection.
+- `api/data/official-receiving-previous-builder-20261025.py`: frozen prior SQL
+  owner, SHA256 `7d2598067aec19591470d83ec6fb89d380e5474a05d7678c6f435bcf7dea94e5`.
+- `api/data/official-receiving-release-guard-tests-20261025.{xml,log}`: final backend run.
+
+Serving DB SHA256 remains
+`b09f8e13743d912d9da9de24f2002ab258a144f49aa9ed33d5033e8633ed9daf`;
+the source core preview remains
+`a0a5e6ff2503bad4f08e3298145042b7ec024b2cd5d34362316df4fca558489f`.
+Nothing was pushed, deployed or promoted.

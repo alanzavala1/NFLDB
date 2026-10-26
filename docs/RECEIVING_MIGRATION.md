@@ -290,8 +290,10 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
   compatible historical collection, and persist their revisions. The real core
   loader/player-game migration passed all 28 years on an unpublishable copy,
   including replacement of the legacy weekly schema without redownloading inputs.
-  Canonical split replacement, other-source coherence and a full real candidate
-  run remain pending; this item is intentionally not marked complete.
+  Official receiving materialization now consumes those inputs and verifies
+  stored-play/weekly/admission coherence before replacing canonical rows. Other
+  source freshness/coherence and a full accepted real candidate remain pending;
+  this item is intentionally not marked complete.
 - [x] Run the receiving preview and independent checks for every played season,
   1999–2026, including 94 completed 2026 games through October 22. All 476
   season/view calculations pass; 26 seasons have complete game coverage.
@@ -301,6 +303,13 @@ source-unavailable. Any intentional feature retirement is a separate user decisi
   Keep usable receiving production and expose these limits explicitly.
 - [ ] Integrate the official receiving path into the ordinary offline build,
   remove its replaced receiving calculation, and preserve passing/rushing paths.
+  The captured-input build now uses the official path and stores coverage and
+  whole-reference records atomically. The old receiving SQL is bypassed in that
+  mode; compatibility remains for unmigrated databases until serving writes are
+  retired. Input-free rebuilds cannot overwrite an official receiving snapshot.
+  All 476 main-materializer receiving outputs matched their audited previews;
+  passing/rushing matched the previous builder on the same fresh inputs. This
+  is an offline integration proof, not an accepted serving snapshot.
 - [ ] Pass the unchanged full candidate/HTTP gates with revision-bound results,
   all historical/current coverage and receiving-total checks. Preview success is
   not a substitute. Ratings/comparables downstream effects must also be checked.

@@ -79,6 +79,11 @@ class ReceivingCoreCollection:
     def feeds(self, seasons: list[int]):
         return self.load_feeds(seasons, seasons)
 
+    def receiving_run(self, season: int) -> tuple[Path, dict, str]:
+        if season not in self.owners:
+            raise SourceError("receiving_core_inputs", season, "no captured receiving run")
+        return self.owners[season].receiving_run(season)
+
     def revision(self) -> str:
         return f"receiving core collection SHA256 {self.manifest_sha256} ({len(self.seasons)} seasons)"
 

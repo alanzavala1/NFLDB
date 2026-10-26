@@ -66,6 +66,8 @@ def validate_snapshot(conn):
     _require('receiving_preview_preparation' not in tables
              and not any(table.startswith('receiving_') and table.endswith('_preview') for table in tables),
              'Receiving-only preview is not a publishable snapshot')
+    _require('receiving_build_preparation' not in tables,
+             'Official receiving integration awaits coverage-aware API/UI and complete release validation')
     _check_schema(conn)
     seasons = [r[0] for r in conn.execute(
         "SELECT DISTINCT season FROM plays WHERE season_type = 'REG' ORDER BY season"

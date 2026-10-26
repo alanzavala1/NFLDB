@@ -8,12 +8,15 @@ from database import get_connection
 from pipeline.analytics import prepare_analytics
 from pipeline.loading import load_and_store_raw, load_advanced_stats, load_supplemental_data
 from pipeline.player_stats import build_player_game_stats
+from pipeline.receiving_build import has_official_receiving
 from pipeline.source_results import SourceOutcome
 
 
 def run_ingest(seasons: list[int], log=print, *, core_inputs=None) -> list[SourceOutcome]:
     """Load source feeds, build player stats, then prepare analytics for the batch."""
     conn = get_connection()
+    if core_inputs is None and has_official_receiving(conn):
+        raise RuntimeError("Official receiving snapshot requires captured offline inputs before any source refresh")
     options = {} if core_inputs is None else {"core_inputs": core_inputs}
     raw = load_and_store_raw(conn, seasons, log=log, **options)
     plays = raw.plays
@@ -52,7 +55,8 @@ def run_ingest(seasons: list[int], log=print, *, core_inputs=None) -> list[Sourc
     log(f"\nLoading supplemental vendor data for {seasons}...")
     outcomes.extend(load_supplemental_data(conn, seasons, log=log))
 
-    prepare_analytics(sorted(analytics_seasons), log=log)
+    analytics_options = {} if core_inputs is None else {"receiving_inputs": core_inputs}
+    prepare_analytics(sorted(analytics_seasons), log=log, **analytics_options)
     return outcomes
 
 

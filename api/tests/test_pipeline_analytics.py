@@ -72,6 +72,7 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
     inputs = object() if use_captured else None
     calls = []
     monkeypatch.setattr(ingest, 'get_connection', lambda: connection)
+    monkeypatch.setattr(ingest, 'has_official_receiving', lambda conn: False)
 
     def load_raw(conn, seasons, log, **options):
         assert conn is connection and seasons == requested
@@ -92,8 +93,9 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
             return []
         monkeypatch.setattr(ingest, name, load)
 
-    def prepare(seasons, log):
+    def prepare(seasons, log, **options):
         assert seasons == [2024]
+        assert options == ({'receiving_inputs': inputs} if use_captured else {})
         calls.append('analytics')
 
     monkeypatch.setattr(ingest, 'prepare_analytics', prepare)
@@ -101,6 +103,14 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
     assert outcomes == [SourceOutcome('schedules', 2024, 'loaded', 1)]
     assert calls == (['raw', 'player_stats', 'load_advanced_stats',
                       'load_supplemental_data', 'analytics'] if has_plays else ['raw'])
+
+
+def test_analytics_forwards_receiving_inputs_only_to_player_splits(preparation_steps, monkeypatch):
+    import splits_builder
+    inputs, calls = object(), []
+    monkeypatch.setattr(splits_builder, 'materialize', lambda season, **options: calls.append((season, options)) or 5)
+    prepare_analytics([2024, 2026], log=lambda _: None, receiving_inputs=inputs)
+    assert calls == [(2024, {'receiving_inputs': inputs}), (2026, {'receiving_inputs': inputs})]
 
 
 def test_weekly_history_migration_rebuilds_dependents_without_expanding_vendor_downloads(monkeypatch):

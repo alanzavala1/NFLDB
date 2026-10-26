@@ -5,7 +5,7 @@ This orchestrates existing builders; it does not validate snapshot completeness.
 """
 
 
-def prepare_analytics(seasons: list[int], log=print) -> None:
+def prepare_analytics(seasons: list[int], log=print, *, receiving_inputs=None) -> None:
     """Rebuild seasonal tables and globally calibrated analytics in dependency order."""
     # Materialize team-analytics so /team-analytics serves a precomputed
     # SELECT instead of running a 150-line CTE per request.
@@ -40,7 +40,8 @@ def prepare_analytics(seasons: list[int], log=print) -> None:
     log("\nMaterializing player splits...")
     import splits_builder
     for season in seasons:
-        n = splits_builder.materialize(season)
+        options = {} if receiving_inputs is None else {"receiving_inputs": receiving_inputs}
+        n = splits_builder.materialize(season, **options)
         log(f"  player_splits[{season}]: {n} rows")
 
     # Materialize defensive player splits — event line by situation.
