@@ -205,7 +205,8 @@ def test_candidate_worker_consumes_captures_records_provenance_and_retains_full_
         return popen([command[0], "-c", CORE_WORKER, *command[3:]], **kwargs)
     monkeypatch.setattr(snapshots.subprocess, "Popen", start)
     checked = []
-    def gate(path):
+    def gate(path, *, core_inputs=None):
+        assert core_inputs == bundle
         # Analytics are intentionally stubbed for this lifecycle control, so
         # inspect the real worker's core/provenance writes in place of full QA.
         with duckdb.connect(str(path), read_only=True) as conn:

@@ -695,6 +695,14 @@ refreshes the current captured inputs and context before rebuilding dependent
 analytics across the stored history. It is a separate development proof; the
 complete receiving-aware release gate remains outstanding.
 
+`jobs.validate --database ... --core-inputs ...` now runs the
+[complete official snapshot diagnostics](RECEIVING_RELEASE_VALIDATION.md),
+including source-bound receiving, recorded inputs, shared FTN, all-game analytics
+coverage and existing nonreceiving reconciliation. The actual 28-season run
+still fails a 2004 passing attribution check; publication stays blocked. Its
+sack-only passing EPA reconstruction bug was fixed without changing stored
+statistics or enlarging any error allowance.
+
 The app is not read-only yet. These paths must be retired together with verified
 replacement preparation:
 

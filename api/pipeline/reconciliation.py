@@ -59,8 +59,21 @@ def passing_epa_mismatches(conn, season):
     adjustment = 'COALESCE(two_pt.epa, 0)' if new_feed else '0'
     return conn.execute(f'''
         WITH sp AS (
-            SELECT player_id, SUM(epa * att) epa, SUM(att) att FROM player_splits
+            SELECT player_id, SUM(epa * att) epa, SUM(att) att,
+                COUNT(*) FILTER (WHERE att IS NULL OR (att > 0 AND epa IS NULL)
+                                 OR (att = 0 AND epa IS NOT NULL)) invalid
+            FROM player_splits
             WHERE category = 'passing' AND split_dim = 'down' AND season = ? GROUP BY 1),
+        sack_only AS (
+            -- A sack-only down has NULL EPA/attempt, not zero EPA. Its raw
+            -- numerator cannot be reconstructed by multiplying that rate by 0.
+            SELECT p.passer_player_id AS player_id, SUM(p.qb_epa) epa
+            FROM plays p JOIN player_splits s
+              ON s.player_id = p.passer_player_id AND s.season = p.season
+             AND s.category = 'passing' AND s.split_dim = 'down'
+             AND TRY_CAST(s.split_value AS INTEGER) = p.down AND s.att = 0
+            WHERE p.season = ? AND p.season_type = 'REG' AND {PASSING_EPA_PLAY}
+            GROUP BY p.passer_player_id),
         two_pt AS (
             SELECT passer_player_id AS player_id, SUM(qb_epa) epa FROM plays
             WHERE season = ? AND season_type = 'REG' AND down IS NULL
@@ -72,10 +85,11 @@ def passing_epa_mismatches(conn, season):
             GROUP BY 1 HAVING SUM(attempts) >= 100)
         SELECT COUNT(*) FROM off LEFT JOIN sp USING (player_id)
         LEFT JOIN two_pt USING (player_id)
-        WHERE sp.att IS NULL OR sp.att = 0 OR sp.epa IS NULL OR off.e IS NULL
+        LEFT JOIN sack_only USING (player_id)
+        WHERE sp.att IS NULL OR sp.att = 0 OR sp.epa IS NULL OR off.e IS NULL OR sp.invalid > 0
            OR NOT isfinite(off.e) OR NOT isfinite(sp.epa)
-           OR ABS((sp.epa + {adjustment}) / NULLIF(sp.att, 0) - off.e) > 0.005
-    ''', [season, season, season]).fetchone()[0]
+           OR ABS((sp.epa + COALESCE(sack_only.epa, 0) + {adjustment}) / NULLIF(sp.att, 0) - off.e) > 0.005
+    ''', [season, season, season, season]).fetchone()[0]
 
 
 def defensive_sack_mismatches(conn, season):
@@ -113,7 +127,7 @@ def impossible_rates(conn):
     ''').fetchone()[0]
 
 
-def season_checks(conn, season):
+def season_checks(conn, season, *, official_receiving=False):
     """Mismatch counts and allowed counts; preserve established yardage tolerances."""
     checks = {}
     for name, category, column, official, minimum, allowed in (
@@ -124,6 +138,10 @@ def season_checks(conn, season):
         ('rush_yards', 'rushing', 'yards', 'rushing_yards', 300, 2),
         ('rec_yards', 'receiving', 'yards', 'receiving_yards', 300, 6),
     ):
+        if official_receiving and category == 'receiving':
+            # The caller must run source-bound receiving validation instead;
+            # a Down subtotal is not an independent whole-season reference.
+            continue
         checks[name] = (count_mismatches(conn, season, category, column, official, minimum), allowed)
     checks['passing_epa'] = (passing_epa_mismatches(conn, season), 0)
     checks['defensive_sacks'] = (defensive_sack_mismatches(conn, season), 0)

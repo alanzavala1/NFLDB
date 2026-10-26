@@ -202,12 +202,12 @@ def reconciled():
     conn.execute('''CREATE TABLE weekly_player_stats (
         season INTEGER, season_type VARCHAR, player_id VARCHAR, attempts INTEGER, passing_epa DOUBLE)''')
     conn.execute('''CREATE TABLE player_splits (
-        season INTEGER, player_id VARCHAR, category VARCHAR, split_dim VARCHAR,
+        season INTEGER, player_id VARCHAR, category VARCHAR, split_dim VARCHAR, split_value VARCHAR,
         att INTEGER, epa DOUBLE, yards INTEGER, success_pct DOUBLE)''')
     conn.execute('''CREATE TABLE plays (season INTEGER, season_type VARCHAR, down INTEGER,
         pass_attempt INTEGER, sack INTEGER, passer_player_id VARCHAR, qb_epa DOUBLE, play_type VARCHAR)''')
     conn.execute("INSERT INTO weekly_player_stats VALUES (2024, 'REG', 'qb', 100, 20)")
-    conn.execute("INSERT INTO player_splits VALUES (2024, 'qb', 'passing', 'down', 100, 0.2, 500, 50)")
+    conn.execute("INSERT INTO player_splits VALUES (2024, 'qb', 'passing', 'down', '1', 100, 0.2, 500, 50)")
     yield conn
     conn.close()
 

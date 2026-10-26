@@ -70,8 +70,11 @@ def _run_worker(candidate: Path, seasons: list[int], *, core_inputs: Path | None
     _run_job(candidate, 'jobs.prepare_worker', arguments)
 
 
-def _run_validation(candidate: Path) -> None:
-    _run_job(candidate, 'jobs.validate', ['--database', str(candidate)], read_only=True)
+def _run_validation(candidate: Path, *, core_inputs: Path | None = None) -> None:
+    arguments = ['--database', str(candidate)]
+    if core_inputs is not None:
+        arguments.extend(['--core-inputs', str(core_inputs)])
+    _run_job(candidate, 'jobs.validate', arguments, read_only=True)
 
 
 def validate_preparation(candidate: Path, seasons: list[int]) -> None:
@@ -80,50 +83,61 @@ def validate_preparation(candidate: Path, seasons: list[int]) -> None:
         raise CandidateError('Candidate still has a WAL; preparation did not close cleanly')
     conn = duckdb.connect(str(candidate), read_only=True)
     try:
-        tables = {row[0] for row in conn.execute('SHOW TABLES').fetchall()}
-        if 'snapshot_preparation' not in tables:
-            raise CandidateError('Candidate has no preparation record')
-        records = conn.execute(
-            'SELECT format_version, requested_seasons, source_outcomes FROM snapshot_preparation'
-        ).fetchall()
-        if len(records) != 1 or records[0][0] != 1:
-            raise CandidateError('Candidate has an invalid preparation record')
-        if json.loads(records[0][1]) != seasons:
-            raise CandidateError('Candidate preparation record has different requested seasons')
-        outcomes = json.loads(records[0][2])
-
-        def stored(table, season):
-            if table not in tables:
-                return 0
-            return conn.execute(
-                f'SELECT COUNT(*) FROM "{table}" WHERE season = ?', [season]
-            ).fetchone()[0]
-
-        def observed(source, season):
-            matches = [o for o in outcomes if o['source'] == source and o['season'] == season]
-            if len(matches) != 1:
-                raise CandidateError(f'{source}[{season}]: expected one source outcome')
-            return matches[0]
-
-        def require_loaded(table, season):
-            outcome = observed(table, season)
-            if outcome['status'] != 'loaded' or outcome['rows'] <= 0:
-                raise CandidateError(f'{table}[{season}]: required source was not loaded')
-            if stored(table, season) != outcome['rows']:
-                raise CandidateError(f'{table}[{season}]: stored count differs from downloaded count')
-
-        for season in seasons:
-            require_loaded('schedules', season)
-            plays = observed('plays', season)
-            if plays['status'] == 'loaded':
-                for table in ('plays', 'rosters', 'weekly_player_stats'):
-                    require_loaded(table, season)
-                if stored('player_game_stats', season) == 0:
-                    raise CandidateError(f'player_game_stats[{season}]: no prepared rows')
-            elif plays['status'] != 'not_found' or stored('plays', season):
-                raise CandidateError(f'plays[{season}]: cannot treat stored plays as an unplayed season')
+        check_preparation(conn, seasons)
     finally:
         conn.close()
+
+
+def check_preparation(conn, seasons: list[int] | None = None) -> dict:
+    """Check recorded core-source counts on an existing read-only connection."""
+    tables = {row[0] for row in conn.execute('SHOW TABLES').fetchall()}
+    if 'snapshot_preparation' not in tables:
+        raise CandidateError('Candidate has no preparation record')
+    records = conn.execute(
+        'SELECT format_version, requested_seasons, source_outcomes FROM snapshot_preparation'
+    ).fetchall()
+    if len(records) != 1 or records[0][0] != 1:
+        raise CandidateError('Candidate has an invalid preparation record')
+    requested = json.loads(records[0][1])
+    if (not isinstance(requested, list) or not requested
+            or any(type(year) is not int or year < 1999 for year in requested)
+            or requested != sorted(set(requested))):
+        raise CandidateError('Candidate has invalid requested seasons')
+    if seasons is not None and requested != seasons:
+        raise CandidateError('Candidate preparation record has different requested seasons')
+    outcomes = json.loads(records[0][2])
+
+    def stored(table, season):
+        if table not in tables:
+            return 0
+        return conn.execute(
+            f'SELECT COUNT(*) FROM "{table}" WHERE season = ?', [season]
+        ).fetchone()[0]
+
+    def observed(source, season):
+        matches = [o for o in outcomes if o['source'] == source and o['season'] == season]
+        if len(matches) != 1:
+            raise CandidateError(f'{source}[{season}]: expected one source outcome')
+        return matches[0]
+
+    def require_loaded(table, season):
+        outcome = observed(table, season)
+        if outcome['status'] != 'loaded' or outcome['rows'] <= 0:
+            raise CandidateError(f'{table}[{season}]: required source was not loaded')
+        if stored(table, season) != outcome['rows']:
+            raise CandidateError(f'{table}[{season}]: stored count differs from downloaded count')
+
+    for season in requested:
+        require_loaded('schedules', season)
+        plays = observed('plays', season)
+        if plays['status'] == 'loaded':
+            for table in ('plays', 'rosters', 'weekly_player_stats'):
+                require_loaded(table, season)
+            if stored('player_game_stats', season) == 0:
+                raise CandidateError(f'player_game_stats[{season}]: no prepared rows')
+        elif plays['status'] != 'not_found' or stored('plays', season):
+            raise CandidateError(f'plays[{season}]: cannot treat stored plays as an unplayed season')
+    return {'requested_seasons': requested, 'source_outcomes': outcomes}
 
 
 def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=print, *,
@@ -153,7 +167,8 @@ def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=pri
             options['rebuild_all_analytics'] = True
         _run_worker(candidate, seasons, **options)
         validate_preparation(candidate, seasons)
-        _run_validation(candidate)
+        validation_options = {} if core_inputs is None else {'core_inputs': core_inputs}
+        _run_validation(candidate, **validation_options)
     except BaseException:
         candidate.unlink(missing_ok=True)
         _wal(candidate).unlink(missing_ok=True)

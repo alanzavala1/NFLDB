@@ -12,6 +12,11 @@ validation are ready. API/UI handling and a coordinated offline rebuild are now
 connected locally; complete receiving-aware release checks remain outstanding.
 No serving database was replaced.
 
+The latest [complete snapshot diagnostic](RECEIVING_RELEASE_VALIDATION.md) now
+composes the source-bound receiving checks with the other release checks.
+Receiving passes, but a 2004 passing attribution case still fails; the official
+publication guard remains in place.
+
 ## Why this boundary comes first
 
 The Python loader and the R receiving producer previously downloaded plays and

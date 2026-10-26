@@ -167,7 +167,8 @@ def test_candidate_worker_reads_collection_through_ordinary_prepare_cli(two_year
     monkeypatch.setattr(snapshots.subprocess, "Popen", lambda command, **kwargs:
                         popen([command[0], "-c", CORE_WORKER, *command[3:]], **kwargs))
     checked = []
-    def gate(path):
+    def gate(path, *, core_inputs=None):
+        assert core_inputs == collection.directory
         with duckdb.connect(str(path), read_only=True) as conn:
             outcomes = json.loads(conn.execute("SELECT source_outcomes FROM snapshot_preparation").fetchone()[0])
             assert all(item["detail"] == collection.revision() for item in outcomes if item["source"] in ("plays", "weekly_player_stats"))
