@@ -103,7 +103,10 @@ software tests does not override the real-data failure recorded above.
 
 ## Remaining release work
 
-Investigate a repeatable passing-credit solution for the 2004 case. The recorded
+The passing-credit investigation below verifies a repeatable upstream counting
+solution for the 2004 case. It still needs an isolated passing adapter preview,
+qualification/efficiency-metric checks and all-history validation before build
+integration. The recorded
 receiving counts and usable passing data should remain available while the
 affected attribution is addressed. Separately audit metric availability in the
 legacy profiles/leaders/game endpoints; their existing masks cover historical
@@ -111,3 +114,56 @@ targets, while the dedicated receiving API has the broader YAC/air/NULL policy.
 Only after the complete real-data checks, legacy-consumer audit and release
 review pass should the official publication guard be removed. Refresh/deployment
 migration and retirement of request-time writes remain later pipeline work.
+
+## Passing attribution investigation, October 26
+
+The missing credit is present in the already captured detailed play statistics:
+
+| Player | Detailed stat ID | Credit on play 4462 |
+|---|---:|---|
+| Vinny Testaverde | 15 | Completion, 14 passing yards |
+| Keyshawn Johnson | 19 | Intercepted pass, zero passing yards |
+
+The existing receiving producer saves all detailed credits, not only receiving
+credits. These two passing records are already in its bound `credits-2004.csv`
+and RDS capture. The single-row PBP representation loses this distinction for
+our custom passing aggregation, while the maintained calculator uses the
+separate records. Its [passing counting implementation](https://github.com/nflverse/nflfastR/blob/4fc75e88b308ed592e11700e580e9e5380bdc46b/R/calculate_stats.R)
+sums completion/attempt/yardage/interception stat IDs rather than assigning all
+of a play's passing counts to `passer_player_id`.
+
+An actual **unmodified** `nflfastR::calculate_stats` run passed in the pinned
+R 4.6.1 / nflfastR 6.0.0 / nflreadr 1.5.1 environment. It read the frozen full
+2004 PBP/weekly inputs and downloaded detailed credits through its normal
+loader. The fresh five-column credit projection matched the previous capture,
+preserving duplicate records. No namespace, calculator or transport was patched.
+
+The one-play result assigns Testaverde one attempt, one completion and 14 yards;
+Johnson receives one attempt, no completion, no passing yards and one
+interception. The whole season and four Down calculations also passed:
+
+- All six passing count fields matched weekly reference totals for every
+  identified player, including low-volume players. There were 117 players with
+  nonzero passing counts or sacks suffered.
+- Whole versus weekly, summed Down versus weekly, and summed Down versus whole
+  had zero mismatches in attempts, completions, yards, TDs, interceptions and
+  sacks suffered: all 18 metric comparisons passed.
+- Testaverde's calculated whole/Down season totals are 495 attempts, 297
+  completions and 3,532 yards, matching the already correct stored player-game
+  totals. The current custom Down rows remain 494 / 296 / 3,518.
+
+A separate read-only scan of all 28 captured seasons, 1999–2026, found exactly
+one supplied REG nonconversion play with more than one identified player holding
+passing stat IDs 14/15/16/19: this same play. Every scanned credit CSV matched
+its captured hash first. This census covers that specific multi-passer pattern;
+it does not certify all other passing counts or source classifications.
+
+The investigation therefore supports extending the existing offline calculator
+integration to passing counts. A one-player override is unnecessary. EPA, CPOE,
+success rates, air yards and qualification are separate integration questions;
+this count proof does not certify them or retire the release guard.
+
+Ignored evidence: `api/data/passing-attribution-probe-20261026/proof.json`, its
+exact-play/whole/Down CSVs, `passing-attribution-probe-20261026.log`, the runner
+`investigate_passing_2004_20261026.R`, and
+`passing-multiple-passer-audit-20261026.json`. No database was changed.
