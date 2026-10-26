@@ -58,9 +58,7 @@ CREATE TABLE IF NOT EXISTS player_splits (
 )
 """
 
-_COLUMNS = ("player_id", "season", "category", "split_dim", "split_value",
-            "sort_order", "att", "cmp", "yards", "td", "interceptions",
-            "air_yards", "yac", "first_downs", "epa", "success_pct", "cpoe")
+_COLUMNS = core.PLAYER_COLUMNS
 
 
 def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:

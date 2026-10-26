@@ -12,6 +12,10 @@ lead dims (depth/direction) are stored name-less as 3-tuples because the
 caller names them differently per category (pass_depth vs target_depth).
 """
 
+PLAYER_COLUMNS = ("player_id", "season", "category", "split_dim", "split_value",
+                  "sort_order", "att", "cmp", "yards", "td", "interceptions",
+                  "air_yards", "yac", "first_downs", "epa", "success_pct", "cpoe")
+
 # ── Fixed-name dimensions (4-tuples) ─────────────────────────────────────────
 
 DOWN_DIM = (

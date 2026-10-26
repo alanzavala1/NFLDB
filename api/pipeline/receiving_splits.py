@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from splits_core import PLAYER_COLUMNS
 
 from pipeline.source_results import SourceError
 from pipeline.receiving_dimensions import DIMENSIONS
@@ -31,9 +32,7 @@ _PRODUCTION = {"targets": "att", "receptions": "cmp", "receiving_yards": "yards"
 COUNT_COLUMNS = {**_PRODUCTION, "receiving_yards_after_catch": "yac", "receiving_first_downs": "first_downs"}
 _UNSUPPORTED = ("interceptions", "cpoe")
 _TARGET_METRICS = ("epa", "success_pct", "air_yards")
-_COLUMNS = ("player_id", "season", "category", "split_dim", "split_value", "sort_order",
-            "att", "cmp", "yards", "td", "interceptions", "air_yards", "yac",
-            "first_downs", "epa", "success_pct", "cpoe")
+_COLUMNS = PLAYER_COLUMNS
 
 
 def _error(season: int, reason: str) -> SourceError:

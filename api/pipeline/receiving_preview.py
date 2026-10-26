@@ -3,7 +3,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import signal
 import subprocess
 import uuid
 
@@ -34,23 +33,8 @@ def _run_export(rscript: Path, library: Path, output: Path, seasons: list[int], 
     prepare_receiving_inputs(output, seasons)
     command = [str(rscript), "--vanilla", str(producer),
                str(output), *(str(year) for year in seasons)]
-    options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
-    with (output / "R-job.log").open("xb") as log:
-        process = subprocess.Popen(command, cwd=api, env=env, stdout=log, stderr=subprocess.STDOUT, **options)
-        try:
-            code = process.wait()
-        except BaseException:
-            # Rscript can launch another process. Stop this job's process tree
-            # before its candidate is cleaned up, including on Windows.
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            else:
-                os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
-            raise
-    if code:
-        raise CandidateError(f"R export failed ({code}); see {output / 'R-job.log'}")
+    from pipeline.r_runtime import run_r_export
+    run_r_export(command, cwd=api, env=env, logfile=output / "R-job.log")
 
 
 def _check_environment(rscript: Path, library: Path, output: Path, env: dict) -> None:

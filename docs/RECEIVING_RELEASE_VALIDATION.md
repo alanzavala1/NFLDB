@@ -104,9 +104,9 @@ software tests does not override the real-data failure recorded above.
 ## Remaining release work
 
 The passing-credit investigation below verifies a repeatable upstream counting
-solution for the 2004 case. It still needs an isolated passing adapter preview,
-qualification/efficiency-metric checks and all-history validation before build
-integration. The recorded
+solution for the 2004 case. The isolated Down adapter preview is now complete;
+efficiency-metric checks, other views and all-history validation remain before
+build integration. The recorded
 receiving counts and usable passing data should remain available while the
 affected attribution is addressed. Separately audit metric availability in the
 legacy profiles/leaders/game endpoints; their existing masks cover historical
@@ -167,3 +167,70 @@ Ignored evidence: `api/data/passing-attribution-probe-20261026/proof.json`, its
 exact-play/whole/Down CSVs, `passing-attribution-probe-20261026.log`, the runner
 `investigate_passing_2004_20261026.R`, and
 `passing-multiple-passer-audit-20261026.json`. No database was changed.
+
+## Isolated passing Down adapter preview
+
+`jobs.passing_preview` now turns the official six-count Down export into the
+shared `player_splits` row shape, outside every serving and ingestion path.
+From `api/`, with the existing pinned R environment and captured core collection:
+
+```powershell
+uv run --locked python -m jobs.passing_preview `
+  --core-inputs data/receiving-refreshed-history-collection-20261026 `
+  --exports data/passing-down-preview-example --season 2004 `
+  --rscript data/upstream-r-trial/R-4.6.1/bin/Rscript.exe `
+  --r-library data/receiving-r-clean-20261023
+```
+
+The command refuses an existing output directory. It creates CSVs and JSON,
+**no database or replacement live rows**. Failed logs remain for diagnosis;
+`preview.json` is written only after all acceptance checks. That record always
+says `preview_only` and `publication_ready: false`.
+
+The frozen `experiments/upstream_passing_down.R` calls the unmodified upstream
+calculator. It reuses the captured full PBP and weekly RDS files and verifies
+fresh detailed credits against the captured credit projection. The R environment
+and dependency lock are checked before source downloads. All producer, request,
+input context, reference and result bytes are bound to hashes. Python compares
+the exported context and weekly counts to the already validated typed core
+bundle before adapting rows. Preparation/validation does not open a source DB.
+
+All players' six counts are checked before eligibility filtering. Independent
+whole versus weekly, summed Down versus classified, and classified plus excluded
+versus whole must match exactly. Invalid scopes, duplicate keys, nonfinite/
+fractional counts and impossible completion/TD/interception counts are rejected.
+Missing Down context retains its production in whole/excluded references.
+
+The existing 50-dropback PBP qualification SQL is reused unchanged. Eligibility
+is not inferred from an export's total. The canonical preview contains known
+attempts, completions, yards, TDs and interceptions. Sacks are verified and kept
+in raw/count references; the existing canonical table has no sack column.
+Sack-only buckets remain represented. Air yards, YAC, first downs, EPA, success
+rate and CPOE are NULL with explicit unverified reasons in the report. They are
+not copied from the previous passing rows or converted to zero.
+
+The real 2004 run produced **206 rows for the same 53 admitted players** as the
+current build. Comparing the five canonical count fields changes exactly one
+row, with no missing/extra keys: Testaverde on first down changes from
+205 attempts / 120 completions / 1,452 yards to **206 / 121 / 1,466**. TDs and
+interceptions are unchanged. All other 205 rows keep the same count values.
+His summed preview totals are **495 attempts, 297 completions, 3,532 yards**.
+The source context has 44,719 REG nonconversion plays, of which 6,753 lack a
+usable Down bucket; no admitted passing production is excluded in this season.
+
+The completed exports replayed through the Python validator with identical
+canonical rows. Evidence remains ignored in
+`api/data/passing-down-preview-20261026/`, its adjacent `.log`, and
+`passing-down-row-comparison-20261026.json`. Existing receiving and main-builder
+column lists now share one constant in `splits_core`; both R preview commands
+reuse the same process-tree interruption handling. These shared helpers do not
+change the existing receiving calculation or database schema.
+
+Final verification passed **1,259 backend tests, two skipped** (360.55s),
+including 37 new passing preview controls and the existing receiving process/
+export checks. The 206 real rows replayed exactly and round-tripped through the
+actual split schema in an isolated in-memory database. All three existing DB
+files retained their baseline hashes and had no WALs. Evidence is in
+`api/data/passing-down-backend-20261026.{xml,log}` and
+`passing-down-preview-proof-20261026.json`. No main-build integration or
+publication was performed.
