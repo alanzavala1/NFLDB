@@ -1,4 +1,4 @@
-"""Export and adapt a count-only passing Down preview; never writes a database."""
+"""Export and verify a passing Down preview; never writes a database."""
 import argparse
 import json
 import os

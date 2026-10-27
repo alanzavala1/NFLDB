@@ -136,7 +136,8 @@ def captured(tmp_path,monkeypatch):
     """Only R transport is simulated; actual loader, hashes and adapter run."""
     from pipeline import passing_preview as preview
     from pipeline.source_results import SeasonalFeed
-    data = case()
+    from tests.passing_cases import metric_case
+    data = metric_case(2004)
     weekly = data['weekly'].assign(game_id='game')
     class Inputs:
         def feeds(self,seasons):
@@ -146,13 +147,17 @@ def captured(tmp_path,monkeypatch):
         def revision(self):return 'captured fixture'
     monkeypatch.setattr(preview,'open_core_inputs',lambda path:Inputs())
     monkeypatch.setattr(preview,'_check_environment',lambda *args:None)
+    monkeypatch.setattr(preview,'read_export_csv',lambda *args,**kwargs:data['credits'].copy())
     def produce(command,*,cwd,env,logfile):
         output=logfile.parent
         for name in ('context','whole','classified','excluded','down','weekly'):
-            data[name].to_csv(output/(name+'.csv'),index=False)
+            frame=data[name][list(preview.CONTEXT)] if name=='context' else data[name]
+            frame.to_csv(output/(name+'.csv'),index=False)
+        data['context'].to_csv(output/'metric-context.csv',index=False)
+        data['credits'].to_csv(output/'metric-credits.csv',index=False)
         (output/'credits.rds').write_bytes(b'captured native credits transport fixture')
         files={p.name:preview.file_sha256(p) for p in output.iterdir()}
-        manifest=dict(format_version=1,kind='passing_down_counts_preview',season=2004,R='4.6.1',
+        manifest=dict(format_version=2,kind='passing_down_metrics_preview',season=2004,R='4.6.1',
             nflfastR='6.0.0',nflreadr='1.5.1',fresh_credits_match_capture=True,source_run_sha256='a'*64,files=files)
         (output/'run.json').write_text(json.dumps(manifest))
     monkeypatch.setattr(preview,'run_r_export',produce)
@@ -172,7 +177,8 @@ def test_csv_job_has_no_database_output_and_refuses_existing_directory(captured)
     assert (output/'preview.json').read_bytes()==before
 
 
-@pytest.mark.parametrize('fault',['csv_bytes','context_rebound','weekly_rebound','request','policy','runtime','counts'])
+@pytest.mark.parametrize('fault',['csv_bytes','context_rebound','weekly_rebound','request','policy','runtime','counts',
+                                'metric_context_rebound','credit_rebound','model_rebound','credit_scope'])
 def test_changed_bound_inputs_or_exported_bytes_never_complete(captured,monkeypatch,fault):
     preview,path,data=captured
     original=preview.run_r_export
@@ -182,16 +188,21 @@ def test_changed_bound_inputs_or_exported_bytes_never_complete(captured,monkeypa
         manifest=json.loads((output/'run.json').read_text())
         if fault=='csv_bytes':
             with (output/'down.csv').open('ab') as stream:stream.write(b'changed')
-        elif fault in ('context_rebound','weekly_rebound','counts'):
-            name={'context_rebound':'context.csv','weekly_rebound':'weekly.csv','counts':'down.csv'}[fault]
+        elif fault in ('context_rebound','weekly_rebound','counts','metric_context_rebound','credit_rebound','model_rebound'):
+            name={'context_rebound':'context.csv','weekly_rebound':'weekly.csv','counts':'down.csv',
+                  'metric_context_rebound':'metric-context.csv','credit_rebound':'metric-credits.csv',
+                  'model_rebound':'down.csv'}[fault]
             frame=pd.read_csv(output/name)
-            frame.loc[0,'play_id' if fault=='context_rebound' else 'passing_yards']=999
+            field={'context_rebound':'play_id','metric_context_rebound':'qb_epa',
+                   'credit_rebound':'yards','model_rebound':'passing_epa'}.get(fault,'passing_yards')
+            frame.loc[0,field]=999
             frame.to_csv(output/name,index=False)
             manifest['files'][name]=preview.file_sha256(output/name)
         elif fault in ('request','policy'):
             name='request.json' if fault=='request' else 'producer.R'
             (output/name).write_text('{}')
             manifest['files'][name]=preview.file_sha256(output/name)
+        elif fault=='credit_scope':manifest['credit_match_scope']='ignore mismatches'
         else:manifest['nflfastR']='99.0.0'
         (output/'run.json').write_text(json.dumps(manifest))
     monkeypatch.setattr(preview,'run_r_export',bad_export)
@@ -199,3 +210,21 @@ def test_changed_bound_inputs_or_exported_bytes_never_complete(captured,monkeypa
     with pytest.raises(SourceError):
         preview.prepare_passing_preview(path,output,2004,rscript=Path(sys.executable),library=path,log=lambda _:None)
     assert not (output/'preview.json').exists() and not (output/'canonical-down.csv').exists()
+
+
+def test_new_credits_outside_supplied_plays_do_not_change_a_captured_replay(captured,monkeypatch):
+    preview,path,data=captured
+    original=preview.run_r_export
+    def later_games(command,**kwargs):
+        original(command,**kwargs)
+        output=kwargs['logfile'].parent
+        credits=pd.read_csv(output/'metric-credits.csv')
+        newer=credits.iloc[:1].copy().assign(game_id='later-game',play_id=999)
+        pd.concat([credits,newer],ignore_index=True).to_csv(output/'metric-credits.csv',index=False)
+        manifest=json.loads((output/'run.json').read_text())
+        manifest['files']['metric-credits.csv']=preview.file_sha256(output/'metric-credits.csv')
+        manifest['credit_match_scope']='supplied REG nonconversion game/play keys'
+        (output/'run.json').write_text(json.dumps(manifest))
+    monkeypatch.setattr(preview,'run_r_export',later_games)
+    report=preview.prepare_passing_preview(path,path/'output',2004,rscript=Path(sys.executable),library=path,log=lambda _:None)
+    assert report['rows']==2 and report['credit_match_scope']=='supplied REG nonconversion game/play keys'

@@ -104,9 +104,9 @@ software tests does not override the real-data failure recorded above.
 ## Remaining release work
 
 The passing-credit investigation below verifies a repeatable upstream counting
-solution for the 2004 case. The isolated Down adapter preview is now complete;
-efficiency-metric checks, other views and all-history validation remain before
-build integration. The recorded
+solution for the 2004 case. The isolated Down adapter now verifies counts and
+metric availability across the captured history. Other passing views and their
+all-history validation remain before build integration. The recorded
 receiving counts and usable passing data should remain available while the
 affected attribution is addressed. Separately audit metric availability in the
 legacy profiles/leaders/game endpoints; their existing masks cover historical
@@ -234,3 +234,97 @@ files retained their baseline hashes and had no WALs. Evidence is in
 `api/data/passing-down-backend-20261026.{xml,log}` and
 `passing-down-preview-proof-20261026.json`. No main-build integration or
 publication was performed.
+
+## Passing Down metric verification, October 27
+
+The isolated passing job now exports native first downs, EPA, CPOE, air yards
+and passing YAC alongside its counts. Export contract version 2 binds the
+additional PBP context and detailed-credit CSVs. Python compares both to the
+captured core inputs, including duplicate credit multiplicity, before adapting
+anything. All-player Down counts are independently reconstructed from detailed
+stat IDs and must match the native calculator exactly before admission.
+
+The metric definitions are explicit:
+
+- First downs use native completion credits with a team first-down record.
+- EPA per attempt uses native pass/spike QB EPA divided by credited attempts;
+  sacks contribute to the numerator. Zero-attempt buckets have no rate.
+- Success is positive-EPA attempts divided by attempts; missing EPA is unknown.
+- CPOE is the mean of available modeled pass/spike observations, rather than
+  an average over all attempts. No modeled observations means unavailable.
+- Passing air yards require complete matching attempt air-yard coverage.
+- Passing YAC follows the native definition: credited passing yards minus air
+  yards on completions. It is not the sum of the PBP receiver-YAC field.
+- Air yards and YAC remain unavailable before 2006.
+
+EPA/CPOE exports are checked against their PBP model populations. Each player's
+per-play detailed counts are also compared with that player's PBP contributions,
+so equal bucket totals cannot conceal opposing per-play discrepancies. An
+attribution disagreement masks only the five dependent fields in that player's
+affected bucket; verified counts and first downs remain. Missing air or model
+inputs similarly affect only their dependent fields. Reasons are recorded per
+field in `preview.json`; these diagnostics are not yet exposed by a serving API.
+
+This follows the inspected [upstream calculator source](https://github.com/nflverse/nflfastR/blob/4fc75e88b308ed592e11700e580e9e5380bdc46b/R/calculate_stats.R).
+The producer continues to call the unmodified installed calculator and verify
+the pinned runtime and fresh detailed-credit projection against the capture.
+
+The final native 2004 preview has 206 rows/53 players: first downs are available
+in all rows, EPA/success in 205, and CPOE/air/YAC in none. Testaverde's first-down
+bucket retains 206 attempts, 121 completions, 1,466 yards and 60 first downs;
+its rates are unavailable because of the documented two-passer attribution.
+His other three Down buckets retain EPA and success. The other affected player,
+Johnson, remains below the unchanged split-admission threshold.
+
+The final native 2024 preview has 200 rows/50 players with all six checked
+metrics available. There are no per-play passing attribution disagreements.
+An initial comparison against PBP receiver YAC disagreed in 21 rows; validating
+the calculator's actual passing decomposition resolves those differences
+without suppressing verified values or loosening numerical tolerances.
+
+Evidence: ignored `api/data/passing-down-metrics-{2004,2024}-20261027-final/`
+and adjacent job logs. The main build and publication guard remain unchanged;
+this checkpoint creates only exports, reports and CSV previews.
+
+The historical replay covers **28 captured seasons (1999-2026), 5,728 Down
+rows and 1,447 qualified player-seasons**. Every season checks first downs
+against its supplied-game weekly reference, plus Down/classified and
+classified+excluded/whole conservation, for all identified players before
+admission. The existing split schema is also exercised in memory. No admitted
+passing count production is excluded for missing Down in these captures.
+
+The existing development database has exactly the same 5,728 row keys. Its five
+core passing counts differ only on Testaverde's documented first-down row.
+First downs differ in 1,164 rows; the native values match the weekly source.
+One confirmed reason is the old generic `first_down` field counting a
+penalty-awarded first down: `2024_03_NE_NYJ / 462` is a Rodgers completion for
+no gain followed by an unnecessary-roughness penalty. It advances the chains
+but is not a passing first down. These first-down changes are intentional;
+they are not described as part of the single-row five-count correction.
+
+The history run exposed and tested an unidentified-passer model aggregate in
+2001: its native model values are verified, but it cannot become an admitted
+player. It also correctly stopped on current-season source drift. A separate
+probe showed all **71,984** detailed credit records on the **18,514 supplied
+REG nonconversion plays** still match, including multiplicity; the changed
+records are outside the consumed keys. The exporter now verifies exactly the
+native calculator's supplied-play semi-join and records that scope. Changed
+credits on any supplied play still fail. Older version-2 exports with the
+stronger entire-season check remain readable. This is captured-input replay,
+not a certificate that all games available today have been refreshed.
+
+The repaired full-history replay is in
+`api/data/passing-metrics-history-final-20261027/`; the current-season export
+is `passing-down-metrics-2026-20261027-supplied-scope/`. Original failed
+logs/exports and the 2001/2026 diagnostic proofs are retained separately.
+The comparison is `passing-metrics-all-history-comparison-20261027.json`.
+
+Final verification: **1,299 backend tests passed, two skipped** (361.41s),
+including **77 passing controls** (also independently passed in 3.59s).
+Evidence is `api/data/passing-metrics-backend-complete-20261027.{xml,log}` and
+`passing-metrics-focused-final-20261027.{xml,log}`. The history proof records
+the current Python policy hashes, all 28 first-down reference checks, exact
+replays and in-memory schema round-trips, the database comparison and the
+current-season drift diagnosis. All three existing database hashes remain
+unchanged, with no WALs. No main-build connection, publication-guard removal,
+API/UI integration, push or deployment was performed.

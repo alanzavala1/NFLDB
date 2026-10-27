@@ -1,4 +1,4 @@
-# Count-only preview using the unmodified official calculator and captured PBP.
+# Passing preview using the unmodified official calculator and captured PBP.
 # Rscript --vanilla producer.R OUTPUT; request.json is prepared by the Python job.
 args <- commandArgs(trailingOnly=TRUE)
 stopifnot(length(args)==1L)
@@ -24,6 +24,8 @@ read_capture <- function(kind) {
 pbp <- read_capture("pbp")
 weekly <- read_capture("weekly")
 credits <- read_capture("credits")
+reg <- pbp[pbp$season %in% year & pbp$season_type %in% "REG" & !(pbp$two_point_attempt %in% 1),]
+stopifnot(nrow(reg)>0L,!anyDuplicated(reg[c("game_id","play_id")]))
 fresh <- nflfastR:::load_playstats(year)
 credit_keys <- c("game_id","play_id","gsis_player_id","stat_id","yards")
 ordered <- function(x) {
@@ -31,12 +33,16 @@ ordered <- function(x) {
   rownames(x) <- NULL
   x
 }
-stopifnot(isTRUE(all.equal(ordered(credits),ordered(fresh),check.attributes=FALSE)))
+# calculate_stats semi-joins detailed credits to supplied game/play keys.
+# New games outside that subset must not invalidate a captured-input replay;
+# changes to ANY supplied credit still fail, including duplicate multiplicity.
+keys <- reg[c("game_id","play_id")]
+stopifnot(isTRUE(all.equal(ordered(dplyr::semi_join(credits,keys,by=c("game_id","play_id"))),
+                          ordered(dplyr::semi_join(fresh,keys,by=c("game_id","play_id"))),check.attributes=FALSE)))
 saveRDS(fresh,file.path(out,"credits.rds"))
-reg <- pbp[pbp$season %in% year & pbp$season_type %in% "REG" & !(pbp$two_point_attempt %in% 1),]
-stopifnot(nrow(reg)>0L,!anyDuplicated(reg[c("game_id","play_id")]))
 metrics <- c("attempts","completions","passing_yards","passing_tds","passing_interceptions","sacks_suffered")
-selected <- c("player_id","season","season_type",metrics)
+extra <- c("passing_air_yards","passing_yards_after_catch","passing_first_downs","passing_epa","passing_cpoe")
+selected <- c("player_id","season","season_type",metrics,extra)
 write_frame <- function(x,name) write.csv(as.data.frame(x),file.path(out,name),row.names=FALSE,na="")
 calculate <- function(x) {
   if(nrow(x)==0L)return(empty)
@@ -59,18 +65,24 @@ write_frame(do.call(rbind,down),"down.csv")
 context <- c("game_id","play_id","season","season_type","down","passer_player_id",
              "pass_attempt","sack","two_point_attempt")
 write_frame(reg[context],"context.csv")
+metric_context <- c(context,"play_type","complete_pass","incomplete_pass","interception",
+                    "passing_yards","pass_touchdown","first_down","qb_epa","epa","cpoe",
+                    "air_yards","yards_after_catch")
+write_frame(reg[metric_context],"metric-context.csv")
+write_frame(as.data.frame(fresh)[credit_keys],"metric-credits.csv")
 stopifnot("game_id" %in% names(weekly))
 reference <- weekly[weekly$season_type %in% "REG" & weekly$game_id %in% reg$game_id & !is.na(weekly$player_id),]
 reference <- dplyr::summarise(dplyr::group_by(reference,player_id,season,season_type),
                             dplyr::across(dplyr::all_of(metrics),~sum(.x,na.rm=TRUE)),.groups="drop")
 write_frame(reference,"weekly.csv")
 verify_receiving_environment(file.path(out,"renv.lock"),Sys.getenv("NFL_RECEIVING_LIBRARY"))
-files <- c("producer.R","environment.R","renv.lock","request.json","credits.rds",
+files <- c("producer.R","environment.R","renv.lock","request.json","credits.rds","metric-context.csv","metric-credits.csv",
            "whole.csv","classified.csv","excluded.csv","down.csv","context.csv","weekly.csv")
 hashes <- setNames(lapply(files,function(name)sha(file.path(out,name))),files)
-jsonlite::write_json(list(format_version=1L,kind="passing_down_counts_preview",season=year,
+jsonlite::write_json(list(format_version=2L,kind="passing_down_metrics_preview",season=year,
   R=as.character(getRversion()),nflfastR=as.character(packageVersion("nflfastR")),
   nflreadr=as.character(packageVersion("nflreadr")),files=hashes,
+  credit_match_scope="supplied REG nonconversion game/play keys",
   source_run_sha256=request$source_run_sha256,fresh_credits_match_capture=TRUE),
   file.path(out,"run.json"),pretty=TRUE,auto_unbox=TRUE)
 cat("PASSING DOWN EXPORT COMPLETE\n")
