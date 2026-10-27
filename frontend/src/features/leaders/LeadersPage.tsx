@@ -1,5 +1,4 @@
 import ReceivingDataNote from '../../components/ReceivingDataNote'
-import { hasUnavailableTargets } from '../../utils/receiving'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { functionalUpdate, type OnChangeFn, type SortingState } from '@tanstack/react-table'
@@ -69,7 +68,7 @@ export default function LeadersPage() {
   } else {
     content = <>
       <QueryFailure resource="player statistics" error={leadersQuery.error} hasData={leadersQuery.data !== undefined} onRetry={() => void leadersQuery.refetch()} />
-      <ReceivingDataNote unavailable={hasUnavailableTargets(leaders)} />
+      <ReceivingDataNote rows={leaders} />
       {(PAST_AWARDS[season] || leaders.length > 0) && <AwardsSection season={season} leaders={leaders} />}
       {leaders.length > 0 && <StatDashboard leaders={leaders} onPick={tab => updateParams({ mode: 'leaders', tab })} />}
       <LeaderControls mode={mode} statKey={isWpa ? 'wpa' : statTab.key} posKey={posTab.key}

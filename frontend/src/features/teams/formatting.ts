@@ -4,7 +4,7 @@ export function pct(a: number, b: number | null) { return b == null || b === 0 ?
 
 export function avg(y: number, c: number) { return c === 0 ? '—' : (y / c).toFixed(1) }
 
-export function ratio(y: number, a: number | null, d = 1) { return a != null && a > 0 ? (y / a).toFixed(d) : null }
+export function ratio(y: number | null, a: number | null, d = 1) { return y != null && a != null && a > 0 ? (y / a).toFixed(d) : null }
 
 export function sfmt(x: number, d = 3) { return `${x >= 0 ? '+' : ''}${x.toFixed(d)}` }
 

@@ -149,3 +149,36 @@ earlier receiving API proof and original coordinated development database all
 retain their previous hashes, with no WALs. No push, deployment, source database
 replacement or publication-guard removal occurred. Current-season results cover
 the recorded supplied games; they are not a freshness certificate.
+
+## Legacy receiving availability checkpoint
+
+The profile, league leaders, team leaders, game box score, player chart and
+legacy receiving split route now share the prepared receiving history policy:
+targets are unavailable for 2003–2008, receiving YAC before 2006, and receiving
+air yards before 2009. YAC remains usable in 2006–2008 despite the target gap.
+Receptions, receiving yards and touchdowns are preserved. Passing split rows
+are unaffected by these receiving masks. The game-stat fields named `air_yards`
+and `yac` hold receiving statistics, including on a quarterback's profile.
+
+Career and team summaries propagate unavailable components rather than showing
+partial sums as complete totals. API schemas and generated frontend types permit
+these missing fields; tables display dashes and a shared note identifies the
+affected statistics. Real zero and negative YAC remain numeric. An obsolete
+profile footer claiming all EPA starts in 2006 was removed; availability belongs
+to the individual statistic and source population.
+
+The existing integrated candidate passed **36 read-only HTTP checks**, covering
+profiles, leaders, teams, box scores and charts for 2002, 2004, 2006, 2008, 2009,
+2024 and the captured 2026 season, plus Testaverde's corrected passing Down row.
+Receiving production was compared with stored weekly-derived totals. Its SHA256
+remained unchanged, with no WAL. Evidence is retained in ignored
+`api/data/legacy-receiving-api-proof-20261027.{json,log}`; the ignored reproduction
+script is `api/data/verify_legacy_receiving_20261027.py`.
+
+**46 browser checks passed**, covering receiving availability and prepared splits
+plus player, team and game layouts. Phone checks verify the independent 2002 and
+2006 boundaries, including preserved 2006 YAC. Frontend build and lint passed.
+**133 backend checks passed**, including source-bound receiving replay and
+snapshot corruption controls (`receiving-availability-controls-20261027.xml`).
+Passing summary calculations and their field explanations still need work;
+the publication guard remains in place.

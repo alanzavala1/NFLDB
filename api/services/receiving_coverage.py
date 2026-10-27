@@ -3,11 +3,11 @@
 2003–08 feeds lack complete target credits / incomplete-pass receiver identity.
 Positive stored counts do not prove coverage. Fail closed for those seasons,
 including postseason, rather than inventing zeroes or trusting legacy counts.
-Outside this known gap this policy leaves the existing source values unchanged;
+Outside the historical boundaries below, existing source values are unchanged;
 that is not a certification of every other season or of receiving EPA/ratings.
 Raw stored data and independently usable catches/yards/TDs are never changed.
-YAC/air-yard helpers also govern the prepared receiving API. Legacy profile
-and split endpoints retain their existing target-only mask until migration.
+The same historical boundaries govern prepared splits and legacy summaries.
+On player_game_stats, air_yards and yac are receiving fields, even for a QB.
 """
 from collections.abc import Iterable
 
@@ -26,7 +26,6 @@ def yac_unavailable(seasons: Iterable[int]) -> bool:
 
     Separate from target coverage: 2006–08 has YAC despite missing targets.
     Later seasons still require reconciliation, not just this date check.
-    This helper does not change the existing serving mask below.
     """
     return any(season < FIRST_YAC_SEASON for season in seasons)
 
@@ -41,11 +40,15 @@ def air_yards_unavailable(seasons: Iterable[int]) -> bool:
                for season in seasons)
 
 
-def mask_target_fields(row: dict, season: int, *, split: bool = False) -> dict:
+def mask_receiving_fields(row: dict, season: int, *, split: bool = False) -> dict:
     """Return a serving copy; never mutate database/cached builder rows."""
-    if not targets_unavailable([season]):
-        return row
-    fields = ("att", "epa", "success_pct") if split else (
-        "targets", "rz_targets", "third_targets", "target_share", "air_yards_share",
-    )
+    fields = set()
+    if targets_unavailable([season]):
+        fields.update(("att", "epa", "success_pct") if split else (
+            "targets", "rz_targets", "third_targets", "target_share",
+        ))
+    if yac_unavailable([season]):
+        fields.add("yac")
+    if air_yards_unavailable([season]):
+        fields.update(("air_yards", "air_yards_share"))
     return {key: None if key in fields else value for key, value in row.items()}

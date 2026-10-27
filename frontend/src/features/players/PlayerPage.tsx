@@ -1,5 +1,4 @@
 import ReceivingDataNote from '../../components/ReceivingDataNote'
-import { hasUnavailableTargets } from '../../utils/receiving'
 import { useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useLocation } from 'react-router-dom'
@@ -70,7 +69,7 @@ export default function PlayerPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <QueryFailure resource="player profile" error={playerQuery.error} hasData onRetry={() => void playerQuery.refetch()} />
         <QueryFailure resource="league rank context" error={recentLeadersQuery.error} hasData={recentLeadersData !== undefined} onRetry={() => void recentLeadersQuery.refetch()} />
-        <ReceivingDataNote unavailable={hasUnavailableTargets(player.games)} career />
+        <ReceivingDataNote rows={player.games} career />
         {/* Profile header */}
         <ProfileHeader player={player} recentTeams={recentTeams} />
 

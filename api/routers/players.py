@@ -4,7 +4,7 @@ from schemas.leaders import PlayerComparable
 from schemas.players import PlayerProfile, PlayerSplit, DefensiveSplit
 from schemas.receiving import PlayerReceivingSplits
 from services.player_profile import get_player_profile
-from services.receiving_coverage import mask_target_fields, targets_unavailable
+from services.receiving_coverage import mask_receiving_fields, targets_unavailable
 from services.receiving_splits import ReceivingDataError, read_player_receiving
 import comparables_builder
 import splits_builder
@@ -32,7 +32,7 @@ def get_player_comparables(player_id: str, n: int = Query(default=8, ge=1, le=20
 @router.get("/players/{player_id}/splits", response_model=list[PlayerSplit])
 def get_player_splits(player_id: str):
     rows = splits_builder.read_or_materialize(player_id)
-    return [mask_target_fields(row, row["season"], split=True) if row["category"] == "receiving"
+    return [mask_receiving_fields(row, row["season"], split=True) if row["category"] == "receiving"
             else row for row in rows]
 
 

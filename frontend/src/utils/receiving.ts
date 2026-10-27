@@ -1,8 +1,10 @@
-type ReceivingStats = {
+export type ReceivingStats = {
   targets?: number | null
   receptions?: number | null
   rec_yards?: number | null
   rec_tds?: number | null
+  air_yards?: number | null
+  yac?: number | null
 }
 
 /** Recorded production remains displayable independently of target coverage. */
@@ -19,4 +21,8 @@ export function hasReceivingActivity(stats: ReceivingStats, minimumTargets = 1):
 
 export function hasUnavailableTargets(rows: ReceivingStats[]): boolean {
   return rows.some(row => row.targets === null && hasReceivingProduction(row))
+}
+
+export function hasUnavailableReceivingField(rows: ReceivingStats[], field: 'air_yards' | 'yac'): boolean {
+  return rows.some(row => row[field] === null && hasReceivingProduction(row))
 }

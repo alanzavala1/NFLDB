@@ -2,7 +2,7 @@
 import duckdb
 import pytest
 
-from services.receiving_coverage import air_yards_unavailable, mask_target_fields, targets_unavailable, yac_unavailable
+from services.receiving_coverage import air_yards_unavailable, mask_receiving_fields, targets_unavailable, yac_unavailable
 from tests.conftest import _create_schema, _seed
 
 
@@ -23,7 +23,7 @@ def test_preview_air_yards_requires_both_air_and_target_coverage(season, unavail
 @pytest.mark.parametrize("season, unavailable", [(2002, False), (2003, True), (2004, True), (2008, True), (2009, False), (2024, False)])
 def test_policy_boundaries_and_positive_legacy_counts(season, unavailable):
     raw = {"targets": 52, "receptions": 52, "rec_yards": -3, "rec_tds": 1}
-    result = mask_target_fields(raw, season)
+    result = mask_receiving_fields(raw, season)
     assert result["targets"] == (None if unavailable else 52)
     assert {k: v for k, v in result.items() if k != "targets"} == {k: v for k, v in raw.items() if k != "targets"}
     assert raw["targets"] == 52  # Stored/cached input never mutated.
@@ -98,8 +98,60 @@ def test_receiving_splits_mask_target_counts_and_rates_without_touching_other_ca
     masked, *unchanged = response.json()
     assert masked["att"] is None and masked["epa"] is None and masked["success_pct"] is None
     assert masked["cmp"] == 4 and masked["yards"] == -3 and masked["td"] == 1
+    assert masked["yac"] is None and masked["air_yards"] is None
     assert unchanged == rows[1:]
     assert rows[0]["att"] == 52
+
+
+@pytest.mark.parametrize("season,targets,air,yac", [
+    (2002, 52, None, None), (2004, None, None, None),
+    (2006, None, None, 37), (2008, None, None, 37),
+    (2009, 52, 45, 37), (2024, 52, 45, 37),
+])
+def test_http_receiving_boundaries_agree_across_legacy_views(client, historical_db, season, targets, air, yac):
+    for table in ("schedules", "rosters", "player_game_stats", "plays"):
+        historical_db.execute(f"UPDATE {table} SET season = ?", [season])
+    historical_db.execute("UPDATE player_game_stats SET air_yards=45, yac=37 WHERE player_id='00-BUF-WR1'")
+
+    def get(path):
+        response = client.get(path)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    player = "00-BUF-WR1"
+    leader = next(row for row in get(f"/api/leaders?season={season}") if row["player_id"] == player)
+    team = get(f"/api/teams/BUF?season={season}")
+    team_leader = next(row for row in team["leaders"] if row["player_id"] == player)
+    game = get("/api/games/2024_01_BUF_MIA")
+    game_line = next(row for row in game["away"] + game["home"] if row["player_id"] == player)
+    profile = get(f"/api/players/{player}")
+    for row in (game_line, *profile["games"]):
+        assert (row["targets"], row["air_yards"], row["yac"]) == (targets, air, yac)
+        assert (row["receptions"], row["rec_yards"], row["rec_tds"]) == (4, -3, 1)
+    for row in (leader, team_leader, profile["season_totals"]):
+        n = len(profile["games"])
+        assert (row["targets"], row["air_yards"], row["yac"]) == tuple(
+            None if value is None else n * value for value in (targets, air, yac))
+        assert (row["receptions"], row["rec_yards"], row["rec_tds"]) == (n * 4, n * -3, n)
+    # The historical policy must not leak into passing yards or EPA.
+    qb = get("/api/players/00-BUF-QB1")
+    assert qb["season_totals"]["pass_yards"] == 880
+    stored = historical_db.execute("SELECT targets, air_yards, yac FROM player_game_stats WHERE player_id=? LIMIT 1", [player]).fetchone()
+    assert stored == (52, 45, 37)
+
+
+def test_career_yac_and_air_totals_require_every_included_value(client, historical_db):
+    historical_db.execute("UPDATE player_game_stats SET air_yards=45, yac=37")
+    for table in ("schedules", "player_game_stats"):
+        historical_db.execute(f"UPDATE {table} SET season=2009 WHERE game_id='2024_01_BUF_MIA'")
+    response = client.get("/api/players/00-BUF-WR1")
+    assert response.status_code == 200
+    profile = response.json()
+    assert profile["season_totals"]["air_yards"] is None
+    assert profile["season_totals"]["yac"] is None
+    modern = next(row for row in profile["games"] if row["season"] == 2009)
+    assert modern["air_yards"] == 45 and modern["yac"] == 37
+    assert profile["season_totals"]["rec_yards"] == -9
 
 
 def test_assistant_compact_career_line_does_not_sum_only_known_targets():
@@ -131,6 +183,6 @@ def test_postseason_uses_the_same_conservative_season_policy(client, historical_
     response = client.get("/api/teams/BUF?season=2004")
     assert response.status_code == 200
     rows = response.json()["playoff_leaders"]
-    assert rows and all(row["targets"] is None for row in rows)
+    assert rows and all(row["targets"] is None and row["air_yards"] is None and row["yac"] is None for row in rows)
     receiver = next(row for row in rows if row["player_id"] == "00-BUF-WR1")
     assert receiver["receptions"] == 4 and receiver["rec_yards"] == -3

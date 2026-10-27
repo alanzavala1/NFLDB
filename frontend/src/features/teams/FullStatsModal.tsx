@@ -1,5 +1,4 @@
 import ReceivingDataNote from '../../components/ReceivingDataNote'
-import { hasUnavailableTargets } from '../../utils/receiving'
 import type { SectionKind, SectionSorting } from './types'
 import { functionalUpdate, type SortingState, type Updater } from '@tanstack/react-table'
 import type { TeamProfile } from '../../types'
@@ -54,7 +53,7 @@ export default function FullStatsModal({ profile, onClose }: { profile: TeamProf
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6 max-w-6xl mx-auto w-full">
-        <ReceivingDataNote unavailable={hasUnavailableTargets([...profile.leaders, ...profile.playoff_leaders])} />
+        <ReceivingDataNote rows={[...profile.leaders, ...profile.playoff_leaders]} />
         <div className="text-xs font-bold text-ink-dim uppercase tracking-widest mb-5">Regular Season</div>
         <StatsSections leaders={profile.leaders} sorting={regSorting} onSortingChange={makeSortingChange(setRegSorting)} onClose={onClose} games={regGames} />
 

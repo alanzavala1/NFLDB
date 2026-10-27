@@ -2,7 +2,7 @@
 from config import CURRENT_SEASON
 from database import query_to_dict
 from sql_helpers import ROSTER_CTE
-from services.receiving_coverage import mask_target_fields
+from services.receiving_coverage import mask_receiving_fields
 
 
 def get_leaders(season: int | None = None) -> list[dict]:
@@ -60,4 +60,4 @@ def get_leaders(season: int | None = None) -> list[dict]:
         """,
         [season, season],
     )
-    return [mask_target_fields(row, season) for row in rows]
+    return [mask_receiving_fields(row, season) for row in rows]

@@ -144,7 +144,7 @@ export function PlayerStatSections({ game, origin }: { game: GameDetail; origin:
                     {TD(formatStat(p.rec_yards))}
                     {TD(formatYardsPerAttempt(p.rec_yards, p.receptions), true)}
                     {TD(p.rec_tds)}
-                    {TD(formatStat(p.yac), true)}
+                    {TD(p.yac?.toLocaleString() ?? '—', true)}
                     {TD(formatStat(p.rec_epa), true)}
                   </tr>
                 ))}

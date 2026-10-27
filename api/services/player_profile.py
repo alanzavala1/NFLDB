@@ -1,7 +1,7 @@
 """Player biography, game logs and season/stat-family composition."""
 from database import query_to_dict
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, STAT_COLS
-from services.receiving_coverage import mask_target_fields, targets_unavailable
+from services.receiving_coverage import mask_receiving_fields
 from services.player_snaps import OL_POSITIONS as _OL_POSITIONS, _get_snap_first_games, _get_snap_totals
 from services.player_tracking import _get_ngs
 from services.player_advanced import _get_pbp_stats, _get_target_shares
@@ -95,7 +95,7 @@ CASE
             [profile_team, profile_team, profile_team, player_id],
         )
 
-    games = [mask_target_fields(g, g["season"]) for g in games]
+    games = [mask_receiving_fields(g, g["season"]) for g in games]
 
     # Regular-season only, to reconcile with the situational/kicking/etc. stats
     # below (all REG-filtered) and with the ask-agent's get_player_overview.
@@ -103,8 +103,9 @@ CASE
     # game_type and shows a separate postseason section.
     reg_games = [g for g in games if g.get("game_type") == "REG"]
     season_totals = {col: sum(g[col] or 0 for g in reg_games) for col in STAT_COLS}
-    if targets_unavailable(g["season"] for g in reg_games):
-        season_totals["targets"] = None
+    for field in ("targets", "air_yards", "yac"):
+        if any(g[field] is None for g in reg_games):
+            season_totals[field] = None
 
     # One scan of plays covers situational / WPA / kicking / most adv stats /
     # the CPOE fallback; target share is pgs-based and merges into adv.
@@ -120,10 +121,10 @@ CASE
         "games": games,
         "ngs": _get_ngs(player_id, pbp["cpoe"]),
         "snap_totals": _get_snap_totals(player_id),
-        "situational": {s: mask_target_fields(d, s) for s, d in pbp["situational"].items()},
+        "situational": {s: mask_receiving_fields(d, s) for s, d in pbp["situational"].items()},
         "kicking": pbp["kicking"],
         "wpa": pbp["wpa"],
-        "adv_stats": {s: mask_target_fields(d, s) for s, d in adv_stats.items()},
+        "adv_stats": {s: mask_receiving_fields(d, s) for s, d in adv_stats.items()},
         "draft":          _get_draft_info(player_id),
         "combine":        _get_combine_data(player_id),
         "current_injury": _get_current_injury(player_id),

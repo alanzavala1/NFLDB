@@ -1,7 +1,7 @@
 """Game box score and play-derived panels for HTTP and assistant consumers."""
 from database import query_to_dict
 from services.schedule_records import attach_records
-from services.receiving_coverage import mask_target_fields
+from services.receiving_coverage import mask_receiving_fields
 from sql_helpers import PGS_STAT_SEL, ROSTER_CTE, safe_query, team_sql
 
 
@@ -70,7 +70,7 @@ def get_game_detail(game_id: str) -> dict | None:
          game_id],
     )
 
-    players = [mask_target_fields(row, game["season"]) for row in players]
+    players = [mask_receiving_fields(row, game["season"]) for row in players]
 
     # Quarter-by-quarter scores from play-by-play
     quarter_scores = []

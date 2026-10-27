@@ -948,9 +948,9 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Air Yards */
-            air_yards: number;
+            air_yards: number | null;
             /** Yac */
-            yac: number;
+            yac: number | null;
             /** Rec Epa */
             rec_epa: number;
             /** Carries */
@@ -1081,8 +1081,8 @@ export interface components {
          * @description One row per player in /leaders. Stat fields are season totals from
          *     SUM() over player_game_stats, returned as DOUBLE.
          *
-         *     Stat fields are required; targets alone can be unavailable at serving time
-         *     for a known source-coverage gap. The underlying stored columns have
+         *     Stat fields are required; targets, receiving air yards and YAC can be
+         *     unavailable at serving time for known source-coverage gaps. Stored columns have
          *     DEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable
          *     stats like RB pass_yards). Roster-joined fields (position/team) may be
          *     null because the join is LEFT and roster data can be missing.
@@ -1131,9 +1131,9 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Yac */
-            yac: number;
+            yac: number | null;
             /** Air Yards */
-            air_yards: number;
+            air_yards: number | null;
             /** Rec Epa */
             rec_epa: number;
             /** Solo Tackles */
@@ -1576,9 +1576,9 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Air Yards */
-            air_yards: number;
+            air_yards: number | null;
             /** Yac */
-            yac: number;
+            yac: number | null;
             /** Rec Epa */
             rec_epa: number;
             /** Carries */
@@ -2334,9 +2334,9 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Air Yards */
-            air_yards: number;
+            air_yards: number | null;
             /** Yac */
-            yac: number;
+            yac: number | null;
             /** Rec Epa */
             rec_epa: number;
             /** Solo Tackles */

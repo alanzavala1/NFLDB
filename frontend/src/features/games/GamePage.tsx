@@ -1,5 +1,4 @@
 import ReceivingDataNote from '../../components/ReceivingDataNote'
-import { hasUnavailableTargets } from '../../utils/receiving'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useLocation } from 'react-router-dom'
@@ -60,7 +59,7 @@ function GamePageBody() {
         <QueryFailure resource="lineup" error={lineupQuery.error} hasData={lineupQuery.data !== undefined} onRetry={() => void lineupQuery.refetch()} />
         {lineupQuery.isPending && <QueryLoading>Loading lineup…</QueryLoading>}
         <QueryFailure resource="game schedule" error={scheduleQuery.error} hasData={weeks !== undefined} onRetry={() => void scheduleQuery.refetch()} />
-        <ReceivingDataNote unavailable={hasUnavailableTargets([...game.away, ...game.home])} />
+        <ReceivingDataNote rows={[...game.away, ...game.home]} />
         <GameHeader game={game} lineup={lineup} tab={tab} onTab={setTab} live={live} />
         <div className="lineup-page">
           <main className="feed">

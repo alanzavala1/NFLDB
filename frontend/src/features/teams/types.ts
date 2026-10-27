@@ -20,7 +20,7 @@ export type SectionTotals = {
   interceptions_thrown: number; sacks_taken: number; pass_epa: number
   carries: number; rush_yards: number; rush_tds: number; rush_epa: number
   targets: number | null; receptions: number; rec_yards: number; rec_tds: number
-  air_yards: number; yac: number; rec_epa: number
+  air_yards: number | null; yac: number | null; rec_epa: number
   solo_tackles: number; assist_tackles: number; sacks: number; tackles_for_loss: number
   qb_hits: number; def_interceptions: number; pass_breakups: number
   forced_fumbles: number; fumble_recoveries: number

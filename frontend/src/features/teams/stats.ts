@@ -23,8 +23,8 @@ export function aggregateTotals(players: TeamLeader[]): SectionTotals {
     if (p.rush_epa != null) t.rush_epa += p.rush_epa
     t.targets = t.targets == null || p.targets == null ? null : t.targets + p.targets; t.receptions += p.receptions
     t.rec_yards += p.rec_yards; t.rec_tds += p.rec_tds
-    if (p.air_yards != null) t.air_yards += p.air_yards
-    t.yac += p.yac
+    t.air_yards = t.air_yards == null || p.air_yards == null ? null : t.air_yards + p.air_yards
+    t.yac = t.yac == null || p.yac == null ? null : t.yac + p.yac
     if (p.rec_epa != null) t.rec_epa += p.rec_epa
     t.solo_tackles += p.solo_tackles; t.assist_tackles += p.assist_tackles
     t.sacks += p.sacks; t.tackles_for_loss += p.tackles_for_loss
@@ -37,7 +37,7 @@ export function aggregateTotals(players: TeamLeader[]): SectionTotals {
 
 export function buildSummary(section: SectionKind, t: SectionTotals, games: number): SummaryBox[] {
   const pct = (a: number, b: number | null) => b != null && b > 0 ? `${(a / b * 100).toFixed(1)}%` : '—'
-  const rat = (a: number, b: number | null, d = 1) => b != null && b > 0 ? (a / b).toFixed(d) : '—'
+  const rat = (a: number | null, b: number | null, d = 1) => a != null && b != null && b > 0 ? (a / b).toFixed(d) : '—'
   const epa = (a: number, b: number | null) => b != null && b > 0 ? sfmt(a / b) : '—'
   const perg = (a: number) => games > 0 ? (a / games).toFixed(1) : '—'
   switch (section) {
@@ -70,7 +70,7 @@ export function buildSummary(section: SectionKind, t: SectionTotals, games: numb
         { label: 'YDS',     value: t.rec_yards.toLocaleString() },
         { label: 'Y/R',     value: rat(t.rec_yards, t.receptions) },
         { label: 'TD',      value: String(t.rec_tds) },
-        { label: 'YAC',     value: t.yac.toLocaleString() },
+        { label: 'YAC',     value: t.yac?.toLocaleString() ?? '—' },
         { label: 'aDOT',    value: rat(t.air_yards, t.targets) },
         { label: 'EPA/Tgt', value: epa(t.rec_epa, t.targets) },
       ]

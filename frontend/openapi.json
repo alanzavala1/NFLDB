@@ -2866,11 +2866,25 @@
             "title": "Rec Tds"
           },
           "air_yards": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Air Yards"
           },
           "yac": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Yac"
           },
           "rec_epa": {
@@ -3427,11 +3441,25 @@
             "title": "Rec Tds"
           },
           "yac": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Yac"
           },
           "air_yards": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Air Yards"
           },
           "rec_epa": {
@@ -3542,7 +3570,7 @@
           "punt_yards"
         ],
         "title": "LeagueLeader",
-        "description": "One row per player in /leaders. Stat fields are season totals from\nSUM() over player_game_stats, returned as DOUBLE.\n\nStat fields are required; targets alone can be unavailable at serving time\nfor a known source-coverage gap. The underlying stored columns have\nDEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable\nstats like RB pass_yards). Roster-joined fields (position/team) may be\nnull because the join is LEFT and roster data can be missing."
+        "description": "One row per player in /leaders. Stat fields are season totals from\nSUM() over player_game_stats, returned as DOUBLE.\n\nStat fields are required; targets, receiving air yards and YAC can be\nunavailable at serving time for known source-coverage gaps. Stored columns have\nDEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable\nstats like RB pass_yards). Roster-joined fields (position/team) may be\nnull because the join is LEFT and roster data can be missing."
       },
       "LineupPlayer": {
         "properties": {
@@ -5083,11 +5111,25 @@
             "title": "Rec Tds"
           },
           "air_yards": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Air Yards"
           },
           "yac": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Yac"
           },
           "rec_epa": {
@@ -7907,11 +7949,25 @@
             "title": "Rec Tds"
           },
           "air_yards": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Air Yards"
           },
           "yac": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Yac"
           },
           "rec_epa": {

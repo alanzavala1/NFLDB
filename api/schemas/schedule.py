@@ -75,8 +75,8 @@ class GamePlayerStats(BaseModel):
     receptions: float
     rec_yards: float
     rec_tds: float
-    air_yards: float
-    yac: float
+    air_yards: float | None
+    yac: float | None
     rec_epa: float
 
     carries: float

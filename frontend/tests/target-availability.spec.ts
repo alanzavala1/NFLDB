@@ -8,7 +8,7 @@ import { layoutGame, layoutLineup } from './fixtures/gameLayout'
 import { mockSplits, offensiveSplit } from './fixtures/splits'
 import { preparedSeason, receivingScope } from './fixtures/receiving'
 import { sumGames, aggregateSituational } from '../src/features/players/stats'
-import { aggregateTotals } from '../src/features/teams/stats'
+import { aggregateTotals, buildSummary } from '../src/features/teams/stats'
 import { aggregatePlayerSplitRows } from '../src/features/splits/aggregation'
 import { STAT_TABS } from '../src/features/leaders/columns'
 import { REC_COLS } from '../src/features/teams/columns'
@@ -59,6 +59,57 @@ test('unavailable rates remain distinct from real zero in render and sorting val
   const zero = { ...receiver, targets: 0, jersey_number: 10 }
   expect(teamTargets.render(zero, aggregateTotals([zero]))).toBe(0)
 })
+
+test('missing receiving yardage stays missing in career and team summaries; zero and negative YAC stay numeric', () => {
+  const old = { ...historical, air_yards: null, yac: null }
+  const recent = { ...modern, air_yards: 80, yac: 20 }
+  const career = sumGames([old, recent])
+  expect(career.air_yards).toBeNull()
+  expect(career.yac).toBeNull()
+  expect(career.rec_yards).toBe(152)
+  expect(sumGames([recent]).yac).toBe(20)
+  const player = { ...receiver, jersey_number: 10, air_yards: null, yac: null }
+  const team = aggregateTotals([player, { ...player, targets: 20, air_yards: 80, yac: 20 }])
+  expect(team.air_yards).toBeNull()
+  expect(team.yac).toBeNull()
+  expect(buildSummary('receiving', team, 2).find(box => box.label === 'YAC')?.value).toBe('—')
+  for (const key of ['yac', 'yacr', 'aytg']) {
+    const col = REC_COLS.find(col => col.key === key)!
+    expect(col.render(player, team)).toBeNull()
+    expect(col.sortVal(player)).toBeNull()
+    expect(col.total?.(team, 2)).toBeNull()
+  }
+  const col = REC_COLS.find(col => col.key === 'yac')!
+  for (const yac of [0, -3]) expect(col.render({ ...player, yac }, team)).toBe(String(yac))
+})
+
+for (const season of [2002, 2006]) {
+  test(`${season} availability explains independent target, YAC and air-yard boundaries on a phone`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const game = { ...historical, season, targets: season === 2002 ? 12 : null,
+      air_yards: null, yac: season === 2002 ? null : 20 }
+    await mockProfile(page, { ...profile, games: [game] })
+    await page.goto('/players/test-player')
+    const note = page.getByRole('complementary', { name: 'Receiving data availability' })
+    await expect(note).toContainText('Receiving air yards')
+    if (season === 2002) {
+      await expect(note).toContainText('Yards after catch')
+      await expect(note).not.toContainText('target records are incomplete')
+    } else {
+      await expect(note).toContainText('target records are incomplete')
+      await expect(note).not.toContainText('Yards after catch')
+    }
+    await expect(note).toContainText('Receptions, receiving yards and touchdowns are still shown.')
+    await expect(page.getByText('EPA-based metrics start in 2006 when the model became available')).toHaveCount(0)
+    const advanced = page.locator('section').filter({ has: page.getByText('Advanced Stats', { exact: true }) })
+    const table = advanced.getByRole('table')
+    const seasonRow = table.getByRole('row').filter({ has: page.getByRole('cell', { name: String(season), exact: true }) })
+    await expect(await cell(table, seasonRow, 'AY/TGT')).toHaveText('—')
+    await expect(await cell(table, seasonRow, 'YAC/R')).toHaveText(season === 2002 ? '—' : '5.0')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.screenshot({ path: test.info().outputPath(`receiving-availability-${season}-phone.png`), fullPage: true })
+  })
+}
 
 test('receiving leaderboard explains unavailable targets and disables empty rate sorting', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })

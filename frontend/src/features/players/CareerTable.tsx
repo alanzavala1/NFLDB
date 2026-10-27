@@ -69,7 +69,7 @@ export default function CareerTable({ title, seasons, bySeason, ngs, snapTotals,
       holding: totalHold,
       stuff_rate: totalCarries > 0 ? parseFloat((100 * totalStuffed / totalCarries).toFixed(1)) : undefined,
       target_share: allTotals.targets != null && tshVals.length > 0 ? parseFloat((tshVals.reduce((a, b) => a + b, 0) / tshVals.length).toFixed(1)) : undefined,
-      air_yards_share: allTotals.targets != null && ayshVals.length > 0 ? parseFloat((ayshVals.reduce((a, b) => a + b, 0) / ayshVals.length).toFixed(1)) : undefined,
+      air_yards_share: allTotals.air_yards != null && allTotals.targets != null && ayshVals.length > 0 ? parseFloat((ayshVals.reduce((a, b) => a + b, 0) / ayshVals.length).toFixed(1)) : undefined,
     }
   })() : undefined
 
@@ -233,11 +233,9 @@ function TableEraNotes({ seasons, cols }: { seasons: number[]; cols: Col[] }) {
   const notes: string[] = []
 
   const hasNgs   = cols.some(c => c.kind === 'ngs')
-  const hasAdv   = cols.some(c => c.kind === 'adv' || c.wpaOnly)
   const hasSnap  = cols.some(c => c.kind === 'snap')
 
   if (hasNgs  && oldest < 2016) notes.push('NGS metrics (CPOE, ADOT, separation, time to throw) only tracked from 2016+')
-  if (hasAdv  && oldest < 2006) notes.push('EPA-based metrics start in 2006 when the model became available')
   if (hasSnap && oldest < 2012) notes.push('Snap counts tracked from 2012+')
 
   if (notes.length === 0) return null

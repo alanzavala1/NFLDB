@@ -106,7 +106,7 @@ export const WR_COLS: Col[] = [
   { key: 'epat',   label: 'EPA/Tgt', kind: 'adv',  signed: true,        cell: t => t.targets != null && t.targets > 0 ? sfmt(t.rec_epa / t.targets, 3) : null },
   { key: 'ayt',    label: 'AY/TGT',  kind: 'adv',                       cell: t => t.targets != null && t.targets > 0 ? ratio(t.air_yards, t.targets) : null },
   { key: 'yacr',   label: 'YAC/R',   kind: 'adv',                       cell: t => t.receptions > 0 ? ratio(t.yac, t.receptions) : null },
-  { key: 'racr',   label: 'RACR',    kind: 'adv',                       cell: t => t.targets != null && t.air_yards > 0 ? (t.rec_yards / t.air_yards).toFixed(2) : null },
+  { key: 'racr',   label: 'RACR',    kind: 'adv',                       cell: t => t.targets != null && t.air_yards != null && t.air_yards > 0 ? (t.rec_yards / t.air_yards).toFixed(2) : null },
   { key: 'tgtsh',  label: 'TGT%',    kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.target_share != null ? `${a.target_share.toFixed(1)}%` : null },
   { key: 'aysh',   label: 'AY%',     kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.air_yards_share != null ? `${a.air_yards_share.toFixed(1)}%` : null },
   { key: 'wrfl',   label: 'FUM',     kind: 'adv',                       cell: (_, __, _n, _sn, _sit, _w, a) => a?.fumbles_lost != null ? a.fumbles_lost : null },

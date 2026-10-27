@@ -13,7 +13,7 @@ export function passerRating(cmp: number, att: number, yds: number, td: number, 
 
 export function pct(a: number, b: number | null, dec = 1): string | null { return b != null && b > 0 ? (a / b * 100).toFixed(dec) : null }
 
-export function ratio(y: number, a: number | null, dec = 1): string | null { return a != null && a > 0 ? (y / a).toFixed(dec) : null }
+export function ratio(y: number | null, a: number | null, dec = 1): string | null { return y != null && a != null && a > 0 ? (y / a).toFixed(dec) : null }
 
 export function sfmt(x: number | null | undefined, dec = 1): string | null { if (x == null) return null; return `${x >= 0 ? '+' : ''}${x.toFixed(dec)}` }
 
@@ -34,7 +34,11 @@ export function sumGames(games: PlayerGame[]) {
   for (const g of games) {
     for (const k of Object.keys(s) as (keyof typeof s)[]) s[k] += g[k] ?? 0
   }
-  return { ...s, targets: games.some(g => g.targets === null) ? null : s.targets }
+  return { ...s,
+    targets: games.some(g => g.targets === null) ? null : s.targets,
+    air_yards: games.some(g => g.air_yards === null) ? null : s.air_yards,
+    yac: games.some(g => g.yac === null) ? null : s.yac,
+  }
 }
 
 export type Totals = ReturnType<typeof sumGames>

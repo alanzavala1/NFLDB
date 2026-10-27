@@ -2,7 +2,7 @@
 from database import query_to_dict
 from services.schedule_records import attach_records
 from sql_helpers import ROSTER_CTE
-from services.receiving_coverage import mask_target_fields
+from services.receiving_coverage import mask_receiving_fields
 
 
 _LEADER_COLS = """
@@ -95,6 +95,6 @@ def get_team_profile(team: str, season: int) -> dict | None:
 
     return {
         "team": team, "season": season, "games": games,
-        "leaders": [mask_target_fields(row, season) for row in leaders],
-        "playoff_leaders": [mask_target_fields(row, season) for row in playoff_leaders],
+        "leaders": [mask_receiving_fields(row, season) for row in leaders],
+        "playoff_leaders": [mask_receiving_fields(row, season) for row in playoff_leaders],
     }

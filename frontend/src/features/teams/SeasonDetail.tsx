@@ -1,5 +1,4 @@
 import ReceivingDataNote from '../../components/ReceivingDataNote'
-import { hasUnavailableTargets } from '../../utils/receiving'
 import type { TeamProfile } from '../../types'
 import { useState } from 'react'
 import { computeRecord } from './selectors'
@@ -44,7 +43,7 @@ export default function SeasonDetail({ profile }: { profile: TeamProfile }) {
           </button>
         </div>
       </div>
-      <ReceivingDataNote unavailable={hasUnavailableTargets([...profile.leaders, ...profile.playoff_leaders])} />
+      <ReceivingDataNote rows={[...profile.leaders, ...profile.playoff_leaders]} />
       <SeasonSummary profile={profile} />
       <TeamAnalytics team={profile.team} season={profile.season} />
       <TeamSplitsPanel team={profile.team} season={profile.season} />
