@@ -635,6 +635,46 @@
         }
       }
     },
+    "/api/players/{player_id}/passing-splits": {
+      "get": {
+        "summary": "Get Player Passing Splits",
+        "description": "Read independent passing totals, exact aggregation ingredients and coverage.",
+        "operationId": "get_player_passing_splits_api_players__player_id__passing_splits_get",
+        "parameters": [
+          {
+            "name": "player_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Player Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerPassingSplits"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/teams/{team}": {
       "get": {
         "summary": "Get Team",
@@ -4409,6 +4449,406 @@
         "title": "NgsStats",
         "description": "Next Gen Stats per season. Fields populated depend on role.\n\nNOTE: unlike most of our models, these sub-views are genuinely sparse \u2014\na QB row only has passing fields, a WR row only has receiving fields.\nThe helper builds the dict from non-null SELECT results, so absent\nfields mean \"doesn't apply.\" Defaults are kept so each instance can\ncarry any subset."
       },
+      "PassingAggregation": {
+        "properties": {
+          "epa_sum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epa Sum",
+            "description": "Verified QB EPA including sacks; not rate times attempts."
+          },
+          "successes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Successes",
+            "description": "Verified positive-EPA passing attempts."
+          },
+          "cpoe_sum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpoe Sum"
+          },
+          "cpoe_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpoe Count",
+            "description": "Number of provider-modeled CPOE observations."
+          }
+        },
+        "type": "object",
+        "required": [
+          "epa_sum",
+          "successes",
+          "cpoe_sum",
+          "cpoe_count"
+        ],
+        "title": "PassingAggregation"
+      },
+      "PassingCounts": {
+        "properties": {
+          "att": {
+            "type": "integer",
+            "title": "Att"
+          },
+          "cmp": {
+            "type": "integer",
+            "title": "Cmp"
+          },
+          "yards": {
+            "type": "integer",
+            "title": "Yards"
+          },
+          "td": {
+            "type": "integer",
+            "title": "Td"
+          },
+          "interceptions": {
+            "type": "integer",
+            "title": "Interceptions"
+          },
+          "first_downs": {
+            "type": "integer",
+            "title": "First Downs"
+          },
+          "sacks": {
+            "type": "integer",
+            "title": "Sacks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "att",
+          "cmp",
+          "yards",
+          "td",
+          "interceptions",
+          "first_downs",
+          "sacks"
+        ],
+        "title": "PassingCounts"
+      },
+      "PassingRow": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "split_dim": {
+            "type": "string",
+            "title": "Split Dim"
+          },
+          "split_value": {
+            "type": "string",
+            "title": "Split Value"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "att": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Att"
+          },
+          "cmp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cmp"
+          },
+          "yards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yards"
+          },
+          "td": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Td"
+          },
+          "interceptions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interceptions"
+          },
+          "air_yards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Yards"
+          },
+          "yac": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yac"
+          },
+          "first_downs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Downs"
+          },
+          "epa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epa"
+          },
+          "success_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success Pct"
+          },
+          "cpoe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpoe"
+          },
+          "unavailable_metrics": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Unavailable Metrics"
+          },
+          "aggregation": {
+            "$ref": "#/components/schemas/PassingAggregation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "category",
+          "split_dim",
+          "split_value",
+          "sort_order",
+          "att",
+          "cmp",
+          "yards",
+          "td",
+          "interceptions",
+          "air_yards",
+          "yac",
+          "first_downs",
+          "epa",
+          "success_pct",
+          "cpoe",
+          "unavailable_metrics",
+          "aggregation"
+        ],
+        "title": "PassingRow"
+      },
+      "PassingSeason": {
+        "properties": {
+          "season": {
+            "type": "integer",
+            "title": "Season"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "prepared",
+              "unverified"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "overall": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassingRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PassingRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "game_coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReceivingGameCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "views": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PassingViewCoverage"
+            },
+            "type": "object",
+            "title": "Views"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season",
+          "status",
+          "reason",
+          "overall",
+          "rows",
+          "game_coverage",
+          "views"
+        ],
+        "title": "PassingSeason"
+      },
+      "PassingViewCoverage": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "definition": {
+            "type": "string",
+            "title": "Definition"
+          },
+          "excluded": {
+            "$ref": "#/components/schemas/PassingCounts",
+            "description": "Only this passer's production outside the classified view."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "reason",
+          "definition",
+          "excluded"
+        ],
+        "title": "PassingViewCoverage"
+      },
       "PlayerAdvStats": {
         "properties": {
           "fumbles_lost": {
@@ -5280,6 +5720,33 @@
         ],
         "title": "PlayerGame",
         "description": "One row in the player's game log."
+      },
+      "PlayerPassingSplits": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "scope": {
+            "type": "string",
+            "const": "Qualified regular-season passing; observed production on supplied games",
+            "title": "Scope"
+          },
+          "seasons": {
+            "items": {
+              "$ref": "#/components/schemas/PassingSeason"
+            },
+            "type": "array",
+            "title": "Seasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "scope",
+          "seasons"
+        ],
+        "title": "PlayerPassingSplits"
       },
       "PlayerProfile": {
         "properties": {

@@ -9,6 +9,7 @@ from pipeline.passing_dimensions import DIMENSIONS, RECEIVING_NAMES, context_spl
 from pipeline.passing_down import COUNTS, _require, adapt_passing_partition
 from pipeline.passing_metrics import apply_passing_metrics, verify_passing_first_downs
 from pipeline.passing_preview import _csv, validated_passing_inputs
+from pipeline.passing_summary import prepare_passing_summary
 from pipeline.receiving_context_rules import POLICIES
 from pipeline.receiving_core_inputs import _same_rows
 from pipeline.receiving_inputs import verify_receiving_inputs
@@ -102,6 +103,7 @@ def load_passing_season(output: Path, inputs, season: int, *, require_all=True) 
               "source_run_sha256": source_sha, "export_manifest_sha256": file_sha256(output / "run.json"),
               "policy": policy, "dimensions": views, "admission": admission,
               "whole_counts": sorted(totals, key=lambda record: record["player_id"]),
+              "summary": prepare_passing_summary(whole, context, credits, season, admission["qualifying_plays"]),
               "rows": sum(len(frame) for frame in rows.values()),
               "count_checks": "whole/weekly, buckets/classified, classified+excluded/whole: exact before admission",
               "first_down_checks": "whole/weekly and all partition counts: exact before admission",

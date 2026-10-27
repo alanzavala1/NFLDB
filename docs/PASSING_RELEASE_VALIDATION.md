@@ -182,3 +182,75 @@ plus player, team and game layouts. Phone checks verify the independent 2002 and
 snapshot corruption controls (`receiving-availability-controls-20261027.xml`).
 Passing summary calculations and their field explanations still need work;
 the publication guard remains in place.
+
+## Passing summary preparation and read-only API
+
+The native passing preparation now keeps independent whole-season rows and
+the ingredients for combining rates. It reuses the existing captured
+`whole.csv`, detailed credits and typed play context; no R producer change or
+new historical download is needed. Whole totals include supplied plays without
+a supported Down or other context label.
+
+Each admitted player's bucket and whole-season record includes:
+
+- `epa_sum`: verified modeled QB EPA, including sacks. A sack-only bucket keeps
+  its numerator even though its own EPA per attempt is undefined.
+- `successes`: the number of attempts with positive EPA.
+- `cpoe_sum` and `cpoe_count`: the sum and count of provider-modeled observations.
+  Attempts are not the correct denominator for combining CPOE averages.
+
+Attribution disagreements and missing required inputs remain unknown in their
+dependent components. An empty CPOE population is represented as a known zero
+sum and zero observations, so it can be combined correctly with other rows.
+Counts and individual split metrics retain their previous definitions.
+
+`GET /api/players/{player_id}/passing-splits` follows the prepared receiving
+response pattern: season status, independent overall row, classified rows,
+individual field explanations, aggregation components, player-specific omitted
+production and supplied-game coverage. It reads prepared SQL records in one
+transaction. It never invokes a builder, opens export files or downloads data.
+Older records without summary preparation are explicitly unverified; malformed
+prepared records return 503 without exposing build internals or attempting repair.
+
+The ordinary HTTP validation now checks this passing response against stored
+source-replayed records, including components, exclusions and field reasons.
+Regression cases cover unequal CPOE populations, missing Down labels, sack-only
+EPA, per-play attribution mismatches, missing inputs and corrupted responses.
+The frontend contract types are generated, but the splits page still uses its
+previous query and aggregation path. Connecting it to this response is the next
+step; the publication guard remains in place.
+
+Executed against all **28 captured seasons (1999–2026)**: preparation produced
+**1,447 independent player-season summaries**. All **64,953 canonical passing
+split rows** matched their prior values exactly. The owned candidate
+`api/data/passing-summaries-20261027.duckdb` contains the added preparation
+metadata; comparison in both directions confirms **all passing, receiving and
+rushing split rows are unchanged** from the previous integrated candidate.
+
+The final current-code read-only pass verified **102 HTTP requests**, including
+prepared passing samples for every year and the flagged Testaverde season.
+Testaverde's independent 2004 total remains 495 attempts, 297 completions and
+3,532 yards. His dependent EPA remains unknown under the existing attribution
+policy; the new summary does not replace that with zero.
+
+**195 distinct backend regression cases passed** across the source/build,
+summary/API and snapshot suites (deduplicated by test class/name). Frontend
+build, lint and generated-type checks passed. The original R producer and
+locked dependencies remain unchanged. No captured export was regenerated.
+
+Ignored evidence:
+
+- `api/data/passing-summaries-proof-20261027.{json,log}`.
+- `api/data/passing-summaries-final-http-20261027.log`.
+- `api/data/passing-summary-controls-20261027.xml`,
+  `passing-summary-final-controls-20261027.xml` and
+  `passing-summary-api-final-20261027.xml`.
+- Reproduction scripts `prepare_passing_summaries_20261027.py` and
+  `verify_passing_summaries_20261027.py` under `api/data/`.
+
+The new candidate SHA256 is
+`4936dcc0a2705cd2db753213d88dacff8553424535e1fb949cc8e76cd514b269`.
+Its hash was unchanged by final HTTP verification, with no WAL. The prior
+integrated candidate and the three earlier protected databases retain their
+original hashes. Nothing was published or deployed, and the captured current
+season remains a point-in-time input rather than a freshness certificate.

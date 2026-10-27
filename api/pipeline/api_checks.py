@@ -39,4 +39,7 @@ async def check_api(conn, seasons):
     if 'receiving_build_preparation' in {row[0] for row in conn.execute('SHOW TABLES').fetchall()}:
         from pipeline.receiving_api_checks import check_receiving_api
         paths.extend(await check_receiving_api(conn, seasons))
+    if 'passing_build_preparation' in {row[0] for row in conn.execute('SHOW TABLES').fetchall()}:
+        from pipeline.passing_api_checks import check_passing_api
+        paths.extend(await check_passing_api(conn, seasons))
     return paths

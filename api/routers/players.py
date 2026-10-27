@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException, Query
 from schemas.leaders import PlayerComparable
 from schemas.players import PlayerProfile, PlayerSplit, DefensiveSplit
 from schemas.receiving import PlayerReceivingSplits
+from schemas.passing import PlayerPassingSplits
+from services.passing_splits import PassingDataError, read_player_passing
 from services.player_profile import get_player_profile
 from services.receiving_coverage import mask_receiving_fields, targets_unavailable
 from services.receiving_splits import ReceivingDataError, read_player_receiving
@@ -49,3 +51,12 @@ def get_player_receiving_splits(player_id: str):
         return read_player_receiving(player_id)
     except ReceivingDataError as error:
         raise HTTPException(status_code=503, detail="Prepared receiving data is unavailable") from error
+
+
+@router.get("/players/{player_id}/passing-splits", response_model=PlayerPassingSplits)
+def get_player_passing_splits(player_id: str):
+    """Read independent passing totals, exact aggregation ingredients and coverage."""
+    try:
+        return read_player_passing(player_id)
+    except PassingDataError as error:
+        raise HTTPException(status_code=503, detail="Prepared passing data is unavailable") from error

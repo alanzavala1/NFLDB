@@ -117,10 +117,13 @@ def test_sack_only_bucket_keeps_counts_and_cpoe_unknown_instead_of_zero():
     data['down'] = pd.concat([data['down'],source],ignore_index=True)
     for name in ('whole','classified','weekly'):
         data[name].loc[data[name].player_id.eq('qb'),'sacks_suffered'] = 1
-    rows,_ = adapt(data)
+    rows,report = adapt(data)
     row=rows.iloc[-1]
     assert row.att == 0 and row.yards == 0 and row.first_downs == 0
     assert row[['epa','success_pct','cpoe']].isna().all()
+    parts = next(item for item in report['aggregation'] if item['split_value'] == '4')
+    assert parts['epa_sum'] == -2 and parts['successes'] == 0
+    assert parts['cpoe_sum'] == 0 and parts['cpoe_count'] == 0
 
 
 def test_a_real_zero_epa_is_available_but_all_missing_epa_is_unknown():

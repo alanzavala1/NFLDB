@@ -100,12 +100,15 @@ def apply_passing_metrics(rows, source, context, credits, season, *, dimension="
     _require(raw.passing_cpoe.dropna().between(-100, 100).all(), season, "invalid upstream CPOE")
     _require(p.cpoe.dropna().between(-100, 100).all(), season, "invalid PBP CPOE")
     p["player_id"] = p.passer_player_id
-    p["split_value"] = context_split_values(p, dimension, season)
+    # Whole-season metrics use all supplied plays, independently of whether a
+    # particular context view can classify them. No new R export is required.
+    p["split_value"] = "all" if dimension == "overall" else context_split_values(p, dimension, season)
+    allowed = ("all",) if dimension == "overall" else DIMENSIONS[dimension]
     native = _credit_counts(credits, p, season)
     # This independently checks that the exported detailed-credit projection
     # produces every native Down count, before low-volume players are removed.
     located = native.merge(p[["game_id", "play_id", "split_value"]], on=["game_id", "play_id"], validate="many_to_one")
-    located = located.loc[located.split_value.isin(DIMENSIONS[dimension])]
+    located = located.loc[located.split_value.isin(allowed)]
     reference = located.groupby(["player_id", "split_value"])[list(COUNTS)].sum()
     exported = raw.loc[raw.player_id.notna()].set_index(["player_id", "split_value"])[list(COUNTS)]
     a, b = reference.align(exported, fill_value=0)
@@ -124,7 +127,7 @@ def apply_passing_metrics(rows, source, context, credits, season, *, dimension="
     for field in COUNTS:
         wrong |= comparison[field + "_credit"].fillna(0).ne(comparison[field + "_pbp"].fillna(0))
     affected = comparison.loc[wrong, KEYS].merge(p[["game_id", "play_id", "split_value"]], on=["game_id", "play_id"])
-    affected = affected.loc[affected.split_value.isin(DIMENSIONS[dimension])]
+    affected = affected.loc[affected.split_value.isin(allowed)]
     bad_keys = set(zip(affected.player_id, affected.split_value))
 
     modeled = p.loc[p.play_type.isin(["pass", "qb_spike"])].copy()
@@ -144,7 +147,7 @@ def apply_passing_metrics(rows, source, context, credits, season, *, dimension="
     output = rows.copy()
     source_keys = raw.set_index(["player_id", "split_value"])
     play_groups = {key: frame for key, frame in p.loc[p.player_id.notna()].groupby(["player_id", "split_value"])}
-    issues = []
+    issues, components = [], []
     for idx, row in output.iterrows():
         key = (row.player_id, str(row.split_value))
         original = source_keys.loc[key]
@@ -193,8 +196,18 @@ def apply_passing_metrics(rows, source, context, credits, season, *, dimension="
                 reasons[field] = reason
         if reasons:
             issues.append({"player_id": row.player_id, "split_value": str(row.split_value), "metrics": reasons})
+        # Preserve sufficient statistics, not rounded rate * attempts. A sack-only
+        # row has undefined EPA/attempt but still contributes its verified EPA.
+        # No CPOE observations means a known empty model subset (0/0), whereas
+        # disagreeing attribution means unknown components that cannot be added.
+        matches = key not in bad_keys
+        components.append({"player_id": row.player_id, "split_value": str(row.split_value),
+            "epa_sum": float(models.qb_epa.sum()) if matches and not models.empty and models.qb_epa.notna().all() else None,
+            "successes": int(tries.epa.gt(0).sum()) if matches and len(tries) == row.att and tries.epa.notna().all() else None,
+            "cpoe_sum": float(models.cpoe.sum()) if matches else None,
+            "cpoe_count": int(models.cpoe.count()) if matches else None})
     return output, {"policy_version": 1, "source": "native nflfastR metrics with per-play PBP/credit population checks",
                     "attribution_mismatch_player_buckets": [dict(player_id=pid, split_value=value) for pid, value in sorted(bad_keys)],
                     "available_rows": {field: int(output[field].notna().sum()) for field in
                                        ("first_downs", "epa", "success_pct", "cpoe", "air_yards", "yac")},
-                    "unavailable": issues}
+                    "unavailable": issues, "aggregation": components}

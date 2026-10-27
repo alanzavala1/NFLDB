@@ -268,6 +268,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/players/{player_id}/passing-splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Player Passing Splits
+         * @description Read independent passing totals, exact aggregation ingredients and coverage.
+         */
+        get: operations["get_player_passing_splits_api_players__player_id__passing_splits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teams/{team}": {
         parameters: {
             query?: never;
@@ -1376,6 +1396,117 @@ export interface components {
             /** Air Yards Share */
             air_yards_share?: number | null;
         };
+        /** PassingAggregation */
+        PassingAggregation: {
+            /**
+             * Epa Sum
+             * @description Verified QB EPA including sacks; not rate times attempts.
+             */
+            epa_sum: number | null;
+            /**
+             * Successes
+             * @description Verified positive-EPA passing attempts.
+             */
+            successes: number | null;
+            /** Cpoe Sum */
+            cpoe_sum: number | null;
+            /**
+             * Cpoe Count
+             * @description Number of provider-modeled CPOE observations.
+             */
+            cpoe_count: number | null;
+        };
+        /** PassingCounts */
+        PassingCounts: {
+            /** Att */
+            att: number;
+            /** Cmp */
+            cmp: number;
+            /** Yards */
+            yards: number;
+            /** Td */
+            td: number;
+            /** Interceptions */
+            interceptions: number;
+            /** First Downs */
+            first_downs: number;
+            /** Sacks */
+            sacks: number;
+        };
+        /** PassingRow */
+        PassingRow: {
+            /** Season */
+            season: number;
+            /** Category */
+            category: string;
+            /** Split Dim */
+            split_dim: string;
+            /** Split Value */
+            split_value: string;
+            /** Sort Order */
+            sort_order: number | null;
+            /** Att */
+            att: number | null;
+            /** Cmp */
+            cmp: number | null;
+            /** Yards */
+            yards: number | null;
+            /** Td */
+            td: number | null;
+            /** Interceptions */
+            interceptions: number | null;
+            /** Air Yards */
+            air_yards: number | null;
+            /** Yac */
+            yac: number | null;
+            /** First Downs */
+            first_downs: number | null;
+            /** Epa */
+            epa: number | null;
+            /** Success Pct */
+            success_pct: number | null;
+            /** Cpoe */
+            cpoe: number | null;
+            /** Unavailable Metrics */
+            unavailable_metrics: {
+                [key: string]: string;
+            };
+            aggregation: components["schemas"]["PassingAggregation"];
+        };
+        /** PassingSeason */
+        PassingSeason: {
+            /** Season */
+            season: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "prepared" | "unverified";
+            /** Reason */
+            reason: string | null;
+            overall: components["schemas"]["PassingRow"] | null;
+            /** Rows */
+            rows: components["schemas"]["PassingRow"][];
+            game_coverage: components["schemas"]["ReceivingGameCoverage"] | null;
+            /** Views */
+            views: {
+                [key: string]: components["schemas"]["PassingViewCoverage"];
+            };
+        };
+        /** PassingViewCoverage */
+        PassingViewCoverage: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "complete" | "partial" | "unavailable";
+            /** Reason */
+            reason: string | null;
+            /** Definition */
+            definition: string;
+            /** @description Only this passer's production outside the classified view. */
+            excluded: components["schemas"]["PassingCounts"];
+        };
         /**
          * PlayerAdvStats
          * @description Per-season advanced stats — sparse by player role.
@@ -1625,6 +1756,18 @@ export interface components {
             punt_return_yards: number;
             /** Punt Return Tds */
             punt_return_tds: number;
+        };
+        /** PlayerPassingSplits */
+        PlayerPassingSplits: {
+            /** Player Id */
+            player_id: string;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "Qualified regular-season passing; observed production on supplied games";
+            /** Seasons */
+            seasons: components["schemas"]["PassingSeason"][];
         };
         /**
          * PlayerProfile
@@ -2936,6 +3079,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlayerReceivingSplits"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_player_passing_splits_api_players__player_id__passing_splits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerPassingSplits"];
                 };
             };
             /** @description Validation Error */
