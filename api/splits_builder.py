@@ -11,7 +11,8 @@ Design (mirrors team_analytics_builder / comparables_builder):
     rows it lazily materializes their seasons, so the system self-heals.
 
 Three categories share one table via the `category` column:
-  - passing   — QBs, keyed off passer_player_id
+  - passing   — native passer credits with captured passing inputs; original
+    passer dropbacks still determine the existing admission threshold
   - rushing   — ball carriers, keyed off rusher_player_id
   - receiving — official recipient credits in captured-input builds; original
     receiver attempt plays still determine the existing admission threshold
@@ -50,7 +51,7 @@ CREATE TABLE IF NOT EXISTS player_splits (
     interceptions INTEGER,          -- passing only
     air_yards     INTEGER,          -- passing / receiving
     yac           INTEGER,          -- passing / receiving
-    first_downs   INTEGER,          -- plays that gained a first down / TD
+    first_downs   INTEGER,          -- category-specific first-down counts
     epa           DOUBLE,
     success_pct   DOUBLE,
     cpoe          DOUBLE,           -- passing only
@@ -274,7 +275,7 @@ def _category_sql(category: str, season: int, available: set[str], has_ftn: bool
 
 # ── Materialize + read API ───────────────────────────────────────────────────
 
-def materialize(season: int, *, receiving_inputs=None) -> int:
+def materialize(season: int, *, receiving_inputs=None, passing_inputs=None) -> int:
     """Compute all-category splits for one season and persist. Returns rows written.
 
     Holds the write lock: called from the ingest worker (which already owns it)
@@ -283,15 +284,21 @@ def materialize(season: int, *, receiving_inputs=None) -> int:
     writes. Input-free compatibility builds cannot overwrite an official snapshot.
     """
     with write_lock:
-        return _materialize_locked(int(season), receiving_inputs=receiving_inputs)
+        return _materialize_locked(int(season), receiving_inputs=receiving_inputs, passing_inputs=passing_inputs)
 
 
-def _materialize_locked(s: int, *, receiving_inputs=None) -> int:
+def _materialize_locked(s: int, *, receiving_inputs=None, passing_inputs=None) -> int:
     conn = get_connection()
     from pipeline.receiving_build import has_official_receiving, prepare_receiving, store_receiving
+    from pipeline.passing_build import has_official_passing, prepare_passing, store_passing
+    if passing_inputs is not None and receiving_inputs is None:
+        raise RuntimeError("Native passing requires the same captured core inputs as receiving")
+    if passing_inputs is None and has_official_passing(conn):
+        raise RuntimeError("Official passing splits require captured offline passing inputs")
     if receiving_inputs is None and has_official_receiving(conn):
         raise RuntimeError("Official receiving splits require captured offline inputs; legacy rebuilding is disabled")
     prepared = prepare_receiving(conn, s, receiving_inputs) if receiving_inputs is not None else None
+    passing = prepare_passing(conn, s, receiving_inputs, passing_inputs) if passing_inputs is not None else None
     ensure_table(conn)
 
     try:
@@ -308,6 +315,8 @@ def _materialize_locked(s: int, *, receiving_inputs=None) -> int:
         conn.execute("DELETE FROM player_splits WHERE season = ?", [s])
         cols = ", ".join(_COLUMNS)
         categories = ("passing", "rushing") if prepared is not None else ("passing", "rushing", "receiving")
+        if passing is not None:
+            categories = ("rushing",)
         for category in categories:
             sql = _category_sql(category, s, available, has_ftn)
             try:
@@ -325,6 +334,8 @@ def _materialize_locked(s: int, *, receiving_inputs=None) -> int:
                 print(f"player_splits[{category}] materialize failed for season {s}: {e}")
         if prepared is not None:
             store_receiving(conn, s, prepared)
+            if passing is not None:
+                store_passing(conn, s, passing)
             conn.execute("COMMIT")
     except BaseException:
         if prepared is not None:

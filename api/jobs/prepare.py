@@ -20,8 +20,11 @@ def main(argv=None) -> None:
                         help='Use captured core inputs and official receiving exports (integration is not yet publishable)')
     parser.add_argument('--rebuild-all-analytics', action='store_true',
                         help='Refresh advanced inputs and rebuild analytics for every stored REG season')
+    parser.add_argument('--passing-inputs', type=Path, help='Validated native passing export collection; requires --core-inputs')
     args = parser.parse_args(argv)
     options = {} if args.core_inputs is None else {'core_inputs': args.core_inputs}
+    if args.passing_inputs is not None:
+        options['passing_inputs'] = args.passing_inputs
     if args.rebuild_all_analytics:
         options['rebuild_all_analytics'] = True
     prepare_candidate(args.source, args.candidate, args.seasons, **options)

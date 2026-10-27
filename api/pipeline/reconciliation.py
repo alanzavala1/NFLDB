@@ -117,6 +117,27 @@ def defensive_sack_mismatches(conn, season):
     ''', [season] * 4).fetchone()[0]
 
 
+def passing_source_epa_mismatches(conn, season):
+    """Keep the weekly EPA identity after exact replay validates stored rates.
+
+    A flagged split rate cannot reconstruct a whole numerator. Compare source
+    pass/spike QB EPA (including conversions) against the captured weekly feed,
+    with the existing 0.005 per-attempt tolerance. Stored metric values and NULL
+    policies must already have passed exact source-bound passing replay.
+    """
+    return conn.execute(f'''
+        WITH raw AS (SELECT passer_player_id AS player_id,SUM(qb_epa) AS epa
+            FROM plays WHERE season=? AND season_type='REG' AND {PASSING_EPA_PLAY}
+            GROUP BY passer_player_id),
+        official AS (SELECT player_id,SUM(attempts) AS attempts,SUM(passing_epa) AS epa
+            FROM weekly_player_stats WHERE season=? AND season_type='REG'
+            GROUP BY player_id HAVING SUM(attempts)>=100)
+        SELECT COUNT(*) FROM official o LEFT JOIN raw r USING(player_id)
+        WHERE o.epa IS NULL OR r.epa IS NULL OR NOT isfinite(o.epa) OR NOT isfinite(r.epa)
+           OR ABS((r.epa-o.epa)/o.attempts)>0.005
+    ''', [season,season]).fetchone()[0]
+
+
 def impossible_rates(conn):
     return conn.execute('''
         SELECT COUNT(*) FROM player_splits
@@ -127,7 +148,7 @@ def impossible_rates(conn):
     ''').fetchone()[0]
 
 
-def season_checks(conn, season, *, official_receiving=False):
+def season_checks(conn, season, *, official_receiving=False, official_passing=False):
     """Mismatch counts and allowed counts; preserve established yardage tolerances."""
     checks = {}
     for name, category, column, official, minimum, allowed in (
@@ -138,11 +159,11 @@ def season_checks(conn, season, *, official_receiving=False):
         ('rush_yards', 'rushing', 'yards', 'rushing_yards', 300, 2),
         ('rec_yards', 'receiving', 'yards', 'receiving_yards', 300, 6),
     ):
-        if official_receiving and category == 'receiving':
+        if (official_receiving and category == 'receiving') or (official_passing and category == 'passing'):
             # The caller must run source-bound receiving validation instead;
             # a Down subtotal is not an independent whole-season reference.
             continue
         checks[name] = (count_mismatches(conn, season, category, column, official, minimum), allowed)
-    checks['passing_epa'] = (passing_epa_mismatches(conn, season), 0)
+    checks['passing_epa'] = ((passing_source_epa_mismatches if official_passing else passing_epa_mismatches)(conn, season), 0)
     checks['defensive_sacks'] = (defensive_sack_mismatches(conn, season), 0)
     return checks

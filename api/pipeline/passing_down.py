@@ -1,4 +1,4 @@
-"""Count-only passing preview adapter; no downloads, writes or live materializer."""
+"""Passing count validation and admission shared by every offline split view."""
 import hashlib
 
 import duckdb
@@ -7,6 +7,7 @@ import pandas as pd
 
 from pipeline.source_results import SourceError
 from splits_core import PLAYER_COLUMNS
+from pipeline.passing_dimensions import DIMENSIONS, context_split_values
 
 
 COUNTS = ("attempts", "completions", "passing_yards", "passing_tds", "passing_interceptions", "sacks_suffered")
@@ -21,7 +22,7 @@ def _require(condition, season, message):
         raise SourceError("passing_down_preview", season, message)
 
 
-def _counts(frame, season, *, down=False):
+def _counts(frame, season, *, down=False, dimension="down"):
     columns = ["player_id", "season", "season_type", *COUNTS, *(["split_value"] if down else [])]
     _require(not set(columns) - set(frame), season, "count export missing columns")
     result = frame[columns].copy()
@@ -31,7 +32,7 @@ def _counts(frame, season, *, down=False):
         lambda player: isinstance(player, str) and bool(player) and player == player.strip()).astype(bool).all(), season, "invalid player identity")
     if down:
         result["split_value"] = result.split_value.astype("string")
-        _require(result.split_value.isin(["1", "2", "3", "4"]).all(), season, "invalid Down bucket")
+        _require(result.split_value.isin(DIMENSIONS[dimension]).all(), season, f"invalid {dimension} bucket")
     _require(not result.duplicated(["player_id", *(["split_value"] if down else [])]).any(), season, "duplicate count keys")
     try:
         values = result[list(COUNTS)].apply(pd.to_numeric, errors="raise")
@@ -91,14 +92,29 @@ def adapt_passing_down(*, context, whole, classified, excluded, down, weekly, se
     sacks remain in the raw/count evidence because player_splits has no sack column.
     No database connection outside isolated in-memory qualification is opened.
     """
+    return adapt_passing_partition(context=context, whole=whole, classified=classified,
+                                  excluded=excluded, down=down, weekly=weekly, season=season)
+
+
+def adapt_passing_partition(*, context, whole, classified, excluded, down, weekly, season, dimension="down"):
+    """Shared count admission and conservation for any verified passing view."""
     _require(type(season) is int and season >= 1999, season, "invalid season")
+    _require(dimension in DIMENSIONS, season, "unsupported passing dimension")
     qualified, sql_sha = _qualify(context, season)
-    frames = {name: _counts(value, season, down=name == "down") for name, value in (
+    labels = context_split_values(context, dimension, season)
+    frames = {name: _counts(value, season, down=name == "down", dimension=dimension) for name, value in (
         ("whole", whole), ("classified", classified), ("excluded", excluded), ("down", down), ("weekly", weekly))}
     totals = {name: _totals(value) for name, value in frames.items()}
     _equal(totals["whole"], totals["weekly"], season, "whole versus weekly")
     _equal(totals["down"], totals["classified"], season, "Down versus classified")
     _equal(totals["classified"].add(totals["excluded"], fill_value=0), totals["whole"], season, "classified plus excluded versus whole")
+    for bucket in DIMENSIONS[dimension]:
+        _require(labels.eq(bucket).any() or not frames["down"].loc[
+            frames["down"].split_value.eq(bucket), list(COUNTS)].ne(0).any().any(),
+            season, "production in a bucket with no member plays")
+    for active, name in ((labels.notna().any(), "classified"), (labels.isna().any(), "excluded")):
+        _require(active or not frames[name][list(COUNTS)].ne(0).any().any(),
+                 season, "production in an empty play population")
     for label in ("whole", "classified", "excluded", "down"):
         frame = frames[label]
         frames[label] = frame.loc[frame[list(COUNTS)].ne(0).any(axis=1)]
@@ -106,8 +122,10 @@ def adapt_passing_down(*, context, whole, classified, excluded, down, weekly, se
     _require(not set(qualified) - observed, season, "qualifying passer missing from whole counts")
     selected = frames["down"].loc[frames["down"].player_id.isin(qualified)].copy()
     output = selected.rename(columns=MAPPING)
-    output["category"], output["split_dim"] = "passing", "down"
-    output["sort_order"] = output.split_value.astype("int64")
+    output["category"], output["split_dim"] = "passing", dimension
+    output["sort_order"] = output.split_value.map({value: index for index, value in enumerate(DIMENSIONS[dimension], 1)}).astype("Int64")
+    if dimension == "opponent":
+        output["sort_order"] = pd.Series(pd.NA, index=output.index, dtype="Int64")
     for field in UNVERIFIED:
         output[field] = None
     output = output[list(PLAYER_COLUMNS)].sort_values(["player_id", "sort_order"]).reset_index(drop=True)
@@ -116,8 +134,8 @@ def adapt_passing_down(*, context, whole, classified, excluded, down, weekly, se
               "scope": "supplied REG nonconversion games; passing counts only",
               "rows": len(output), "qualified_players": len(qualified), "qualifying_plays": qualified,
               "qualification_sql_sha256": sql_sha, "count_checks": "whole/weekly, Down/classified, classified+excluded/whole: exact for all players",
-              "context": {"plays": len(context), "classified": int(context.down.isin([1, 2, 3, 4]).sum()),
-                          "excluded": int((~context.down.isin([1, 2, 3, 4])).sum())},
+              "context": {"plays": len(context), "classified": int(labels.notna().sum()),
+                          "excluded": int(labels.isna().sum())},
               "qualified_excluded_counts": {field: int(outside[field].sum()) for field in COUNTS},
               "unavailable_metrics": {field: "Not validated by this passing count preview" for field in UNVERIFIED},
               "sacks": "Verified in exports and comparisons; no canonical player_splits sack column"}

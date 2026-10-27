@@ -73,6 +73,7 @@ def test_ingest_prepares_only_after_source_and_player_stat_loading(monkeypatch, 
     calls = []
     monkeypatch.setattr(ingest, 'get_connection', lambda: connection)
     monkeypatch.setattr(ingest, 'has_official_receiving', lambda conn: False)
+    monkeypatch.setattr('pipeline.passing_build.has_official_passing', lambda conn: False)
 
     def load_raw(conn, seasons, log, **options):
         assert conn is connection and seasons == requested
@@ -111,6 +112,14 @@ def test_analytics_forwards_receiving_inputs_only_to_player_splits(preparation_s
     monkeypatch.setattr(splits_builder, 'materialize', lambda season, **options: calls.append((season, options)) or 5)
     prepare_analytics([2024, 2026], log=lambda _: None, receiving_inputs=inputs)
     assert calls == [(2024, {'receiving_inputs': inputs}), (2026, {'receiving_inputs': inputs})]
+
+
+def test_analytics_forwards_native_passing_inputs_only_to_player_splits(preparation_steps, monkeypatch):
+    import splits_builder
+    core, passing, calls = object(), object(), []
+    monkeypatch.setattr(splits_builder, 'materialize', lambda season, **options: calls.append((season, options)) or 5)
+    prepare_analytics([2024], log=lambda _: None, receiving_inputs=core, passing_inputs=passing)
+    assert calls == [(2024, {'receiving_inputs': core, 'passing_inputs': passing})]
 
 
 def test_weekly_history_migration_rebuilds_dependents_without_expanding_vendor_downloads(monkeypatch):

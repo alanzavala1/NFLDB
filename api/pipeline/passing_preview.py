@@ -23,11 +23,11 @@ def _csv(output, manifest, name, season):
                        dtype={"player_id": "string", "passer_player_id": "string", "gsis_player_id": "string", "split_value": "string"})
 
 
-def validate_passing_export(output, inputs, season, request, policy):
+def validated_passing_inputs(output, inputs, season, request, policy, *, version=2, kind="passing_down_metrics_preview"):
     """Read only hash-bound exports and compare context/reference to typed inputs."""
     manifest = json.loads((output / "run.json").read_bytes())
-    if (type(manifest.get("format_version")) is not int or manifest["format_version"] != 2
-            or manifest.get("kind") != "passing_down_metrics_preview"
+    if (type(manifest.get("format_version")) is not int or manifest["format_version"] != version
+            or manifest.get("kind") != kind
             or type(manifest.get("season")) is not int or manifest["season"] != season
             or any(manifest.get(key) != value for key, value in VERSIONS.items())
             or manifest.get("R") != json.loads((output / "renv.lock").read_bytes())["R"]["Version"]
@@ -69,6 +69,13 @@ def validate_passing_export(output, inputs, season, request, policy):
     weekly_reference = weekly.data.loc[weekly.data.season_type.eq("REG") & weekly.data.game_id.isin(source.game_id)]
     expected = weekly_reference.groupby("player_id", as_index=False)[list(COUNTS)].sum()
     _same_rows(reference[["player_id", *COUNTS]], expected, ["player_id"], season)
+    return manifest, context, metric_context, credits, weekly_reference, reference
+
+
+def validate_passing_export(output, inputs, season, request, policy):
+    """Replay immutable version-2 Down evidence using the shared input checks."""
+    manifest, context, metric_context, credits, weekly_reference, reference = validated_passing_inputs(
+        output, inputs, season, request, policy)
     frames = {name: _csv(output, manifest, name + ".csv", season) for name in ("whole", "classified", "excluded", "down")}
     rows, report = adapt_passing_down(context=context, weekly=reference, season=season, **frames)
     verify_passing_first_downs(frames, weekly_reference, season)
@@ -82,11 +89,17 @@ def validate_passing_export(output, inputs, season, request, policy):
     return rows, report
 
 
-def prepare_passing_preview(core_inputs: Path, output: Path, season: int, *, rscript: Path, library: Path, log=print):
+def prepare_passing_preview(core_inputs: Path, output: Path, season: int, *, rscript: Path, library: Path,
+                            dimensions=None, log=print):
     """Own a new output directory; retain failed logs and never open a source DB."""
     os.environ.setdefault("NFL_TEST_MODE", "1")
     if type(season) is not int or season < 1999:
         raise ValueError("Provide one integer season from 1999 onward")
+    if dimensions is not None:
+        from pipeline.passing_dimensions import DIMENSIONS
+        if (not isinstance(dimensions, (list, tuple)) or not dimensions or len(set(dimensions)) != len(dimensions)
+                or any(dimension not in DIMENSIONS for dimension in dimensions)):
+            raise ValueError("Provide distinct supported passing dimensions")
     output = output.absolute()
     if output.exists() or output.is_symlink():
         raise FileExistsError(output)
@@ -98,6 +111,8 @@ def prepare_passing_preview(core_inputs: Path, output: Path, season: int, *, rsc
     source, _, source_sha = inputs.receiving_run(season)
     request = {"run_id": uuid.uuid4().hex, "season": season, "source_directory": str(source),
                "source_run_sha256": source_sha, "core_revision": inputs.revision()}
+    if dimensions is not None:
+        request["dimensions"] = list(dimensions)
     output.mkdir()
     api = Path(__file__).resolve().parents[1]
     for name, path in (("producer.R", api / "experiments/upstream_passing_down.R"),
@@ -111,9 +126,16 @@ def prepare_passing_preview(core_inputs: Path, output: Path, season: int, *, rsc
     log(f"Exporting passing counts and metrics for {season}; log: {output / 'R-job.log'}")
     run_r_export([str(rscript), "--vanilla", str(output / "producer.R"), str(output)],
                  cwd=api, env=env, logfile=output / "R-job.log")
-    rows, report = validate_passing_export(output, inputs, season, request, policy)
-    rows.to_csv(output / "canonical-down.csv", index=False)
-    report["canonical_down_sha256"] = file_sha256(output / "canonical-down.csv")
+    if dimensions is None:
+        rows, report = validate_passing_export(output, inputs, season, request, policy)
+        filename, digest_key = "canonical-down.csv", "canonical_down_sha256"
+    else:
+        from pipeline.passing_exports import load_passing_season
+        prepared = load_passing_season(output, inputs, season, require_all=False)
+        rows, report = pd.concat(list(prepared.rows.values()), ignore_index=True), prepared.report
+        filename, digest_key = "canonical-splits.csv", "canonical_splits_sha256"
+    rows.to_csv(output / filename, index=False)
+    report[digest_key] = file_sha256(output / filename)
     (output / "preview.json").write_text(json.dumps(report, indent=2, allow_nan=False), encoding="utf-8")
-    log(f"Passing Down preview: {len(rows)} rows; CSV only, not accepted for publication")
+    log(f"Passing preview: {len(rows)} rows; CSV only, not accepted for publication")
     return report

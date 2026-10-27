@@ -12,7 +12,11 @@ def main(argv=None):
     parser.add_argument('--database', type=Path, required=True)
     parser.add_argument('--core-inputs', type=Path,
                         help='Run complete official receiving integration checks against bound captures (publication remains blocked)')
+    parser.add_argument('--passing-inputs', type=Path,
+                        help='Run source-bound native passing replay; requires --core-inputs')
     args = parser.parse_args(argv)
+    if args.passing_inputs is not None and args.core_inputs is None:
+        raise ValueError('Passing exports require captured core inputs')
     path = args.database.resolve()
     if not path.is_file() or Path(f'{path}.wal').exists():
         raise RuntimeError('Validation requires an existing database with no pending WAL')
@@ -30,6 +34,9 @@ def main(argv=None):
             from pipeline.receiving_core_collection import open_core_inputs
             options = {'receiving_inputs': open_core_inputs(args.core_inputs),
                        'log': lambda message: print(message, file=sys.stderr)}
+        if args.passing_inputs is not None:
+            from pipeline.passing_inputs import PassingInputs
+            options['passing_inputs'] = PassingInputs(args.passing_inputs)
         report = validate_snapshot(conn, **options)
         report['api_requests'] = asyncio.run(check_api(conn, report['played_seasons']))
         print(json.dumps(report, sort_keys=True))

@@ -104,9 +104,11 @@ software tests does not override the real-data failure recorded above.
 ## Remaining release work
 
 The passing-credit investigation below verifies a repeatable upstream counting
-solution for the 2004 case. The isolated Down adapter now verifies counts and
-metric availability across the captured history. Other passing views and their
-all-history validation remain before build integration. The recorded
+solution for the 2004 case. All passing views have now been integrated with the
+ordinary offline builder and checked across the captured history; the separate
+candidate passes the data checks and 102 HTTP checks. See
+[native passing integration](PASSING_RELEASE_VALIDATION.md) for the complete proof.
+The recorded
 receiving counts and usable passing data should remain available while the
 affected attribution is addressed. Separately audit metric availability in the
 legacy profiles/leaders/game endpoints; their existing masks cover historical

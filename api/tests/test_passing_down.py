@@ -82,6 +82,9 @@ def test_zero_attempt_sack_bucket_and_negative_passing_yards_are_preserved():
     sack[list(COUNTS)] = [0,0,0,0,0,3]
     sack['split_value'] = '4'
     data['down'] = pd.concat([data['down'],sack],ignore_index=True)
+    sack_plays=data['context'].iloc[:3].copy()
+    sack_plays[['play_id','down','pass_attempt','sack']]=[[50,4,0,1],[51,4,0,1],[52,4,0,1]]
+    data['context']=pd.concat([data['context'],sack_plays],ignore_index=True)
     for name in ('whole','classified','weekly'):
         data[name].loc[data[name].player_id.eq('qb'),'sacks_suffered'] = 3
     rows,_ = adapt_passing_down(**data)

@@ -61,19 +61,24 @@ def _run_job(candidate: Path, module: str, arguments: list[str], *, read_only=Fa
         raise subprocess.CalledProcessError(code, command)
 
 
-def _run_worker(candidate: Path, seasons: list[int], *, core_inputs: Path | None = None, rebuild_all_analytics=False) -> None:
+def _run_worker(candidate: Path, seasons: list[int], *, core_inputs: Path | None = None,
+                passing_inputs: Path | None = None, rebuild_all_analytics=False) -> None:
     arguments = ['--seasons', *(str(s) for s in seasons)]
     if core_inputs is not None:
         arguments.extend(['--core-inputs', str(core_inputs)])
     if rebuild_all_analytics:
         arguments.append('--rebuild-all-analytics')
+    if passing_inputs is not None:
+        arguments.extend(['--passing-inputs', str(passing_inputs)])
     _run_job(candidate, 'jobs.prepare_worker', arguments)
 
 
-def _run_validation(candidate: Path, *, core_inputs: Path | None = None) -> None:
+def _run_validation(candidate: Path, *, core_inputs: Path | None = None, passing_inputs: Path | None = None) -> None:
     arguments = ['--database', str(candidate)]
     if core_inputs is not None:
         arguments.extend(['--core-inputs', str(core_inputs)])
+    if passing_inputs is not None:
+        arguments.extend(['--passing-inputs', str(passing_inputs)])
     _run_job(candidate, 'jobs.validate', arguments, read_only=True)
 
 
@@ -141,7 +146,8 @@ def check_preparation(conn, seasons: list[int] | None = None) -> dict:
 
 
 def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=print, *,
-                      core_inputs: Path | None = None, rebuild_all_analytics=False) -> Path:
+                      core_inputs: Path | None = None, passing_inputs: Path | None = None,
+                      rebuild_all_analytics=False) -> Path:
     """Copy a closed snapshot, prepare and validate in isolated processes.
 
     Never replaces source. Failed candidates are removed after the worker exits.
@@ -154,6 +160,10 @@ def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=pri
     seasons = sorted(set(seasons))
     if core_inputs is not None:
         core_inputs = Path(core_inputs).resolve()
+    if passing_inputs is not None:
+        if core_inputs is None:
+            raise ValueError('Passing exports require captured core inputs')
+        passing_inputs = Path(passing_inputs).resolve()
     if source == candidate.resolve():
         raise CandidateError('Source and candidate must be different paths')
     if candidate.exists() or candidate.is_symlink() or _wal(candidate).exists():
@@ -165,9 +175,13 @@ def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=pri
         options = {} if core_inputs is None else {'core_inputs': core_inputs}
         if rebuild_all_analytics:
             options['rebuild_all_analytics'] = True
+        if passing_inputs is not None:
+            options['passing_inputs'] = passing_inputs
         _run_worker(candidate, seasons, **options)
         validate_preparation(candidate, seasons)
         validation_options = {} if core_inputs is None else {'core_inputs': core_inputs}
+        if passing_inputs is not None:
+            validation_options['passing_inputs'] = passing_inputs
         _run_validation(candidate, **validation_options)
     except BaseException:
         candidate.unlink(missing_ok=True)

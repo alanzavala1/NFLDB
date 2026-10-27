@@ -56,7 +56,7 @@ def _check_schema(conn):
         expected.close()
 
 
-def validate_snapshot(conn, *, receiving_inputs=None, log=lambda message: None):
+def validate_snapshot(conn, *, receiving_inputs=None, passing_inputs=None, log=lambda message: None):
     """Validate every loaded regular season, including historical and newest data.
 
     Low-volume player splits and career comparables may legitimately be empty.
@@ -67,6 +67,10 @@ def validate_snapshot(conn, *, receiving_inputs=None, log=lambda message: None):
              and not any(table.startswith('receiving_') and table.endswith('_preview') for table in tables),
              'Receiving-only preview is not a publishable snapshot')
     official = bool(tables & {'receiving_build_preparation', 'receiving_whole_reference', 'receiving_season_totals'})
+    official_passing = 'passing_build_preparation' in tables
+    _require(official_passing == (passing_inputs is not None),
+             'Native passing validation requires matching preparation records and --passing-inputs')
+    _require(not official_passing or official, 'Native passing requires official captured core preparation')
     guard = 'Official receiving integration awaits coverage-aware API/UI and complete release validation'
     _require(not official or receiving_inputs is not None,
              guard + '; provide captured --core-inputs to run the full integration checks')
@@ -81,6 +85,9 @@ def validate_snapshot(conn, *, receiving_inputs=None, log=lambda message: None):
             check_preparation(conn)
             receiving = validate_receiving(conn, receiving_inputs, log=log)
             verify_stored_ftn(conn, receiving_inputs, receiving['played_seasons'])
+            if official_passing:
+                from pipeline.passing_validation import validate_passing
+                validate_passing(conn, receiving_inputs, passing_inputs, log=log)
         except (CandidateError, SourceError, KeyError, TypeError, ValueError) as error:
             raise SnapshotValidationError(f'Official snapshot source check failed: {error}') from error
     seasons = [r[0] for r in conn.execute(
@@ -98,7 +105,7 @@ def validate_snapshot(conn, *, receiving_inputs=None, log=lambda message: None):
         import splits_builder
         available = {r[0] for r in conn.execute('DESCRIBE plays').fetchall()}
         for category in ('passing', 'rushing', 'receiving'):
-            if official and category == 'receiving':
+            if (official and category == 'receiving') or (official_passing and category == 'passing'):
                 continue  # Exact fresh-source admission is already checked by replay.
             eligibility = splits_builder.qualification_ctes(category, season, available)
             qualifying = {r[0] for r in conn.execute(f'{eligibility} SELECT player_id FROM qualified').fetchall()}
@@ -134,7 +141,7 @@ def validate_snapshot(conn, *, receiving_inputs=None, log=lambda message: None):
     reconciliation, failures = {}, []
     for season in seasons:
         checks = {**receiving_total_checks(conn, season),
-                  **season_checks(conn, season, official_receiving=official)}
+                  **season_checks(conn, season, official_receiving=official, official_passing=official_passing)}
         for name, (mismatches, allowed) in checks.items():
             if mismatches > allowed:
                 failures.append(f'{name}[{season}]: {mismatches} mismatches (allowed {allowed})')

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from pipeline.passing_down import CONTEXT, COUNTS, _equal, _require
+from pipeline.passing_dimensions import DIMENSIONS, context_split_values
 
 
 METRIC_CONTEXT = (*CONTEXT, "play_type", "complete_pass", "incomplete_pass", "interception",
@@ -44,7 +45,7 @@ def _credit_counts(credits, context, season):
     _require(credits.gsis_player_id.dropna().map(lambda v: isinstance(v, str) and bool(v)
         and v == v.strip()).astype(bool).all(), season, "invalid credit player identity")
     selected = credits.loc[credits.stat_id.isin([14, 15, 16, 19, 20]) & credits.gsis_player_id.notna()].copy()
-    selected = selected.merge(context[["game_id", "play_id", "down"]], on=["game_id", "play_id"], validate="many_to_one")
+    selected = selected.merge(context[["game_id", "play_id"]], on=["game_id", "play_id"], validate="many_to_one")
     selected = selected.rename(columns={"gsis_player_id": "player_id"})
     selected["attempts"] = selected.stat_id.isin([14, 15, 16, 19]).astype(int)
     selected["completions"] = selected.stat_id.isin([15, 16]).astype(int)
@@ -72,7 +73,7 @@ def verify_passing_first_downs(frames, weekly, season):
            season, "passing first downs: classified plus excluded versus whole")
 
 
-def apply_passing_metrics(rows, source, context, credits, season):
+def apply_passing_metrics(rows, source, context, credits, season, *, dimension="down"):
     """Verify raw exports before admission; attach values and per-field reasons.
 
     EPA = typed pass/spike qb_epa sum / official attempts (including sacks in
@@ -99,12 +100,12 @@ def apply_passing_metrics(rows, source, context, credits, season):
     _require(raw.passing_cpoe.dropna().between(-100, 100).all(), season, "invalid upstream CPOE")
     _require(p.cpoe.dropna().between(-100, 100).all(), season, "invalid PBP CPOE")
     p["player_id"] = p.passer_player_id
-    p["split_value"] = pd.to_numeric(p.down).astype("Int64").astype("string")
+    p["split_value"] = context_split_values(p, dimension, season)
     native = _credit_counts(credits, p, season)
     # This independently checks that the exported detailed-credit projection
     # produces every native Down count, before low-volume players are removed.
     located = native.merge(p[["game_id", "play_id", "split_value"]], on=["game_id", "play_id"], validate="many_to_one")
-    located = located.loc[located.split_value.isin(["1", "2", "3", "4"])]
+    located = located.loc[located.split_value.isin(DIMENSIONS[dimension])]
     reference = located.groupby(["player_id", "split_value"])[list(COUNTS)].sum()
     exported = raw.loc[raw.player_id.notna()].set_index(["player_id", "split_value"])[list(COUNTS)]
     a, b = reference.align(exported, fill_value=0)
@@ -123,7 +124,7 @@ def apply_passing_metrics(rows, source, context, credits, season):
     for field in COUNTS:
         wrong |= comparison[field + "_credit"].fillna(0).ne(comparison[field + "_pbp"].fillna(0))
     affected = comparison.loc[wrong, KEYS].merge(p[["game_id", "play_id", "split_value"]], on=["game_id", "play_id"])
-    affected = affected.loc[affected.split_value.isin(["1", "2", "3", "4"])]
+    affected = affected.loc[affected.split_value.isin(DIMENSIONS[dimension])]
     bad_keys = set(zip(affected.player_id, affected.split_value))
 
     modeled = p.loc[p.play_type.isin(["pass", "qb_spike"])].copy()

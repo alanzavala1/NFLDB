@@ -13,9 +13,12 @@ from pipeline.receiving_inputs import verify_stored_ftn
 from pipeline.source_results import SourceOutcome
 
 
-def run_ingest(seasons: list[int], log=print, *, core_inputs=None, rebuild_all_analytics=False) -> list[SourceOutcome]:
+def run_ingest(seasons: list[int], log=print, *, core_inputs=None, passing_inputs=None, rebuild_all_analytics=False) -> list[SourceOutcome]:
     """Load source feeds, build player stats, then prepare analytics for the batch."""
     conn = get_connection()
+    from pipeline.passing_build import has_official_passing
+    if (passing_inputs is None and has_official_passing(conn)) or (passing_inputs is not None and core_inputs is None):
+        raise RuntimeError("Native passing snapshot requires captured core and passing inputs before any source refresh")
     if core_inputs is None and has_official_receiving(conn):
         raise RuntimeError("Official receiving snapshot requires captured offline inputs before any source refresh")
     options = {} if core_inputs is None else {"core_inputs": core_inputs}
@@ -64,6 +67,8 @@ def run_ingest(seasons: list[int], log=print, *, core_inputs=None, rebuild_all_a
     if rebuild_all_analytics and core_inputs is not None:
         verify_stored_ftn(conn, core_inputs, sorted(analytics_seasons))
     analytics_options = {} if core_inputs is None else {"receiving_inputs": core_inputs}
+    if passing_inputs is not None:
+        analytics_options["passing_inputs"] = passing_inputs
     prepare_analytics(sorted(analytics_seasons), log=log, **analytics_options)
     return outcomes
 
