@@ -15,7 +15,7 @@ import { GetStarted } from './GetStarted'
 import { HeadToHead } from './HeadToHead'
 import { StandoutSplits } from './StandoutSplits'
 import { SplitSections } from './SplitSections'
-import { ReceivingCoverageNote } from './ReceivingCoverageNote'
+import { PreparedCoverageNote } from './PreparedCoverageNote'
 
 export default function SplitsPage() {
   const seasonsQuery = useQuery(seasonsQueryOptions())
@@ -32,9 +32,9 @@ export default function SplitsPage() {
         <ComparisonControls comparison={comparison} entities={model.entities} />
         <SeasonSelectionFeedback query={seasonsQuery} availableYears={comparison.availableYears} season={comparison.season} mode={comparison.mode} />
         <SplitQueryFeedback entities={model.entities} splits={queries.splitResults} profiles={queries.playerProfiles}
-          analytics={queries.rankQuery} splitKind={comparison.mode === 'teams' ? 'team' : model.isDefense ? 'defensive' : model.isReceiving ? 'receiving' : 'offensive'} />
+          analytics={queries.rankQuery} splitKind={comparison.mode === 'teams' ? 'team' : model.isDefense ? 'defensive' : model.isReceiving ? 'receiving' : model.isPassing ? 'passing' : 'offensive'} />
         {comparison.season !== null && (model.entityCount === 0 ? <GetStarted mode={comparison.mode} loadExample={comparison.loadExample} /> : <>
-          <ReceivingCoverageNote model={model} />
+          <PreparedCoverageNote model={model} />
           <HeadToHead model={model} comparison={comparison} splitResults={queries.splitResults} />
           <StandoutSplits notable={notable} entityLabel={model.entities[0].label} isCareer={model.isCareer} season={comparison.season} />
           <SplitSections model={model} selectors={selectors} display={display} queries={queries} />

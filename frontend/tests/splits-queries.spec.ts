@@ -2,11 +2,13 @@ import { expect, type Page, type Route } from '@playwright/test'
 import { test } from './fixtures/scores'
 import { playerProfile } from './fixtures/playerProfile'
 import { defensiveSplits, mockSplits, offensiveSplits, splitAnalytics, teamSplits } from './fixtures/splits'
+import { passingFixture } from './fixtures/passing'
 
 const resources = {
-  offense: { path: '/api/players/test-player/splits', label: 'Test quarterback offensive splits', json: offensiveSplits, url: '/splits?p=test-player&season=2023' },
+  offense: { path: '/api/players/test-player/splits', label: 'Test quarterback offensive splits', json: offensiveSplits, url: '/splits?p=test-player&cat=rushing&season=2023' },
+  passing: { path: '/api/players/test-player/passing-splits', label: 'Test quarterback passing splits', json: passingFixture(offensiveSplits), url: '/splits?p=test-player&season=2023' },
   defense: { path: '/api/players/test-player/def-splits', label: 'Test quarterback defensive splits', json: defensiveSplits, url: '/splits?p=test-player&cat=defense&season=2023' },
-  profile: { path: '/api/players/test-player', label: 'test-player player profile', json: playerProfile, url: '/splits?p=test-player&season=2023' },
+  profile: { path: '/api/players/test-player', label: 'test-player player profile', json: playerProfile, url: '/splits?p=test-player&cat=rushing&season=2023' },
   team: { path: '/api/teams/BUF/splits', label: 'Buffalo Bills team splits', json: teamSplits, url: '/splits?mode=teams&t=BUF&season=2023' },
   ranks: { path: '/api/team-analytics', label: 'opponent defensive ranks', json: splitAnalytics, url: '/splits?p=test-player&season=2023' },
 }
@@ -74,7 +76,7 @@ for (const [name, resource] of Object.entries(resources)) {
   })
 }
 
-for (const name of ['offense', 'defense'] as const) {
+for (const name of ['offense', 'passing', 'defense'] as const) {
   test(`${name} non-JSON errors use the shared readable fallback`, async ({ page }) => {
     await mockSplits(page)
     const resource = resources[name]
@@ -86,9 +88,9 @@ for (const name of ['offense', 'defense'] as const) {
 
 test('a failed comparison member leaves the other player and both game logs usable', async ({ page }) => {
   await mockSplits(page)
-  await page.route(url => url.pathname === '/api/players/other-player/splits', route => route.fulfill({ status: 503, json: { detail: 'Unavailable.' } }))
+  await page.route(url => url.pathname === '/api/players/other-player/passing-splits', route => route.fulfill({ status: 503, json: { detail: 'Unavailable.' } }))
   await page.goto('/splits?p=test-player,other-player&season=2023')
-  await expect(page.getByRole('alert')).toContainText('Could not load Second quarterback offensive splits. Unavailable.')
+  await expect(page.getByRole('alert')).toContainText('Could not load Second quarterback passing splits. Unavailable.')
   await expect(section(page, 'Down').getByRole('cell', { name: '1st Down', exact: true })).toBeVisible()
   await expect(section(page, 'Season').getByRole('cell', { name: /2023/ })).toBeVisible()
   await expect(page.getByRole('status')).toHaveCount(0)
@@ -97,7 +99,7 @@ test('a failed comparison member leaves the other player and both game logs usab
 for (const [name, resource] of Object.entries(resources)) {
   test(`${name} empty successful results are distinct from failures`, async ({ page }) => {
     await mockSplits(page)
-    const json = name === 'profile' ? { ...playerProfile, games: [] } : name === 'ranks' ? { season: 2023, league: [] } : []
+    const json = name === 'profile' ? { ...playerProfile, games: [] } : name === 'ranks' ? { season: 2023, league: [] } : name === 'passing' ? passingFixture([]) : []
     await page.route(url => url.pathname === resource.path, route => route.fulfill({ json }))
     await page.goto(resource.url)
     await expect(page.getByRole('status')).toHaveCount(0)
@@ -108,10 +110,10 @@ for (const [name, resource] of Object.entries(resources)) {
   })
 }
 
-test('offensive categories and career/season filters reuse one resource while defense uses its own cache', async ({ page }) => {
+test('passing, rushing and defense keep separate caches while career/season filters reuse their resources', async ({ page }) => {
   await mockSplits(page)
   const reads: string[] = []
-  page.on('request', request => { if (/\/(splits|def-splits)$/.test(new URL(request.url()).pathname)) reads.push(new URL(request.url()).pathname) })
+  page.on('request', request => { if (/\/(splits|def-splits|passing-splits)$/.test(new URL(request.url()).pathname)) reads.push(new URL(request.url()).pathname) })
   await page.goto(resources.offense.url)
   await loaded(page)
   const initialReads = reads.length
@@ -121,11 +123,12 @@ test('offensive categories and career/season filters reuse one resource while de
   await loaded(page)
   await page.getByRole('button', { name: 'Passing', exact: true }).click()
   await loaded(page)
-  expect(reads).toHaveLength(initialReads)
+  await expect.poll(() => reads.slice(initialReads)).toEqual([resources.passing.path])
+  const afterPassing = reads.length
   await page.getByRole('button', { name: 'Defense', exact: true }).click()
-  await expect.poll(() => reads.slice(initialReads)).toEqual([resources.defense.path])
+  await expect.poll(() => reads.slice(afterPassing)).toEqual([resources.defense.path])
   await loaded(page)
-  expect(reads.slice(initialReads)).toEqual([resources.defense.path])
+  expect(reads.slice(afterPassing)).toEqual([resources.defense.path])
   const afterDefense = reads.length
   await page.getByRole('button', { name: 'Passing', exact: true }).click()
   await loaded(page)
@@ -182,13 +185,13 @@ for (const [name, resource] of Object.entries(resources)) {
 test('removing a comparison member cancels its requests and late results cannot return it', async ({ page }) => {
   await mockSplits(page)
   const pending: Route[] = []
-  await page.route(url => ['/api/players/other-player', '/api/players/other-player/splits'].includes(url.pathname), route => { pending.push(route) })
+  await page.route(url => ['/api/players/other-player', '/api/players/other-player/passing-splits'].includes(url.pathname), route => { pending.push(route) })
   await page.goto('/splits?p=test-player,other-player&season=2023')
   await expect.poll(() => new Set(pending.map(route => new URL(route.request().url()).pathname)).size).toBe(2)
   await page.getByRole('button', { name: 'Remove other-player', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Remove other-player', exact: true })).toHaveCount(0)
   for (const route of pending) {
-    await route.fulfill({ json: new URL(route.request().url()).pathname.endsWith('/splits') ? offensiveSplits : { ...playerProfile, player_name: 'Late player' } })
+    await route.fulfill({ json: new URL(route.request().url()).pathname.endsWith('/passing-splits') ? passingFixture(offensiveSplits, 'other-player') : { ...playerProfile, player_name: 'Late player' } })
     await expect.poll(() => route.request().failure()?.errorText).toMatch(/ABORTED/)
   }
   await loaded(page)
@@ -236,7 +239,7 @@ test('switching modes cancels pending player resources and hides their late resu
   await mockSplits(page)
   const pending: Route[] = []
   await page.route(url => [resources.offense.path, resources.profile.path].includes(url.pathname), route => { pending.push(route) })
-  await page.goto('/splits?p=test-player&t=BUF&season=2023')
+  await page.goto('/splits?p=test-player&t=BUF&cat=rushing&season=2023')
   await expect.poll(() => new Set(pending.map(route => new URL(route.request().url()).pathname)).size).toBe(2)
   await page.getByRole('button', { name: 'Teams', exact: true }).click()
   await loaded(page)
@@ -272,7 +275,7 @@ for (const [name, resource] of Object.entries(resources)) {
       await mockSplits(page)
       let fail = false
       const json = !empty ? resource.json : name === 'profile' ? { ...playerProfile, games: [] }
-        : name === 'ranks' ? { season: 2023, league: [] } : []
+        : name === 'ranks' ? { season: 2023, league: [] } : name === 'passing' ? passingFixture([]) : []
       await page.route(url => url.pathname === resource.path, route => route.fulfill(fail
         ? { status: 503, json: { detail: 'Unavailable.' } } : { json }))
       await page.goto(resource.url)

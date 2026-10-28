@@ -236,7 +236,7 @@ test('duplicate or oversized bookmarked member lists create at most six unique o
   await page.goto('/splits?p=one,one,two,three,four,five,six,seven&season=2023')
   await expect(page.getByRole('button', { name: /^Remove Test quarterback/ })).toHaveCount(6)
   await expect(page.getByRole('status')).toHaveCount(0)
-  expect(reads.filter(path => path.endsWith('/splits')).sort()).toEqual(['one', 'two', 'three', 'four', 'five', 'six'].map(id => `/api/players/${id}/splits`).sort())
+  expect(reads.filter(path => path.endsWith('/passing-splits')).sort()).toEqual(['one', 'two', 'three', 'four', 'five', 'six'].map(id => `/api/players/${id}/passing-splits`).sort())
 })
 
 test('a multi-player example creates one history entry with both resolved members', async ({ page }) => {

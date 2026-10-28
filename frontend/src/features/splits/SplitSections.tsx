@@ -12,7 +12,7 @@ import { Section } from './Section'
 import { StatTable } from './StatTable'
 import { GroupedTable } from './GroupedTable'
 import { EmptySplitState } from './SplitQueryFeedback'
-import { ReceivingViewNote } from './ReceivingCoverageNote'
+import { PreparedViewNote } from './PreparedCoverageNote'
 
 export function SplitSections({ model, selectors, display, queries }: {
   model: SplitModel; selectors: ReturnType<typeof createSectionData>
@@ -23,7 +23,7 @@ export function SplitSections({ model, selectors, display, queries }: {
   const { hidden, expandedKeys, keyStatsOnly, setKeyStatsOnly, isOpen, toggleOpen, toggleHidden, toggleExpanded } = display
   const { playerProfiles, splitResults } = queries
   const visibleDims = sectionDims.filter(d => !hidden.has(d.key))
-  const totalLabel = (dimension: string) => !model.isReceiving ? 'Total'
+  const totalLabel = (dimension: string) => !model.isPrepared ? 'Total'
     : dimension === 'season' ? model.isCareer ? 'Qualifying seasons' : 'Season total' : 'Shown total'
   return <><Card className="mb-3" headerClassName="flex-wrap [&>div:first-child]:whitespace-normal"
     title={singleEntity ? <span>All splits · <span className="text-ink-mid">{entities[0].label}</span></span> : 'All splits · side-by-side'}
@@ -41,7 +41,7 @@ export function SplitSections({ model, selectors, display, queries }: {
           const { rows, total } = sectionData(d.key)
           return (
             <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
-              <ReceivingViewNote model={model} dimension={d.key} />
+              <PreparedViewNote model={model} dimension={d.key} />
               {rows.length === 0
                 ? <div className="py-6 text-center"><EmptySplitState
                   queries={gameBased ? playerProfiles.slice(0, 1) : splitResults.slice(0, 1)}
@@ -55,8 +55,8 @@ export function SplitSections({ model, selectors, display, queries }: {
         }
         // side-by-side
         const base = gameBased ? gameMetrics : metrics
-        const receivingSummary = model.isReceiving && (d.key === 'season' || d.key === 'opponent')
-        const keyList = gameBased || receivingSummary ? GAME_METRICS[metricGroup] : KEY_METRICS[metricGroup]
+        const preparedSummary = model.isPrepared && (d.key === 'season' || d.key === 'opponent')
+        const keyList = gameBased || preparedSummary ? GAME_METRICS[metricGroup] : KEY_METRICS[metricGroup]
         const km = keyStatsOnly ? base.filter(m => (keyList ?? []).includes(m.key)) : base
         const m = km.length ? km : base
         const secs = entities.map((_, i) => entitySection(i, d.key))
@@ -71,7 +71,7 @@ export function SplitSections({ model, selectors, display, queries }: {
             : splitValueLabel(d.key, k)
         return (
           <Section key={d.key} title={`By ${d.label}`} open={isOpen(d.key)} onToggle={() => toggleOpen(d.key)}>
-            <ReceivingViewNote model={model} dimension={d.key} />
+            <PreparedViewNote model={model} dimension={d.key} />
             {keys.length === 0
               ? <div className="py-6 text-center"><EmptySplitState queries={gameBased ? playerProfiles : splitResults}
                 resource={gameBased ? 'game records' : 'split statistics'} /></div>
@@ -86,9 +86,9 @@ export function SplitSections({ model, selectors, display, queries }: {
       })}
     </div>
     <div className="text-xs leading-relaxed text-ink-dim mt-4 px-1 space-y-1">
-      <p>{singleEntity ? 'Select a stat heading to sort. ' : ''}{!model.isReceiving && 'Expand a season or opponent to see games. '}Green highlights the best{singleEntity ? ' in each column' : ' across the comparison'}.</p>
-      <p>{model.isReceiving
-        ? 'Regular season only. Season totals and all receiving splits use the same prepared calculation. Shown totals cover classified plays; missing context can exclude production. Game logs are available on player pages.'
+      <p>{singleEntity ? 'Select a stat heading to sort. ' : ''}{!model.isPrepared && 'Expand a season or opponent to see games. '}Green highlights the best{singleEntity ? ' in each column' : ' across the comparison'}.</p>
+      <p>{model.isPrepared
+        ? `Regular season only. Season totals and all ${model.isPassing ? 'passing' : 'receiving'} splits use the same prepared calculation. Shown totals cover classified plays; missing context can exclude production. Game logs are available on player pages.`
         : 'Regular season only. Season and Opponent use official game-log totals; other splits use play-by-play data.'}</p>
     </div></>
 }

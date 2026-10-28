@@ -216,9 +216,9 @@ The ordinary HTTP validation now checks this passing response against stored
 source-replayed records, including components, exclusions and field reasons.
 Regression cases cover unequal CPOE populations, missing Down labels, sack-only
 EPA, per-play attribution mismatches, missing inputs and corrupted responses.
-The frontend contract types are generated, but the splits page still uses its
-previous query and aggregation path. Connecting it to this response is the next
-step; the publication guard remains in place.
+At this backend checkpoint, the frontend contract types were generated and page
+wiring was still pending. The following October 28 checkpoint completes that
+connection. The publication guard remains in place.
 
 Executed against all **28 captured seasons (1999–2026)**: preparation produced
 **1,447 independent player-season summaries**. All **64,953 canonical passing
@@ -254,3 +254,45 @@ Its hash was unchanged by final HTTP verification, with no WAL. The prior
 integrated candidate and the three earlier protected databases retain their
 original hashes. Nothing was published or deployed, and the captured current
 season remains a point-in-time input rather than a freshness certificate.
+
+## Passing page connection, October 28, 2026
+
+The passing lens now reads `/players/{id}/passing-splits` through the same typed
+API client and TanStack Query pattern as receiving. Passing, receiving, rushing
+and defense retain separate request caches. Seasons and career filters reuse
+their category's response; requests cancel when players or categories change.
+
+Overall and By Season use independently prepared whole-season rows. Opponent
+and other breakdowns use prepared classified rows. Combining passing rows adds
+the full-precision EPA and success numerators and the actual CPOE model sums and
+observation counts; it never reconstructs those from rounded rates or weights
+CPOE by attempts. A sack-only row contributes its verified EPA numerator while
+its own per-attempt rate remains undefined. Missing components stay unknown;
+verified counting statistics remain visible. Unverified seasons cannot become
+zeroes or partial career totals, including derived passer ratings.
+
+Passing and receiving share the coverage-note and omitted-production display.
+Breakdown footers say **Shown total**, whole-season footers say **Season total**
+or **Qualifying seasons**, and partial views identify this player's production
+retained outside the view. Missing statistics have keyboard- and phone-accessible
+explanations. Incomplete views are excluded from automatic standout claims.
+
+Passing no longer reconstructs Season/Opponent rows from profile game logs or
+uses the game log's receiving air-yard/YAC fields as passing metrics. Profile
+game-log links remain available; rushing retains its game-log drilldowns.
+
+Verification: **128 frontend checks passed**, covering passing calculations,
+captured real API examples (Testaverde 2004, Mahomes 2024 and a partial 2026
+passer), receiving regressions, comparison states, retries, cached background
+refreshes, cancellation, season history and phone/table layouts. An additional
+historical phone check passed after clarifying the field explanation. Build,
+TypeScript and lint passed. Modern and historical phone screenshots were
+reviewed; the 320px explanation fits without clipping or overlap.
+
+Evidence is retained in ignored
+`api/data/passing-ui-final-20261028.{xml,log}`. Captured response fixtures are in
+`frontend/tests/fixtures/passingSplits.json`; the read-only capture script is
+`api/data/export_passing_ui_fixtures_20261028.py`. No source recalculation,
+database replacement, environment change, publication-guard removal, push or
+deployment occurred. Offline refresh/publication and read-only serving migration
+remain the next release group.

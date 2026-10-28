@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures/scores'
 import { mockSplits, offensiveSplits, teamSplits } from './fixtures/splits'
+import { passingFixture } from './fixtures/passing'
 
 function section(page: Page, name: string) {
   return page.getByRole('button', { name: new RegExp(`^By ${name} `) }).locator('..')
@@ -20,7 +21,7 @@ async function capture(page: Page, name: string) {
 }
 
 for (const mobile of [false, true]) {
-  test(`${mobile ? 'mobile' : 'desktop'} single-player splits keep official game totals, weighted rates, and standout cards`, async ({ page }) => {
+  test(`${mobile ? 'mobile' : 'desktop'} single-player splits keep prepared totals, weighted rates, and standout cards`, async ({ page }) => {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 })
     await ready(page, '/splits?p=test-player&season=2023')
     await expect(summary(page).getByRole('cell', { name: '250', exact: true })).toBeVisible()
@@ -29,9 +30,8 @@ for (const mobile of [false, true]) {
     await expect(page.getByText('Where Test quarterback stands out', { exact: true })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await capture(page, `splits-single-${mobile ? 'mobile' : 'desktop'}`)
-    await section(page, 'Season').getByRole('button', { name: '▸', exact: true }).click()
-    await expect(section(page, 'Season').getByRole('link', { name: /2023 Wk 1/ })).toHaveAttribute('href', '/games/2023_01_BUF_MIA')
-    await expect(section(page, 'Season').getByRole('link', { name: /Wk 19/ })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Test quarterback game logs →', exact: true })).toHaveAttribute('href', '/players/test-player')
+    await expect(section(page, 'Season').getByRole('button', { name: '▸', exact: true })).toHaveCount(0)
     await page.getByRole('combobox', { name: 'Season' }).selectOption('0')
     await expect(summary(page).getByRole('cell', { name: '550', exact: true })).toBeVisible()
     await expect(summary(page).getByRole('cell', { name: '+3.000', exact: true })).toBeVisible()
@@ -39,13 +39,12 @@ for (const mobile of [false, true]) {
 }
 
 for (const mobile of [false, true]) {
-  test(`${mobile ? 'mobile' : 'desktop'} comparison keeps grouped columns, winner shading, and aligned game drilldowns`, async ({ page }) => {
+  test(`${mobile ? 'mobile' : 'desktop'} comparison keeps grouped columns, winner shading, and prepared season rows`, async ({ page }) => {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 })
     await ready(page, '/splits?p=test-player,other-player&season=2023')
     await expect(section(page, 'Down').getByRole('columnheader', { name: 'Second quarterback', exact: true })).toBeVisible()
     await expect(summary(page).getByRole('cell', { name: '500', exact: true })).toHaveClass(/text-data-win/)
-    await section(page, 'Season').getByRole('button', { name: '▸', exact: true }).click()
-    await expect(section(page, 'Season').getByRole('link', { name: 'vs MIA', exact: true })).toHaveCount(2)
+    await expect(page.getByRole('link', { name: /game logs →/ })).toHaveCount(2)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await capture(page, `splits-comparison-${mobile ? 'mobile' : 'desktop'}`)
     const keyColumns = await section(page, 'Down').getByRole('columnheader').count()
@@ -69,6 +68,13 @@ test('single-player sorting, situations, and section visibility retain their sta
   await expect(page.getByRole('button', { name: /^By Down / })).toHaveCount(0)
   await page.getByRole('button', { name: 'Down', exact: true }).click()
   await expect(section(page, 'Down').getByRole('cell', { name: '1st Down', exact: true })).toBeVisible()
+})
+
+test('rushing retains its independent game-log drilldowns', async ({ page }) => {
+  await ready(page, '/splits?p=test-player&cat=rushing&season=2023')
+  await section(page, 'Season').getByRole('button', { name: '▸', exact: true }).click()
+  await expect(section(page, 'Season').getByRole('link', { name: /2023 Wk 1/ })).toHaveAttribute('href', '/games/2023_01_BUF_MIA')
+  await expect(section(page, 'Season').getByRole('link', { name: /Wk 19/ })).toHaveCount(0)
 })
 
 test('defensive player counts and fractional sacks remain independent from offensive metrics', async ({ page }) => {
@@ -108,7 +114,7 @@ test('empty-state examples and entity search still build comparisons', async ({ 
 
 test('equal values receive no winner shading and valid empty situation filters stay empty', async ({ page }) => {
   await mockSplits(page)
-  await page.route(url => url.pathname === '/api/players/other-player/splits', route => route.fulfill({ json: offensiveSplits }))
+  await page.route(url => url.pathname === '/api/players/other-player/passing-splits', route => route.fulfill({ json: passingFixture(offensiveSplits, 'other-player') }))
   await page.goto('/splits?p=test-player,other-player&season=2023')
   await expect(summary(page).getByRole('cell', { name: '250', exact: true })).toHaveCount(2)
   for (const cell of await summary(page).getByRole('cell', { name: '250', exact: true }).all()) await expect(cell).not.toHaveClass(/text-data-win/)

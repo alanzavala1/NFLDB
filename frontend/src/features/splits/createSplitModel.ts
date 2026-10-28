@@ -7,24 +7,28 @@ import { TEAM_SPLIT_CONFIG, TEAM_SITUATIONS } from './teamConfig'
 import { DEFENSE_SPLIT_CONFIG, DEFENSE_SITUATIONS } from './defenseConfig'
 import {
   aggregatePlayerSplitRows, aggregateTeamSplitRows, aggregateDefenseSplitRows,
-  aggregateDefenseCareerByValue, aggregateCareerByValue, gameToSplitRow
+  aggregateDefenseCareerByValue, aggregateCareerByValue, rushingGameToSplitRow
 } from './aggregation'
 import { CAREER_SEASON, OVERALL_DIM } from './constants'
 import { entityColor } from './presets'
 import { includeReceivingSeasons, preparedReceivingRows, selectedReceivingSeasons } from './receivingModel'
 import { receivingMetricReason } from './receivingAvailability'
+import { includePassingSeasons, preparedPassingRows } from './passingModel'
+import { passingMetricReason } from './passingAvailability'
 
 export function createSplitModel(comparison: ComparisonSelection, queries: ReturnType<typeof useSplitQueries>) {
   const { mode, playerLens, teamSide, season, situation, players, teams } = comparison
-  const { playerResults, receivingResults, teamResults, playerProfiles, analytics } = queries
+  const { playerResults, receivingResults, passingResults, teamResults, playerProfiles, analytics } = queries
   const isDefense = mode === 'players' && playerLens === 'defense'
   const isReceiving = mode === 'players' && playerLens === 'receiving'
+  const isPassing = mode === 'players' && playerLens === 'passing'
+  const isPrepared = isReceiving || isPassing
 
   const splitConfig = mode === 'teams' ? TEAM_SPLIT_CONFIG[teamSide] : isDefense ? DEFENSE_SPLIT_CONFIG : PLAYER_SPLIT_CONFIG[playerLens as PlayerCategory]
 
   const baseMetrics = splitConfig.metrics as Metric<SplitRow>[]
-  const metrics = isReceiving ? baseMetrics.map(metric => ({ ...metric,
-    unavailableReason: (row: SplitRow) => receivingMetricReason(row as PlayerSplit, metric.key),
+  const metrics = isPrepared ? baseMetrics.map(metric => ({ ...metric,
+    unavailableReason: (row: SplitRow) => (isPassing ? passingMetricReason : receivingMetricReason)(row as PlayerSplit, metric.key),
   })) : baseMetrics
 
   const metricGroup = mode === 'teams' ? `team_${teamSide}` : playerLens
@@ -49,9 +53,14 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
         : ((s as TeamSplit).side === teamSide && (s as TeamSplit).split_dim === dim)
 
   const splitRows: SplitRow[][] = mode === 'players' ? players.map((_, i) => isReceiving
-    ? preparedReceivingRows(receivingResults[i]?.data) : (playerResults[i]?.data ?? []) as SplitRow[])
+    ? preparedReceivingRows(receivingResults[i]?.data) : isPassing
+      ? preparedPassingRows(passingResults[i]?.data) : (playerResults[i]?.data ?? []) as SplitRow[])
     : teams.map((_, i) => (teamResults[i]?.data ?? []) as TeamSplit[])
   const receivingSeasons = isReceiving ? players.map((_, i) => selectedReceivingSeasons(receivingResults[i]?.data, season)) : []
+  const passingSeasons = isPassing ? players.map((_, i) => passingResults[i]?.data?.seasons.filter(
+    item => season === CAREER_SEASON || item.season === season) ?? []) : []
+  const preparedSeasons = isPassing ? passingSeasons : receivingSeasons
+  const includeSeasons = isPassing ? includePassingSeasons : includeReceivingSeasons
 
   const entities: EntityCard[] = mode === 'players'
     ? players.map((p, i) => { const prof = playerProfiles[i]?.data; return { key: p.id, label: p.name || prof?.player_name || p.id, sub: p.sub || (prof ? [prof.position, prof.team].filter(Boolean).join(' · ') : undefined), headshot: p.headshot ?? prof?.headshot_url, color: entityColor(i) } })
@@ -61,10 +70,10 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
 
   const focusData = splitRows[0] ?? []
 
-  const playerGames = mode === 'players' && !isDefense && !isReceiving
+  const playerGames = mode === 'players' && !isDefense && !isPrepared
     ? players.map((_, i) => (playerProfiles[i]?.data?.games ?? [])
       .filter(g => g.game_type === 'REG' && (isCareer || g.season === season))
-      .map(g => ({ g, r: gameToSplitRow(g, playerLens as 'passing' | 'rushing') }))
+      .map(g => ({ g, r: rushingGameToSplitRow(g) }))
       .filter(x => (x.r.att ?? 0) > 0))
     : []
 
@@ -79,13 +88,13 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
   const defensiveRanks = (() => { const m = new Map<string, number>(); for (const t of analytics.data?.league ?? []) if (t.def_epa_play_rank != null) m.set(t.team, t.def_epa_play_rank); return m })()
 
   function situationRow(data: SplitRow[]): SplitRow | null {
-    const dimKey = situation ? situation.dim : isReceiving ? 'overall' : OVERALL_DIM
+    const dimKey = situation ? situation.dim : isPrepared ? 'overall' : OVERALL_DIM
     let sel = data.filter(s => matchesDimension(s, dimKey))
     if (situation) sel = sel.filter(s => s.split_value === situation.value)
     if (mode === 'teams') return situation ? (sel[0] ?? null) : aggregateRows(sel)
     if (isCareer) {
-      if (isReceiving && situation) sel = sel.length
-        ? includeReceivingSeasons(sel as PlayerSplit[], data as PlayerSplit[])
+      if (isPrepared && situation) sel = sel.length
+        ? includeSeasons(sel as PlayerSplit[], data as PlayerSplit[])
         : data.filter(row => matchesDimension(row, 'overall') && (row as PlayerSplit).cmp == null)
       return aggregateRows(sel)
     }
@@ -97,12 +106,12 @@ export function createSplitModel(comparison: ComparisonSelection, queries: Retur
 
   const defaultOpen = isDefense ? ['vs_play', 'down', 'field_zone'] : mode === 'players' ? ['season', 'down', 'game_script', 'opponent'] : ['down', 'game_script', 'field_zone']
 
-  const gameDims = new Set((mode === 'players' && !isDefense && !isReceiving) ? ['season', 'opponent'] : [])
+  const gameDims = new Set((mode === 'players' && !isDefense && !isPrepared) ? ['season', 'opponent'] : [])
   return {
     mode, playerLens, season, splitConfig, metrics, metricGroup, situations, isCareer, isDefense, flip,
     aggregateRows, aggregateValues, matchesDimension, splitRows, entities, entityCount, focusData, playerGames,
     games, gameMetrics, singleEntity, showDefensiveRanks, defensiveRanks, situationRow, sectionDims, defaultOpen, gameDims,
-    isReceiving, receivingSeasons
+    isReceiving, receivingSeasons, isPassing, isPrepared, preparedSeasons, includeSeasons
   }
 }
 

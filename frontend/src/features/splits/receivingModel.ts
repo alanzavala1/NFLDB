@@ -1,6 +1,7 @@
 import type { PlayerReceivingSplits, PlayerSplit, ReceivingSeason } from '../../types'
 import { CAREER_SEASON } from './constants'
 import { RECEIVING_FIELDS, receivingReasons, unavailableReceivingRow } from './receivingAvailability'
+import { preparedViewHasGaps } from './preparedCoverage'
 
 export function selectedReceivingSeasons(data: PlayerReceivingSplits | undefined, season: number | null): ReceivingSeason[] {
   return data?.seasons.filter(item => season === CAREER_SEASON || item.season === season) ?? []
@@ -32,9 +33,5 @@ export function includeReceivingSeasons(rows: PlayerSplit[], allRows: PlayerSpli
 }
 
 export function receivingViewHasGaps(seasons: ReceivingSeason[], dimension: string): boolean {
-  return seasons.some(item => {
-    const view = item.views[dimension]
-    return item.status !== 'prepared' || !view || view.status === 'unavailable'
-      || Object.values(view.excluded).some(value => value != null && value !== 0)
-  })
+  return preparedViewHasGaps(seasons, dimension)
 }

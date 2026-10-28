@@ -13,7 +13,7 @@ export function SplitQueryFeedback({ entities, splits, profiles, analytics, spli
   splits: SplitQueryState[]
   profiles: SplitQueryState[]
   analytics: SplitQueryState | null
-  splitKind: 'offensive' | 'defensive' | 'receiving' | 'team'
+  splitKind: 'offensive' | 'defensive' | 'receiving' | 'passing' | 'team'
 }) {
   return <>
     {entities.map((entity, index) => {

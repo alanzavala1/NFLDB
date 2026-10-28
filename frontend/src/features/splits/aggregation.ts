@@ -1,5 +1,6 @@
 import type { PlayerSplit, TeamSplit, DefensiveSplit, PlayerGame } from '../../types'
 import { receivingReasons } from './receivingAvailability'
+import { aggregatePassingRows } from './passingAggregation'
 
 /** Sum a defender's event rows (counting stats only). */
 export function aggregateDefenseSplitRows(rows: DefensiveSplit[]): DefensiveSplit | null {
@@ -28,6 +29,7 @@ export function aggregateDefenseCareerByValue(rows: DefensiveSplit[]): Defensive
 
 export function aggregatePlayerSplitRows(rows: PlayerSplit[]): PlayerSplit | null {
   if (rows.length === 0) return null
+  if (rows[0].category === 'passing') return aggregatePassingRows(rows)
   const receiving = rows[0].category === 'receiving'
   const sum = (f: (r: PlayerSplit) => number | null | undefined) => receiving && rows.some(r => f(r) == null)
     ? null : rows.reduce((a, r) => a + (f(r) ?? 0), 0)
@@ -79,17 +81,15 @@ export function aggregateTeamSplitRows(rows: TeamSplit[]): TeamSplit | null {
   }
 }
 
-// Map a singleEntity game-log row to the PlayerSplit shape so per-game rows reuse the
-// same columns. Rate fields the game log doesn't carry (success%, cpoe) are
-// null; epa is converted to a per-attempt average to match the split metric.
-export function gameToSplitRow(g: PlayerGame, cat: 'passing' | 'rushing'): PlayerSplit {
+// Rushing alone uses game-log drilldowns. Passing and receiving use prepared
+// totals; the game log's air_yards and yac fields describe RECEIVING production.
+export function rushingGameToSplitRow(g: PlayerGame): PlayerSplit {
   const base = {
-    season: g.season, category: cat, split_dim: 'game', split_value: g.game_id, sort_order: g.week,
+    season: g.season, category: 'rushing', split_dim: 'game', split_value: g.game_id, sort_order: g.week,
     att: null as number | null, cmp: null as number | null, yards: null as number | null, td: null as number | null,
     interceptions: null as number | null, air_yards: null as number | null, yac: null as number | null,
     first_downs: null as number | null,
     epa: null as number | null, success_pct: null as number | null, cpoe: null as number | null,
   }
-  if (cat === 'passing') return { ...base, att: g.attempts, cmp: g.completions, yards: g.pass_yards, td: g.pass_tds, interceptions: g.interceptions_thrown, air_yards: g.air_yards, yac: g.yac, epa: g.attempts ? g.pass_epa / g.attempts : null }
   return { ...base, att: g.carries, yards: g.rush_yards, td: g.rush_tds, epa: g.carries ? g.rush_epa / g.carries : null }
 }

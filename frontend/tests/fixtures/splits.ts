@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import type { PlayerSplit, DefensiveSplit } from '../../src/types'
 import { mockProfile, playerProfile } from './playerProfile'
 import { analyticsRow, teamSplit, teamProfile } from './teamProfile'
+import { passingFixture } from './passing'
 
 export const offensiveSplit: PlayerSplit = {
   season: 2023, category: 'passing', split_dim: 'down', split_value: '1', sort_order: 1,
@@ -45,6 +46,11 @@ export async function mockSplits(page: Page) {
     player_id: new URL(route.request().url()).pathname.split('/').at(-2),
     scope: 'Qualified regular-season receiving; observed production on supplied games', seasons: [],
   } }))
+  await page.route('**/api/players/*/passing-splits', route => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-2)!
+    const rows = offensiveSplits.map(row => id === 'other-player' ? { ...row, yards: row.yards! * 2 } : row)
+    return route.fulfill({ json: passingFixture(rows, id) })
+  })
   await page.route(url => url.pathname.startsWith('/api/teams/'), route => {
     const url = new URL(route.request().url())
     if (url.pathname.endsWith('/splits')) return route.fulfill({ json: teamSplits })

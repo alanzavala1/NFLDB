@@ -22,6 +22,13 @@ export async function fetchReceivingSplits(playerId: string, signal?: AbortSigna
   return requireData(data)
 }
 
+export async function fetchPassingSplits(playerId: string, signal?: AbortSignal) {
+  const { data } = await client.GET('/api/players/{player_id}/passing-splits', {
+    params: { path: { player_id: playerId } }, signal,
+  })
+  return requireData(data)
+}
+
 function requirePlayer(playerId: string | undefined) {
   if (!playerId) throw new Error('Select a player first.')
   return playerId
@@ -47,6 +54,14 @@ export function receivingSplitsQueryOptions(playerId: string | undefined) {
   return queryOptions({
     queryKey: ['player-receiving-splits', playerId] as const,
     queryFn: ({ signal }) => fetchReceivingSplits(requirePlayer(playerId), signal),
+    enabled: !!playerId,
+  })
+}
+
+export function passingSplitsQueryOptions(playerId: string | undefined) {
+  return queryOptions({
+    queryKey: ['player-passing-splits', playerId] as const,
+    queryFn: ({ signal }) => fetchPassingSplits(requirePlayer(playerId), signal),
     enabled: !!playerId,
   })
 }

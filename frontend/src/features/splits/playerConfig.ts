@@ -27,7 +27,7 @@ const PASSING_METRICS: Metric<PlayerSplit>[] = [
   { key: 'int', label: 'INT', group: 'Production', value: r => r.interceptions, fmt: intStr, higherIsBetter: false },
   { key: 'cmpp', label: 'CMP%', group: 'Efficiency', value: r => pct(r.cmp, r.att), fmt: v => v.toFixed(1) + '%', higherIsBetter: true },
   { key: 'ya', label: 'Y/A', group: 'Efficiency', value: r => per(r.yards, r.att), fmt: v => v.toFixed(1), higherIsBetter: true },
-  { key: 'rate', label: 'RATE', group: 'Efficiency', value: r => passerRating(r.cmp ?? 0, r.att ?? 0, r.yards ?? 0, r.td ?? 0, r.interceptions ?? 0), fmt: v => v.toFixed(1), higherIsBetter: true },
+  { key: 'rate', label: 'RATE', group: 'Efficiency', value: r => passerRating(r.cmp, r.att, r.yards, r.td, r.interceptions), fmt: v => v.toFixed(1), higherIsBetter: true },
   { key: 'adot', label: 'aDOT', group: 'Efficiency', value: r => per(r.air_yards, r.att), fmt: v => v.toFixed(1) },
   { key: 'yac', label: 'YAC/cmp', group: 'Efficiency', value: r => per(r.yac, r.cmp), fmt: v => v.toFixed(1) },
   { key: 'epa', label: 'EPA/att', group: 'Advanced', value: r => r.epa, fmt: v => sgn(v, 3), higherIsBetter: true },

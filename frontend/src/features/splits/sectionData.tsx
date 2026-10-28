@@ -5,18 +5,17 @@ import type { SplitModel } from './createSplitModel'
 import { teamLogoUrl } from '../../utils/teams'
 import { aggregatePlayerSplitRows } from './aggregation'
 import { splitValueLabel } from './valueLabels'
-import { includeReceivingSeasons } from './receivingModel'
 
 export function createSectionData(model: SplitModel, expandedKeys: Set<string>) {
   const { gameDims, games, showDefensiveRanks, defensiveRanks, focusData, matchesDimension, mode, isCareer, aggregateValues,
-    season, aggregateRows, playerGames, splitRows, isReceiving } = model
+    season, aggregateRows, playerGames, splitRows, isPrepared, includeSeasons } = model
   function preparedRows(data: SplitRow[], dim: string): SplitRow[] {
-    if (isReceiving && dim === 'season') return data.filter(row => matchesDimension(row, 'overall')
+    if (isPrepared && dim === 'season') return data.filter(row => matchesDimension(row, 'overall')
       && (isCareer || (row as PlayerSplit).season === season))
       .map(row => ({ ...row, split_dim: 'season', split_value: String((row as PlayerSplit).season), sort_order: -(row as PlayerSplit).season }))
     let rows = data.filter(row => matchesDimension(row, dim))
     if (mode === 'players') {
-      if (isCareer) rows = aggregateValues(isReceiving ? includeReceivingSeasons(rows as PlayerSplit[], data as PlayerSplit[]) : rows)
+      if (isCareer) rows = aggregateValues(isPrepared ? includeSeasons(rows as PlayerSplit[], data as PlayerSplit[]) : rows)
       else rows = rows.filter(row => (row as PlayerSplit).season === season)
     }
     return rows
