@@ -18,6 +18,7 @@ from pipeline.receiving_preview import file_sha256
 from pipeline.receiving_splits import read_export_bytes, read_export_csv, validate_export_manifest
 from pipeline.source_results import SeasonalFeed, SourceError
 from pipeline.sources import PLAYS_KEEP_COLUMNS, WEEKLY_REQUIRED_COLUMNS
+from pipeline.capture_paths import capture_directory
 
 
 def load_scoped_feeds(reader, play_seasons: list[int], weekly_seasons: list[int], available: list[int]):
@@ -94,7 +95,7 @@ class ReceivingCoreInputs:
         self.manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
         data = read_export_bytes(self.directory, self.manifest, "receiving-run.json", season=0)
         self.receiving_manifest = json.loads(data)
-        self.source = Path(self.manifest["source_directory"])
+        self.source = capture_directory(self.directory, self.manifest["source_directory"])
         years = self.manifest.get("seasons")
         if (not isinstance(years, list) or not years
                 or any(type(year) is not int or year < 1999 for year in years)

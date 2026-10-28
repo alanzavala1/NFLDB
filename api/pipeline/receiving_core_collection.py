@@ -7,6 +7,7 @@ from pipeline.receiving_core_inputs import ReceivingCoreInputs, load_scoped_feed
 from pipeline.receiving_preview import file_sha256
 from pipeline.receiving_splits import validate_export_manifest
 from pipeline.source_results import SourceError
+from pipeline.capture_paths import capture_directory
 
 
 def _policy(inputs: ReceivingCoreInputs) -> tuple:
@@ -55,9 +56,7 @@ class ReceivingCoreCollection:
             raise SourceError("receiving_core_inputs", None, "unsupported collection index")
         bundles = []
         for entry in self.manifest["bundles"]:
-            path = Path(entry["directory"])
-            if not path.is_absolute():
-                raise SourceError("receiving_core_inputs", None, "collection bundle paths must be absolute")
+            path = capture_directory(self.directory, entry["directory"])
             bundle = ReceivingCoreInputs(path)
             if bundle.manifest_sha256 != entry["manifest_sha256"] or bundle.seasons != entry["seasons"]:
                 raise SourceError("receiving_core_inputs", None, "indexed bundle revision/seasons changed")
@@ -71,7 +70,7 @@ class ReceivingCoreCollection:
         if file_sha256(self.directory / "run.json") != self.manifest_sha256:
             raise SourceError("receiving_core_inputs", None, "collection index changed")
         for entry in self.manifest["bundles"]:
-            if file_sha256(Path(entry["directory"]) / "run.json") != entry["manifest_sha256"]:
+            if file_sha256(capture_directory(self.directory, entry["directory"]) / "run.json") != entry["manifest_sha256"]:
                 raise SourceError("receiving_core_inputs", None, "indexed bundle revision changed")
         return load_scoped_feeds(lambda year: self.owners[year].feeds([year]),
                                  play_seasons, weekly_seasons, self.seasons)

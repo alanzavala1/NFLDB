@@ -88,8 +88,9 @@ Captured play-by-play and weekly data do not prove today's upstream files were
 consumed, so their marks remain unchanged. Fresh capture/version binding is
 required before claiming an automated current-season refresh.
 
-The local protocol is implemented. Cloud migration still needs portable capture
-storage/restore, fresh core-version evidence, immutable GCS prefixes, a
+The local protocol and [portable capture packing/restore](CAPTURE_ARCHIVES.md)
+are implemented. Cloud migration still needs capture upload/download wiring,
+fresh core-version evidence, immutable GCS prefixes, a
 generation-matched current pointer and deployment consuming that bundle. The
 scheduled workflow still has its legacy ingest/upload path; do not describe it
 as migrated or run it as a native release workflow yet.

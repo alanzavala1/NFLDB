@@ -1,0 +1,5 @@
+# Native captures bind exact calculator/environment bytes. Preserve the lock's
+# existing CRLF representation on Linux too; calculator scripts use LF.
+api/r/renv.lock text eol=crlf
+api/r/*.R text eol=lf
+api/experiments/*.R text eol=lf

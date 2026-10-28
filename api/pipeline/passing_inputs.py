@@ -6,6 +6,7 @@ from pathlib import Path
 from pipeline.passing_exports import load_passing_season, passing_policy
 from pipeline.receiving_preview import file_sha256
 from pipeline.source_results import SourceError
+from pipeline.capture_paths import capture_directory
 
 
 class PassingInputs:
@@ -20,7 +21,7 @@ class PassingInputs:
             raise SourceError("passing_inputs", None, "unsupported passing collection")
         self.exports = {}
         for record in records:
-            year, path, digest = record.get("season"), Path(record["directory"]), record.get("manifest_sha256")
+            year, path, digest = record.get("season"), capture_directory(self.directory, record["directory"]), record.get("manifest_sha256")
             if (type(year) is not int or year < 1999 or year in self.exports or not path.is_absolute()
                     or not isinstance(digest, str) or len(digest) != 64 or file_sha256(path / "run.json") != digest):
                 raise SourceError("passing_inputs", year, "invalid/changed indexed passing export")
