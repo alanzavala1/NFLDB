@@ -69,10 +69,32 @@ This proves published input identity, not completeness of the NFL schedule or
 every upstream statistic. Existing game-coverage, statistical and API validation
 remain required. No availability rules or counting definitions change.
 
-A fresh core bundle still needs a matching passing export and a new collection
-that reuses the unaffected historical seasons. That full candidate build and
-cloud capture transport/publication are separate steps. The scheduled workflow
-still uses its legacy path; it has not been migrated or deployed.
+Create the matching passing export, then combine the refreshed seasons with
+unchanged history. From `api/`, using absent output paths:
+
+```powershell
+uv run --locked python -m jobs.passing_preview `
+  --core-inputs data/fresh-2026/core --season 2026 `
+  --exports data/fresh-2026-passing --rscript $rscript --r-library $library
+
+uv run --locked python -m jobs.refresh_inputs `
+  --core-inputs PATH_TO_PREVIOUS_CORE_COLLECTION `
+  --passing-inputs PATH_TO_PREVIOUS_PASSING_COLLECTION `
+  --fresh-core data/fresh-2026/core --fresh-passing data/fresh-2026-passing `
+  --output data/new-input-pair
+```
+
+Passing export defaults to all views. Composition validates every retained and
+refreshed season, preserves original files, and writes `inputs.json` only after
+both new collections pass. Missing/mismatched years and partial replacement of a
+multi-season bundle are rejected. Adding a new season preserves existing ones.
+
+Pass `data/new-input-pair/core` and `data/new-input-pair/passing` to
+`jobs.refresh prepare` as described in [the release workflow](OFFLINE_RELEASES.md).
+Historical exports are reused; Python/SQL analytics are rebuilt against the new
+collection revisions. Database and release validation remain separate from
+input composition. Cloud capture transport/publication is still a later step;
+the scheduled workflow has not been migrated or deployed.
 
 ## Local verification (October 28, 2026)
 

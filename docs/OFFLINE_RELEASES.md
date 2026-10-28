@@ -115,3 +115,34 @@ The release, refresh and related validation suites have 148 distinct passing
 checks, including failure cases for copying, validation, corruption, concurrent
 publication, policy changes and upstream changes during preparation. Local proof
 logs and databases are ignored under `api/data/`.
+
+## Fresh-season refresh proof (October 28, 2026)
+
+The ordinary `jobs.refresh prepare` command completed against a separate copy of
+the prepared database, using new 2026 core/receiving and passing captures with
+the original 1999–2025 exports. The candidate gate and final release gate both
+passed all 28 seasons and 102 HTTP checks. Relevant statistical tolerances and
+availability rules were unchanged.
+
+Every historical passing/receiving split row for 1999–2025 is exactly identical
+to the source database, checked with bidirectional `EXCEPT ALL`. Updated 2026
+split-row counts are:
+
+| Category | Previous | Refreshed |
+| --- | ---: | ---: |
+| Passing | 1,793 | 1,831 |
+| Receiving | 4,611 | 4,706 |
+| Rushing | 2,991 | 3,028 |
+
+The completed bundle contains a byte-identical copy of the candidate and 12
+acknowledged 2026 source versions. Its three native RDS marks exactly match the
+hash-verified capture proof; no legacy parquet keys were acknowledged. The
+matching input archive contains 4,741 files; every payload hash and its collection
+revisions were verified, including preservation of the new provenance files.
+
+All five protected working/proof databases, the old input manifests, previous
+watermarks and local demonstration pointer remain unchanged. The 85 targeted
+input-composition, provenance, refresh, release and candidate controls passed.
+Logs/artifacts remain ignored under `api/data/`. This proves the complete local
+refresh path; cloud transport, atomic cloud selection and deployment remain
+separate work. No release was selected or deployed by this trial.
