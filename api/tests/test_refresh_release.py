@@ -11,14 +11,17 @@ from pipeline.source_results import SourceOutcome
 from pipeline.vendor_sources import WATCHED_VENDOR_SOURCES
 
 
-def test_isolated_prepare_full_rebuild_and_stable_vendor_marks_are_bundled_together(tmp_path, monkeypatch):
+@pytest.mark.parametrize('verified', [False, True])
+def test_isolated_prepare_full_rebuild_and_stable_vendor_marks_are_bundled_together(tmp_path, monkeypatch, verified):
+    core_versions = dict.fromkeys(('pbp_rds','weekly_rds','playstats'),'today')
+    monkeypatch.setattr(refresh_release, 'capture_versions', lambda *args: {2026: core_versions if verified else {}})
     source, candidate, output = tmp_path/'source.duckdb', tmp_path/'candidate.duckdb', tmp_path/'release'
     source.write_bytes(b'unchanged published file')
     previous = {'pbp:2026':'old-capture', 'weekly:2026':'old-capture', 'snaps:2026':'old', 'pfr_pass:2026':'old'}
     observed = []
     def observe(year):
         observed.append(year)
-        return {'pbp':'today', 'weekly':'today', 'snaps':'today', 'pfr_pass':'first' if len(observed)==1 else 'second'}
+        return {**core_versions,'pbp':'today', 'weekly':'today', 'snaps':'today', 'pfr_pass':'first' if len(observed)==1 else 'second'}
     def prepare(given_source, given_candidate, seasons, **options):
         assert given_source == source and given_candidate == candidate and seasons == [2026]
         assert options['rebuild_all_analytics'] is True
@@ -40,7 +43,8 @@ def test_isolated_prepare_full_rebuild_and_stable_vendor_marks_are_bundled_toget
         passing_inputs=tmp_path/'passing',previous_watermarks=previous,observe=observe,log=lambda _:None)
     assert result['kind'] == 'native_nfl_release' and observed == [2026,2026]
     marks = json.loads((output/'watermarks.json').read_bytes())
-    assert marks == {**previous,'snaps:2026':'today'}
+    expected = {f'{key}:2026':value for key,value in core_versions.items()} if verified else {}
+    assert marks == {**previous,'snaps:2026':'today',**expected}
     assert previous['snaps:2026'] == 'old' and source.read_bytes() == b'unchanged published file'
     assert not (tmp_path/'current.json').exists()
 
@@ -73,7 +77,7 @@ def test_prepare_cli_observes_remote_versions_fresh_each_time(tmp_path, monkeypa
         result = refresh._release_assets('pbp')
         observed.append(result['pbp'])
         return result
-    monkeypatch.setattr(refresh, 'remote_watermarks', remote)
+    monkeypatch.setattr(refresh, 'native_remote_watermarks', remote)
     def prepare(*args, **options):
         assert options['previous_watermarks'] == {'pbp:2026':'old'}
         options['observe'](2026)

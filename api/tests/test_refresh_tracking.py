@@ -31,3 +31,14 @@ def test_live_core_requires_a_loaded_outcome_and_matching_season():
     outcomes = [SourceOutcome('plays',2026,'loaded'),SourceOutcome('weekly_player_stats',2025,'loaded')]
     stamps = {'pbp':'new','weekly':'new'}
     assert acknowledged_watermarks({},2026,stamps,stamps,outcomes) == {'pbp:2026':'new'}
+
+
+def test_native_proof_versions_acknowledge_only_stable_loaded_sources():
+    outcomes = [SourceOutcome('plays',2026,'loaded'),SourceOutcome('weekly_player_stats',2026,'loaded')]
+    stamps = {'pbp_rds':'pbp','weekly_rds':'weekly','playstats':'credits','pbp':'parquet'}
+    proof = {key:stamps[key] for key in ('pbp_rds','weekly_rds','playstats')}
+    after = {**stamps,'playstats':'republished'}
+    assert acknowledged_watermarks({},2026,stamps,after,outcomes,captured_core=True,core_versions=proof) == {
+        'pbp_rds:2026':'pbp','weekly_rds:2026':'weekly'}
+    assert acknowledged_watermarks({},2026,stamps,stamps,outcomes,captured_core=True) == {}
+    assert acknowledged_watermarks({},2025,stamps,stamps,outcomes,core_versions=proof) == {}

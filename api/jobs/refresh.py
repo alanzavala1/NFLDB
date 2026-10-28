@@ -129,14 +129,35 @@ def remote_watermarks(season: int) -> dict[str, str | None]:
     error; for the rest it simply means there is nothing of theirs to be stale
     against.
     """
+    return _watched_watermarks(season, WATCHED_ASSETS)
+
+
+def _watched_watermarks(season, assets):
     out: dict[str, str | None] = {}
-    for key, tag, name in WATCHED_ASSETS:
+    for key, tag, name in assets:
         spec = WATCHED_VENDOR_SOURCES.get(key)
         if spec and season < spec.first_season:
             out[key] = None
             continue
         out[key] = _release_assets(tag).get(name.format(season=season))
     return out
+
+
+def native_remote_watermarks(season):
+    from pipeline.upstream_assets import observe_core_assets, asset_version
+    out = _watched_watermarks(season, WATCHED_ASSETS[2:])
+    out.update({key: asset_version(asset) for key, asset in observe_core_assets(season).items()})
+    return out
+
+
+def cmd_native_check(watermarks_path):
+    season = _resolve_season()
+    _release_assets.cache_clear()
+    moved = _moved(read_watermarks(watermarks_path), season, native_remote_watermarks(season))
+    changed = bool(moved) or os.environ.get('REFRESH_FORCE') == '1'
+    _log(f'Native season {season}: ' + (', '.join(moved) if moved else 'all watched assets unchanged'))
+    _emit(changed='true' if changed else 'false', season=season)
+    return 0
 
 
 def read_watermarks(path: str) -> dict:
@@ -284,16 +305,18 @@ def main(argv: list[str]) -> int:
         from pipeline.refresh_release import prepare_refresh_release
         def observe(year):
             _release_assets.cache_clear()  # Re-read remote versions after the build.
-            return remote_watermarks(year)
+            return native_remote_watermarks(year)
         prepare_refresh_release(args.source, args.candidate, args.release, args.seasons,
             core_inputs=args.core_inputs, passing_inputs=args.passing_inputs,
             previous_watermarks=read_watermarks(str(args.watermarks)), observe=observe, log=_log)
         return 0
-    if len(argv) < 2 or argv[1] not in ("check", "ingest"):
+    if len(argv) < 2 or argv[1] not in ("check", "native-check", "ingest"):
         print(__doc__)
-        print("usage: python -m jobs.refresh {check|ingest|prepare} [watermarks.json]; prepare --help for native releases")
+        print("usage: python -m jobs.refresh {check|native-check|ingest|prepare} [watermarks.json]; prepare --help for native releases")
         return 2
     path = argv[2] if len(argv) > 2 else "watermarks.json"
+    if argv[1] == 'native-check':
+        return cmd_native_check(path)
     return cmd_check(path) if argv[1] == "check" else cmd_ingest(path)
 
 

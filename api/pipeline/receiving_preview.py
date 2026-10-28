@@ -16,7 +16,7 @@ def file_sha256(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def _run_export(rscript: Path, library: Path, output: Path, seasons: list[int], run_id: str) -> None:
+def _run_export(rscript: Path, library: Path, output: Path, seasons: list[int], run_id: str, *, before_export=None) -> None:
     from pipeline.receiving_inputs import prepare_receiving_inputs
     api = Path(__file__).resolve().parents[1]
     producer = output / "producer.R"
@@ -30,6 +30,8 @@ def _run_export(rscript: Path, library: Path, output: Path, seasons: list[int], 
     env.update(R_LIBS_USER=str(library), NFL_RECEIVING_LIBRARY=str(library),
                LC_ALL="C", NFL_RECEIVING_RUN_ID=run_id)
     _check_environment(rscript, library, output, env)
+    if before_export is not None:
+        before_export()
     prepare_receiving_inputs(output, seasons)
     command = [str(rscript), "--vanilla", str(producer),
                str(output), *(str(year) for year in seasons)]

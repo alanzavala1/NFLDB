@@ -84,13 +84,16 @@ supported empty optional vendor feeds. Failed, missing, unsupported, unobserved
 or mid-build changed sources retain their marks. Packaging an old candidate
 carries only explicitly supplied, previously acknowledged marks.
 
-Captured play-by-play and weekly data do not prove today's upstream files were
-consumed, so their marks remain unchanged. Fresh capture/version binding is
-required before claiming an automated current-season refresh.
+Old captured play-by-play and weekly data do not prove today's upstream files
+were consumed. [Native source-version proofs](UPSTREAM_PROVENANCE.md) now bind
+RDS play-by-play, weekly stats and detailed credits to verified consumed inputs.
+Only matching proofs and loaded outcomes can acknowledge those native keys;
+legacy parquet keys are never acknowledged by RDS evidence.
 
 The local protocol and [portable capture packing/restore](CAPTURE_ARCHIVES.md)
-are implemented. Cloud migration still needs capture upload/download wiring,
-fresh core-version evidence, immutable GCS prefixes, a
+and native source-version proofs are implemented. Cloud migration still needs
+fresh capture/passing/collection orchestration, capture upload/download wiring,
+immutable GCS prefixes, a
 generation-matched current pointer and deployment consuming that bundle. The
 scheduled workflow still has its legacy ingest/upload path; do not describe it
 as migrated or run it as a native release workflow yet.

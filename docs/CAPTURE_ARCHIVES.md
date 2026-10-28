@@ -53,8 +53,10 @@ project's controlled artifact storage.
 
 This makes existing captures reusable by cloud workers. It does not fetch new
 upstream files, rerun calculators, record new watermarks, publish a database or
-change the scheduled workflow. Fresh capture/version binding and cloud release
-selection remain separate steps in [the release workflow](OFFLINE_RELEASES.md).
+change the scheduled workflow. [Source-version proof](UPSTREAM_PROVENANCE.md)
+is available for new native core captures; archive packing retains its declared
+files. Fresh complete-candidate orchestration and cloud release selection remain
+separate steps in [the release workflow](OFFLINE_RELEASES.md).
 
 ## Checkout consistency
 
