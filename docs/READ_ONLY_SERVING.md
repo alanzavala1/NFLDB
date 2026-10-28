@@ -45,8 +45,9 @@ is migrated; it does not make that path ready to publish native snapshots.
 
 ## Current checkpoint
 
-This completes the serving boundary. The official snapshot publication guard
-remains unchanged. Remaining work is to connect native input capture/reuse,
+This completes the serving boundary. At this checkpoint the publication guard
+remained unchanged. The subsequent [offline release work](OFFLINE_RELEASES.md)
+replaces that blanket block with native source checks. Remaining work connects input capture/reuse,
 candidate validation, publication and acknowledged watermarks in the scheduled
 refresh/deployment flow. The existing workflow must not be described as migrated
 or a native snapshot as published yet.

@@ -148,11 +148,15 @@ def validate_snapshot(conn, *, receiving_inputs=None, passing_inputs=None, log=l
         reconciliation[season] = checks
         log(f'Snapshot[{season}]: ' + ', '.join(f'{key}={value[0]}/{value[1]}' for key, value in checks.items()))
     _require(not failures, '\n'.join(failures))
-    # Keep publication blocked while the complete real-history proof and the
-    # remaining legacy receiving consumers are audited. Inputs enable diagnosis,
-    # not an opt-out from this release boundary.
-    _require(not official, guard)
+    # The temporary API/UI audit is complete. Official releases still need
+    # BOTH source-bound paths; a receiving-only integration cannot be promoted.
+    _require(not official or official_passing,
+             'Official receiving snapshots require native passing preparation before publication')
     return {'played_seasons': seasons, 'coverage': coverage, 'reconciliation': reconciliation,
+            'official_receiving': official, 'official_passing': official_passing,
+            'publication_ready': official and official_passing,
+            'source_revisions': {'core': receiving_inputs.revision() if official else None,
+                                 'passing': passing_inputs.revision() if official_passing else None},
             'allowed_empty': ['player splits below admission thresholds',
                               'career comparables below volume/pool thresholds',
                               'optional vendor feeds with recorded gaps']}

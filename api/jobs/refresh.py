@@ -35,6 +35,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+import argparse
+from pathlib import Path
+from functools import cache
 
 import httpx
 import pandas as pd
@@ -98,7 +101,8 @@ def upstream_latest_season() -> int:
     return int(games["season"].max())
 
 
-def _release_assets(tag: str, _cache: dict[str, dict[str, str]] = {}) -> dict[str, str]:
+@cache
+def _release_assets(tag: str) -> dict[str, str]:
     """`{asset name: updated_at}` for one nflverse release, fetched once per run.
 
     Several watched assets share a release, so the cache turns ten lookups into
@@ -106,8 +110,6 @@ def _release_assets(tag: str, _cache: dict[str, dict[str, str]] = {}) -> dict[st
     unauthenticated calls are rate-limited per IP, and Actions runners share
     theirs with everyone else on the same host.
     """
-    if tag in _cache:
-        return _cache[tag]
     headers = {"Accept": "application/vnd.github+json"}
     token = os.environ.get("GITHUB_TOKEN")
     if token:
@@ -115,7 +117,6 @@ def _release_assets(tag: str, _cache: dict[str, dict[str, str]] = {}) -> dict[st
     r = httpx.get(RELEASE_API.format(tag=tag), headers=headers, timeout=30, follow_redirects=True)
     r.raise_for_status()
     assets = {a["name"]: a.get("updated_at") for a in r.json().get("assets", []) if a.get("name")}
-    _cache[tag] = assets
     return assets
 
 
@@ -273,9 +274,24 @@ def cmd_ingest(watermarks_path: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    if len(argv) >= 2 and argv[1] == 'prepare':
+        parser = argparse.ArgumentParser(description='Prepare a native release without editing the published database or watermarks')
+        parser.add_argument('watermarks', type=Path)
+        for name in ('source', 'candidate', 'release', 'core-inputs', 'passing-inputs'):
+            parser.add_argument('--'+name, type=Path, required=True)
+        parser.add_argument('--seasons', type=int, nargs='+', required=True)
+        args = parser.parse_args(argv[2:])
+        from pipeline.refresh_release import prepare_refresh_release
+        def observe(year):
+            _release_assets.cache_clear()  # Re-read remote versions after the build.
+            return remote_watermarks(year)
+        prepare_refresh_release(args.source, args.candidate, args.release, args.seasons,
+            core_inputs=args.core_inputs, passing_inputs=args.passing_inputs,
+            previous_watermarks=read_watermarks(str(args.watermarks)), observe=observe, log=_log)
+        return 0
     if len(argv) < 2 or argv[1] not in ("check", "ingest"):
         print(__doc__)
-        print("usage: python -m jobs.refresh {check|ingest} [watermarks.json]")
+        print("usage: python -m jobs.refresh {check|ingest|prepare} [watermarks.json]; prepare --help for native releases")
         return 2
     path = argv[2] if len(argv) > 2 else "watermarks.json"
     return cmd_check(path) if argv[1] == "check" else cmd_ingest(path)
