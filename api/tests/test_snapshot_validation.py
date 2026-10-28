@@ -156,7 +156,7 @@ def test_real_validation_command_reads_only_and_checks_http_responses(prepared):
     assert not Path(f'{path}.wal').exists()
 
 
-def test_api_check_fails_when_request_tries_to_rebuild(prepared, monkeypatch):
+def test_api_check_rejects_missing_prepared_rows_without_rebuilding(prepared, monkeypatch):
     import database
     from pipeline.api_checks import check_api
     conn, path = prepared
@@ -165,7 +165,7 @@ def test_api_check_fails_when_request_tries_to_rebuild(prepared, monkeypatch):
     readonly = duckdb.connect(str(path), read_only=True)
     monkeypatch.setattr(database, '_conn', readonly)
     try:
-        with pytest.raises(Exception, match='read-only'):
+        with pytest.raises(Exception, match='unexpectedly empty response'):
             asyncio.run(check_api(readonly, [2024]))
     finally:
         readonly.close()

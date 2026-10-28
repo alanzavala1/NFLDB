@@ -472,20 +472,3 @@ def read(game_id: str) -> list[dict]:
         if not is_missing_data_error(_data_error):
             raise
         return []
-
-
-def read_or_materialize(game_id: str) -> list[dict]:
-    rows = read(game_id)
-    if rows:
-        return rows
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(game_id)
-        if rows:
-            return rows
-        if materialize() > 0:
-            return read(game_id)
-        return []
-    finally:
-        write_lock.release()

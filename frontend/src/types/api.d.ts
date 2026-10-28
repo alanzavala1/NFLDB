@@ -50,7 +50,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Load Season */
+        /**
+         * Load Season
+         * @deprecated
+         */
         post: operations["load_season_api_seasons__year__load_post"];
         delete?: never;
         options?: never;
@@ -65,7 +68,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Season Progress */
+        /**
+         * Season Progress
+         * @deprecated
+         */
         get: operations["season_progress_api_seasons__year__progress_get"];
         put?: never;
         post?: never;
@@ -356,7 +362,7 @@ export interface paths {
         /**
          * Get Team Splits
          * @description Team offense/defense rate profile conditioned on each situational
-         *     dimension. Reads the materialized table; self-heals on a cold table.
+         *     dimension. Reads the offline-prepared table without rebuilding.
          */
         get: operations["get_team_splits_api_teams__team__splits_get"];
         put?: never;
@@ -403,8 +409,7 @@ export interface paths {
          *     on every request. It now runs once during ingest and writes to the
          *     `team_season_analytics` table; this endpoint is a simple keyed SELECT.
          *
-         *     If the row is missing (fresh DB, never-ingested season), the builder
-         *     lazily materializes on first hit so the system self-heals.
+         *     Missing rows stay unavailable until the next offline preparation.
          */
         get: operations["get_team_analytics_api_team_analytics_get"];
         put?: never;
@@ -2683,12 +2688,8 @@ export interface operations {
     };
     load_season_api_seasons__year__load_post: {
         parameters: {
-            query?: {
-                force?: boolean;
-            };
-            header?: {
-                "x-admin-token"?: string | null;
-            };
+            query?: never;
+            header?: never;
             path: {
                 year: number;
             };
@@ -2704,6 +2705,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LoadSeasonResponse"];
                 };
+            };
+            /** @description Ingest moved to offline jobs */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2735,6 +2743,13 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Ingest progress is available in offline job logs */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

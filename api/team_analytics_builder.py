@@ -6,8 +6,7 @@ Design:
   - Schema mirrors what the CTE emits, plus a `season` column for filtering.
   - The original CTE remains the single source of truth — `_analytics_sql()`
     builds it for one season; `materialize()` writes the result to the table.
-  - Endpoint hits the table; if a row is missing it lazily materializes
-    so the system self-heals.
+  - Endpoints only read the table; missing rows await offline preparation.
   - The ingest pipeline calls `materialize()` after a season finishes so
     freshly-loaded data is query-fast from the first request.
 """
@@ -371,26 +370,3 @@ def read(season: int) -> list[dict]:
         if not is_missing_data_error(_data_error):
             raise
         return []
-
-
-def read_or_materialize(season: int) -> list[dict]:
-    """Endpoint entry point: read from table; lazily materialize if empty.
-
-    This is what makes the system self-healing: if the table is missing
-    (fresh DB, or migrated without ingest), the first request computes
-    and persists for subsequent ones.
-    """
-    rows = read(season)
-    if rows:
-        return rows
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(season)  # a concurrent request may have built it
-        if rows:
-            return rows
-        if materialize(season) > 0:
-            return read(season)
-        return []
-    finally:
-        write_lock.release()

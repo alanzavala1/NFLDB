@@ -2,64 +2,45 @@
 production image) serves the built frontend so the whole app is one service."""
 import os
 from contextlib import asynccontextmanager
+import duckdb
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
+
+def _require_read_only():
+    if os.environ.get('NFL_DB_READ_ONLY') == '0':
+        raise RuntimeError('Serving requires a read-only snapshot; use offline jobs for writes')
+
+
+# Check before config can inspect the database during import.
+_require_read_only()
+
 from config import CURRENT_SEASON
-from database import ensure_indexes, get_connection
+from data_errors import is_missing_data_error
 from routers import assistant, leaders, live, meta, players, power_rankings, schedule, teams
-
-
-def _ensure_player_awards() -> None:
-    """Build the player_awards table on startup if it's missing or empty.
-
-    The data is a static seed (see awards_seed.py) — refreshing it doesn't
-    require network calls, so we can do it transparently on every cold
-    boot. Skips if the table already has rows so subsequent restarts are
-    instant.
-    """
-    try:
-        conn = get_connection()
-        n = conn.execute(
-            "SELECT COUNT(*) FROM player_awards"
-        ).fetchone()[0] if any(
-            r[0] == 'player_awards' for r in conn.execute("SHOW TABLES").fetchall()
-        ) else 0
-        if n == 0:
-            from pipeline.awards import load_player_awards
-            load_player_awards(conn)
-    except Exception as e:
-        print(f"awards seed load failed (non-fatal): {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Point-lookup indexes on the large tables hit per request (idempotent;
-    # persisted by DuckDB so this is a no-op after the first build).
-    ensure_indexes()
-
-    # Static seed data — populate on first boot if not already loaded
-    _ensure_player_awards()
-
-    # NOTE: startup deliberately does NOT ingest. It used to auto-queue any
-    # recent season missing from the DB, which meant a cold start downloaded a
-    # full season of play-by-play and re-materialized every derived table —
-    # inside the container serving traffic, holding the write lock against
-    # every reader. On 2026-09-01 that took the site down: the season rolled
-    # over before nflverse had published any 2026 plays, so each cold boot
-    # crash-looped. Ingest now runs offline and ships as a rebuilt database.
-    #
-    # The two calls above do still write, so this isn't a pure reader — but
-    # both are local, idempotent and bounded (an index build that DuckDB
-    # persists, and a static seed). Nothing here touches the network, and
-    # nothing here scales with how much football has been played.
+    # Prerequisites belong to the offline worker. Startup must not repair an
+    # incomplete snapshot or accept the worker's explicit writable mode.
+    _require_read_only()
     yield
 
 
 app = FastAPI(title="NFL Platform", lifespan=lifespan)
+
+
+@app.exception_handler(duckdb.CatalogException)
+@app.exception_handler(duckdb.BinderException)
+async def missing_snapshot_data(request: Request, error: Exception):
+    if not is_missing_data_error(error):
+        raise error
+    return JSONResponse(status_code=503, content={
+        'detail': 'Published data is unavailable for this view. Please try again later.'})
 
 
 @app.middleware("http")

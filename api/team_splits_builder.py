@@ -1,7 +1,7 @@
 """Materialized team splits: a team's offense (and defense) rate profile,
 conditioned on one situational dimension.
 
-Same long-format / materialize / self-heal pattern as player splits, built on
+Same long-format offline preparation and read pattern as player splits, built on
 the shared splits_core scaffolding. `side` ('offense' | 'defense') replaces the
 player table's `category`; metrics are team rate stats (EPA/play, success%,
 pass rate, yards/play, explosive%) over scrimmage plays.
@@ -175,36 +175,3 @@ def read(team: str, season: int) -> list[dict]:
         if not is_missing_data_error(_data_error):
             raise
         return []
-
-
-def _season_built(season: int) -> bool:
-    try:
-        return query_to_dict(
-            "SELECT 1 FROM team_splits WHERE season = ? LIMIT 1", [int(season)]
-        ) != []
-    except Exception as _data_error:
-        if not is_missing_data_error(_data_error):
-            raise
-        return False
-
-
-def read_or_materialize(team: str, season: int) -> list[dict]:
-    rows = read(team, season)
-    if rows:
-        return rows
-    # A built season with no rows for this team means the team didn't exist
-    # that year (or a bogus abbreviation) — rebuilding wouldn't change that.
-    if _season_built(season):
-        return []
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(team, season)
-        if rows:
-            return rows
-        if _season_built(season):
-            return []
-        materialize(season)
-    finally:
-        write_lock.release()
-    return read(team, season)

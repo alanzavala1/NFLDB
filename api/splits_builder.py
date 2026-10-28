@@ -7,8 +7,7 @@ Design (mirrors team_analytics_builder / comparables_builder):
   - A split groups a classified play population. Missing context can exclude
     production, so whole receiving references and coverage are stored separately.
   - `materialize(season)` recomputes every player's splits for one season
-    (called from ingest). The endpoint reads per player; if a player has no
-    rows it lazily materializes their seasons, so the system self-heals.
+    (called from offline ingest). Endpoints only read prepared player rows.
 
 Three categories share one table via the `category` column:
   - passing   — native passer credits with captured passing inputs; original
@@ -279,7 +278,7 @@ def materialize(season: int, *, receiving_inputs=None, passing_inputs=None) -> i
     """Compute all-category splits for one season and persist. Returns rows written.
 
     Holds the write lock: called from the ingest worker (which already owns it)
-    and from lazy request-thread materialization (which must wait its turn).
+    while holding the offline writer lock.
     Captured inputs select official receiving with atomic coverage/reference
     writes. Input-free compatibility builds cannot overwrite an official snapshot.
     """
@@ -362,50 +361,3 @@ def read(player_id: str) -> list[dict]:
         if not is_missing_data_error(_data_error):
             raise
         return []
-
-
-def read_or_materialize(player_id: str) -> list[dict]:
-    """Endpoint entry point: read; if the player has no rows, lazily build any
-    of their seasons that were never materialized, then re-read.
-
-    Two guards keep this cheap and safe:
-      - Only seasons absent from player_splits are built. A season that's
-        already materialized but has no rows for this player means the player
-        didn't meet the volume floor — rebuilding wouldn't change that.
-      - Building takes the write lock (bounded wait, then give up and return
-        empty rather than hang the request behind a long ingest) and re-reads
-        after acquiring, since a concurrent request may have built the same
-        seasons while we waited.
-    """
-    rows = read(player_id)
-    if rows:
-        return rows
-    try:
-        seasons = {r["season"] for r in query_to_dict("""
-            SELECT DISTINCT season FROM plays
-            WHERE passer_player_id = ? OR rusher_player_id = ? OR receiver_player_id = ?
-        """, [player_id, player_id, player_id])}
-    except Exception as _data_error:
-        if not is_missing_data_error(_data_error):
-            raise
-        seasons = set()
-    if not seasons:
-        return []
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(player_id)
-        if rows:
-            return rows
-        try:
-            built = {r["season"] for r in query_to_dict(
-                "SELECT DISTINCT season FROM player_splits")}
-        except Exception as _data_error:
-            if not is_missing_data_error(_data_error):
-                raise
-            built = set()
-        for s in sorted(seasons - built, reverse=True):
-            materialize(s)
-    finally:
-        write_lock.release()
-    return read(player_id)

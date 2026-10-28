@@ -86,11 +86,11 @@ def test_shared_player_game_fragment_sums_duplicates_and_null_stats(ratings_data
     assert rows == [{'player_id': '00-BUF-QB1', 'game_id': GAME_ID, 'pass_yards': 265, 'sacks': 1}]
 
 
-def test_missing_ratings_table_still_uses_real_builder(client, ratings_data):
+def test_missing_ratings_table_never_rebuilds_during_a_request(client, ratings_data):
     ratings_data.execute('DROP TABLE player_game_ratings')
     rows = game_ratings.get_game_ratings(GAME_ID)
-    assert rows and any(row['player_id'] == '00-BUF-QB1' for row in rows)
-    assert ratings_data.execute('SELECT COUNT(*) FROM player_game_ratings').fetchone()[0] > 0
+    assert rows == []
+    assert 'player_game_ratings' not in {row[0] for row in ratings_data.execute('SHOW TABLES').fetchall()}
     response = client.get(f'/api/games/{GAME_ID}/ratings')
     assert response.status_code == 200 and response.json() == _http_rows(rows)
 
@@ -99,7 +99,7 @@ def test_missing_ratings_table_still_uses_real_builder(client, ratings_data):
 def test_missing_game_returns_domain_none_and_exact_http_404(client, ratings_data, monkeypatch, game_id):
     def unexpected_builder(*args):
         pytest.fail('missing game reached the ratings builder')
-    monkeypatch.setattr(game_ratings_builder, 'read_or_materialize', unexpected_builder)
+    monkeypatch.setattr(game_ratings_builder, 'read', unexpected_builder)
     assert game_ratings.get_game_ratings(game_id) is None
     response = client.get(f'/api/games/{game_id}/ratings')
     assert response.status_code == 404
@@ -115,7 +115,7 @@ def test_empty_builder_result_is_http_success_and_skips_enrichment(client, ratin
     def schedule_only(sql, params):
         assert 'SELECT game_id FROM schedules' in sql
         return original(sql, params)
-    monkeypatch.setattr(game_ratings_builder, 'read_or_materialize', empty)
+    monkeypatch.setattr(game_ratings_builder, 'read', empty)
     monkeypatch.setattr(game_ratings, 'query_to_dict', schedule_only)
     assert game_ratings.get_game_ratings(GAME_ID) == []
     response = client.get(f'/api/games/{GAME_ID}/ratings')
@@ -144,7 +144,7 @@ def test_query_errors_propagate_instead_of_becoming_missing_ratings(client, rati
 def test_unexpected_builder_error_propagates(client, ratings_data, monkeypatch):
     def fail(*args):
         raise RuntimeError('rating builder failed')
-    monkeypatch.setattr(game_ratings_builder, 'read_or_materialize', fail)
+    monkeypatch.setattr(game_ratings_builder, 'read', fail)
     with pytest.raises(RuntimeError, match='rating builder failed'):
         game_ratings.get_game_ratings(GAME_ID)
     with pytest.raises(RuntimeError, match='rating builder failed'):

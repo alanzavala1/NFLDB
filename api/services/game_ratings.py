@@ -12,7 +12,7 @@ def get_game_ratings(game_id: str) -> list[dict] | None:
     if not game:
         return None
 
-    rows = game_ratings_builder.read_or_materialize(game_id)
+    rows = game_ratings_builder.read(game_id)
     if not rows:
         return []
 

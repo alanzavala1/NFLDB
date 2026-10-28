@@ -5,11 +5,8 @@ that needs to run a query takes a fresh cursor from that Connection via
 `get_cursor()`. Cursors are independent execution contexts (DuckDB's MVCC
 isolates them), so concurrent reads don't serialize on a Python lock.
 
-The ingest pipeline uses the Connection directly via `get_connection()` to
-issue DDL/DML. Writes come from two places — the background ingest worker
-(see ingest_queue) and lazy materialization triggered by request threads
-(the *_builder modules) — so "one writer at a time" is enforced by
-`write_lock`, not by thread topology. Every write path must hold it.
+Serving opens the snapshot read-only. Offline jobs explicitly opt into a
+writable connection and hold `write_lock` while preparing a new candidate.
 """
 import os
 import threading
@@ -17,8 +14,8 @@ import threading
 import duckdb
 
 # Overridable so a local run can point at a rebuilt or experimental copy
-# without touching the working database. Validation also uses NFL_DB_READ_ONLY=1;
-# normal serving remains writable until startup/lazy writes are retired.
+# without touching the working database. Writes require NFL_DB_READ_ONLY=0 in
+# an offline process; the serving app rejects that mode.
 DB_PATH = os.environ.get(
     "NFL_DB_PATH", os.path.join(os.path.dirname(__file__), "data", "nfl.duckdb")
 )
@@ -35,7 +32,7 @@ def get_connection() -> duckdb.DuckDBPyConnection:
     """The process connection; ordinary read queries take independent cursors."""
     global _conn
     if _conn is None:
-        read_only = os.environ.get('NFL_DB_READ_ONLY') == '1'
+        read_only = os.environ.get('NFL_DB_READ_ONLY') != '0'
         if not read_only:
             os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         _conn = duckdb.connect(DB_PATH, read_only=read_only)
@@ -112,7 +109,7 @@ def query_to_dict(sql: str, params: list = None) -> list[dict]:
     Used by all read endpoints. Each call gets its own cursor, so concurrent
     requests do not serialize.
     """
-    cur = get_cursor()
-    rel = cur.execute(sql, params or [])
-    columns = [desc[0] for desc in rel.description]
-    return [dict(zip(columns, row)) for row in rel.fetchall()]
+    with get_cursor() as cur:
+        rel = cur.execute(sql, params or [])
+        columns = [desc[0] for desc in rel.description]
+        return [dict(zip(columns, row)) for row in rel.fetchall()]

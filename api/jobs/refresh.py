@@ -223,6 +223,8 @@ def cmd_check(watermarks_path: str) -> int:
 
 
 def cmd_ingest(watermarks_path: str) -> int:
+    if os.environ.get('NFL_DB_READ_ONLY') != '0':
+        raise RuntimeError('Offline ingest requires NFL_DB_READ_ONLY=0; use jobs.prepare for isolated candidates')
     # Imported here, not at module scope: `check` must not need a database.
     from database import get_connection, write_lock
     from ingest import run_ingest

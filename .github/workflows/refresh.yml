@@ -91,6 +91,8 @@ jobs:
         if: steps.check.outputs.changed == 'true'
         working-directory: api
         env:
+          # This offline process is the only writable runtime; serving stays read-only.
+          NFL_DB_READ_ONLY: '0'
           REFRESH_SEASON: ${{ inputs.season }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: uv run --locked python -m jobs.refresh ingest "$WATERMARKS"

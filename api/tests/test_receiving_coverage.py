@@ -43,7 +43,7 @@ def historical_db(client, monkeypatch):
         conn.execute("UPDATE player_game_stats SET targets = 52, receptions = 4, rec_yards = -3, rec_tds = 1 WHERE player_id = '00-BUF-WR1'")
         monkeypatch.setattr(database, "_conn", conn)
         game_ratings_builder.ensure_table(conn)
-        monkeypatch.setattr(game_ratings_builder, "read_or_materialize", lambda _: [])
+        monkeypatch.setattr(game_ratings_builder, "read", lambda _: [])
         yield conn
 
 
@@ -92,7 +92,7 @@ def test_receiving_splits_mask_target_counts_and_rates_without_touching_other_ca
              "att": 52, "cmp": 4, "yards": -3, "td": 1, "interceptions": 0, "air_yards": 10,
              "yac": 2, "first_downs": 1, "epa": 1.5, "success_pct": 100, "cpoe": None}
             for s, category in [(2004, "receiving"), (2009, "receiving"), (2004, "passing"), (2004, "rushing")]]
-    monkeypatch.setattr(routers.players.splits_builder, "read_or_materialize", lambda _: rows)
+    monkeypatch.setattr(routers.players.splits_builder, "read", lambda _: rows)
     response = client.get("/api/players/test-player/splits")
     assert response.status_code == 200
     masked, *unchanged = response.json()
@@ -169,7 +169,7 @@ def test_comparable_display_withholds_targets_for_career_ranges_touching_the_gap
            "rush_yards": 0, "rush_tds": 0, "carries": 0, "rec_yards": 500, "rec_tds": 4,
            "targets": 90, "att": 0, "cmp": 0, "ints": 0}
     modern = dict(row, player_id="modern", first_season=2009, last_season=2010, targets=0)
-    monkeypatch.setattr(routers.players.comparables_builder, "read_or_materialize", lambda *_: [row, modern])
+    monkeypatch.setattr(routers.players.comparables_builder, "read", lambda *_: [row, modern])
     response = client.get("/api/players/test-player/comparables")
     assert response.status_code == 200
     old, new = response.json()

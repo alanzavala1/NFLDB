@@ -75,8 +75,7 @@ def joined_players(league, monkeypatch):
         (5, GAME_ID, 998, 'BUF', None, None, 0, 'missed', 'kick', 'Unmapped Kicker', 50, None, 'Missed FG'),
         (6, 'other-game', 3500, 'BUF', 'BUF', 'direct', 1, None, None, None, None, None, 'Other game TD'),
     ])
-    monkeypatch.setattr(game_lineup.game_ratings_builder, 'read_or_materialize', lambda game_id: [{}])
-    monkeypatch.setattr(game_lineup.ol_grades_builder, 'read_or_materialize', lambda game_id: {'BUF': {'grade': 6.5}})
+    monkeypatch.setattr(game_lineup.ol_grades_builder, 'read', lambda game_id: {'BUF': {'grade': 6.5}})
     return league
 
 
@@ -95,7 +94,9 @@ def _rotation_ties(lineup):
     ]} for team in lineup['teams']]}
 
 
-def test_seeded_service_http_and_real_lazy_builders_match(client, league):
+def test_seeded_service_http_matches_offline_prepared_ratings(client, league):
+    game_ratings_builder.materialize()
+    game_lineup.ol_grades_builder.materialize()
     lineup = game_lineup.get_game_lineup('2024_01_DEN_KC')
     assert lineup['join_match_rate'] == 1
     kc = lineup['teams'][1]
@@ -174,8 +175,8 @@ def test_missing_game_preserves_404_and_short_circuits(client, league, monkeypat
     def unexpected_builder(*args):
         pytest.fail('missing game reached a builder')
     monkeypatch.setattr(game_lineup, 'query_to_dict', schedule_only)
-    monkeypatch.setattr(game_lineup.game_ratings_builder, 'read_or_materialize', unexpected_builder)
-    monkeypatch.setattr(game_lineup.ol_grades_builder, 'read_or_materialize', unexpected_builder)
+    monkeypatch.setattr(game_ratings_builder, 'materialize', unexpected_builder)
+    monkeypatch.setattr(game_lineup.ol_grades_builder, 'read', unexpected_builder)
     assert game_lineup.get_game_lineup(game_id) is None
     response = client.get(f'/api/games/{game_id}/lineup')
     assert response.status_code == 404 and response.json() == {'detail': f'Game {game_id} not found'}
@@ -210,15 +211,14 @@ def test_missing_plays_table_is_a_required_snap_join_error(client, joined_player
     joined_players.execute('DROP TABLE plays')
     with pytest.raises(duckdb.CatalogException):
         game_lineup.get_game_lineup(GAME_ID)
-    with pytest.raises(duckdb.CatalogException):
-        client.get(f'/api/games/{GAME_ID}/lineup')
+    assert client.get(f'/api/games/{GAME_ID}/lineup').status_code == 503
 
 
-@pytest.mark.parametrize('builder', ['game_ratings_builder', 'ol_grades_builder'])
+@pytest.mark.parametrize('builder', ['ol_grades_builder'])
 def test_uncaught_builder_errors_propagate(client, joined_players, monkeypatch, builder):
     def fail(*args):
         raise RuntimeError('lineup builder failed')
-    monkeypatch.setattr(getattr(game_lineup, builder), 'read_or_materialize', fail)
+    monkeypatch.setattr(getattr(game_lineup, builder), 'read', fail)
     with pytest.raises(RuntimeError, match='lineup builder failed'):
         game_lineup.get_game_lineup(GAME_ID)
     with pytest.raises(RuntimeError, match='lineup builder failed'):

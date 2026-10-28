@@ -1,5 +1,4 @@
 """Snap-based game lineups, scoring events and team averages."""
-import game_ratings_builder
 import ol_grades_builder
 from config import era_team_case
 from database import query_to_dict
@@ -24,10 +23,6 @@ def get_game_lineup(game_id: str) -> dict | None:
     if not games:
         return None
     game = games[0]
-
-    # Ensure the derived ratings table exists before joining it. This is a no-op
-    # once ratings have already been materialized by ingest.
-    game_ratings_builder.read_or_materialize(game_id)
 
     team_expr = era_team_case("sc.team", "sc.season")
     snap_rows = query_to_dict(
@@ -263,7 +258,7 @@ def get_game_lineup(game_id: str) -> dict | None:
         [game_id, game_id],
     )
 
-    ol_grades = ol_grades_builder.read_or_materialize(game_id)
+    ol_grades = ol_grades_builder.read(game_id)
 
     def _avg(players: list[dict]) -> float | None:
         vals = [p["rating"] for p in players if p.get("rating") is not None]

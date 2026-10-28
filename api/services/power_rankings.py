@@ -46,7 +46,7 @@ def get_power_rankings(
     season: int = CURRENT_SEASON,
     week: int | None = None,
 ) -> list[dict]:
-    rows = power_rankings_builder.read_or_materialize(season, week)
+    rows = power_rankings_builder.read(season, week)
     if not rows:
         return []
 

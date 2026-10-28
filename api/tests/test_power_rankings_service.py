@@ -39,7 +39,7 @@ def rankings_data(monkeypatch):
             ]
 
         monkeypatch.setattr(database, '_conn', conn)
-        monkeypatch.setattr(power_rankings.power_rankings_builder, 'read_or_materialize', read)
+        monkeypatch.setattr(power_rankings.power_rankings_builder, 'read', read)
         yield calls
 
 
@@ -95,7 +95,7 @@ def test_default_season_and_empty_rankings_do_not_query_schedule(client, monkeyp
         return []
     def unexpected_query(*args, **kwargs):
         pytest.fail('empty rankings should not query schedule records')
-    monkeypatch.setattr(power_rankings.power_rankings_builder, 'read_or_materialize', empty)
+    monkeypatch.setattr(power_rankings.power_rankings_builder, 'read', empty)
     monkeypatch.setattr(power_rankings, 'query_to_dict', unexpected_query)
     assert power_rankings.get_power_rankings() == []
     assert client.get('/api/power-rankings').json() == []
@@ -111,7 +111,7 @@ def test_default_season_and_empty_rankings_do_not_query_schedule(client, monkeyp
 def test_http_rejects_invalid_weeks_before_builder_work(client, monkeypatch, week):
     def unexpected_read(*args, **kwargs):
         pytest.fail('invalid HTTP input reached the ranking builder')
-    monkeypatch.setattr(power_rankings.power_rankings_builder, 'read_or_materialize', unexpected_read)
+    monkeypatch.setattr(power_rankings.power_rankings_builder, 'read', unexpected_read)
     assert client.get('/api/power-rankings', params={'season': 2024, 'week': week}).status_code == 422
     assert client.get('/api/power-rankings?season=banana').status_code == 422
 

@@ -1,5 +1,4 @@
 """Game player statistics, role, snap percentage and chart events."""
-import game_ratings_builder
 from database import query_to_dict
 from services.game_players import position_group as _position_group
 from services.receiving_coverage import mask_receiving_fields
@@ -22,8 +21,6 @@ def get_game_player_chart(game_id: str, player_id: str) -> dict:
     if not game:
         raise GameNotFoundError(game_id)
     game = game[0]
-
-    game_ratings_builder.read_or_materialize(game_id)
 
     profile = query_to_dict(
         f"""

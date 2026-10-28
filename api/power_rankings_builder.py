@@ -246,20 +246,3 @@ def read(season: int, week: int | None = None) -> list[dict]:
         if not is_missing_data_error(_data_error):
             raise
         return []
-
-
-def read_or_materialize(season: int, week: int | None = None) -> list[dict]:
-    rows = read(season, week)
-    if rows:
-        return rows
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(season, week)
-        if rows:
-            return rows
-        if materialize(season) > 0:
-            return read(season, week)
-        return []
-    finally:
-        write_lock.release()

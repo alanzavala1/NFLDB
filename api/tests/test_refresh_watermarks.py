@@ -21,6 +21,11 @@ PBP = "2026-09-11T04:00:00Z"
 SNAPS = "2026-09-11T06:30:00Z"
 
 
+@pytest.fixture(autouse=True)
+def offline_writer_mode(monkeypatch):
+    monkeypatch.setenv('NFL_DB_READ_ONLY', '0')
+
+
 def test_failed_required_feed_never_advances_watermarks(tmp_path, monkeypatch):
     import database
     import ingest

@@ -25,7 +25,7 @@ def get_player(player_id: str):
 
 @router.get("/players/{player_id}/comparables", response_model=list[PlayerComparable])
 def get_player_comparables(player_id: str, n: int = Query(default=8, ge=1, le=20)):
-    rows = comparables_builder.read_or_materialize(player_id, n)
+    rows = comparables_builder.read(player_id, n)
     # A career range touching a gap cannot claim a complete career target total.
     return [dict(row, targets=None) if targets_unavailable(range(row["first_season"], row["last_season"] + 1))
             else row for row in rows]
@@ -33,7 +33,7 @@ def get_player_comparables(player_id: str, n: int = Query(default=8, ge=1, le=20
 
 @router.get("/players/{player_id}/splits", response_model=list[PlayerSplit])
 def get_player_splits(player_id: str):
-    rows = splits_builder.read_or_materialize(player_id)
+    rows = splits_builder.read(player_id)
     return [mask_receiving_fields(row, row["season"], split=True) if row["category"] == "receiving"
             else row for row in rows]
 
@@ -41,7 +41,7 @@ def get_player_splits(player_id: str):
 @router.get("/players/{player_id}/def-splits", response_model=list[DefensiveSplit])
 def get_player_def_splits(player_id: str):
     """A defender's event line conditioned on one situational dimension."""
-    return def_splits_builder.read_or_materialize(player_id)
+    return def_splits_builder.read(player_id)
 
 
 @router.get("/players/{player_id}/receiving-splits", response_model=PlayerReceivingSplits)

@@ -898,10 +898,10 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
             return f"Invalid category '{category}'. Use one of: {', '.join(_DIMENSIONS)}."
 
         if cat == "defense":
-            all_rows = def_splits_builder.read_or_materialize(player_id)
+            all_rows = def_splits_builder.read(player_id)
             rows = [r for r in all_rows if int(r.get("season")) == s and r.get("split_dim") == dim]
         else:
-            all_rows = splits_builder.read_or_materialize(player_id)
+            all_rows = splits_builder.read(player_id)
             rows = [r for r in all_rows
                     if int(r.get("season")) == s and r.get("category") == cat and r.get("split_dim") == dim]
 
@@ -934,7 +934,7 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         if sd not in ("offense", "defense"):
             ctx.record("get_team_splits", args)
             return "Invalid side. Use 'offense' or 'defense'."
-        all_rows = team_splits_builder.read_or_materialize(team.upper(), s)
+        all_rows = team_splits_builder.read(team.upper(), s)
         rows = [r for r in all_rows if r.get("side") == sd and r.get("split_dim") == dim]
         ctx.record("get_team_splits", args, rows)
         if not rows:
@@ -1007,7 +1007,7 @@ def _build_tools(ctx: _Ctx) -> list[Callable]:
         if not _valid_player_id(player_id):
             ctx.record("get_comparables", {"player_id": player_id})
             return _PLAYER_ID_MSG
-        rows = comparables_builder.read_or_materialize(player_id, 8)
+        rows = comparables_builder.read(player_id, 8)
         out = [{"player": r.get("player_name"), "position": r.get("position"),
                 "team": r.get("team"), "similarity_pct": r.get("similarity"),
                 "seasons": f'{r.get("first_season")}-{r.get("last_season")}'} for r in rows]

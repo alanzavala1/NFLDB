@@ -46,10 +46,10 @@ def get_team_depth_chart(team: str, season: int = Query(default=None), week: int
 @router.get("/teams/{team}/splits", response_model=list[TeamSplit])
 def get_team_splits(team: str, season: int = Query(default=None)):
     """Team offense/defense rate profile conditioned on each situational
-    dimension. Reads the materialized table; self-heals on a cold table."""
+    dimension. Reads the offline-prepared table without rebuilding."""
     if season is None:
         season = CURRENT_SEASON
-    return team_splits_builder.read_or_materialize(team, season)
+    return team_splits_builder.read(team, season)
 
 
 @router.get("/teams/{team}/injuries", response_model=list[InjuryStatus])
@@ -67,10 +67,9 @@ def get_team_analytics(season: int = Query(default=None)):
     on every request. It now runs once during ingest and writes to the
     `team_season_analytics` table; this endpoint is a simple keyed SELECT.
 
-    If the row is missing (fresh DB, never-ingested season), the builder
-    lazily materializes on first hit so the system self-heals.
+    Missing rows stay unavailable until the next offline preparation.
     """
     if season is None:
         season = CURRENT_SEASON
-    league = team_analytics_builder.read_or_materialize(season)
+    league = team_analytics_builder.read(season)
     return {"season": season, "league": league}

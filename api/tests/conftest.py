@@ -582,28 +582,16 @@ def seeded_conn() -> duckdb.DuckDBPyConnection:
 
 @pytest.fixture
 def client(seeded_conn, monkeypatch) -> TestClient:
-    """FastAPI TestClient wired to the seeded in-memory DB.
+    """Real app lifespan and endpoints, reading a writable in-memory fixture.
 
-    We bypass the lifespan (which would try to auto-ingest seasons over the
-    network) by patching ingest_queue.queue_season into a no-op, and we
-    point database._conn at the seeded connection so every cursor reads
-    from it.
+    Fixture construction is separate from serving. The app no longer starts
+    ingest workers, creates indexes, seeds awards or lazily rebuilds analytics.
+    File-backed serving access is checked separately against read-only DuckDB.
     """
     import database
-    import ingest_queue
     import main
-    import routers.meta
 
     monkeypatch.setattr(database, "_conn", seeded_conn)
-    # Startup no longer ingests, so the lifespan itself is inert. What remains
-    # to defend is the admin load endpoint: queue_season is imported by name
-    # into routers.meta, so patching ingest_queue alone does NOT reach it. Patch
-    # both, and stub run_ingest so nothing already queued can hit the network.
-    stub = lambda year, force=False: "loaded"  # noqa: E731
-    monkeypatch.setattr(ingest_queue, "queue_season", stub)
-    monkeypatch.setattr(routers.meta, "queue_season", stub)
-    monkeypatch.setattr(ingest_queue, "run_ingest", lambda years, log=print: None)
-
-    # TestClient runs lifespan; it reads only, so no network calls happen.
+    # TestClient runs the actual read-only serving lifecycle.
     with TestClient(main.app) as c:
         yield c

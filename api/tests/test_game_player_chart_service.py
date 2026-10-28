@@ -78,7 +78,6 @@ def chart_data(league, monkeypatch):
         league.execute(f'INSERT INTO plays ({names}) VALUES ({placeholders})', list(row.values()))
     league.execute('''INSERT INTO plays (game_id, play_id, game_seconds_remaining, passer_player_id)
         VALUES ('other-game', 999, 9999, 'mixed')''')
-    monkeypatch.setattr(game_player_chart.game_ratings_builder, 'read_or_materialize', lambda game_id: [{}])
     return league
 
 
@@ -86,7 +85,8 @@ def _http_chart(chart):
     return PlayerChart.model_validate(chart).model_dump(mode='json')
 
 
-def test_seeded_chart_matches_http_and_real_lazy_ratings(client, league):
+def test_seeded_chart_matches_http_and_offline_prepared_ratings(client, league):
+    game_ratings_builder.materialize()
     chart = game_player_chart.get_game_player_chart('2024_01_DEN_KC', '00-KC-OFF3')
     assert chart['role'] == 'receiver' and chart['snap_pct'] == 1
     assert chart['events'][0]['outcome'] == 'TD'
@@ -159,7 +159,7 @@ def test_roster_only_or_stats_only_profile_stays_valid_with_no_events(client, ch
 def test_missing_game_error_short_circuits_builder_and_keeps_http_message(client, league, monkeypatch):
     def unexpected_builder(*args):
         pytest.fail('missing game reached the ratings builder')
-    monkeypatch.setattr(game_player_chart.game_ratings_builder, 'read_or_materialize', unexpected_builder)
+    monkeypatch.setattr(game_ratings_builder, 'materialize', unexpected_builder)
     with pytest.raises(game_player_chart.GameNotFoundError):
         game_player_chart.get_game_player_chart('missing', 'mixed')
     response = client.get('/api/games/missing/players/mixed/chart')
@@ -209,11 +209,9 @@ def test_required_query_failures_propagate(client, chart_data, monkeypatch, stag
             action()
 
 
-def test_uncaught_builder_error_propagates(client, chart_data, monkeypatch):
+def test_chart_never_invokes_offline_rating_builder(client, chart_data, monkeypatch):
     def fail(*args):
         raise RuntimeError('chart builder failed')
-    monkeypatch.setattr(game_player_chart.game_ratings_builder, 'read_or_materialize', fail)
-    with pytest.raises(RuntimeError, match='chart builder failed'):
-        game_player_chart.get_game_player_chart(GAME_ID, 'mixed')
-    with pytest.raises(RuntimeError, match='chart builder failed'):
-        client.get(f'/api/games/{GAME_ID}/players/mixed/chart')
+    monkeypatch.setattr(game_ratings_builder, 'materialize', fail)
+    assert game_player_chart.get_game_player_chart(GAME_ID, 'mixed')
+    assert client.get(f'/api/games/{GAME_ID}/players/mixed/chart').status_code == 200

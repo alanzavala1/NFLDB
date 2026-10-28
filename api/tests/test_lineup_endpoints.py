@@ -1,4 +1,6 @@
 def test_game_lineup_endpoint_returns_snap_starters_and_scoring(client):
+    import game_ratings_builder
+    game_ratings_builder.materialize()  # Offline fixture preparation, before HTTP.
     r = client.get("/api/games/2024_01_DEN_KC/lineup")
     assert r.status_code == 200
     data = r.json()
@@ -21,6 +23,8 @@ def test_game_lineup_endpoint_returns_snap_starters_and_scoring(client):
 
 
 def test_game_player_chart_endpoint_returns_role_stats_and_events(client):
+    import game_ratings_builder
+    game_ratings_builder.materialize()
     r = client.get("/api/games/2024_01_DEN_KC/players/00-KC-OFF3/chart")
     assert r.status_code == 200
     data = r.json()

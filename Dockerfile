@@ -25,7 +25,8 @@ COPY api/ ./
 # the built frontend, served by FastAPI at / (see main.py)
 COPY --from=frontend /app/frontend/dist ./static
 
-# Cloud Run provides $PORT (8080); single worker (DuckDB is single-writer).
+# Cloud Run serves one immutable, offline-prepared snapshot.
+ENV NFL_DB_READ_ONLY=1
 ENV PORT=8080
 # Keep DuckDB inside the container's limits: it sizes its memory budget and
 # thread pool from the HOST, not the cgroup, so an unpinned build sizes itself
