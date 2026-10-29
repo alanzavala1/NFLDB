@@ -34,8 +34,9 @@ uv run --locked python -m jobs.receiving_preview `
 ```
 
 In another shell, the same scripts accept ordinary positional paths:
-`Rscript --vanilla r/restore.R data/receiving-r-library`. Python's existing
-`jobs.receiving_preview` command is still the only candidate build entry point.
+`Rscript --vanilla r/restore.R data/receiving-r-library`. The command above
+demonstrates a receiving preview; the integrated candidate/release path is
+documented in [offline releases](../../docs/OFFLINE_RELEASES.md).
 Source must be closed without a WAL; candidate and export paths must be new.
 Keep installations, packages, caches and generated data under ignored `data/`.
 Setup installs packages only in the explicit library; it does not install R,
@@ -63,9 +64,17 @@ Backend validation: **1,028 passed, 2 skipped**. Ignored evidence is under
 `api/data/upstream-r-trial/`: `renv-clean-restore.log`, `renv-preview-build.log`,
 `renv-preview-verification.json` and `renv-backend-tests.xml`.
 
-R is a prerequisite, not downloaded automatically. Linux/macOS restoration has
-not been executed here. Those platforms may need system libraries and a compiler
-for packages such as curl, stringi and xgboost; renv locks R packages, not operating
+On October 29, 2026, a fresh Ubuntu 24.04 library restored all 49 locked packages
+under R 4.6.1 and passed the environment checks and nine real provenance controls.
+The Linux passing calculator rebuilt all 17 views for the saved 2026 inputs;
+all 1,831 canonical rows matched the Windows values exactly. See the
+[Linux preparation trial](../../docs/LINUX_PREPARATION_TRIAL.md) for the worker
+setup and separate database-validation checks. CSV byte hashes differ because
+of line endings; the comparison uses parsed rows and exact values.
+
+R is a prerequisite, not downloaded automatically. macOS restoration has not
+been executed here. Linux/macOS may need system libraries and a compiler for
+packages such as curl, stringi and xgboost; renv locks R packages, not operating
 system packages. Even Windows may need Rtools if a pinned binary is no longer
 available and CRAN must build an older source package. Package repositories must
 still provide the pinned artifacts. This is dependency reproducibility, not a

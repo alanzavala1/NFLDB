@@ -98,6 +98,15 @@ generation-matched current pointer and deployment consuming that bundle. The
 scheduled workflow still has its legacy ingest/upload path; do not describe it
 as migrated or run it as a native release workflow yet.
 
+The [Linux preparation trial](LINUX_PREPARATION_TRIAL.md) checks the worker
+runtime separately from cloud storage and deployment. It uses copied artifacts
+and new output paths without selecting a release or changing the live site.
+On October 29, the ordinary preparation command completed on Ubuntu 24.04:
+both validation gates passed all 28 seasons and 102 HTTP reads, and the independent
+audit confirmed unchanged historical native splits and protected inputs. The
+trial records setup steps, runtime, memory and disk measurements; it has not yet
+been run on a GitHub-hosted worker.
+
 ## Local proof (October 28, 2026)
 
 The native bundle passed receiving and passing source validation for all 28
