@@ -90,11 +90,13 @@ RDS play-by-play, weekly stats and detailed credits to verified consumed inputs.
 Only matching proofs and loaded outcomes can acknowledge those native keys;
 legacy parquet keys are never acknowledged by RDS evidence.
 
-The local protocol and [portable capture packing/restore](CAPTURE_ARCHIVES.md)
-and native source-version proofs are implemented. Cloud migration still needs
-fresh capture/passing/collection orchestration, capture upload/download wiring,
-immutable GCS prefixes, a
-generation-matched current pointer and deployment consuming that bundle. The
+The local protocol, [portable capture packing/restore](CAPTURE_ARCHIVES.md),
+native source-version proofs and [versioned cloud uploads](CLOUD_RELEASES.md)
+are implemented. A cloud completion manifest links the validated bundle to its
+matching input ZIP and pins every uploaded object generation. Cloud migration
+still needs fresh capture/passing/collection orchestration, downloads of the
+selected artifacts, a generation-matched current pointer and deployment
+consuming that bundle. The
 scheduled workflow still has its legacy ingest/upload path; do not describe it
 as migrated or run it as a native release workflow yet.
 
@@ -106,6 +108,11 @@ both validation gates passed all 28 seasons and 102 HTTP reads, and the independ
 audit confirmed unchanged historical native splits and protected inputs. The
 trial records setup steps, runtime, memory and disk measurements; it has not yet
 been run on a GitHub-hosted worker.
+
+On October 30, the validated bundle and matching input archive were uploaded to
+a new GCS prefix. The separate cloud verification command matched the pinned
+manifest receipt; 151 targeted controls passed on Windows and Linux. Release
+selection, consumer downloads and deployment integration remain separate work.
 
 ## Local proof (October 28, 2026)
 
