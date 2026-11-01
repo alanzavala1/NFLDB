@@ -2,7 +2,7 @@
 
 The offline worker first creates and validates a native bundle. Publication then
 uploads that bundle and its matching capture ZIP into one new GCS prefix. The
-publisher never selects a current release or deploys the website.
+upload operation never selects a current release or deploys the website.
 
 ```text
 gs://BUCKET/native/releases/RELEASE_ID/
@@ -91,6 +91,85 @@ Omitting the optional manifest identity discovers the prefix's current
 completion marker, then pins its generation for the verification. Automated
 deployment should consume the recorded identity from selection.
 
+## Select a completed release
+
+A selection is a small mutable JSON object pointing to one completed publication.
+Its content pins the publication manifest's generation and SHA256. Keep selection
+objects outside immutable release directories. Selection expresses the desired
+release; it does not change an already running Cloud Run image.
+
+For a known unused **trial** pointer:
+
+```powershell
+uv run --locked python -m jobs.publish select `
+  --pointer gs://BUCKET/native/selection-trials/TRIAL_ID/current.json `
+  --expected-generation 0 `
+  --destination gs://BUCKET/native/releases/RELEASE_ID `
+  --manifest-generation PUBLICATION_GENERATION `
+  --manifest-sha256 PUBLICATION_SHA256
+```
+
+For subsequent updates, pass the pointer generation read **at the start of the
+job's work**, rather than zero. The server accepts the update only while that
+generation is still current. An older job cannot silently overwrite a selection
+that another job changed in the meantime. The selector never refreshes its
+expectation and retries a conflict automatically. Intentional rollback selects
+an earlier compatible release using a fresh observed pointer generation.
+
+Read a selection with:
+
+```powershell
+uv run --locked python -m jobs.publish current `
+  --pointer gs://BUCKET/native/selection-trials/TRIAL_ID/current.json
+```
+
+The response includes `pointer_generation`, `pointer_sha256` and the selected
+publication identity. Missing selections and authentication/read errors remain
+errors; they are not treated as permission to initialize a new pointer.
+
+## Download and verify the selected snapshot
+
+```powershell
+uv run --locked python -m jobs.publish download `
+  --pointer gs://BUCKET/native/selection-trials/TRIAL_ID/current.json `
+  --pointer-generation POINTER_GENERATION `
+  --pointer-sha256 POINTER_SHA256 `
+  --output data/new-selected-download
+```
+
+The identity options pin a recorded selection. Omitting them reads the latest
+selection once and pins that version for the rest of the operation. Each payload
+comes from the publication's exact recorded object generation. The SDK's standard
+resumable/sliced file downloader writes into a private staging directory; bounded
+copies then fill exclusively created output files, checked against SHA256, MD5
+and size. A stalled SDK download is limited to 30 minutes per file. Budget for
+temporary SDK files in addition to the completed output. The existing
+native bundle verifier checks the downloaded database/report/watermark linkage
+and the analytics validation policy.
+
+```text
+data/new-selected-download/
+  release/             database and the three native metadata files
+  download.json        verified local completion record, written last
+  captures.zip         only with --include-captures
+```
+
+The serving/deployment consumer needs `release/`. Add `--include-captures` for a
+refresh worker or archive replay; this also checks every downloaded capture
+member and the source graph without extracting a second copy. The API image
+does not need R or the input archive to serve the prepared database.
+
+The command requires a new output directory and never replaces an existing
+local snapshot. On ordinary failures it removes files it created and preserves
+unexpected files from other actors. A killed process can leave an incomplete
+directory; use a new output path for retries. Use an output only after the command
+succeeds, and verify its native bundle again before packaging/deployment.
+
+A selection update during a download does not mix releases: the download
+finishes the snapshot it already pinned. The completion record retains that
+selection and publication identity. Deployment must enforce its own rollout
+ordering; the mutable selection is not a record of what is already serving.
+
 ## Failure handling
 
 An incomplete prefix has no completion manifest and cannot be treated as a
@@ -141,11 +220,46 @@ version and diagnostic logs are kept under ignored `api/data/` with the
 `publication-*-20261030` prefix. Keep the saved receipt for the next selection
 step; it identifies the exact completed cloud release.
 
+## Verified selection/download result: November 1, 2026
+
+184 distinct targeted checks passed on Windows and Ubuntu 24.04. The new cases
+cover stale/duplicate selection updates, intentional rollback, exact selection
+reads, interrupted/corrupt downloads, preservation of existing snapshots and
+unexpected files, code/local-file changes during downloads, missing pinned
+objects, and SDK timeout cleanup.
+
+A separate real GCS trial pointer was created and conditionally updated.
+Duplicate initialization and a stale-generation update were rejected by the
+server; the successful selection remained intact. The trial selected the
+previously validated October 28 capture bundle, not freshly downloaded NFL data.
+
+The ordinary download command then retrieved all five selected payloads,
+including the capture ZIP, from their recorded object generations. SHA256, MD5
+and sizes matched, the native bundle verified, and all 4,741 capture members and
+their source graph passed. The completion record matched the recorded cloud
+selection/publication identities. A fresh read-only API process successfully
+handled 102 HTTP checks and rejected a persistent database write. A subsequent
+audit confirmed the downloaded bytes, original publication inputs and all five
+protected original databases were unchanged.
+
+The first one-shot `gcloud storage cat` transfer stalled and eventually failed
+with a read timeout; its partial output directory was removed without a completion
+record. The adapter now uses the SDK's resumable file downloader and private
+staging. The successful local run took 10 minutes 3 seconds, including remote
+checks, both large files and archive verification. This is a local-network
+measurement, not a GitHub-hosted worker benchmark.
+
+Evidence remains ignored under `api/data/`: `selection-cloud-proof-20261101.json`,
+`selection-cloud-receipt-20261101.json`, `selection-download-proof-20261101.json`,
+`selection-api-proof-20261101.json`, related logs/test XML, and
+`selected-cloud-download-retry-20261101/`. No production selection or deployment
+was performed by this trial.
+
 ## Remaining integration
 
 The legacy `refresh.yml` and `deploy.yml` still use the bucket's original
-`nfl.duckdb` and standalone watermarks. Uploading a new native release leaves
-that serving path intact. The next work is a generation-matched selection
-pointer, downloads of its pinned release, deployment/rollback handling, and the
-workflow that captures and prepares refreshed native inputs. Ask model/streaming
+`nfl.duckdb` and standalone watermarks. Uploading or selecting a native release
+leaves that serving path intact. Selection and verified download commands are
+implemented; deployment/rollback handling and the workflow that captures and
+prepares refreshed native inputs remain separate work. Ask model/streaming
 changes and alternative frontend hosting remain separate milestones.

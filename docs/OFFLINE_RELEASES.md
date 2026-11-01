@@ -92,11 +92,11 @@ legacy parquet keys are never acknowledged by RDS evidence.
 
 The local protocol, [portable capture packing/restore](CAPTURE_ARCHIVES.md),
 native source-version proofs and [versioned cloud uploads](CLOUD_RELEASES.md)
-are implemented. A cloud completion manifest links the validated bundle to its
-matching input ZIP and pins every uploaded object generation. Cloud migration
-still needs fresh capture/passing/collection orchestration, downloads of the
-selected artifacts, a generation-matched current pointer and deployment
-consuming that bundle. The
+are implemented, together with conditional cloud selection and verified
+downloads. A cloud completion manifest links the validated bundle to its matching
+input ZIP and pins every uploaded object generation. Cloud migration still needs
+fresh capture/passing/collection orchestration and deployment consuming the
+selected bundle. The
 scheduled workflow still has its legacy ingest/upload path; do not describe it
 as migrated or run it as a native release workflow yet.
 
@@ -113,6 +113,13 @@ On October 30, the validated bundle and matching input archive were uploaded to
 a new GCS prefix. The separate cloud verification command matched the pinned
 manifest receipt; 151 targeted controls passed on Windows and Linux. Release
 selection, consumer downloads and deployment integration remain separate work.
+
+On November 1, an isolated cloud selection rejected duplicate/stale writes and
+the ordinary consumer downloaded its exact selected database, metadata and
+capture archive. All payload checksums and source-graph checks passed, followed
+by 102 API reads against the downloaded read-only database and rejection of a
+persistent write. The 184 targeted checks passed on Windows and Linux. This was
+a selection/download trial; production workflow and deployment wiring remain.
 
 ## Local proof (October 28, 2026)
 
