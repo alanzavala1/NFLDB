@@ -1,122 +1,130 @@
 # Deploying NFLDB
 
-The whole app ships as **one container**: a multi-stage [`Dockerfile`](./Dockerfile)
-builds the React frontend, then a single Python process serves the static site,
-the FastAPI API (under `/api`), and the baked-in 400MB DuckDB file. It targets
-**Google Cloud Run** (free tier, scales to zero) but runs on any container host.
+The React frontend and FastAPI API ship in one container with an offline-prepared
+DuckDB snapshot. Cloud Run serves that snapshot **read-only**. It never downloads
+sources, prepares analytics, or updates watermarks during a visitor's request.
+R runs in the offline worker, not the serving container.
 
-Because DuckDB is single-writer, run **one instance** (`--max-instances 1`).
+## Migration status
 
----
+- The existing `refresh.yml` → `deploy.yml` path still serves the legacy root
+  bucket database on `nfldb`; it has not switched to native publications.
+- `deploy-native-preview.yml` is a manual, separate path targeting only
+  **`nfldb-native-preview`**. It consumes an exact, verified cloud selection.
+- Scheduled native capture/preparation and production cutover remain work to
+  finish. Prepare fresh inputs before cutover: validation describes captured
+  inputs and does not promise they are the latest feeds.
 
-## Path A — fastest (build & deploy from your machine)
+See [cloud publication and selection](docs/CLOUD_RELEASES.md) and
+[offline preparation](docs/OFFLINE_RELEASES.md) for the preceding steps.
 
-Prereqs: Docker running, `gcloud` installed and logged in, a GCP project.
+## Native preview workflow
 
-```bash
-# one-time: enable APIs + create an Artifact Registry repo
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com
-gcloud artifacts repositories create nfldb --repository-format=docker --location=us-central1
+Run **Deploy native snapshot preview** in GitHub Actions with operation `deploy`.
+Supply the selection URI, exact object generation, and SHA256 returned by
+`jobs.publish current`. Retrying a failed deployment does not require new data;
+deployment success is separate from preparation success.
 
-REGION=us-central1
-IMAGE=$REGION-docker.pkg.dev/$(gcloud config get-value project)/nfldb/nfldb:latest
+The workflow:
 
-# build (bakes api/data/nfl.duckdb) and push
-gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
-docker build -t "$IMAGE" .
-docker push "$IMAGE"
+1. Downloads the selected bundle and verifies its hashes, native validation
+   report, and compatibility with the checked-out analytics/API policy.
+2. Builds the frontend and locked Python environment. Only the four native
+   release files enter through the separate `native_snapshot` build context.
+3. Runs the certified API requests, including real startup and read-only checks,
+   then reconciliation and assistant compatibility tests inside the image.
+   Missing data fails the native gate rather than silently skipping.
+4. Pushes an image tagged with code/data/run identities, resolves its immutable
+   registry digest, and deploys **that digest** to the preview.
+5. Checks the candidate's image identity, readiness, API health, seasons response,
+   and frontend before promoting it. It rechecks the latest selection immediately
+   before promotion; a superseded job stops.
+6. Verifies the service after promotion and saves the previous revision, exact
+   image, traffic state, and download receipt as a workflow artifact.
 
-# deploy — public, 1 instance, 1GB RAM
-gcloud run deploy nfldb --image "$IMAGE" --region $REGION \
-  --allow-unauthenticated --memory 1Gi --cpu 1 --max-instances 1 --port 8080
-```
+Deployments and rollbacks share a GitHub concurrency group and never cancel a
+running traffic operation. This serializes this workflow, not independent console
+or CLI changes. Selection and Cloud Run traffic are separate services, so their
+updates are not one atomic transaction. A selection changed after the final
+check requires a subsequent deploy.
 
-`gcloud run deploy` prints the public URL. Share it with friends.
+Preview resources: 4 GiB RAM, 2 CPUs, zero minimum instances, one maximum instance.
+DuckDB is capped at 2,400 MB and two threads. Read-only serving supports multiple
+replicas; the preview's single-instance cap is a cost/testing choice.
 
-> Even simpler: `gcloud run deploy nfldb --source . ...` lets Cloud Build build
-> the image for you (no local Docker needed), as long as the DB is in `api/data/`.
+### Local image check
 
----
-
-## Path B — CI/CD (auto build + test + deploy via GitHub Actions)
-
-[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) pulls the DB
-from a GCS bucket, builds the image, **runs the data-reconciliation tests
-inside the image** (a release is blocked if the data doesn't reconcile with
-official stats), pushes to Artifact Registry, and deploys to Cloud Run.
-
-**One-time setup:**
-
-```bash
-PROJECT=$(gcloud config get-value project)
-REGION=us-central1
-
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com storage.googleapis.com
-gcloud artifacts repositories create nfldb --repository-format=docker --location=$REGION
-
-# host the DB in a bucket (too big for git)
-gcloud storage buckets create gs://$PROJECT-nfldb-data
-gcloud storage cp api/data/nfl.duckdb gs://$PROJECT-nfldb-data/nfl.duckdb
-
-# a deploy service account (no key — auth is keyless via WIF below)
-gcloud iam service-accounts create nfldb-deployer
-SA=nfldb-deployer@$PROJECT.iam.gserviceaccount.com
-for role in run.admin artifactregistry.writer storage.objectViewer iam.serviceAccountUser; do
-  gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/$role
-done
-```
-
-**Keyless auth via Workload Identity Federation.** Rather than a downloadable
-SA key (which newer org policies block by default — `iam.disableServiceAccountKeyCreation`),
-GitHub Actions presents a short-lived OIDC token that GCP trusts. Replace
-`OWNER/REPO` with your GitHub repo (e.g. `alanzavala1/nfl-statistics`) and
-`$NUM` with your project *number* (`gcloud projects describe $PROJECT --format='value(projectNumber)'`):
+After `jobs.publish download` completes into a new directory:
 
 ```bash
-gcloud services enable iamcredentials.googleapis.com
-gcloud iam workload-identity-pools create github --location=global --display-name="GitHub Actions"
-gcloud iam workload-identity-pools providers create-oidc github-provider \
-  --location=global --workload-identity-pool=github --display-name="GitHub provider" \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
-  --attribute-condition="assertion.repository=='OWNER/REPO'"
-
-# let ONLY this repo impersonate the deploy SA
-gcloud iam service-accounts add-iam-policy-binding $SA \
-  --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/projects/$NUM/locations/global/workloadIdentityPools/github/attribute.repository/OWNER/REPO"
-
-# the provider resource name → goes in the GCP_WIF_PROVIDER secret
-gcloud iam workload-identity-pools providers describe github-provider \
-  --location=global --workload-identity-pool=github --format="value(name)"
+# From the repository root; RELEASE is the download's release/ directory.
+docker build --target native --provenance=false \
+  --build-context native_snapshot="$RELEASE" -t nfldb-native:check .
+docker run --rm --read-only --tmpfs /tmp --memory 4g --cpus 2 \
+  nfldb-native:check python -m jobs.deploy check-image
+docker run --rm --read-only --tmpfs /tmp -p 8080:8080 nfldb-native:check
 ```
 
-**Add these GitHub repository secrets** (Settings → Secrets and variables → Actions):
+The shared source context excludes local databases, captures, virtual environments,
+credentials, and private planning documents. The native image has no legacy
+database copy. Both Docker targets require an explicit data context; a bare
+`docker build .` is intentionally insufficient.
 
-| Secret | Value |
-|---|---|
-| `GCP_PROJECT_ID` | your project id |
-| `GCP_WIF_PROVIDER` | the provider resource name printed by the last command |
-| `GCP_SA_EMAIL` | `nfldb-deployer@<project>.iam.gserviceaccount.com` |
-| `GCP_DB_BUCKET` | `<project>-nfldb-data` |
+## Rollback
 
-Then run the **Deploy to Cloud Run** workflow (Actions tab → Run workflow).
-Flip the trigger in `deploy.yml` to `push: {branches: [main]}` for continuous
-deployment once you trust it.
+Run the same workflow with operation `rollback` and the full **previous preview
+revision** from a successful deployment artifact. Selection inputs are unused.
+The script verifies that the revision belongs to the preview, checks its tagged
+URL, then sends 100% of traffic to it. This restores the previous code **and baked
+database together**, without rebuilding either.
 
----
+An unhealthy candidate is not promoted. If checks fail after a traffic switch,
+the script attempts to restore the exact previous revision and saves failure
+evidence. If restoration fails, the job reports it; use `before.json` to recover.
+The first preview creation has no previous revision to restore. Rollback does
+not edit the desired cloud selection; resolve the cause before retrying it.
 
-## Keep it warm (kill cold starts)
+Cloud Run documents the underlying command in its
+[rollback guide](https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration):
 
-Cloud Run scales to zero, so the first visit after idle takes ~10–30s. Point a
-free uptime monitor (UptimeRobot / cron-job.org) at `https://<url>/api/health`
-every few minutes and it stays warm. Or set `--min-instances 1` (small cost).
+```bash
+gcloud run services update-traffic nfldb-native-preview --region us-central1 \
+  --to-revisions=EXACT_PREVIOUS_REVISION=100
+```
 
-## Updating the data
+## Existing cloud setup
 
-The scheduled refresh uses `api/uv.lock`, the same dependency lockfile as the
-serving image and CI. Its `uv run --locked` commands refuse dependency drift.
+Workflows use Workload Identity Federation: GitHub exchanges a short-lived OIDC
+token for Google credentials, with no downloadable service-account key. The
+project needs Cloud Run, Artifact Registry, Cloud Storage, and IAM Credentials
+enabled, an Artifact Registry Docker repository named `nfldb` in `us-central1`,
+and the publication bucket.
 
-To rebuild locally, stop the API server, run `uv sync --locked` from `api/`, then
-run `uv run --locked python -m ingest --seasons 2024 2025` with the desired seasons.
-Re-upload the DB to the bucket (Path B) or rebuild/redeploy the image (Path A).
+| Repository secret | Purpose |
+| --- | --- |
+| `GCP_PROJECT_ID` | Google Cloud project |
+| `GCP_WIF_PROVIDER` | Existing GitHub OIDC provider resource |
+| `GCP_SA_EMAIL` | Deployment service account |
+| `GCP_DB_BUCKET` | Legacy database bucket; native deploy uses the selection URI |
+
+The deployer needs Cloud Run administration, Artifact Registry write, bucket
+object read, and permission to act as the runtime service account. Publication
+and selection writers also need object write permissions. Restrict the WIF
+provider to the intended repository. Google's
+[authentication action](https://github.com/google-github-actions/auth)
+documents one-time setup.
+
+## Transitional legacy build
+
+`deploy.yml` retains its `workflow_call` interface for `refresh.yml`. It downloads
+the legacy root object into a separate temporary directory and supplies it as
+`legacy_snapshot`:
+
+```bash
+docker build --target legacy --provenance=false \
+  --build-context legacy_snapshot="$LEGACY_DIRECTORY" -t nfldb-legacy:check .
+```
+
+That directory must contain only its `nfl.duckdb`. The shared image layers contain
+no data. Retire legacy refresh/deploy as part of the native production cutover;
+it must not race a native deploy to the same live service.

@@ -1,0 +1,105 @@
+name: Deploy native snapshot preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+        required: true
+      pointer:
+        description: 'Deploy: gs:// selection JSON URI'
+        type: string
+      pointer_generation:
+        description: 'Deploy: exact selection generation'
+        type: string
+      pointer_sha256:
+        description: 'Deploy: exact selection SHA256'
+        type: string
+      revision:
+        description: 'Rollback: previously verified nfldb-native-preview revision'
+        type: string
+
+# Rollbacks and deployments share one queue. Never interrupt a traffic change.
+concurrency:
+  group: nfldb-native-preview
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      OPERATION: ${{ inputs.operation }}
+      POINTER: ${{ inputs.pointer }}
+      POINTER_GENERATION: ${{ inputs.pointer_generation }}
+      POINTER_SHA256: ${{ inputs.pointer_sha256 }}
+      ROLLBACK_REVISION: ${{ inputs.revision }}
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: us-central1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set temporary paths
+        run: |
+          echo "DOWNLOAD=$RUNNER_TEMP/native-download" >> "$GITHUB_ENV"
+          echo "EVIDENCE=$RUNNER_TEMP/native-deployment" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: api/.python-version
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.11.23'
+      - run: uv sync --locked --project api
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Download the exact selected release
+        if: inputs.operation == 'deploy'
+        working-directory: api
+        run: |
+          test -n "$POINTER" && test -n "$POINTER_GENERATION" && test -n "$POINTER_SHA256"
+          .venv/bin/python -m jobs.publish download --pointer "$POINTER" \
+            --pointer-generation "$POINTER_GENERATION" --pointer-sha256 "$POINTER_SHA256" \
+            --output "$DOWNLOAD"
+          .venv/bin/python -m jobs.deploy assert-current --download "$DOWNLOAD"
+
+      - name: Build and check the native image
+        if: inputs.operation == 'deploy'
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          RELEASE_SHA=$(cd api && .venv/bin/python -m jobs.deploy identity --release "$DOWNLOAD/release" | jq -r .release_sha256)
+          IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/nfldb/nfldb-native:$GITHUB_SHA-${RELEASE_SHA:0:16}-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker build --target native --provenance=false \
+            --build-context "native_snapshot=$DOWNLOAD/release" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "nfldb.release.sha256=$RELEASE_SHA" -t "$IMAGE" .
+          docker run --rm --read-only --tmpfs /tmp --memory 4g --cpus 2 \
+            "$IMAGE" python -m jobs.deploy check-image
+          docker run --rm --read-only --tmpfs /tmp --memory 4g --cpus 2 \
+            "$IMAGE" python -m pytest tests/test_reconciliation.py tests/test_ask_limits.py \
+            tests/test_ask_provenance.py tests/test_ask_telemetry.py -q -p no:cacheprovider
+          docker push "$IMAGE"
+          DIGEST=$(gcloud artifacts docker images describe "$IMAGE" --format='value(image_summary.digest)')
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/nfldb/nfldb-native@$DIGEST" >> "$GITHUB_ENV"
+
+      - name: Deploy or roll back the isolated preview
+        run: bash .github/scripts/native-preview.sh
+
+      - name: Preserve deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-deployment-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/native-deployment/
+            ${{ runner.temp }}/native-download/download.json
+          if-no-files-found: ignore

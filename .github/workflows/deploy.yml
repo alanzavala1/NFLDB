@@ -37,15 +37,20 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 
-      # The 400MB DuckDB file lives in a GCS bucket (too big for git). Pull it
-      # so it gets baked into the image.
+      # Transitional legacy source. Keep it outside the shared build context.
       - name: Fetch database from GCS
-        run: gcloud storage cp gs://${{ secrets.GCP_DB_BUCKET }}/nfl.duckdb api/data/nfl.duckdb
+        env:
+          DB_BUCKET: ${{ secrets.GCP_DB_BUCKET }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/legacy-snapshot"
+          gcloud storage cp "gs://$DB_BUCKET/nfl.duckdb" "$RUNNER_TEMP/legacy-snapshot/nfl.duckdb"
 
       - name: Build image
         env:
           IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}
-        run: docker build --provenance=false -t "$IMAGE" .
+        run: |
+          docker build --target legacy --provenance=false \
+            --build-context "legacy_snapshot=$RUNNER_TEMP/legacy-snapshot" -t "$IMAGE" .
 
       # Test the DB and assistant against the dependencies actually shipped.
       # The assistant checks use a fake provider: no credentials or billed calls.
