@@ -309,6 +309,8 @@ The legacy `refresh.yml` and `deploy.yml` still use the bucket's original
 leaves that serving path intact. Selection and verified download commands are
 implemented. The [native preview workflow](../DEPLOY.md) consumes the selected
 bundle and supports verified revision rollback on a separate service. The
-workflow that captures and prepares refreshed native inputs and the production
-cutover remain work to finish. Ask model/streaming changes and alternative
-frontend hosting remain separate milestones.
+[native refresh workflow](NATIVE_REFRESH_AUTOMATION.md) now captures and prepares
+refreshed inputs, publishes a versioned release, and conditionally updates its
+configured selection. It has not been pushed or activated in GitHub Actions.
+That activation and production cutover remain work to finish. Ask model/streaming
+changes and alternative frontend hosting remain separate milestones.

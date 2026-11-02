@@ -96,10 +96,11 @@ are implemented, together with conditional cloud selection and verified
 downloads. A cloud completion manifest links the validated bundle to its matching
 input ZIP and pins every uploaded object generation. The selected bundle now
 also feeds an isolated [native preview deployment](../DEPLOY.md), with image
-verification and revision rollback. Cloud migration still needs fresh
-capture/passing/collection orchestration and production cutover. The scheduled
-workflow retains its legacy ingest/upload path; do not describe it as migrated
-or run it as a native release workflow yet.
+verification and revision rollback. The [native refresh automation](NATIVE_REFRESH_AUTOMATION.md)
+connects fresh capture, passing exports, historical composition, full preparation
+and publication. GitHub activation and production cutover remain separate. The
+existing scheduled workflow retains its legacy ingest/upload path; do not
+describe it as migrated or run it as a native release workflow yet.
 
 The [Linux preparation trial](LINUX_PREPARATION_TRIAL.md) checks the worker
 runtime separately from cloud storage and deployment. It uses copied artifacts

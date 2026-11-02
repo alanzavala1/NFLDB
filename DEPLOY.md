@@ -11,9 +11,10 @@ R runs in the offline worker, not the serving container.
   bucket database on `nfldb`; it has not switched to native publications.
 - `deploy-native-preview.yml` is a manual, separate path targeting only
   **`nfldb-native-preview`**. It consumes an exact, verified cloud selection.
-- Scheduled native capture/preparation and production cutover remain work to
-  finish. Prepare fresh inputs before cutover: validation describes captured
-  inputs and does not promise they are the latest feeds.
+- The [native refresh workflow](docs/NATIVE_REFRESH_AUTOMATION.md) now connects
+  capture, calculation, validation and publication. GitHub activation and the
+  production cutover remain separate. Validation describes captured inputs and
+  does not promise no upstream feed changed after preparation.
 
 See [cloud publication and selection](docs/CLOUD_RELEASES.md) and
 [offline preparation](docs/OFFLINE_RELEASES.md) for the preceding steps.
