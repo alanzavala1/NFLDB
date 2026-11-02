@@ -3,3 +3,5 @@
 api/r/renv.lock text eol=crlf
 api/r/*.R text eol=lf
 api/experiments/*.R text eol=lf
+# Deployment scripts execute on Linux even when edited on Windows.
+*.sh text eol=lf

@@ -94,11 +94,12 @@ The local protocol, [portable capture packing/restore](CAPTURE_ARCHIVES.md),
 native source-version proofs and [versioned cloud uploads](CLOUD_RELEASES.md)
 are implemented, together with conditional cloud selection and verified
 downloads. A cloud completion manifest links the validated bundle to its matching
-input ZIP and pins every uploaded object generation. Cloud migration still needs
-fresh capture/passing/collection orchestration and deployment consuming the
-selected bundle. The
-scheduled workflow still has its legacy ingest/upload path; do not describe it
-as migrated or run it as a native release workflow yet.
+input ZIP and pins every uploaded object generation. The selected bundle now
+also feeds an isolated [native preview deployment](../DEPLOY.md), with image
+verification and revision rollback. Cloud migration still needs fresh
+capture/passing/collection orchestration and production cutover. The scheduled
+workflow retains its legacy ingest/upload path; do not describe it as migrated
+or run it as a native release workflow yet.
 
 The [Linux preparation trial](LINUX_PREPARATION_TRIAL.md) checks the worker
 runtime separately from cloud storage and deployment. It uses copied artifacts

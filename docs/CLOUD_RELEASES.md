@@ -255,11 +255,60 @@ Evidence remains ignored under `api/data/`: `selection-cloud-proof-20261101.json
 `selected-cloud-download-retry-20261101/`. No production selection or deployment
 was performed by this trial.
 
+## Native preview deployment proof — November 1, 2026
+
+The Docker build now keeps all local data outside its shared source context.
+The native target receives only the four verified release files through a named
+context; the transitional legacy target receives its own database through a
+different named context. Both targets were built and inspected. The native image
+contained no legacy database, captures, or experiments. The legacy image's
+database retained its original SHA256.
+
+The native image used code commit `9825057c20ec67ac11f4d601df046f55ef6fe9d4`
+and the October 28 snapshot already published and downloaded above. It passed
+102 API checks with real application startup, rejected a persistent database
+write, and passed 24 reconciliation/assistant tests with a read-only container
+filesystem. Local HTTP checks also verified the frontend and API.
+
+The image was pushed to Artifact Registry and deployed by immutable digest:
+`sha256:3d2b21a06dddad6cb76e94727453902097884bfd044bdcf2e2c9fd0c0e0a9bb4`.
+The ordinary rollout script then completed three real Cloud Run operations on
+the separate `nfldb-native-preview` service:
+
+1. Created and verified revision `nfldb-native-preview-n-20261101-1`.
+2. Created revision `nfldb-native-preview-n-20261101-2` at zero traffic, checked
+   its tagged URL and image digest, rechecked the selection, and promoted it.
+3. Verified the first revision through a tag and rolled traffic back to it.
+
+After rollback, all 102 certified API paths also passed over actual network HTTP
+against the [cloud preview](https://nfldb-native-preview-urbkyyex2a-uc.a.run.app),
+along with health and frontend checks. Production remained on
+`nfldb-00072-vs6` at 100% traffic; its recorded revision, URL and traffic metadata
+were unchanged. No production selection or legacy bucket object was written.
+
+Both preview revisions intentionally used the same verified image and captured
+data. This proves real revision rollout/rollback plumbing, not a comparison
+between different data releases. Candidate rejection, superseded selection, and
+recovery after a failed promotion were additionally exercised against a stateful
+Cloud Run stand-in. The related suite passed 65 tests on Linux; Windows passed
+58 with the seven Linux shell tests skipped. Workflow syntax passed actionlint.
+The GitHub workflow itself has not been pushed or dispatched; the real cloud
+trial ran its ordinary script using the existing authenticated SDK.
+
+The native validation policy remains `f72611443cf21bba4fc9ecec485459304b10e6094c4997339747b4ac16ef7ef4`.
+No statistical definitions, tolerances or availability rules changed. Audits
+confirmed all five protected databases, downloaded payloads, original release
+and capture archive retained their hashes and no WALs appeared. Ignored evidence
+is under `api/data/native-image-*20261101*`, `native-preview-*20261101*`,
+`native-deployment-*20261101*`, and `legacy-image-*20261101*`.
+
 ## Remaining integration
 
 The legacy `refresh.yml` and `deploy.yml` still use the bucket's original
 `nfl.duckdb` and standalone watermarks. Uploading or selecting a native release
 leaves that serving path intact. Selection and verified download commands are
-implemented; deployment/rollback handling and the workflow that captures and
-prepares refreshed native inputs remain separate work. Ask model/streaming
-changes and alternative frontend hosting remain separate milestones.
+implemented. The [native preview workflow](../DEPLOY.md) consumes the selected
+bundle and supports verified revision rollback on a separate service. The
+workflow that captures and prepares refreshed native inputs and the production
+cutover remain work to finish. Ask model/streaming changes and alternative
+frontend hosting remain separate milestones.
