@@ -31,7 +31,6 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      pointer: ${{ steps.selection.outputs.pointer }}
       pointer_generation: ${{ steps.selection.outputs.pointer_generation }}
       pointer_sha256: ${{ steps.selection.outputs.pointer_sha256 }}
     env:
@@ -145,7 +144,7 @@ jobs:
           .venv/bin/python -m jobs.publish select --pointer "$POINTER" --destination "$DESTINATION" \
             --expected-generation "$GENERATION" --manifest-generation "$MANIFEST_GENERATION" \
             --manifest-sha256 "$MANIFEST_SHA" > "$REFRESH_ROOT/selection.json"
-          jq -r '"pointer=\(.pointer)", "pointer_generation=\(.pointer_generation)", "pointer_sha256=\(.pointer_sha256)"' \
+          jq -r '"pointer_generation=\(.pointer_generation)", "pointer_sha256=\(.pointer_sha256)"' \
             "$REFRESH_ROOT/selection.json" >> "$GITHUB_OUTPUT"
 
       - name: Preserve refresh evidence
@@ -172,7 +171,9 @@ jobs:
     uses: ./.github/workflows/deploy-native.yml
     with:
       target: ${{ vars.NATIVE_REFRESH_TARGET }}
-      pointer: ${{ needs.refresh.outputs.pointer }}
+      # Bucket names can contain GCP_PROJECT_ID, which GitHub masks as a secret.
+      # Pass the configured URI directly instead of a secret-derived job output.
+      pointer: ${{ inputs.pointer || vars.NATIVE_REFRESH_POINTER }}
       pointer_generation: ${{ needs.refresh.outputs.pointer_generation }}
       pointer_sha256: ${{ needs.refresh.outputs.pointer_sha256 }}
     secrets: inherit
