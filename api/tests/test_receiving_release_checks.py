@@ -87,7 +87,7 @@ def test_full_diagnostics_use_bound_receiving_instead_of_down_subtotals_and_keep
         return original(conn,year,category,*args)
     monkeypatch.setattr(reconciliation,'count_mismatches',counts)
     messages = []
-    with pytest.raises(SnapshotValidationError,match='coverage-aware API/UI'):
+    with pytest.raises(SnapshotValidationError,match='require native passing preparation before publication'):
         validate_snapshot(c,receiving_inputs=inputs,log=messages.append)
     assert calls == ['receiving','charting']
     assert any('Snapshot[2024]' in msg and 'pass_attempts=0/0' in msg for msg in messages)
