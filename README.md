@@ -8,7 +8,7 @@ a time, and **Ask NFLDB**, an agent that answers plain-English questions
 through the platform's typed queries. Preparation validates supported statistics,
 source coverage, and API responses before publishing a release.
 
-**[Deployment guide →](./DEPLOY.md)** &nbsp;·&nbsp; one-container deploy to Cloud Run (free tier)
+**[Live site →](https://nfl-db.cloud.run)** &nbsp;·&nbsp; **[Deployment guide →](./DEPLOY.md)**
 
 ![Game lineup — matchup field view with per-player EPA game ratings](docs/img/lineup.png)
 

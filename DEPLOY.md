@@ -5,6 +5,25 @@ DuckDB snapshot. Cloud Run serves that snapshot **read-only**. It never download
 sources, prepares analytics, or updates watermarks during a visitor's request.
 R runs in the offline worker, not the serving container.
 
+## Public address
+
+The live site is **https://nfl-db.cloud.run**. A Cloud Run custom URL mapping
+connects that hostname to service `nfldb` in `us-central1`. The mapping follows
+the service's traffic allocation across deployments and rollbacks.
+
+The mapping was created November 6, 2026 using Google Cloud CLI 592.0.0 with
+the beta component. Google's [custom URL feature](https://docs.cloud.google.com/run/docs/custom-urls)
+is in Preview. Its HTTPS address requires no domain registration or DNS setup.
+
+```bash
+gcloud beta run domain-mappings describe --domain nfl-db.cloud.run \
+  --project project-60bdbe3e-823a-46fb-b02 --region us-central1
+```
+
+Google reported the mapping Ready and DomainRoutable. Public HTTP checks passed
+for health, all 28 seasons, standings, homepage, the Splits client route, and
+the frontend's JavaScript and CSS assets.
+
 ## Native deployment
 
 - `deploy-native.yml` supports **preview** (`nfldb-native-preview`) and
