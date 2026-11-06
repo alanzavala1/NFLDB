@@ -16,6 +16,7 @@ class TeamGame(BaseModel):
     by attach_records() are required (always set on this endpoint)."""
     game_id: str
     season: int
+    game_type: str
     week: int
     gameday: str | None
     gametime: str | None
@@ -55,12 +56,13 @@ class TeamLeader(BaseModel):
     rush_tds: float
     rush_epa: float
 
-    targets: float
+    # Known source gaps are unavailable, never a measured zero.
+    targets: float | None
     receptions: float
     rec_yards: float
     rec_tds: float
-    air_yards: float
-    yac: float
+    air_yards: float | None
+    yac: float | None
     rec_epa: float
 
     solo_tackles: float

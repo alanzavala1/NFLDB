@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { api } from '../api'
-import type { Game, WeekGroup } from '../api'
+import { scheduleQueryOptions } from '../api/schedule'
+import type { Game } from '../types'
+import { QueryError, QueryLoading } from './QueryFeedback'
 import { teamLogoUrl, CONFERENCES } from '../utils/teams'
 import Card from './Card'
 
-export type ConfKey = 'AFC' | 'NFC'
+type ConfKey = 'AFC' | 'NFC'
 
-export function teamConference(team: string): ConfKey | null {
+function teamConference(team: string): ConfKey | null {
   for (const conf of ['AFC', 'NFC'] as const) {
     for (const teams of Object.values(CONFERENCES[conf])) {
       if (teams.includes(team)) return conf
@@ -16,7 +17,7 @@ export function teamConference(team: string): ConfKey | null {
   return null
 }
 
-export const CONF_STYLE: Record<ConfKey, { text: string; dot: string }> = {
+const CONF_STYLE: Record<ConfKey, { text: string; dot: string }> = {
   AFC: { text: 'text-ink-mid', dot: 'bg-surface-raise' },
   NFC: { text: 'text-ink-mid', dot: 'bg-surface-raise' },
 }
@@ -153,25 +154,21 @@ function SuperBowlCard({ game, champ, season }: { game: Game; champ: string | nu
 }
 
 export function PlayoffBracket({ season, title }: { season: number; title?: string }) {
-  const [weeks, setWeeks] = useState<WeekGroup[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    setWeeks([])
-    api.schedule(season)
-      .then(setWeeks)
-      .catch(() => setWeeks([]))
-      .finally(() => setLoading(false))
-  }, [season])
-
-  if (loading) return null
+  const schedule = useQuery(scheduleQueryOptions(season))
+  if (schedule.isPending) return <QueryLoading>Loading playoffs…</QueryLoading>
+  if (schedule.isError && !schedule.data) {
+    return <QueryError message={`Could not load playoffs. ${schedule.error.message}`} onRetry={() => void schedule.refetch()} />
+  }
+  const weeks = schedule.data ?? []
+  const refreshError = schedule.isError
+    ? <QueryError message="Could not refresh playoffs. Showing the last successful result." onRetry={() => void schedule.refetch()} />
+    : null
 
   const playoffGames = weeks
     .flatMap(w => w.games)
     .filter(g => g.game_type === 'WC' || g.game_type === 'DIV' || g.game_type === 'CON' || g.game_type === 'SB')
 
-  if (!playoffGames.length) return null
+  if (!playoffGames.length) return refreshError
 
   playoffGames.sort((a, b) => a.week - b.week || (a.gametime ?? '').localeCompare(b.gametime ?? ''))
 
@@ -192,6 +189,7 @@ export function PlayoffBracket({ season, title }: { season: number; title?: stri
           {playoffGames.length} game{playoffGames.length === 1 ? '' : 's'}
         </span>} className="mb-10">
 
+      {refreshError}
       <div className="grid grid-cols-1 gap-4 border-t border-surface-line p-4 lg:grid-cols-[1fr_minmax(260px,auto)_1fr] lg:items-center">
         <ConferenceBracket conf="AFC" games={afc} champs={champs} side="left" />
         {sb

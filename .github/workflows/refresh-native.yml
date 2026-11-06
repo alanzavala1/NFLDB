@@ -1,0 +1,178 @@
+name: Prepare native data release
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      pointer:
+        description: 'Existing native selection URI; blank uses NATIVE_REFRESH_POINTER variable'
+        type: string
+      season:
+        description: 'Season; blank uses newest scheduled season'
+        type: string
+      force:
+        description: 'Prepare even when watched sources are unchanged'
+        type: boolean
+        default: false
+
+# Preparation publishes immutable native data and conditionally updates selection.
+# NATIVE_REFRESH_TARGET opts into deploying that exact selection after validation.
+concurrency:
+  group: nfldb-native-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.event_name == 'workflow_dispatch' || vars.NATIVE_REFRESH_POINTER != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      pointer: ${{ steps.selection.outputs.pointer }}
+      pointer_generation: ${{ steps.selection.outputs.pointer_generation }}
+      pointer_sha256: ${{ steps.selection.outputs.pointer_sha256 }}
+    env:
+      POINTER: ${{ inputs.pointer || vars.NATIVE_REFRESH_POINTER }}
+      REFRESH_SEASON: ${{ inputs.season }}
+      FORCE: ${{ inputs.force && '1' || '0' }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NFL_TEST_MODE: '1'
+      NFL_DB_READ_ONLY: '1'
+      PYTHONUNBUFFERED: '1'
+      DUCKDB_MEMORY_LIMIT: 8GB
+      DUCKDB_THREADS: '4'
+      LC_ALL: C
+      MAKEFLAGS: -j4
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '4'
+      RENV_CONFIG_CACHE_ENABLED: 'FALSE'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set temporary paths
+        run: |
+          test -n "$POINTER" || { echo 'Configure NATIVE_REFRESH_POINTER or supply a pointer input.' >&2; exit 1; }
+          echo "REFRESH_ROOT=$RUNNER_TEMP/native-refresh" >> "$GITHUB_ENV"
+          echo "NATIVE_R_LIBRARY=$RUNNER_TEMP/native-r-library" >> "$GITHUB_ENV"
+          mkdir "$RUNNER_TEMP/native-refresh"
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: api/.python-version
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.11.23'
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+      - run: uv sync --locked --project api
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Check selected release and upstream versions
+        id: plan
+        working-directory: api
+        run: |
+          OPTIONS=()
+          if [[ -n "$REFRESH_SEASON" ]]; then OPTIONS+=(--season "$REFRESH_SEASON"); fi
+          if [[ "$FORCE" == 1 ]]; then OPTIONS+=(--force); fi
+          .venv/bin/python -m jobs.refresh_native plan --pointer "$POINTER" \
+            --output "$REFRESH_ROOT/plan.json" "${OPTIONS[@]}"
+          echo "changed=$(jq -r .changed "$REFRESH_ROOT/plan.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Download exact base snapshot and historical captures
+        if: steps.plan.outputs.changed == 'true'
+        working-directory: api
+        run: |
+          GENERATION=$(jq -r .selection.pointer_generation "$REFRESH_ROOT/plan.json")
+          SHA=$(jq -r .selection.pointer_sha256 "$REFRESH_ROOT/plan.json")
+          .venv/bin/python -m jobs.publish download --pointer "$POINTER" \
+            --pointer-generation "$GENERATION" --pointer-sha256 "$SHA" \
+            --include-captures --output "$REFRESH_ROOT/download"
+
+      - name: Install pinned R runtime and system libraries
+        if: steps.plan.outputs.changed == 'true'
+        run: bash .github/scripts/setup-native-r.sh
+      - name: Restore cached R library
+        if: steps.plan.outputs.changed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NATIVE_R_LIBRARY }}
+          key: ubuntu24-r-${{ hashFiles('api/r/.R-version', 'api/r/renv.lock', 'api/r/restore.R', '.github/scripts/setup-native-r.sh') }}
+      - name: Restore and verify locked R packages
+        if: steps.plan.outputs.changed == 'true'
+        working-directory: api
+        run: /opt/R/4.6.1/bin/Rscript --vanilla r/restore.R "$NATIVE_R_LIBRARY"
+
+      - name: Capture, calculate, prepare and validate
+        if: steps.plan.outputs.changed == 'true'
+        working-directory: api
+        run: |
+          df -h "$REFRESH_ROOT"
+          .venv/bin/python -m jobs.refresh_native prepare --plan "$REFRESH_ROOT/plan.json" \
+            --download "$REFRESH_ROOT/download" --workspace "$REFRESH_ROOT/prepared" \
+            --rscript /opt/R/4.6.1/bin/Rscript --r-library "$NATIVE_R_LIBRARY" \
+            > "$REFRESH_ROOT/preparation.log" 2>&1
+          df -h "$REFRESH_ROOT"
+
+      # Preparation can take long enough to outlive the initial credentials.
+      - name: Renew cloud authentication before publication
+        if: steps.plan.outputs.changed == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+      - name: Publish completed release and conditionally select it
+        id: selection
+        if: steps.plan.outputs.changed == 'true'
+        working-directory: api
+        run: |
+          test -f "$REFRESH_ROOT/prepared/refresh.json"
+          BUCKET=$(jq -r '.selection.pointer | split("/")[2]' "$REFRESH_ROOT/plan.json")
+          DESTINATION="gs://$BUCKET/native/releases/refresh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          .venv/bin/python -m jobs.publish upload --release "$REFRESH_ROOT/prepared/release" \
+            --captures "$REFRESH_ROOT/prepared/captures.zip" --destination "$DESTINATION" \
+            > "$REFRESH_ROOT/publication.log" 2>&1
+          .venv/bin/python -m jobs.publish verify --destination "$DESTINATION" > "$REFRESH_ROOT/publication.json"
+          GENERATION=$(jq -r .selection.pointer_generation "$REFRESH_ROOT/plan.json")
+          MANIFEST_GENERATION=$(jq -r .manifest_generation "$REFRESH_ROOT/publication.json")
+          MANIFEST_SHA=$(jq -r .manifest_sha256 "$REFRESH_ROOT/publication.json")
+          .venv/bin/python -m jobs.publish select --pointer "$POINTER" --destination "$DESTINATION" \
+            --expected-generation "$GENERATION" --manifest-generation "$MANIFEST_GENERATION" \
+            --manifest-sha256 "$MANIFEST_SHA" > "$REFRESH_ROOT/selection.json"
+          jq -r '"pointer=\(.pointer)", "pointer_generation=\(.pointer_generation)", "pointer_sha256=\(.pointer_sha256)"' \
+            "$REFRESH_ROOT/selection.json" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve refresh evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-refresh-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/native-refresh/*.json
+            ${{ runner.temp }}/native-refresh/*.log
+            ${{ runner.temp }}/native-refresh/download/download.json
+            ${{ runner.temp }}/native-refresh/prepared/refresh.json
+            ${{ runner.temp }}/native-refresh/prepared/release/*.json
+            ${{ runner.temp }}/native-refresh/prepared/fresh/receiving/*.log
+            ${{ runner.temp }}/native-refresh/prepared/fresh-passing/*.log
+          if-no-files-found: ignore
+
+  deploy:
+    needs: refresh
+    if: needs.refresh.outputs.pointer_generation != '' && vars.NATIVE_REFRESH_TARGET != ''
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-native.yml
+    with:
+      target: ${{ vars.NATIVE_REFRESH_TARGET }}
+      pointer: ${{ needs.refresh.outputs.pointer }}
+      pointer_generation: ${{ needs.refresh.outputs.pointer_generation }}
+      pointer_sha256: ${{ needs.refresh.outputs.pointer_sha256 }}
+    secrets: inherit

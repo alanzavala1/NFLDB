@@ -1,0 +1,636 @@
+# Frontend data flow
+
+The analytics pages use shared typed requests and TanStack Query. Standings
+established this pattern; each feature owns its layout and specialized query
+policies. Ask's conversation and streaming client remain a separate migration.
+
+Scores/Schedule now uses this pattern for seasons, schedule, standings, league
+leaders, and power rankings. It waits for metadata to confirm a readable season,
+then starts the four season-specific queries independently. Loaded and scheduled
+seasons are readable here; standings selection still requires loaded statistics.
+Each section has its own error/retry state. Cached results stay visible with a
+warning when a background refresh fails. Live scores use the shared query cache
+with server pacing and the existing ordering safeguards.
+
+Season schedule assembly now lives in `api/services/schedule.py`, shared by the
+HTTP route and assistant. Week grouping, kickoff ordering and pregame-record
+annotations are unchanged; the route still owns season defaults and validation.
+The separate weekly `/api/games` listing uses the same backend module, retaining
+its week validation and 404 response for an empty week. Its team-record fields
+remain null; it does not use the season listing's record annotations.
+
+Power-ranking response assembly now lives in `api/services/power_rankings.py`,
+shared by the HTTP route and assistant. Team records stop at the ranking's
+selected week; the builder's existing EPA calculation remains separate. See
+[backend data ownership](BACKEND_DATA.md).
+
+Scores lives in `frontend/src/features/scores/`. `ScoresPage.tsx` owns query
+state, season/week URL choices, and layout. `WeekNavigator.tsx`, `SeasonCard.tsx`,
+`FeaturedGame.tsx`, `GameList.tsx`, `SidebarPanels.tsx`, `Storylines.tsx`, and
+`SeasonRecap.tsx` own their visible sections. `selectors.ts` chooses the displayed
+week, featured game, and kickoff groups; `presentation.ts` contains shared labels
+and formatting. Cards receive data and callbacks through props. Game-list rows
+also read the shared live provider, so moving them creates no additional pollers.
+Backend pregame record annotations for schedules, game details and team profiles
+now share `api/services/schedule_records.py`; their existing calculation and
+response fields are unchanged.
+
+Leaders now lives in `frontend/src/features/leaders/`. Its page coordinates
+metadata, player-stat queries, URL choices, and local sort state. Tables,
+column definitions, awards, the dashboard, and the podium have separate owners.
+`WpaPanel.tsx` mounts its query only when WPA is selected. Its typed resource
+module is `src/api/wpaLeaders.ts`; the panel uses its query options directly.
+The backend route delegates its three play-based queries to
+`api/services/wpa_leaders.py`, preserving qualification and response fields.
+Statistics and WPA failures have separate retries and retain successful cached
+results on refresh failures. Shared loaded-season selection is in
+`src/utils/seasons.ts`, used by both Standings and Leaders. Scores also permits
+scheduled seasons because published fixtures can precede statistics.
+
+The ordinary leaders endpoint and the assistant now share season-total logic in
+`api/services/leaders.py`. The UI still owns tab-specific qualifications and
+sorting; the assistant chooses a requested stat and a bounded ranking. Both start
+with the same regular-season totals and roster join. See
+[backend data ownership](BACKEND_DATA.md).
+
+The two sortable Leaders views share `LeaderTable.tsx`, backed by TanStack
+Table 9. It receives the existing NFL column definitions and exposes their
+numeric accessors to the sorting engine. Formatting remains separate, so
+`5,000` displays with commas but sorts as `5000`. The page stores a controlled
+sorting state for each tab, preserving that tab's choice when switching views.
+Only row sorting and its numeric comparator are enabled. Header buttons support
+keyboard activation and expose their sort direction through `aria-sort`.
+Qualification rules, formulas, grouped labels, colors, and links remain
+application-owned. Simple Standings tables and the fixed WPA table remain HTML.
+
+The Table pilot replaced duplicated renderers and handwritten sorting with one
+138-line renderer. Its measured cost is roughly 10 KB of additional compressed
+JavaScript across the production build. Browser checks preserve numeric sorting,
+ties, tab state, keyboard controls, and mobile scrolling; captured desktop,
+position-view, and mobile layouts match their pre-pilot screenshots exactly.
+
+Backend player composition now lives in `api/services/player_profile.py`, shared
+by the HTTP route and assistant. Supporting snaps, tracking, advanced statistics
+and supplemental queries have focused service modules. See the backend ownership
+notes for the request flow and optional-data error policy.
+
+Player profiles now read the returned profile without starting season ingestion,
+polling ingestion status, or invalidating the profile for years without games.
+A known player without game records keeps their biography and shows an empty
+state. Request failures show an error and retry; a failed refresh preserves the
+cached profile.
+
+Profile and similar-player requests now live in `src/api/players.ts`, using the
+shared typed client and canonical query options. Cache keys include the player
+ID, and each request consumes Query's cancellation signal. The Player page uses
+these options directly; Splits uses the same profile options for its dynamic
+queries. Both profile and comparables now inherit the normal five-minute
+freshness policy instead of
+keeping comparables or Splits profiles permanently fresh.
+
+The profile, league-rank context, and similar-player section have independent
+errors and retries. Successful cached results stay visible on refresh failures,
+including cached empty comparables. Empty comparables have an explicit message;
+their loading message describes fetching rather than implying preparation runs
+in the browser. Rank context waits for the profile's latest regular-season year
+and shares the existing leaders cache.
+
+Player now lives in `src/features/players/`. `PlayerPage.tsx` coordinates route
+state, profile/rank queries, section navigation, and layout. `ProfileHeader.tsx`,
+`BackgroundCard.tsx`, `HighlightsBar.tsx`, `CareerTrajectory.tsx`, `CareerTable.tsx`,
+`TeamSplits.tsx`, `GameLog.tsx`, and `ComparablesSection.tsx` own their sections.
+`selectors.ts` groups returned games into regular-season, postseason, and game-log
+views. `stats.ts`, `rankings.ts`, and `careerColumns.ts` keep totals, formatting,
+rank qualifications, and column definitions separate from page composition.
+Components receive data through props; only Similar Players owns an additional
+query. `src/types/navigation.ts` describes the originating-game context shared by
+game/player navigation. These route-state types are separate from API schemas.
+The old Player page entry is removed; the router imports the feature page.
+
+Team now reads the five newest loaded seasons from server metadata, with controls
+to reveal older loaded years. It does not guess five calendar years, queue season
+jobs, poll preparation status, or show a preparation spinner. Empty publication
+lists have an explicit empty state. Each profile has independent pending/error/
+retry feedback; a failed selected year never falls back to another year's detail.
+Cached results stay visible with a warning if a refresh fails. Revealing an older
+year changes which profile queries are observed and only reads published data.
+
+Team profile, roster, depth-chart, injury, and split requests/options now live in
+`src/api/teams.ts`. League-wide analytics live in `src/api/teamAnalytics.ts`.
+Backend profile assembly now lives in `api/services/team_profile.py`, shared by
+the HTTP route and assistant. The route keeps its existing missing-profile 404;
+scheduled games without player stats still return a valid profile.
+Each request uses the shared typed client and consumes an `AbortSignal`.
+The team depth-chart route and assistant team overview now share snapshot
+selection in `api/services/team_depth_chart.py`. The feed has no weekly history;
+the existing snapshot/season rules are described in
+[backend data ownership](BACKEND_DATA.md).
+Team injury reports similarly share `api/services/team_injuries.py`; they retain
+their weekly history, latest team/season selection and explicit-week behavior.
+Team-specific cache keys include team/year and, for depth/injuries, optional week.
+League analytics use one key per year because a response contains every team.
+Team uses these definitions directly; Splits reuses canonical team-split and
+analytics options. These resources inherit
+the normal five-minute freshness policy, replacing permanent freshness for splits
+and their duplicate Splits-page observers.
+
+Each section distinguishes pending, successful-empty, and failed requests and has
+its own retry. Failed refreshes preserve successful cached data and warn, including
+empty arrays or an analytics response with no matching team. The roster query
+mounts only while its modal is open; closing it cancels unfinished work, and fresh
+results are reused on reopening. Analytics derives the focal team from Query data
+instead of keeping fetched/loading state in an effect. Unknown roster positions
+remain visible under Other.
+Roster selection now lives in `api/services/team_roster.py`. The HTTP route
+retains season defaults and the existing 404 response for a missing roster;
+the frontend's error/retry behavior is unchanged.
+The selected detail is keyed by team/year so local UI state resets between profiles.
+There are no frontend season-loading callers; obsolete `api.loadSeason` is removed.
+Backend admin endpoints and generated contract types are unchanged.
+
+Team now lives in `src/features/teams/`. Its small page coordinates publication
+metadata, dynamic profile queries, selected/revealed years, and the layout.
+`SeasonSidebar.tsx` and `SeasonDetail.tsx` compose the existing sections;
+summary, schedule/chart, leaders, analytics, situational splits, injury/lineup,
+and roster/full-stat modals each have focused components. `columns.ts`, `stats.ts`,
+`selectors.ts`, `analyticsMetrics.ts`, and `splitDefinitions.ts` own presentation
+definitions and calculations, while `types.ts` describes their local props/configs.
+The router imports this feature directly and the old large Team entry is removed.
+The largest feature file is the 210-line column definitions module.
+
+The team-game response now includes `game_type` from schedules, declared in the
+backend's TeamGame schema and regenerated frontend contract. Schedule/chart labels
+can name playoff rounds, and full-stat summaries count regular-season and playoff
+games separately. Previously the UI tried to read this missing field through
+untyped casts. The tooltip now uses the chart library's inferred parameter types.
+
+Team's full-stat tables now use TanStack Table 9 for interactive sorting, matching
+Leaders. The existing numeric `sortVal` functions become column accessors; display
+formatting, share bars, summary strips, and team-total footers remain application
+code. The modal keeps independent controlled sorting state for every section in
+regular season and postseason. Header buttons support keyboard activation and
+expose direction through `aria-sort`, with one column sorted at a time and a
+descending/ascending cycle. Section preparation retains the established tie order.
+Scrimmage/defense reveal limits apply after sorting; totals include every qualifying
+player regardless of visible row count. Existing Table code is shared in the
+production bundle; this migration adds no dependency.
+
+Team season selection now belongs to React Router's `season` search parameter,
+using the shared loaded-season validator. A bare URL selects the newest published
+year; a valid old-year bookmark also reveals that year beyond the initial five
+sidebar entries. Invalid or unpublished explicit years show an availability
+message and start no profile/section queries until a loaded year is chosen.
+Changing the year preserves unrelated query parameters and creates a history
+entry, so back/forward restores the view using Query's cache. Re-selecting the
+same explicit year does not create a duplicate entry. Revealed sidebar rows
+remain local UI state; there is no effect synchronizing a second selected year.
+
+Games now uses the shared typed client and canonical definitions in
+`src/api/games.ts` for detail, lineup, and player charts. Its season schedule
+uses the existing `src/api/schedule.ts` definition, sharing the same cache as
+Scores and Standings. Detail and lineup start independently; schedule waits for
+the detail response's season, and a chart starts only when a player is selected.
+Chart keys include both game ID and player ID, so one player's different games
+cannot share a chart result. Requests consume Query's cancellation signal;
+an in-flight shared schedule can remain needed by another observer, while a gap
+between observers can cancel and restart it. Fresh completed results are reused.
+
+Backend detail assembly now lives in `api/services/game_detail.py`, called by
+both the HTTP route and assistant. The route retains its schema and missing-game
+404. Box-score/scoring calculations and optional play-data fallbacks are
+unchanged. Ratings now delegate to `api/services/game_ratings.py`, with their
+schema, missing-game 404 and existing on-demand builder preserved. Ratings,
+lineup and player charts share `PGS_GAME_CTE` in `api/sql_helpers.py`. Lineup
+assembly now lives in `api/services/game_lineup.py`, preserving its snap identity
+matches, scoring, averages, builder behavior and missing-game 404. Player charts
+now use `api/services/game_player_chart.py`, preserving stat totals, role/event
+rules, the 80-event cap, snap percentage and both missing-game/player responses.
+Field placement, styling and passing/rushing plots stay frontend-owned.
+
+All four resources expose pending, error, and retry states. Cached successful
+results remain visible on refresh failures, including empty lineups, schedules,
+and charts. Empty data is distinguished from pending requests; a lineup failure
+no longer displays permanent loading, and a missing canonical player ID starts
+no chart request. Switching game routes resets the local tab and selected player
+while separate query keys prevent late responses from replacing the new game.
+Existing game/player origin state, statistical formatting, and live score
+overlays remain in place. The live query owns pacing and ordering; its provider
+distributes the selected games to consumers.
+
+Ordinary game queries inherit the normal five-minute freshness policy, including
+uncharted games. Consumers use the resource query options directly.
+
+Games now lives in `src/features/games/`. Its small `GamePage.tsx` owns
+queries, route context, tab choice, and composition. Header, quarter scores,
+team box score, game leaders, player-stat sections, scoring summary, key plays,
+and win probability have separate components. `GameLineupView.tsx` coordinates
+the lineup's ball choice, rating help, and selected player; field rendering,
+player nodes/rotation, the chart modal, passing zones, rushing gaps, and the rail
+have their own files. The largest feature file is 183 lines.
+
+Components receive game data and navigation origin through explicit props; the
+former game context is removed. `selectors.ts` selects related schedule games
+and sums team statistics, `playSelection.ts` identifies key plays, and
+`lineupPlacement.ts` arranges players and explains missing grades. Formatting,
+chart stat labels, and existing lineup CSS have separate owners. The CSS is
+still installed by the Game page, preserving its existing scope and order.
+The router imports the feature directly; both former large files are removed.
+
+The lineup field now uses separate schematic position rows. Groups spread across
+the available width, with at most five players per row; larger groups get another
+row. Field height grows to leave room between occupied rows. Player targets are
+at least 44 pixels wide and 50 pixels high, and names retain full accessible labels
+and chart access while long visible names truncate. Empty position rows preserve
+sparse-data placement; unidentified offense positions get separate overflow rows.
+Backend starter/rotation choices and rating values are unchanged.
+
+The O-line unit grade is above the field, and rating help expands in the page
+instead of covering players. Headers and controls wrap on phones. Field styles
+live in `lineupFieldStyles.ts`, composed into the Game page's existing stylesheet.
+Long chart names wrap, close controls have 44-pixel targets and stay visible
+while scrolling, and modal columns
+shrink without horizontal overflow; passing/rushing data and plot logic are
+unchanged. `tests/lineup-spacing.spec.ts` covers full standard/jumbo/spread units
+at 320, 390, 760 and 1280 pixels, both possession choices, separate contained
+targets and actual hit testing, unknown positions, keyboard opening, expandable
+help and narrow-phone passing/rushing charts.
+
+Nested stat bars, stat sections, player links, and leader sides are now stable
+module-level components. Independent request updates preserve keyboard focus
+instead of recreating those component types. The win-probability tooltip uses
+Recharts' existing types. All 29 former Game lint errors are resolved without
+suppressions or new dependencies. Browser checks preserve displayed statistics,
+qualification/order, ratios, plays, tooltips, formations/grades, role-specific
+maps, and modal closing. Eight desktop/mobile captures match their pre-move
+screenshots pixel for pixel; a source audit also verifies unchanged calculations,
+constants, and CSS.
+
+Splits uses `src/api/playerSplits.ts` for typed requests and canonical query
+options. Passing/rushing share `['player-splits', playerId]`; receiving observes
+the prepared `/receiving-splits` response under `['player-receiving-splits', playerId]`.
+Defense uses `['player-def-splits', playerId]`. Each includes its available seasons;
+the page filters and aggregates returned rows locally without mixing caches.
+The former permanent freshness override is removed; normal five-minute freshness
+and thirty-minute cache retention apply. Requests consume Query's abort signal.
+
+Only the active comparison mode observes data: player mode observes selected
+players' splits/profiles, while team mode observes selected team/season splits.
+Passing/rushing, receiving and defense observe only the selected dataset. Removing an entity,
+changing mode/category, or leaving the page cancels unneeded requests; separate
+cache keys isolate members and team seasons. Profiles and team splits reuse their
+previously migrated resource modules. Opponent ranks reuse league analytics only
+for a non-career offensive player comparison with at least one selected player.
+
+`src/features/splits/SplitQueryFeedback.tsx` shows independent failures/retries
+for each member's splits/profile and the optional rank context, with warnings
+that preserve successful cached data. Passing/rushing Season and Opponent sections
+follow profile request state because their rows come from game logs. Every receiving
+section follows the prepared receiving request; profiles provide display identity.
+Pending requests, failures, and successful empty selections
+have different messages. A failed comparison member does not hide usable members
+or their game logs. Season and remove-member controls have accessible labels.
+
+Splits now lives in `src/features/splits/`. `SplitsPage.tsx` is a small entry point and
+connects comparison state, canonical queries, derived view data, and components.
+`ComparisonControls.tsx`, `MatchupHeader.tsx`, `GetStarted.tsx`, `HeadToHead.tsx`,
+`StandoutSplits.tsx`, and `SplitSections.tsx` own visible sections. `StatTable.tsx`
+and `GroupedTable.tsx` retain the existing single/grouped renderers and sorting.
+Controls and sections receive related state/data/callbacks through explicit props.
+The router imports the feature directly; the former page/config files are removed.
+
+`useComparisonState.ts` reads selections from the URL and owns their transitions;
+`useSplitDisplay.ts` owns hidden/open sections, drilldowns, and metric density.
+`useSplitQueries.ts` observes requests. `createSplitModel.ts` derives selected
+rows, game records, entities, and the metric lens. `sectionData.tsx` prepares
+display rows and game links; `standouts.tsx` selects meaningful efficiency swings.
+Player, defender, and team definitions have separate config modules; aggregation,
+formatting/rating helpers, labels, ranking, presets, and types have named owners.
+The extraction checkpoint's largest feature file was 125 lines; later receiving
+coverage, cell explanations and availability helpers have separate small modules.
+
+The feature extraction preserved statistical definitions, weighted rates,
+sorting/highlighting, game links, and comparison behavior. Empty search-result clearing belongs
+to the input event; its pending debounce timer is cleared when leaving. Section
+toggles use explicit set operations. All 17 former Splits lint errors are resolved
+without suppressions/dependencies. Regression checks preserve weighting, regular-
+season game-log totals, situations/sorts, ties, defense winner direction, grouped
+expansion, visibility, search/examples, and timer cleanup. Seven desktop/mobile
+captures match their pre-move screenshots pixel for pixel.
+
+Legacy split endpoints can still materialize missing data on a GET; retiring
+those writes belongs to the backend milestone. The new prepared receiving
+endpoint is a database-only reader and never starts a build.
+
+The Splits visual cleanup groups comparison, stat-category, and season controls,
+fits selected members into a responsive grid, and wraps long headings. Its search
+card explicitly allows the dropdown to extend outside the card; other cards keep
+their existing clipping. Search results support mouse and keyboard selection.
+Numeric columns align right, row labels stay visible during horizontal scrolling,
+and sortable headers use keyboard-accessible buttons with `aria-sort`. Expanded
+game rows and section/filter controls expose their state. Loading/errors have
+spaced panels; the empty view and data-source notes have clearer layouts.
+The existing query, URL, calculation, and comparison rules are preserved.
+Browser checks cover unclipped search selection at 320/390/1280 pixels, sticky
+phone labels, keyboard sorting, and six long names with usable removal controls.
+
+Splits now reads the shared published-season list and uses the shared strict
+season validator. Players default to Career (`season=0`); teams default to the
+newest published year when no season is supplied. Team links with `season=0`,
+malformed years, or unpublished years show an availability message and start no
+split/profile/rank queries. No publication data means no comparison requests.
+Season-list loading, errors, empty results, retry, and failed-refresh warnings
+have explicit feedback in `SeasonSelectionFeedback.tsx`. A failed refresh keeps
+cached availability; a successful refresh that withdraws the selected year hides
+its table while preserving the bookmark.
+
+Member IDs, mode, category, team side, year, and situation come directly from
+React Router search parameters. Controls update those parameters in one history
+entry, preserve unrelated fields and inactive-mode members, and skip no-op
+selections. Back/forward and reload restore the selected view; Query reuses the
+matching resource cache. Switching from player Career to Teams removes the
+Career parameter so the team uses publication metadata. Search display metadata
+and table display state remain local; neither holds a second selected view.
+Member lists are unique and limited to six. Examples resolve their members into
+one URL update and discard results if another selection or navigation intervenes.
+The calendar-derived Splits season list and URL-reflection effect are removed.
+
+Search now uses the typed request and canonical query options in
+`src/api/search.ts`. Navigation, the Splits picker, and player examples share
+`['search', trimmedText]`, with one-minute freshness, normal retention/retry
+defaults, and requests that consume Query's abort signal. Empty text makes no
+request; one-character searches remain supported. Player/team filtering belongs
+to the picker, so it never replaces the shared all-entity cache with filtered data.
+The HTTP search route and the assistant's entity resolver now share the matching
+logic in `api/services/search.py`; see [backend data ownership](BACKEND_DATA.md).
+
+`src/features/search/useEntitySearch.ts` owns the shared 300-ms typing delay.
+The input's query key changes immediately when its trimmed text changes, hiding
+old results and releasing old requests while the new text settles. Closing the
+picker releases its query too. `SearchResults.tsx` draws common results and
+distinct searching, successful-empty, first-error/retry, and cached-refresh
+warning states. Results remain usable after a failed background refresh,
+including a warning alongside cached empty results. Both fields retain only
+input/open UI state; neither stores a second copy of downloaded search results.
+`SearchModal.tsx` owns the navigation popup, keyboard closing, and profile/team
+navigation. Nav retains its shortcuts and restores trigger focus on close.
+
+Player examples use `useExampleSearch.ts` and `observeSearch.ts` to subscribe
+temporarily to the same query definitions with TanStack's public QueryObserver.
+Each subscription means that consumer still needs the result. Finishing or
+aborting an example releases its subscription; Query cancels the underlying
+request only after its final consumer leaves. Changing selections, leaving
+Splits, or starting another example aborts its old resolution without affecting
+another field using that request. Examples keep best-effort name matching and
+commit their resolved members as one URL change. This avoids a second cache or
+unconditional cancellation of another consumer's shared request.
+
+Live scores use `src/api/liveScores.ts` for typed transport and
+`src/features/live-scores/queries.ts` for the canonical `['live-scoreboard']`
+query. This is a current scoreboard shared by games, not a season-specific
+statistics request. A route group in `main.tsx` keeps one LiveScoresProvider
+mounted across Scores/Game navigation and unmounts it on other pages. The
+provider selects a game-ID map from Query data; `useLiveGame` reads that map.
+The old fetching effect, timer, copied board/timestamp state, and unused
+`useAnyGameLive` hook are removed. Consumers use the typed resource directly;
+the old generic GET helper is removed.
+
+This query uses the server's `poll_after` rather than ordinary five-minute
+freshness. Each interval begins when the request finishes; a running request
+has no polling timer. A null interval stops background requests. HTTP failures
+wait sixty seconds instead of using the global immediate retry. Focus and
+reconnect events do not start extra refreshes, while background/offline attempts
+retain the prior paced behavior. Cached data and completion times preserve the
+remaining deadline on re-entry; an overdue result refreshes, and an idle board
+is checked again on a later mount. Leaving the route group stops the timer and
+cancels any unused request. Initial failure leaves ordinary schedule/details
+usable; later failure keeps the last successful live data while recovery runs.
+
+`ordering.ts` retains the existing snapshot and per-game guards. Reconciliation
+occurs before publishing to the shared cache, so navigation preserves the same
+ordered board. An older whole snapshot cannot replace it, but that reply's
+polling interval still applies. Newer snapshots retain game values that would
+rewind state, score, period, or clock. Quarter changes allow the clock reset;
+unknown clocks/timestamps are not evidence of regression. The incoming set of
+matched game IDs remains authoritative, including removal/empty results. These
+guards retain server-reported values; they do not interpolate time or invent
+statistics. As before, the score-decrease guard also holds downward corrections
+until later data catches up.
+
+## Follow one request
+
+1. `frontend/src/features/standings/StandingsPage.tsx` reads the season from
+   the URL and asks TanStack Query for the loaded season list.
+2. `src/utils/seasons.ts` selects the newest loaded season when the URL has no season.
+   An explicit unavailable or malformed year shows a message rather than a
+   different year's standings. No loaded seasons means no standings request.
+3. `queries.ts` describes the standings request: its cache key is
+   `['standings', season]`, and its request function calls `api.ts`.
+4. The feature's `api.ts` uses `frontend/src/api/client.ts` to request
+   `/api/standings?season=2023`. The backend calculates and returns standings;
+   the frontend only formats them.
+   The HTTP route now delegates to `api/services/standings.py`, which the
+   assistant also calls directly. See [backend data ownership](BACKEND_DATA.md).
+5. TanStack Query stores the response and exposes loading/error/data state.
+   `StandingsTable.tsx` draws the division tables from the returned data.
+6. `PlayoffBracket.tsx` uses the same pattern for the season's schedule.
+   A playoff request failure is shown separately from the standings table.
+
+## What the tools own
+
+**openapi-fetch** handles HTTP requests using the generated OpenAPI types in
+`src/types/api.d.ts`. TypeScript checks endpoint names, parameters, and response
+types against the backend contract. These are compile-time checks, not runtime
+validation of incoming JSON. Regenerate types when backend schemas change.
+The shared client turns unsuccessful HTTP responses into readable errors.
+
+**TanStack Query** manages server state: downloaded results, pending requests,
+errors, retries, and cached results. A query key identifies one result. Different
+seasons have different keys; requests for the same key share their cache.
+The request consumes Query's `AbortSignal`, so leaving a season cancels an
+unneeded request. Cancellation saves work; separate keys also keep results isolated.
+
+**React Router** keeps the selected season in the URL. This makes a chosen year
+bookmarkable and lets browser back/forward navigate between selections. Changing
+the season preserves unrelated URL parameters.
+
+**React components** arrange and display the result. They do not maintain a
+second copy of fetched standings in `useState` or start requests in `useEffect`.
+The simple division tables remain ordinary HTML tables.
+
+The existing app defaults still apply: results are fresh for five minutes,
+cached for thirty minutes, retried once, and not refreshed on window focus.
+The season list has a shorter thirty-second freshness window. A failed background
+refresh keeps the last successful result visible with a warning and retry button.
+
+## Request ownership and remaining work
+
+Shared season and schedule requests live in `src/api/seasons.ts` and
+`src/api/schedule.ts`; games, players, teams, leaders, and power rankings have
+matching resource modules.
+Standings-specific requests and queries live with the Standings feature.
+Pages and sections consume canonical query options directly through `useQuery`
+or `useQueries`. The unused `src/queries.ts` wrapper hooks, `src/api.ts` facade,
+historical type re-exports and aliases, and unused non-streaming Ask request are
+removed. Generated response aliases have one public home in `src/types/index.ts`.
+
+Ask's existing streaming transport now lives in `src/api/ask.ts`; its event
+handling and request behavior are unchanged. Its conversation lifecycle,
+cancellation and stream-parser migration remain the assistant milestone.
+The current-season date value used only to hide outdated player status badges
+lives in `src/utils/seasons.ts`. Published season choices still come from server
+metadata; this date value does not choose a season or start ingestion.
+
+The unused starter logo and hero image are removed. An import-graph audit from
+the application entry point confirms the remaining handwritten source modules
+are reachable, including lazy route imports. This checks module usage rather
+than proving every branch or exported helper is used.
+
+## Receiving production and visibility
+
+`src/utils/receiving.ts` owns the display rule shared by receiving lists,
+leader cards, game tables/popups and running-back profile cells. A recorded
+catch, nonzero signed receiving yardage, or receiving touchdown qualifies for
+display independently of targets. Target-only rows retain the view's previous
+target minimum (for example, 20 on the receiving leaderboard). Production can
+therefore admit low-volume players previously excluded by that minimum. This
+is a visibility rule, not certification of target coverage or rate qualification.
+
+Player receiving-yard rankings use that rule; target-rate highlight rankings
+retain their target minimum. Rostered WR/TE players retain receiving columns
+when missing targets would otherwise trigger a rushing-usage heuristic; unknown
+positions can use recorded receiving production as a fallback. Running-back
+career and game-log views include receiving touchdowns and lateral yardage
+without requiring a catch. Team receiving tables preserve negative yards and
+measured zero counts, and their totals include those retained players. Rushing
+game popups can show secondary receiving production without targets.
+
+### Unavailable historical targets
+
+The serving policy in `api/services/receiving_coverage.py` withholds target counts
+for the known 2003–08 nflverse source gap, including plausible positive legacy
+counts. This is conservative across both regular season and postseason; outside
+that interval existing values pass through, which does not independently certify
+all other source data. Raw stored values and production counts remain unchanged.
+Policy changes belong on the backend; frontend code contains no season blacklist.
+
+`targets` is now required-but-nullable in leader, team, game, profile-game and
+comparable responses. Profile aggregate totals also support null. The generated
+OpenAPI/TypeScript contract reflects this change. API and frontend changes should
+ship together. `null` means unavailable; a measured zero remains numeric zero.
+Target-based shares and situational target counts are masked on profiles. Receiving
+split targets (`att`), EPA/target and success rates are masked before HTTP serving;
+passing/rushing split rows are unchanged. Comparable target displays conservatively
+withhold a total when the career range overlaps the source gap; this does not
+repair comparable model selection or calibration.
+
+`ReceivingDataNote` explains the expected gap without treating a loaded page as
+an error. Existing table cells show a dash for unavailable counts and rates;
+combined REC/TGT lines retain the catch count (`4/—`). Target-dependent sort
+values stay null (rather than zero); entirely unavailable columns cannot be sorted,
+and mixed rows sort unavailable values last. Receiver target maps are hidden when
+their incomplete play sample could imply complete target coverage. Passing and
+rushing maps retain their existing behavior.
+
+Career, career-by-team, team-summary and receiving-split aggregations keep targets
+unavailable if any included row lacks coverage. They never sum only covered targets
+and divide complete production by a partial denominator. Receiving-yard rankings
+and independently usable counts stay visible. Target-rate rankings and highlight
+rank badges cannot attach to unavailable values. Target-share career summaries
+and situational target rates preserve the gap too. Independent Next Gen Stats
+remain separate from this play-by-play coverage policy.
+
+`tests/target-availability.spec.ts` covers null versus zero, mixed-career totals,
+target sorting, historical/modern leaderboards, profile rates, team totals,
+game charts and prepared receiving season rows, including a mobile layout capture.
+Backend `tests/test_receiving_coverage.py` exercises real HTTP serialization with
+an in-memory historical dataset and confirms the underlying counts are unchanged.
+
+This serving/display checkpoint does not repair raw attribution, split admission,
+receiving EPA/WPA, ratings or comparable calibration. It does not integrate the
+individual-credit pilot or claim that every displayed historical metric is verified.
+Assistant execution/stream work remains separate; its compact stat summation only
+avoids reconstructing a partial target total from the newly nullable profile rows.
+
+`tests/receiving-visibility.spec.ts` covers zero/null targets, signed yardage,
+zero-catch touchdowns, target-only rows, empty production, source-position
+fallback, and browser flows through leaders/positions, Scores, profiles, team
+totals, game tables and popups. Its historical responses are controlled fixtures,
+not a claim of deployed-data verification. The mobile running-back log retains
+its receiving counts without widening the document.
+
+### Prepared receiving splits and coverage
+
+The receiving lens now consumes the [coverage-aware API](RECEIVING_BUILD_INTEGRATION.md#coverage-aware-receiving-api).
+`receivingModel.ts` selects its rows/whole totals and carries season availability;
+`receivingAvailability.ts` maps missing source fields to the affected metrics.
+Head-to-head Overall and By Season use the independent prepared whole rows.
+By Opponent and all other views use the same prepared calculation. They no longer
+mix profile/game-log totals with old Down-derived receiving totals. The Gibbs-
+specific source-difference annotation and its hardcoded lateral workaround were
+removed: the actual official 2024 rows now retain all 517 yards, including the
+previously omitted 41. Player pages retain their game logs, linked from this lens;
+inline receiving game expansion is retired so it cannot mix sources into these totals.
+
+`ReceivingCoverageNote.tsx` states regular-season/25-recorded-intended-receiver-play
+qualification, supplied-game scope and qualifying-season range. It separates
+missing PBP games from supplied games with unconfirmed stored final scores.
+Unverified seasons remain explicitly unavailable; the page never falls back to
+legacy Down totals. A successful empty response remains distinct from a request
+failure, and each comparison member has independent receiving retry feedback.
+
+Each view has a `Shown total` for its classified population. Player-specific
+excluded counts and wholly unavailable views have visible notes; exclusions are
+retained in the season total. Season-wide context gaps with no excluded production
+for this player stay in collapsed details. Definitions explain the QB-hit proxy,
+original-pass depth/direction, current-franchise divisions and optional charting.
+Receiving standouts use the independent baseline and skip views with player-specific
+exclusions, unavailable coverage or unverified years.
+
+Receiving aggregation preserves NULL independently for targets, catches, yards,
+YAC, air yards, first downs and rates. Target-weighted rates require every
+positive-weight input; zero-target lateral rows contribute counts without changing
+the target denominator. Derived ratios require both numerator and denominator.
+Career buckets carry availability from included seasons even when a season has
+no active row in that bucket: supported absent activity contributes zero observed
+counts, unknown fields stay NULL, and an unverified season contributes all NULLs.
+These client-only availability rows do not calculate or redistribute credits.
+Displayed combined rates use the prepared rows' rounded rates and target weights.
+
+`MetricValue.tsx` renders — with a keyboard/touch explanation for unavailable
+receiving cells in both table layouts. Native popovers appear above scroll
+containers, close with Escape or Close, and fit a 320-pixel viewport. Actual zero
+values stay numeric, missing values cannot win comparisons, and tables keep their
+horizontal scroll and sticky labels. Combined season footers say `Qualifying seasons`.
+
+The October 26 UI checkpoint passed **115 related Playwright checks**, including
+**24 receiving/availability checks**; production build and lint
+also passed. Real response fixtures in `tests/fixtures/receivingSplits.json` were
+captured read-only from the verified receiving copy: Gibbs/Jefferson 2024,
+Gonzalez 2004/2009 and a receiver with 2026 surface exclusions. Fixtures keep one
+stat row per line. Tests cover counts/rates, missing history and absent buckets,
+partial/unavailable/unverified scope, comparison failure, retry/cache/cancellation,
+keyboard/mobile popovers and 320/390-pixel overflow. Browser fixtures test UI
+behavior; backend credit/source verification remains the independent offline proof.
+Screenshots/traces and `frontend/test-results-receiving-*-20261026.log` are ignored.
+
+This is local integration. No source snapshot or deployment was changed. Fresh
+source loading, downstream analytics and full receiving-aware candidate/release
+validation remain outstanding; publication guards remain in force.
+
+## Browser regression checks
+
+From `frontend`, install dependencies with `npm ci --legacy-peer-deps`, then:
+
+```sh
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright starts Vite and drives Chromium. These tests replace API responses
+with controlled fixtures: they need no running Python API, database, or model
+credentials. They cover season selection, loading/empty/error/retry behavior,
+cancelled late responses, cache reuse, playoff links, and mobile tables.
+They verify frontend behavior, not the backend's statistical calculations.
+`npm run build` also type-checks the application, test code, and configuration.
+CI runs the browser checks after TypeScript. Traces and screenshots are local
+test output, ignored by Git.

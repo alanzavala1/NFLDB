@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Single-image deploy: build the React frontend, then serve it + the FastAPI API
 # + the baked DuckDB file from one Python process. Targets Cloud Run / any
-# container host. Build from the repo root: `docker build -t nfldb .`
+# container host. See DEPLOY.md for the target's explicit database context.
 
 # ---- Stage 1: build the frontend ----
 FROM node:22-slim AS frontend
@@ -12,7 +12,7 @@ COPY frontend/ ./
 RUN npm run build            # -> /app/frontend/dist
 
 # ---- Stage 2: backend + static frontend + database ----
-FROM python:3.12-slim
+FROM python:3.12-slim AS runtime
 COPY --from=ghcr.io/astral-sh/uv:0.11.23 /uv /bin/uv
 WORKDIR /app/api
 ENV UV_PYTHON_DOWNLOADS=never
@@ -20,12 +20,13 @@ COPY api/pyproject.toml api/uv.lock api/.python-version ./
 # Keep the default dev group: the release checks run pytest inside this image.
 RUN uv sync --locked --no-install-project --no-cache
 ENV PATH="/app/api/.venv/bin:$PATH"
-# backend source + the baked DuckDB file (api/data/nfl.duckdb)
+# Data is added only in the final target, never hidden in a shared source layer.
 COPY api/ ./
 # the built frontend, served by FastAPI at / (see main.py)
 COPY --from=frontend /app/frontend/dist ./static
 
-# Cloud Run provides $PORT (8080); single worker (DuckDB is single-writer).
+# Cloud Run serves one immutable, offline-prepared snapshot.
+ENV NFL_DB_READ_ONLY=1
 ENV PORT=8080
 # Keep DuckDB inside the container's limits: it sizes its memory budget and
 # thread pool from the HOST, not the cgroup, so an unpinned build sizes itself
@@ -40,3 +41,14 @@ EXPOSE 8080
 # Without this, request.client.host is the proxy IP and per-IP rate limits
 # collapse every user into one bucket.
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips='*'"]
+
+# Supply --build-context native_snapshot=/path/to/verified-download/release.
+# The capture archive and all other local databases stay outside this context.
+FROM runtime AS native
+COPY --from=native_snapshot /nfl.duckdb /validation.json /watermarks.json /release.json ./data/release/
+ENV NFL_DB_PATH=/app/api/data/release/nfl.duckdb
+RUN test ! -e data/nfl.duckdb && python -m jobs.deploy identity --release /app/api/data/release
+
+# Default target preserves the existing refresh/deploy workflow during migration.
+FROM runtime AS legacy
+COPY --from=legacy_snapshot /nfl.duckdb ./data/nfl.duckdb

@@ -274,7 +274,8 @@ nfl-platform/
 ├── Dockerfile, DEPLOY.md          # one-container deploy → Cloud Run
 ├── api/
 │   ├── main.py                    # FastAPI app: /api routes + serves the SPA
-│   ├── ingest.py                  # data pipeline (pbp → materialized tables)
+│   ├── ingest.py                  # refresh orchestration and legacy local CLI
+│   ├── pipeline/                  # feed adapters, analytics and candidate snapshots; see docs/DATA_PIPELINE.md
 │   ├── splits_core.py             # shared situational-dimension scaffolding
 │   ├── splits_builder.py          # player_splits (passing/rushing/receiving)
 │   ├── def_splits_builder.py      # defense_splits (event-based)
@@ -283,15 +284,16 @@ nfl-platform/
 │   ├── power_rankings_builder.py  # weekly team power rankings (net EPA/play)
 │   ├── ol_grades_builder.py       # O-line unit grades (pressure + stuff rate)
 │   ├── routers/                   # schedule (incl. lineup/ratings), players, teams, leaders, assistant (Ask NFLDB), meta
+│   ├── services/                  # league/team/player data, game views, structured play queries and records
 │   ├── tests/                     # endpoints, invariants, data-reconciliation
 │   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
 └── frontend/src/
-    ├── components/GameLineupView.tsx  # matchup field view, rating badges, popup charts
-    ├── pages/SplitsPage.tsx       # the splits explorer
+    ├── features/                 # Scores, Games, Players, Teams, Leaders, Standings, Splits, Search, Live Scores
+    ├── components/               # shared navigation, cards, request feedback, live card, playoff bracket
     ├── pages/AskPage.tsx          # Ask NFLDB
-    ├── pages/                     # Schedule, Game, Player, Team, Leaders, Standings
-    ├── splits.ts                  # split metrics / dimensions config
-    └── api.ts, types/             # typed client (codegen from OpenAPI)
+    ├── api/                      # typed resource requests/query options; Ask streaming transport
+    ├── utils/                    # shared season selection, team identity and awards
+    └── types/                    # generated API types and navigation state
 ```
 
 ## Setup
@@ -320,7 +322,7 @@ files together. Commit `uv.lock`; never commit `.venv`.
 **Frontend**
 ```bash
 cd frontend
-npm install
+npm ci --legacy-peer-deps
 npm run dev                                        # :5173 (proxies /api → :8000)
 ```
 
@@ -345,6 +347,23 @@ Covers endpoint behavior, data-quality **invariants**, and
 **data-reconciliation** against the real database (splits ⇄ official stats, EPA
 consistency, defensive-sack reconciliation). The reconciliation suite skips
 cleanly when the DB isn't present (CI) and runs against the baked DB at deploy time.
+
+Frontend browser checks run with controlled API responses and do not need a database:
+
+```bash
+cd frontend
+npx playwright install chromium                     # first setup
+npm run test:e2e
+npm run build                                      # type check + production build
+```
+
+The Standings pilot uses TanStack Query and an OpenAPI-typed client. See the
+[frontend data walkthrough](docs/FRONTEND_DATA.md) for the request flow,
+responsibilities, and migration boundary.
+
+Standings, search, league leaders, schedules/game details, power rankings and team profiles use services called directly
+by their HTTP routes and assistant tools. See the [backend data walkthrough](docs/BACKEND_DATA.md)
+for that boundary and its focused checks.
 
 ## Deploy
 

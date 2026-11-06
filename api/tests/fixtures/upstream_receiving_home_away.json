@@ -1,0 +1,15 @@
+{
+  "source": "Official nflfastR 6.0.0 / nflreadr 1.5.1 calculate_stats, October 21, 2026 v7 preview",
+  "scope": "REG nonconversion designated home/away; includes neutral-site and traded-player inputs",
+  "columns": ["player_id", "season", "season_type", "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_yards_after_catch", "receiving_first_downs", "receiving_epa", "receiving_air_yards", "split_value"],
+  "rows": [
+    ["00-0006101", 2006, "REG", 0, 36, 481, 1, 149, 26, 47.0308056008944, 0, "home"],
+    ["00-0006101", 2006, "REG", 0, 37, 419, 4, 170, 28, 42.2762229093933, 0, "away"],
+    ["00-0031544", 2024, "REG", 37, 22, 301, 4, 51, 15, 19.8529907853808, 503, "home"],
+    ["00-0036322", 2024, "REG", 87, 59, 920, 6, 318, 35, 39.378039889721, 994, "home"],
+    ["00-0039139", 2024, "REG", 37, 31, 277, 3, 311, 14, 10.2461795418014, 3, "home"],
+    ["00-0031544", 2024, "REG", 48, 22, 246, 0, 60, 10, -12.9461677008077, 658, "away"],
+    ["00-0036322", 2024, "REG", 67, 44, 613, 4, 169, 27, 24.8150717133902, 688, "away"],
+    ["00-0039139", 2024, "REG", 26, 21, 240, 1, 282, 10, 4.72155124408241, -14, "away"]
+  ]
+}

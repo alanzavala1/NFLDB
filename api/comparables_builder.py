@@ -19,6 +19,7 @@ result lives in two tables:
 
 The endpoint becomes a single JOIN keyed by player_id.
 """
+from data_errors import is_missing_data_error
 import numpy as np
 
 from database import get_connection, query_to_dict, write_lock
@@ -270,6 +271,8 @@ def _materialize_locked() -> tuple[int, int]:
     try:
         rows = query_to_dict(_CAREER_SQL)
     except Exception as e:
+        if not is_missing_data_error(e):
+            raise
         print(f"comparables materialize: career query failed: {e}")
         return (0, 0)
 
@@ -323,6 +326,8 @@ def _materialize_locked() -> tuple[int, int]:
         conn.execute("COMMIT")
     except Exception as e:
         conn.execute("ROLLBACK")
+        if not is_missing_data_error(e):
+            raise
         print(f"comparables materialize: write failed: {e}")
         return (0, 0)
 
@@ -380,42 +385,8 @@ def read(player_id: str, n: int = 8) -> list[dict]:
     """Read top-N comparables for a player. Returns [] if not materialized."""
     try:
         rows = query_to_dict(_READ_SQL, [player_id, n])
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
     return _rows_to_response(rows)
-
-
-def read_or_materialize(player_id: str, n: int = 8) -> list[dict]:
-    """Read from the materialized table; rebuild on first hit if empty.
-
-    Note: unlike team_analytics, the rebuild is global (all players at
-    once), so the first cold request can take a few seconds. Subsequent
-    requests are O(1) keyed lookups.
-    """
-    rows = read(player_id, n)
-    if rows:
-        return rows
-
-    # A populated summary table with no rows for this player means they just
-    # don't have comparables (below the games floor / OTHER position group) —
-    # rebuilding wouldn't change that, so only build when the table is empty.
-    try:
-        populated = query_to_dict("SELECT 1 FROM player_career_summary LIMIT 1") != []
-    except Exception:
-        populated = False
-    if populated:
-        return []
-
-    # Cold path: rebuild the whole thing. Only happens once per fresh DB.
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(player_id, n)
-        if rows:
-            return rows
-        summary_n, _ = materialize()
-        if summary_n == 0:
-            return []
-    finally:
-        write_lock.release()
-    return read(player_id, n)

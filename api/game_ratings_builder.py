@@ -7,6 +7,7 @@ if it is missing.
 """
 from __future__ import annotations
 
+from data_errors import is_missing_data_error
 import duckdb
 
 from config import era_team_case
@@ -60,7 +61,9 @@ def ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
 def _columns(conn: duckdb.DuckDBPyConnection, table: str) -> set[str]:
     try:
         return {r[0] for r in conn.execute(f"DESCRIBE {table}").fetchall()}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return set()
 
 
@@ -447,6 +450,8 @@ def materialize(season: int | None = None) -> int:
                 FROM ({sql})
             """)
         except Exception as e:
+            if not is_missing_data_error(e):
+                raise
             print(f"player_game_ratings materialize failed: {e}")
             return 0
         return conn.execute("SELECT COUNT(*) FROM player_game_ratings").fetchone()[0]
@@ -463,22 +468,7 @@ def read(game_id: str) -> list[dict]:
             """,
             [game_id],
         )
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
-
-
-def read_or_materialize(game_id: str) -> list[dict]:
-    rows = read(game_id)
-    if rows:
-        return rows
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(game_id)
-        if rows:
-            return rows
-        if materialize() > 0:
-            return read(game_id)
-        return []
-    finally:
-        write_lock.release()

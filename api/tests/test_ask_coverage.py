@@ -89,7 +89,7 @@ def test_get_game_detail_trims_the_known_super_bowl_box_score():
 
 
 def test_get_player_game_log_reconciles_with_profile_week_row():
-    from routers.players import get_player
+    from services.player_profile import get_player_profile as get_player
 
     expected = next(
         game for game in get_player(_HENRY_ID)["games"]
@@ -107,7 +107,7 @@ def test_get_player_game_log_reconciles_with_profile_week_row():
 
 
 def test_get_player_career_reconciles_with_regular_profile_games():
-    from routers.players import get_player
+    from services.player_profile import get_player_profile as get_player
 
     regular = [game for game in get_player(_RODGERS_ID)["games"] if game["game_type"] == "REG"]
     expected_tds = sum(game["pass_tds"] or 0 for game in regular)
@@ -132,7 +132,7 @@ def test_get_team_overview_returns_verified_past_standing_without_current_report
 
 
 def test_get_power_rankings_matches_platform_model_and_caps_rows():
-    from routers.power_rankings import get_power_rankings
+    from services.power_rankings import get_power_rankings
 
     expected = next(row for row in get_power_rankings(2023, None) if row["team"] == "KC")
     raw = _tool("get_power_rankings")(season=2023)

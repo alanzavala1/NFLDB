@@ -13,6 +13,7 @@ Perspective is the defense's: game script is flipped (defender leads when the
 offense trails), home/away is the offense's flipped, and "opponent" is the
 offense faced (posteam).
 """
+from data_errors import is_missing_data_error
 import duckdb
 
 import splits_core as core
@@ -24,7 +25,7 @@ from database import get_connection, query_to_dict, write_lock
 _MIN_EVENTS = 20
 
 # (slot player-id column, stat bucket, weight). Mirrors DEFENSIVE_SLOTS in
-# ingest.py. Fumble recoveries are intentionally excluded — they can be credited
+# pipeline/play_stats.py. Fumble recoveries are intentionally excluded — they can be credited
 # to offensive players too, so they're not cleanly "defense".
 _SLOTS = [
     ("solo_tackle_1_player_id", "solo", 1.0),
@@ -197,6 +198,8 @@ def _materialize_locked(s: int) -> int:
             FROM ({_season_sql(s)})
         """)
     except Exception as e:
+        if not is_missing_data_error(e):
+            raise
         print(f"defense_splits materialize failed for season {s}: {e}")
     return conn.execute("SELECT COUNT(*) FROM defense_splits WHERE season = ?", [s]).fetchone()[0]
 
@@ -211,39 +214,7 @@ def read(player_id: str) -> list[dict]:
             WHERE player_id = ?
             ORDER BY season DESC, split_dim, sort_order
         """, [player_id])
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
-
-
-def read_or_materialize(player_id: str) -> list[dict]:
-    """Read; on miss, build only the player's never-materialized seasons under
-    the write lock (see splits_builder.read_or_materialize for the rationale)."""
-    rows = read(player_id)
-    if rows:
-        return rows
-    try:
-        seasons = {r["season"] for r in query_to_dict(
-            "SELECT DISTINCT season FROM plays "
-            "WHERE solo_tackle_1_player_id = ? OR assist_tackle_1_player_id = ? "
-            "OR sack_player_id = ? OR interception_player_id = ?",
-            [player_id, player_id, player_id, player_id])}
-    except Exception:
-        seasons = set()
-    if not seasons:
-        return []
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(player_id)
-        if rows:
-            return rows
-        try:
-            built = {r["season"] for r in query_to_dict(
-                "SELECT DISTINCT season FROM defense_splits")}
-        except Exception:
-            built = set()
-        for s in sorted(seasons - built, reverse=True):
-            materialize(s)
-    finally:
-        write_lock.release()
-    return read(player_id)

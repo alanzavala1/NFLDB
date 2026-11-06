@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components -- app entry point; fast-refresh component-export rules don't apply here */
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
+import { LiveScoresProvider } from './features/live-scores/LiveScoresProvider'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 
@@ -13,17 +14,17 @@ import './index.css'
 // chart pages (Game/Team/Player) also pull the large Recharts chunk, so
 // warming them up front is the biggest single win.
 const routeImporters = {
-  schedule:  () => import('./pages/SchedulePage'),
-  game:      () => import('./pages/GamePage'),
-  team:      () => import('./pages/TeamPage'),
-  player:    () => import('./pages/PlayerPage'),
-  leaders:   () => import('./pages/LeadersPage'),
-  standings: () => import('./pages/StandingsPage'),
-  splits:    () => import('./pages/SplitsPage'),
+  scores:    () => import('./features/scores/ScoresPage'),
+  game:      () => import('./features/games/GamePage'),
+  team:      () => import('./features/teams/TeamPage'),
+  player:    () => import('./features/players/PlayerPage'),
+  leaders:   () => import('./features/leaders/LeadersPage'),
+  standings: () => import('./features/standings/StandingsPage'),
+  splits:    () => import('./features/splits/SplitsPage'),
   ask:       () => import('./pages/AskPage'),
 }
 
-const SchedulePage  = lazy(routeImporters.schedule)
+const ScoresPage    = lazy(routeImporters.scores)
 const GamePage      = lazy(routeImporters.game)
 const TeamPage      = lazy(routeImporters.team)
 const PlayerPage    = lazy(routeImporters.player)
@@ -76,8 +77,10 @@ createRoot(document.getElementById('root')!).render(
         <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="/teams/:teamAbbrev"  element={<TeamPage />} />
-            <Route path="/"                   element={<SchedulePage />} />
-            <Route path="/games/:gameId"      element={<GamePage />} />
+            <Route element={<LiveScoresProvider><Outlet /></LiveScoresProvider>}>
+              <Route path="/"              element={<ScoresPage />} />
+              <Route path="/games/:gameId" element={<GamePage />} />
+            </Route>
             <Route path="/players/:playerId"  element={<PlayerPage />} />
             <Route path="/leaders"            element={<LeadersPage />} />
             <Route path="/standings"          element={<StandingsPage />} />

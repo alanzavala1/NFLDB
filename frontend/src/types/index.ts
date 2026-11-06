@@ -46,6 +46,7 @@ export type TeamProfile      = Schemas['TeamProfile']
 // Standings
 export type StandingsRow         = Schemas['StandingsRow']
 export type DivisionStandings    = Schemas['DivisionStandings']
+export type PowerRankingRow      = Schemas['PowerRankingRow']
 
 // Leaders
 export type LeagueLeader     = Schemas['LeagueLeader']
@@ -63,6 +64,15 @@ export type KickingStats     = Schemas['KickingStats']
 export type PlayerWpa        = Schemas['PlayerWpa']
 export type PlayerAdvStats   = Schemas['PlayerAdvStats']
 export type PlayerSplit      = Schemas['PlayerSplit']
+export type PlayerReceivingSplits = Schemas['PlayerReceivingSplits']
+export type ReceivingSeason  = Schemas['ReceivingSeason']
+export type ReceivingRow     = Schemas['ReceivingRow']
+export type ReceivingViewCoverage = Schemas['ReceivingViewCoverage']
+export type PlayerPassingSplits = Schemas['PlayerPassingSplits']
+export type PassingSeason = Schemas['PassingSeason']
+export type PassingRow = Schemas['PassingRow']
+export type PassingAggregation = Schemas['PassingAggregation']
+export type PassingViewCoverage = Schemas['PassingViewCoverage']
 export type DefensiveSplit   = Schemas['DefensiveSplit']
 
 // Team analytics

@@ -12,6 +12,10 @@ lead dims (depth/direction) are stored name-less as 3-tuples because the
 caller names them differently per category (pass_depth vs target_depth).
 """
 
+PLAYER_COLUMNS = ("player_id", "season", "category", "split_dim", "split_value",
+                  "sort_order", "att", "cmp", "yards", "td", "interceptions",
+                  "air_yards", "yac", "first_downs", "epa", "success_pct", "cpoe")
+
 # ── Fixed-name dimensions (4-tuples) ─────────────────────────────────────────
 
 DOWN_DIM = (
@@ -155,6 +159,11 @@ def two_pt_filter(available: set[str]) -> str:
 # 0 attempt/target mismatches vs weekly_player_stats.
 PASS_ATTEMPT = ("(COALESCE(complete_pass, 0) = 1 OR COALESCE(incomplete_pass, 0) = 1 "
                 "OR COALESCE(interception, 0) = 1)")
+
+# nflfastR calculate_stats.R uses this play-type filter for modern passing EPA,
+# excluding no_play/untyped rows even if pass_attempt remains set. Counting
+# stats still use PASS_ATTEMPT: some historical untyped plays are valid attempts.
+PASSING_EPA_PLAY = "play_type IN ('pass', 'qb_spike')"
 
 
 # ── UNION assembly ───────────────────────────────────────────────────────────

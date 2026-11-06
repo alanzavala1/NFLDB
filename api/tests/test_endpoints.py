@@ -80,7 +80,7 @@ def test_leaders_sums_across_games(client):
 
 def test_team_analytics_endpoint(client):
     """Endpoint returns the typed shape even when the underlying plays table
-    is absent — the materialized table is created (empty) and read."""
+    is absent — the read returns unavailable rows without creating tables."""
     r = client.get("/api/team-analytics?season=2024")
     assert r.status_code == 200
     body = r.json()
@@ -88,16 +88,11 @@ def test_team_analytics_endpoint(client):
     assert isinstance(body["league"], list)
 
 
-def test_team_analytics_creates_materialized_table(client, seeded_conn):
-    """First call lazily creates team_season_analytics.
-
-    This is the key behavior of read_or_materialize: the table doesn't
-    need to exist ahead of time. If it doesn't, we materialize on demand.
-    """
+def test_team_analytics_does_not_create_materialized_table(client, seeded_conn):
+    """Missing analytics remain missing; HTTP must never build a table."""
+    before = seeded_conn.execute('SHOW TABLES').fetchall()
     client.get("/api/team-analytics?season=2024")
-    # Table now exists
-    tables = {r[0] for r in seeded_conn.execute("SHOW TABLES").fetchall()}
-    assert "team_season_analytics" in tables
+    assert seeded_conn.execute('SHOW TABLES').fetchall() == before
 
 
 def test_player_comparables_endpoint_returns_typed_shape(client):
@@ -109,12 +104,11 @@ def test_player_comparables_endpoint_returns_typed_shape(client):
     assert isinstance(r.json(), list)
 
 
-def test_player_comparables_creates_materialized_tables(client, seeded_conn):
-    """First call lazily creates player_career_summary + player_comparables."""
+def test_player_comparables_does_not_create_materialized_tables(client, seeded_conn):
+    """Requests preserve an incomplete snapshot instead of repairing it."""
+    before = seeded_conn.execute('SHOW TABLES').fetchall()
     client.get("/api/players/00-BUF-QB1/comparables")
-    tables = {r[0] for r in seeded_conn.execute("SHOW TABLES").fetchall()}
-    assert "player_career_summary" in tables
-    assert "player_comparables"   in tables
+    assert seeded_conn.execute('SHOW TABLES').fetchall() == before
 
 
 def test_player_splits_endpoint_returns_typed_shape(client):
@@ -124,6 +118,23 @@ def test_player_splits_endpoint_returns_typed_shape(client):
     r = client.get("/api/players/00-BUF-QB1/splits")
     assert r.status_code == 200
     assert isinstance(r.json(), list)
+
+
+def test_team_profile_preserves_regular_and_playoff_game_types(client, seeded_conn):
+    seeded_conn.execute(
+        """INSERT INTO schedules
+           (game_id, season, game_type, week, away_team, home_team, away_score, home_score)
+           VALUES ('2024_19_BUF_KC', 2024, 'WC', 19, 'BUF', 'KC', 20, 24)"""
+    )
+    try:
+        response = client.get("/api/teams/BUF?season=2024")
+        assert response.status_code == 200
+        games = response.json()["games"]
+        assert next(game for game in games if game["game_id"] == "2024_19_BUF_KC")["game_type"] == "WC"
+        assert all(game["game_type"] == "REG" for game in games if game["week"] < 19)
+    finally:
+        # The mini-league connection is shared across tests.
+        seeded_conn.execute("DELETE FROM schedules WHERE game_id = '2024_19_BUF_KC'")
 
 
 def test_team_splits_endpoint_returns_typed_shape(client):

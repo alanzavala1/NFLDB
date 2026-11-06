@@ -6,7 +6,8 @@ class LeagueLeader(BaseModel):
     """One row per player in /leaders. Stat fields are season totals from
     SUM() over player_game_stats, returned as DOUBLE.
 
-    All stat fields are required-and-non-null: the underlying columns have
+    Stat fields are required; targets, receiving air yards and YAC can be
+    unavailable at serving time for known source-coverage gaps. Stored columns have
     DEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable
     stats like RB pass_yards). Roster-joined fields (position/team) may be
     null because the join is LEFT and roster data can be missing.
@@ -31,12 +32,13 @@ class LeagueLeader(BaseModel):
     rush_tds: float
     rush_epa: float
 
-    targets: float
+    # Known source gaps are unavailable, never a measured zero.
+    targets: float | None
     receptions: float
     rec_yards: float
     rec_tds: float
-    yac: float
-    air_yards: float
+    yac: float | None
+    air_yards: float | None
     rec_epa: float
 
     solo_tackles: float
@@ -105,7 +107,8 @@ class PlayerComparable(BaseModel):
     carries: float
     rec_yards: float
     rec_tds: float
-    targets: float
+    # Known source gaps are unavailable, never a measured zero.
+    targets: float | None
     att: float
     cmp: float
     ints: float

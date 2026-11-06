@@ -6,11 +6,11 @@ Design:
   - Schema mirrors what the CTE emits, plus a `season` column for filtering.
   - The original CTE remains the single source of truth — `_analytics_sql()`
     builds it for one season; `materialize()` writes the result to the table.
-  - Endpoint hits the table; if a row is missing it lazily materializes
-    so the system self-heals.
+  - Endpoints only read the table; missing rows await offline preparation.
   - The ingest pipeline calls `materialize()` after a season finishes so
     freshly-loaded data is query-fast from the first request.
 """
+from data_errors import is_missing_data_error
 import duckdb
 
 from config import era_team_case
@@ -76,7 +76,9 @@ def _analytics_sql(conn: duckdb.DuckDBPyConnection, season: int) -> str:
     """
     try:
         available = {r[0] for r in conn.execute("DESCRIBE plays").fetchall()}
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         available = set()
 
     has_success   = "success"           in available
@@ -347,6 +349,8 @@ def _materialize_locked(s: int) -> int:
             f"INSERT INTO team_season_analytics SELECT {s} AS season, * FROM ({sql})"
         )
     except Exception as e:
+        if not is_missing_data_error(e):
+            raise
         print(f"team-analytics materialize failed for season {s}: {e}")
         return 0
 
@@ -362,28 +366,7 @@ def read(season: int) -> list[dict]:
             "SELECT * EXCLUDE (season) FROM team_season_analytics WHERE season = ? ORDER BY team",
             [int(season)],
         )
-    except Exception:
+    except Exception as _data_error:
+        if not is_missing_data_error(_data_error):
+            raise
         return []
-
-
-def read_or_materialize(season: int) -> list[dict]:
-    """Endpoint entry point: read from table; lazily materialize if empty.
-
-    This is what makes the system self-healing: if the table is missing
-    (fresh DB, or migrated without ingest), the first request computes
-    and persists for subsequent ones.
-    """
-    rows = read(season)
-    if rows:
-        return rows
-    if not write_lock.acquire(timeout=15):
-        return []
-    try:
-        rows = read(season)  # a concurrent request may have built it
-        if rows:
-            return rows
-        if materialize(season) > 0:
-            return read(season)
-        return []
-    finally:
-        write_lock.release()

@@ -8,10 +8,13 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "gen-types": "openapi-typescript openapi.json -o src/types/api.d.ts"
+    "gen-types": "openapi-typescript openapi.json -o src/types/api.d.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.14",
+    "@tanstack/react-table": "^9.3.1",
+    "openapi-fetch": "^0.17.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-is": "^19.2.6",
@@ -22,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "^4.2.4",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",

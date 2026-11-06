@@ -9,9 +9,9 @@ def test_player_tools_reject_names_before_querying(monkeypatch):
         pytest.fail("invalid player id reached the verified query layer")
 
     monkeypatch.setattr(llm, "_player_profile", unexpected_query)
-    monkeypatch.setattr(llm.splits_builder, "read_or_materialize", unexpected_query)
-    monkeypatch.setattr(llm.def_splits_builder, "read_or_materialize", unexpected_query)
-    monkeypatch.setattr(llm.comparables_builder, "read_or_materialize", unexpected_query)
+    monkeypatch.setattr(llm.splits_builder, "read", unexpected_query)
+    monkeypatch.setattr(llm.def_splits_builder, "read", unexpected_query)
+    monkeypatch.setattr(llm.comparables_builder, "read", unexpected_query)
 
     ctx = llm._Ctx()
     tools = {tool.name: tool.func for tool in llm._build_tools(ctx)}

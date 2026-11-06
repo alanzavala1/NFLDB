@@ -70,12 +70,13 @@ class GamePlayerStats(BaseModel):
     sacks_taken: float
     pass_epa: float
 
-    targets: float
+    # Known source gaps are unavailable, never a measured zero.
+    targets: float | None
     receptions: float
     rec_yards: float
     rec_tds: float
-    air_yards: float
-    yac: float
+    air_yards: float | None
+    yac: float | None
     rec_epa: float
 
     carries: float

@@ -2,6 +2,7 @@
 import logging
 
 from database import query_to_dict
+from data_errors import is_missing_data_error
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,23 @@ STAT_COLS = (
 
 # Prefixed for use inside CTEs where pgs alias is in scope.
 PGS_STAT_SEL = ", ".join(f"pgs.{c}" for c in STAT_COLS)
+
+# One player-game row for ratings, lineup totals and charts. Requires a game_id parameter.
+PGS_GAME_CTE = f"""
+        pgs_game AS (
+            SELECT
+                player_id,
+                game_id,
+                ANY_VALUE(player_name) AS player_name,
+                CAST(ANY_VALUE(season) AS INTEGER) AS season,
+                CAST(ANY_VALUE(week) AS INTEGER) AS week,
+                ANY_VALUE(team) AS team,
+                {", ".join(f"SUM(COALESCE({c}, 0)) AS {c}" for c in STAT_COLS)}
+            FROM player_game_stats
+            WHERE game_id = ?
+            GROUP BY player_id, game_id
+        )
+"""
 
 # De-duped roster: one row per player+season. For players who changed teams
 # mid-season (weekly roster snapshots), pick the latest week's row — i.e. the
@@ -87,9 +105,11 @@ CASE
 
 
 def safe_query(sql: str, params: list = None) -> list[dict]:
-    """Wrapper around query_to_dict that returns [] on any failure (missing table, etc)."""
+    """Optional feed query: missing source schema returns []; other errors propagate."""
     try:
         return query_to_dict(sql, params or [])
-    except Exception:
+    except Exception as error:
+        if not is_missing_data_error(error):
+            raise
         logger.warning("safe_query failed, returning []", exc_info=True)
         return []

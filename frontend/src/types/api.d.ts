@@ -50,7 +50,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Load Season */
+        /**
+         * Load Season
+         * @deprecated
+         */
         post: operations["load_season_api_seasons__year__load_post"];
         delete?: never;
         options?: never;
@@ -65,7 +68,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Season Progress */
+        /**
+         * Season Progress
+         * @deprecated
+         */
         get: operations["season_progress_api_seasons__year__progress_get"];
         put?: never;
         post?: never;
@@ -248,6 +254,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/players/{player_id}/receiving-splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Player Receiving Splits
+         * @description Prepared receiving totals, views and coverage in one read-only response.
+         */
+        get: operations["get_player_receiving_splits_api_players__player_id__receiving_splits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/players/{player_id}/passing-splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Player Passing Splits
+         * @description Read independent passing totals, exact aggregation ingredients and coverage.
+         */
+        get: operations["get_player_passing_splits_api_players__player_id__passing_splits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teams/{team}": {
         parameters: {
             query?: never;
@@ -316,7 +362,7 @@ export interface paths {
         /**
          * Get Team Splits
          * @description Team offense/defense rate profile conditioned on each situational
-         *     dimension. Reads the materialized table; self-heals on a cold table.
+         *     dimension. Reads the offline-prepared table without rebuilding.
          */
         get: operations["get_team_splits_api_teams__team__splits_get"];
         put?: never;
@@ -363,8 +409,7 @@ export interface paths {
          *     on every request. It now runs once during ingest and writes to the
          *     `team_season_analytics` table; this endpoint is a simple keyed SELECT.
          *
-         *     If the row is missing (fresh DB, never-ingested season), the builder
-         *     lazily materializes on first hit so the system self-heals.
+         *     Missing rows stay unavailable until the next offline preparation.
          */
         get: operations["get_team_analytics_api_team_analytics_get"];
         put?: never;
@@ -920,7 +965,7 @@ export interface components {
             /** Pass Epa */
             pass_epa: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Receptions */
             receptions: number;
             /** Rec Yards */
@@ -928,9 +973,9 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Air Yards */
-            air_yards: number;
+            air_yards: number | null;
             /** Yac */
-            yac: number;
+            yac: number | null;
             /** Rec Epa */
             rec_epa: number;
             /** Carries */
@@ -1061,7 +1106,8 @@ export interface components {
          * @description One row per player in /leaders. Stat fields are season totals from
          *     SUM() over player_game_stats, returned as DOUBLE.
          *
-         *     All stat fields are required-and-non-null: the underlying columns have
+         *     Stat fields are required; targets, receiving air yards and YAC can be
+         *     unavailable at serving time for known source-coverage gaps. Stored columns have
          *     DEFAULT 0, so SUM(...) is always a number (0.0 for non-applicable
          *     stats like RB pass_yards). Roster-joined fields (position/team) may be
          *     null because the join is LEFT and roster data can be missing.
@@ -1102,7 +1148,7 @@ export interface components {
             /** Rush Epa */
             rush_epa: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Receptions */
             receptions: number;
             /** Rec Yards */
@@ -1110,9 +1156,9 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Yac */
-            yac: number;
+            yac: number | null;
             /** Air Yards */
-            air_yards: number;
+            air_yards: number | null;
             /** Rec Epa */
             rec_epa: number;
             /** Solo Tackles */
@@ -1355,6 +1401,117 @@ export interface components {
             /** Air Yards Share */
             air_yards_share?: number | null;
         };
+        /** PassingAggregation */
+        PassingAggregation: {
+            /**
+             * Epa Sum
+             * @description Verified QB EPA including sacks; not rate times attempts.
+             */
+            epa_sum: number | null;
+            /**
+             * Successes
+             * @description Verified positive-EPA passing attempts.
+             */
+            successes: number | null;
+            /** Cpoe Sum */
+            cpoe_sum: number | null;
+            /**
+             * Cpoe Count
+             * @description Number of provider-modeled CPOE observations.
+             */
+            cpoe_count: number | null;
+        };
+        /** PassingCounts */
+        PassingCounts: {
+            /** Att */
+            att: number;
+            /** Cmp */
+            cmp: number;
+            /** Yards */
+            yards: number;
+            /** Td */
+            td: number;
+            /** Interceptions */
+            interceptions: number;
+            /** First Downs */
+            first_downs: number;
+            /** Sacks */
+            sacks: number;
+        };
+        /** PassingRow */
+        PassingRow: {
+            /** Season */
+            season: number;
+            /** Category */
+            category: string;
+            /** Split Dim */
+            split_dim: string;
+            /** Split Value */
+            split_value: string;
+            /** Sort Order */
+            sort_order: number | null;
+            /** Att */
+            att: number | null;
+            /** Cmp */
+            cmp: number | null;
+            /** Yards */
+            yards: number | null;
+            /** Td */
+            td: number | null;
+            /** Interceptions */
+            interceptions: number | null;
+            /** Air Yards */
+            air_yards: number | null;
+            /** Yac */
+            yac: number | null;
+            /** First Downs */
+            first_downs: number | null;
+            /** Epa */
+            epa: number | null;
+            /** Success Pct */
+            success_pct: number | null;
+            /** Cpoe */
+            cpoe: number | null;
+            /** Unavailable Metrics */
+            unavailable_metrics: {
+                [key: string]: string;
+            };
+            aggregation: components["schemas"]["PassingAggregation"];
+        };
+        /** PassingSeason */
+        PassingSeason: {
+            /** Season */
+            season: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "prepared" | "unverified";
+            /** Reason */
+            reason: string | null;
+            overall: components["schemas"]["PassingRow"] | null;
+            /** Rows */
+            rows: components["schemas"]["PassingRow"][];
+            game_coverage: components["schemas"]["ReceivingGameCoverage"] | null;
+            /** Views */
+            views: {
+                [key: string]: components["schemas"]["PassingViewCoverage"];
+            };
+        };
+        /** PassingViewCoverage */
+        PassingViewCoverage: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "complete" | "partial" | "unavailable";
+            /** Reason */
+            reason: string | null;
+            /** Definition */
+            definition: string;
+            /** @description Only this passer's production outside the classified view. */
+            excluded: components["schemas"]["PassingCounts"];
+        };
         /**
          * PlayerAdvStats
          * @description Per-season advanced stats — sparse by player role.
@@ -1488,7 +1645,7 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Att */
             att: number;
             /** Cmp */
@@ -1547,7 +1704,7 @@ export interface components {
             /** Pass Epa */
             pass_epa: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Receptions */
             receptions: number;
             /** Rec Yards */
@@ -1555,9 +1712,9 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Air Yards */
-            air_yards: number;
+            air_yards: number | null;
             /** Yac */
-            yac: number;
+            yac: number | null;
             /** Rec Epa */
             rec_epa: number;
             /** Carries */
@@ -1605,6 +1762,18 @@ export interface components {
             /** Punt Return Tds */
             punt_return_tds: number;
         };
+        /** PlayerPassingSplits */
+        PlayerPassingSplits: {
+            /** Player Id */
+            player_id: string;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "Qualified regular-season passing; observed production on supplied games";
+            /** Seasons */
+            seasons: components["schemas"]["PassingSeason"][];
+        };
         /**
          * PlayerProfile
          * @description Full /players/{id} payload.
@@ -1644,7 +1813,7 @@ export interface components {
             games_played: number;
             /** Season Totals */
             season_totals: {
-                [key: string]: number;
+                [key: string]: number | null;
             };
             /** Games */
             games: components["schemas"]["PlayerGame"][];
@@ -1678,6 +1847,18 @@ export interface components {
             depth: components["schemas"]["DepthChartEntry"] | null;
             /** Awards */
             awards: components["schemas"]["PlayerAward"][];
+        };
+        /** PlayerReceivingSplits */
+        PlayerReceivingSplits: {
+            /** Player Id */
+            player_id: string;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "Qualified regular-season receiving; observed production on supplied games";
+            /** Seasons */
+            seasons: components["schemas"]["ReceivingSeason"][];
         };
         /**
          * PlayerSplit
@@ -1752,6 +1933,119 @@ export interface components {
             away: number;
             /** Home */
             home: number;
+        };
+        /** ReceivingCounts */
+        ReceivingCounts: {
+            /** Att */
+            att: number | null;
+            /** Cmp */
+            cmp: number;
+            /** Yards */
+            yards: number;
+            /** Td */
+            td: number;
+            /** Yac */
+            yac: number | null;
+            /** First Downs */
+            first_downs: number;
+        };
+        /**
+         * ReceivingGameCoverage
+         * @description Supplied games versus recorded final scores; not a source freshness certificate.
+         */
+        ReceivingGameCoverage: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "complete" | "partial";
+            /** Supplied Games */
+            supplied_games: number;
+            /** Recorded Completed Games */
+            recorded_completed_games: number;
+            /** Missing Game Ids */
+            missing_game_ids: string[];
+            /** Unconfirmed Game Ids */
+            unconfirmed_game_ids: string[];
+            /** Reason */
+            reason: string | null;
+        };
+        /**
+         * ReceivingRow
+         * @description EPA per original target; success is percent of targets with EPA > 0.
+         */
+        ReceivingRow: {
+            /** Season */
+            season: number;
+            /** Category */
+            category: string;
+            /** Split Dim */
+            split_dim: string;
+            /** Split Value */
+            split_value: string;
+            /** Sort Order */
+            sort_order: number | null;
+            /** Att */
+            att: number | null;
+            /** Cmp */
+            cmp: number | null;
+            /** Yards */
+            yards: number | null;
+            /** Td */
+            td: number | null;
+            /** Interceptions */
+            interceptions: number | null;
+            /** Air Yards */
+            air_yards: number | null;
+            /** Yac */
+            yac: number | null;
+            /** First Downs */
+            first_downs: number | null;
+            /** Epa */
+            epa: number | null;
+            /** Success Pct */
+            success_pct: number | null;
+            /** Cpoe */
+            cpoe: number | null;
+            /** Unavailable Metrics */
+            unavailable_metrics: {
+                [key: string]: string;
+            };
+        };
+        /** ReceivingSeason */
+        ReceivingSeason: {
+            /** Season */
+            season: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "prepared" | "unverified";
+            /** Reason */
+            reason: string | null;
+            overall: components["schemas"]["ReceivingRow"] | null;
+            /** Rows */
+            rows: components["schemas"]["ReceivingRow"][];
+            game_coverage: components["schemas"]["ReceivingGameCoverage"] | null;
+            /** Views */
+            views: {
+                [key: string]: components["schemas"]["ReceivingViewCoverage"];
+            };
+        };
+        /** ReceivingViewCoverage */
+        ReceivingViewCoverage: {
+            /**
+             * Status
+             * @description Context coverage of all supplied season plays, not just this receiver.
+             * @enum {string}
+             */
+            status: "complete" | "partial" | "unavailable";
+            /** Reason */
+            reason: string | null;
+            /** Definition */
+            definition: string;
+            /** @description Only this receiver's verified production outside the view. */
+            excluded: components["schemas"]["ReceivingCounts"];
         };
         /**
          * RosterPlayer
@@ -2078,6 +2372,8 @@ export interface components {
             game_id: string;
             /** Season */
             season: number;
+            /** Game Type */
+            game_type: string;
             /** Week */
             week: number;
             /** Gameday */
@@ -2178,7 +2474,7 @@ export interface components {
             /** Rush Epa */
             rush_epa: number;
             /** Targets */
-            targets: number;
+            targets: number | null;
             /** Receptions */
             receptions: number;
             /** Rec Yards */
@@ -2186,9 +2482,9 @@ export interface components {
             /** Rec Tds */
             rec_tds: number;
             /** Air Yards */
-            air_yards: number;
+            air_yards: number | null;
             /** Yac */
-            yac: number;
+            yac: number | null;
             /** Rec Epa */
             rec_epa: number;
             /** Solo Tackles */
@@ -2392,12 +2688,8 @@ export interface operations {
     };
     load_season_api_seasons__year__load_post: {
         parameters: {
-            query?: {
-                force?: boolean;
-            };
-            header?: {
-                "x-admin-token"?: string | null;
-            };
+            query?: never;
+            header?: never;
             path: {
                 year: number;
             };
@@ -2413,6 +2705,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LoadSeasonResponse"];
                 };
+            };
+            /** @description Ingest moved to offline jobs */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2444,6 +2743,13 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Ingest progress is available in offline job logs */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2757,6 +3063,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DefensiveSplit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_player_receiving_splits_api_players__player_id__receiving_splits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerReceivingSplits"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_player_passing_splits_api_players__player_id__passing_splits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerPassingSplits"];
                 };
             };
             /** @description Validation Error */

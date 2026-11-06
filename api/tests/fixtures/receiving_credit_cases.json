@@ -1,0 +1,173 @@
+{
+  "source": "https://github.com/nflverse/nflverse-pbp/releases/download/playstats/play_stats_{season}.rds",
+  "definitions": "https://github.com/nflverse/nflfastR/blob/master/R/calculate_stats.R",
+  "scope": "Minimal cached provider rows; manually stated receiving expectations. Other offensive categories are controls only. target_credits does not assert complete targets.",
+  "independent_allen_confirmation": "https://amp.nfl.com/news/bills-qb-josh-allen-s-dope-td-pass-catch-highlights-dominant-four-td-evening-in-win-over-niners",
+  "cases": [
+    {
+      "name": "ordinary_catch",
+      "play": {"game_id": "2024_01_ARI_BUF", "play_id": 108, "season": 2024, "season_type": "REG", "down": 1, "qtr": 1, "two_point_attempt": 0, "receiver_player_id": "00-0033553", "receiving_yards": 9.0, "complete_pass": 1.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0033553", "player_name": "J.Conner", "stat_id": 21, "yards": 9},
+        {"gsis_player_id": "00-0033553", "player_name": "J.Conner", "stat_id": 115, "yards": 0},
+        {"gsis_player_id": "00-0035228", "player_name": "K.Murray", "stat_id": 15, "yards": 9}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0033553", "target_credits": 1, "receptions": 1, "receiving_yards": 9, "receiving_tds": 0}
+      ]
+    },
+    {
+      "name": "ordinary_negative_catch",
+      "play": {"game_id": "2001_01_CAR_MIN", "play_id": 1452, "season": 2001, "season_type": "REG", "down": 2, "qtr": 2, "two_point_attempt": 0, "receiver_player_id": "00-0019712", "receiving_yards": -3.0, "complete_pass": 1.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0003739", "player_name": "D.Culpepper", "stat_id": 15, "yards": -3},
+        {"gsis_player_id": "00-0019712", "player_name": "D.Chapman", "stat_id": 21, "yards": -3},
+        {"gsis_player_id": "00-0019712", "player_name": "D.Chapman", "stat_id": 115, "yards": 0}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0019712", "target_credits": 1, "receptions": 1, "receiving_yards": -3, "receiving_tds": 0}
+      ]
+    },
+    {
+      "name": "carter_chapman_lateral",
+      "play": {"game_id": "2001_07_MIN_TB", "play_id": 2977, "season": 2001, "season_type": "REG", "down": 1, "qtr": 4, "two_point_attempt": 0, "receiver_player_id": "00-0002721", "receiving_yards": 2.0, "complete_pass": 1.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0002721", "player_name": "C.Carter", "stat_id": 21, "yards": 2},
+        {"gsis_player_id": "00-0002721", "player_name": "C.Carter", "stat_id": 115, "yards": 0},
+        {"gsis_player_id": "00-0003739", "player_name": "D.Culpepper", "stat_id": 15, "yards": 11},
+        {"gsis_player_id": "00-0019712", "player_name": "D.Chapman", "stat_id": 23, "yards": 9}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0002721", "target_credits": 1, "receptions": 1, "receiving_yards": 2, "receiving_tds": 0},
+        {"player_id": "00-0019712", "target_credits": 0, "receptions": 0, "receiving_yards": 9, "receiving_tds": 0}
+      ]
+    },
+    {
+      "name": "allen_passing_and_receiving_td",
+      "play": {"game_id": "2024_13_SF_BUF", "play_id": 2394, "season": 2024, "season_type": "REG", "down": 1, "qtr": 3, "two_point_attempt": 0, "receiver_player_id": "00-0031544", "receiving_yards": 0.0, "complete_pass": 1.0, "pass_touchdown": 1.0},
+      "credits": [
+        {"gsis_player_id": "00-0031544", "player_name": "A.Cooper", "stat_id": 21, "yards": 0},
+        {"gsis_player_id": "00-0031544", "player_name": "A.Cooper", "stat_id": 115, "yards": 0},
+        {"gsis_player_id": "00-0034857", "player_name": "J.Allen", "stat_id": 16, "yards": 7},
+        {"gsis_player_id": "00-0034857", "player_name": "J.Allen", "stat_id": 24, "yards": 7}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0031544", "target_credits": 1, "receptions": 1, "receiving_yards": 0, "receiving_tds": 0},
+        {"player_id": "00-0034857", "target_credits": 0, "receptions": 0, "receiving_yards": 7, "receiving_tds": 1}
+      ]
+    },
+    {
+      "name": "saubert_two_credits_same_play",
+      "play": {"game_id": "2024_03_SF_LA", "play_id": 4434, "season": 2024, "season_type": "REG", "down": 1, "qtr": 4, "two_point_attempt": 0, "receiver_player_id": "00-0038647", "receiving_yards": 12.0, "complete_pass": 1.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0032701", "player_name": "J.Brendel", "stat_id": 23, "yards": 2},
+        {"gsis_player_id": "00-0033576", "player_name": "E.Saubert", "stat_id": 23, "yards": -3},
+        {"gsis_player_id": "00-0033576", "player_name": "E.Saubert", "stat_id": 23, "yards": 20},
+        {"gsis_player_id": "00-0036261", "player_name": "B.Aiyuk", "stat_id": 23, "yards": 5},
+        {"gsis_player_id": "00-0037525", "player_name": "J.Mason", "stat_id": 23, "yards": 1},
+        {"gsis_player_id": "00-0037834", "player_name": "B.Purdy", "stat_id": 15, "yards": 34},
+        {"gsis_player_id": "00-0038647", "player_name": "R.Bell", "stat_id": 21, "yards": 12},
+        {"gsis_player_id": "00-0038647", "player_name": "R.Bell", "stat_id": 115, "yards": 0},
+        {"gsis_player_id": "00-0039351", "player_name": "D.Puni", "stat_id": 23, "yards": -3}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0032701", "target_credits": 0, "receptions": 0, "receiving_yards": 2, "receiving_tds": 0},
+        {"player_id": "00-0033576", "target_credits": 0, "receptions": 0, "receiving_yards": 17, "receiving_tds": 0},
+        {"player_id": "00-0036261", "target_credits": 0, "receptions": 0, "receiving_yards": 5, "receiving_tds": 0},
+        {"player_id": "00-0037525", "target_credits": 0, "receptions": 0, "receiving_yards": 1, "receiving_tds": 0},
+        {"player_id": "00-0038647", "target_credits": 1, "receptions": 1, "receiving_yards": 12, "receiving_tds": 0},
+        {"player_id": "00-0039351", "target_credits": 0, "receptions": 0, "receiving_yards": -3, "receiving_tds": 0}
+      ]
+    },
+    {
+      "name": "mcconkey_negative_lateral",
+      "play": {"game_id": "2024_09_LAC_CLE", "play_id": 2105, "season": 2024, "season_type": "REG", "down": 4, "qtr": 2, "two_point_attempt": 0, "receiver_player_id": "00-0038544", "receiving_yards": 26.0, "complete_pass": 1.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0036158", "player_name": "J.Dobbins", "stat_id": 23, "yards": 10},
+        {"gsis_player_id": "00-0036355", "player_name": "J.Herbert", "stat_id": 15, "yards": 39},
+        {"gsis_player_id": "00-0036988", "player_name": "J.Palmer", "stat_id": 23, "yards": 9},
+        {"gsis_player_id": "00-0038544", "player_name": "Q.Johnston", "stat_id": 21, "yards": 26},
+        {"gsis_player_id": "00-0038544", "player_name": "Q.Johnston", "stat_id": 115, "yards": 0},
+        {"gsis_player_id": "00-0039915", "player_name": "L.McConkey", "stat_id": 23, "yards": -6}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0036158", "target_credits": 0, "receptions": 0, "receiving_yards": 10, "receiving_tds": 0},
+        {"player_id": "00-0036988", "target_credits": 0, "receptions": 0, "receiving_yards": 9, "receiving_tds": 0},
+        {"player_id": "00-0038544", "target_credits": 1, "receptions": 1, "receiving_yards": 26, "receiving_tds": 0},
+        {"player_id": "00-0039915", "target_credits": 0, "receptions": 0, "receiving_yards": -6, "receiving_tds": 0}
+      ]
+    },
+    {
+      "name": "two_passers_receiving_side_incomplete_targets",
+      "play": {"game_id": "2004_14_NO_DAL", "play_id": 4462, "season": 2004, "season_type": "REG", "down": 1, "qtr": 4, "two_point_attempt": 0, "receiver_player_id": "00-0000339", "receiving_yards": 9.0, "complete_pass": 1.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0000339", "player_name": "R.Anderson", "stat_id": 21, "yards": 9},
+        {"gsis_player_id": "00-0008561", "player_name": "K.Johnson", "stat_id": 19, "yards": 0},
+        {"gsis_player_id": "00-0008561", "player_name": "K.Johnson", "stat_id": 23, "yards": 5},
+        {"gsis_player_id": "00-0016193", "player_name": "V.Testaverde", "stat_id": 15, "yards": 14}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0000339", "target_credits": 0, "receptions": 1, "receiving_yards": 9, "receiving_tds": 0},
+        {"player_id": "00-0008561", "target_credits": 0, "receptions": 0, "receiving_yards": 5, "receiving_tds": 0}
+      ]
+    },
+    {
+      "name": "rushing_lateral_is_not_receiving",
+      "play": {"game_id": "2001_06_STL_NYJ", "play_id": 1523, "season": 2001, "season_type": "REG", "down": 1, "qtr": 2, "two_point_attempt": 0, "receiver_player_id": null, "receiving_yards": null, "complete_pass": 0.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0006627", "player_name": "A.Hakim", "stat_id": 10, "yards": 12},
+        {"gsis_player_id": "00-0019649", "player_name": "T.Canidate", "stat_id": 13, "yards": 44}
+      ],
+      "expected_receiving": [
+      ]
+    },
+    {
+      "name": "aborted_punt_is_not_receiving",
+      "play": {"game_id": "2004_04_NE_BUF", "play_id": 1745, "season": 2004, "season_type": "REG", "down": 4, "qtr": 2, "two_point_attempt": 0, "receiver_player_id": null, "receiving_yards": null, "complete_pass": 0.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0011626", "player_name": "B.Moorman", "stat_id": 10, "yards": 0},
+        {"gsis_player_id": "00-0011626", "player_name": "B.Moorman", "stat_id": 12, "yards": 34}
+      ],
+      "expected_receiving": [
+      ]
+    },
+    {
+      "name": "conversion_is_not_ordinary_receiving",
+      "play": {"game_id": "2001_02_DEN_ARI", "play_id": 2030, "season": 2001, "season_type": "REG", "down": null, "qtr": 2, "two_point_attempt": 1, "receiver_player_id": "00-0002709", "receiving_yards": null, "complete_pass": 0.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0002709", "player_name": "D.Carswell", "stat_id": 104, "yards": 0},
+        {"gsis_player_id": "00-0006423", "player_name": "B.Griese", "stat_id": 77, "yards": 0}
+      ],
+      "expected_receiving": [
+      ]
+    },
+    {
+      "name": "gibbs_lateral_touchdown",
+      "play": {"game_id": "2024_03_DET_ARI", "play_id": 1697, "season": 2024, "season_type": "REG", "down": 1, "qtr": 2, "two_point_attempt": 0, "receiver_player_id": "00-0036963", "receiving_yards": 1.0, "complete_pass": 1.0, "pass_touchdown": 1.0},
+      "credits": [
+        {"gsis_player_id": "00-0033106", "player_name": "J.Goff", "stat_id": 16, "yards": 21},
+        {"gsis_player_id": "00-0036963", "player_name": "A.St. Brown", "stat_id": 21, "yards": 1},
+        {"gsis_player_id": "00-0036963", "player_name": "A.St. Brown", "stat_id": 115, "yards": 0},
+        {"gsis_player_id": "00-0039139", "player_name": "J.Gibbs", "stat_id": 24, "yards": 20}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0036963", "target_credits": 1, "receptions": 1, "receiving_yards": 1, "receiving_tds": 0},
+        {"player_id": "00-0039139", "target_credits": 0, "receptions": 0, "receiving_yards": 20, "receiving_tds": 1}
+      ]
+    },
+    {
+      "name": "gibbs_second_lateral",
+      "play": {"game_id": "2024_15_BUF_DET", "play_id": 4695, "season": 2024, "season_type": "REG", "down": 4, "qtr": 4, "two_point_attempt": 0, "receiver_player_id": "00-0036963", "receiving_yards": 2.0, "complete_pass": 1.0, "pass_touchdown": 0.0},
+      "credits": [
+        {"gsis_player_id": "00-0033106", "player_name": "J.Goff", "stat_id": 15, "yards": 23},
+        {"gsis_player_id": "00-0036963", "player_name": "A.St. Brown", "stat_id": 21, "yards": 2},
+        {"gsis_player_id": "00-0036963", "player_name": "A.St. Brown", "stat_id": 115, "yards": 0},
+        {"gsis_player_id": "00-0039139", "player_name": "J.Gibbs", "stat_id": 23, "yards": 21}
+      ],
+      "expected_receiving": [
+        {"player_id": "00-0036963", "target_credits": 1, "receptions": 1, "receiving_yards": 2, "receiving_tds": 0},
+        {"player_id": "00-0039139", "target_credits": 0, "receptions": 0, "receiving_yards": 21, "receiving_tds": 0}
+      ]
+    }
+  ]
+}
