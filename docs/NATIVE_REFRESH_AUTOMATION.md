@@ -45,15 +45,19 @@ outside this native path.
 Use the same cloud authentication secrets as the deployment workflow. This job
 also needs permission to create publication objects and conditionally replace
 the selection. It renews authentication after preparation, before publication.
-Configure a trial/candidate selection while proving automation. Switching the
-live service requires the separate deployment and cutover work in
-[DEPLOY.md](../DEPLOY.md).
+Configure a trial/candidate selection while proving automation. Set repository
+variable `NATIVE_REFRESH_TARGET` to `preview` or `production` to pass a successful
+selection to the reusable `deploy-native.yml` workflow. The deployment pins the
+exact selection identity emitted by this refresh and rechecks it before traffic
+promotion. An unchanged-source run skips preparation and deployment. A failed
+deployment retains its publication for a manual retry through **Deploy native
+snapshot**. See [DEPLOY.md](../DEPLOY.md) for rollout and rollback.
 
 The job records plan, preparation logs, validation reports, publication receipt,
 and selection receipt as a GitHub artifact. Large databases and captures live
 in the versioned cloud publication rather than duplicated workflow artifacts.
-The existing legacy refresh workflow retains its own source and live deploy path
-until cutover; this native job never overwrites its root database or watermarks.
+The legacy refresh/deploy workflows are retired by the native cutover change.
+Preparation and publication use the versioned native objects and selection.
 
 ## Local commands
 

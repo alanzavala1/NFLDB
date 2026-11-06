@@ -1,8 +1,13 @@
-name: Deploy native snapshot preview
+name: Deploy native snapshot
 
 on:
   workflow_dispatch:
     inputs:
+      target:
+        type: choice
+        options: [preview, production]
+        default: preview
+        required: true
       operation:
         type: choice
         options: [deploy, rollback]
@@ -18,17 +23,37 @@ on:
         description: 'Deploy: exact selection SHA256'
         type: string
       revision:
-        description: 'Rollback: previously verified nfldb-native-preview revision'
+        description: 'Rollback: previously verified revision of the selected service'
         type: string
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        required: true
+      pointer:
+        type: string
+        required: true
+      pointer_generation:
+        type: string
+        required: true
+      pointer_sha256:
+        type: string
+        required: true
+      operation:
+        type: string
+        default: deploy
+      revision:
+        type: string
+        default: ''
 
 # Rollbacks and deployments share one queue. Never interrupt a traffic change.
 concurrency:
-  group: nfldb-native-preview
+  group: nfldb-native-${{ inputs.target }}
   cancel-in-progress: false
 
 jobs:
-  preview:
-    runs-on: ubuntu-latest
+  deploy:
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -41,10 +66,14 @@ jobs:
       ROLLBACK_REVISION: ${{ inputs.revision }}
       PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       REGION: us-central1
+      TARGET: ${{ inputs.target }}
+      SERVICE: ${{ inputs.target == 'production' && 'nfldb' || 'nfldb-native-preview' }}
     steps:
       - uses: actions/checkout@v4
       - name: Set temporary paths
         run: |
+          [[ "$TARGET" == preview || "$TARGET" == production ]]
+          [[ "$OPERATION" == deploy || "$OPERATION" == rollback ]]
           echo "DOWNLOAD=$RUNNER_TEMP/native-download" >> "$GITHUB_ENV"
           echo "EVIDENCE=$RUNNER_TEMP/native-deployment" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
@@ -91,8 +120,8 @@ jobs:
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           echo "IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/nfldb/nfldb-native@$DIGEST" >> "$GITHUB_ENV"
 
-      - name: Deploy or roll back the isolated preview
-        run: bash .github/scripts/native-preview.sh
+      - name: Deploy or roll back the selected service
+        run: bash .github/scripts/native-deploy.sh
 
       - name: Preserve deployment evidence
         if: always()
