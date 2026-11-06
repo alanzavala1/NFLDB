@@ -22,6 +22,45 @@ R runs in the offline worker, not the serving container.
 See [cloud publication and selection](docs/CLOUD_RELEASES.md) and
 [offline preparation](docs/OFFLINE_RELEASES.md) for the preceding steps.
 
+### Verified production cutover — November 6, 2026
+
+[PR #12](https://github.com/alanzavala1/NFLDB/pull/12) is merged. The old workflow
+registrations were disabled before merge and are now deleted. Repository variables
+select `gs://project-60bdbe3e-823a-46fb-b02-nfldb-data/native/production/current.json`
+and target `production` for the daily native refresh.
+
+- Hosted preparation job [42251739850](https://github.com/alanzavala1/NFLDB/actions/runs/42251739850)
+  captured fresh 2026 inputs, validated all 28 stored seasons and 102 API paths,
+  and published `native/releases/refresh-42251739850-1`. Preparation took
+  68 minutes 25 seconds on the hosted worker.
+- That run's subsequent deployment stopped because GitHub suppressed the
+  secret-derived selection URI job output. Commit `8ecae7f` passes the configured
+  URI directly, keeping the generation and SHA256 as outputs. The completed
+  release was reused through the independent deployment workflow.
+- [Preview deployment 42264100300](https://github.com/alanzavala1/NFLDB/actions/runs/42264100300)
+  and [production deployment 42265029741](https://github.com/alanzavala1/NFLDB/actions/runs/42265029741)
+  passed their image/startup/read-only gates. Each then passed 102 API checks over
+  public network HTTP. The first combined run retains its failed deployment
+  record; the corrected scheduled handoff awaits its next changed-source run.
+- Production serves `nfldb-n-42265029741-1` at 100% traffic. Its image digest is
+  `sha256:ff03cfb28f51d23b9bb3799f4bd9054562dd1e043594c729582979917eac41cc`.
+  The previous revision for rollback is **`nfldb-00076-7sq`**.
+- The database SHA256 is
+  `17414cdee6f6b30d43217d5bd190f42c058998c769bc8243495245eddd7d13f9`,
+  with release manifest SHA256
+  `bd19a11867f563c76cfce4c91aff089bfe78f35ae6494e8cefa361de345ec31f`.
+  Production's current-season schedule retained all 121 previously completed
+  games and contains 122 completed games through Week 9. Both retired ingest
+  URLs returned 410.
+
+Before cutover, a separate real preview drill deployed the November 1 data,
+rolled back to the October 28 snapshot, and restored the newer snapshot. Each
+stage passed 102 public API checks. Those revisions contain different data and
+images. Sixteen shell controls also exercised promotion and recovery for both
+services. CI passed 1,580 backend checks with 25 expected data/model skips and all
+391 browser checks. The shipped-image checks include the real-data reconciliation
+tests. Original protected databases and prior local downloads retained their hashes.
+
 ## Native workflow
 
 Run **Deploy native snapshot** in GitHub Actions with operation `deploy` and

@@ -5,6 +5,17 @@ reading its existing snapshot while a separate worker builds the next release.
 Publication and deployment are separate: selecting new data does not replace a
 running Cloud Run container.
 
+As of the November 6 cutover, both native workflows are active on `main`,
+`NATIVE_REFRESH_POINTER` selects the production pointer and
+`NATIVE_REFRESH_TARGET=production` enables deployment after successful preparation.
+The first hosted preparation/publication succeeded. Its deployment handoff
+exposed GitHub's suppression of a secret-derived URI output, fixed in `8ecae7f`.
+The validated release subsequently passed the independent preview and production
+deployment workflows. The corrected combined handoff awaits the next changed-source
+run. See [the cutover evidence](../DEPLOY.md#verified-production-cutover--november-6-2026)
+for exact runs, the live revision and rollback target. The November 1 trial below
+records the earlier local checkpoint.
+
 ## What the worker does
 
 1. Reads the current native selection and verifies its publication metadata.

@@ -2,17 +2,20 @@
 
 The serving app reads a DuckDB database file containing source data and prepared
 analytics. A **snapshot** means that complete file at a particular revision.
-The goal is to build and verify a candidate snapshot offline, then ship it with
-the app. Visitors should only read published data.
+The offline worker builds and verifies a candidate snapshot, then publication
+and deployment ship it with the app. Visitors read the published data.
 
 ## Current preparation flow
 
-The scheduled job still uses `jobs.refresh` and updates its downloaded database
-in place. The new, opt-in candidate command wraps the same ingestion pipeline
-in a separate working file; publication has not been migrated yet.
+The native workflow uses `jobs.refresh_native` to plan, restore historical
+captures, capture the refreshed season, calculate passing/receiving views, and
+prepare a new candidate. Validation precedes immutable publication and conditional
+selection. Deployment consumes that exact release. See the
+[native refresh workflow](NATIVE_REFRESH_AUTOMATION.md) for the full sequence.
+The lower-level ingestion composition used by candidate preparation is below.
 
 ```text
-jobs.refresh → ingest.run_ingest
+jobs.refresh_native → jobs.prepare → offline worker → ingest.run_ingest
                     ├─ pipeline.loading coordinates adapters and storage
                     ├─ pipeline.player_stats composes player_game_stats
                     │      └─ pipeline.play_stats computes play-derived lines
@@ -59,6 +62,10 @@ conflicting old charting fails this check. The flag changes preparation scope,
 not the publication gate.
 
 ## Core seasonal downloads
+
+Native passing/receiving preparation supplies source-bound RDS captures through
+the [capture and refresh workflow](NATIVE_REFRESH_AUTOMATION.md). The generic
+source adapters below also support parquet for separate ingestion commands.
 
 `api/pipeline/sources.py` owns downloading play-by-play and official weekly
 player statistics. It has no database dependency. Each result identifies the
@@ -779,9 +786,10 @@ Validation checks additionally build a small real historical/newest snapshot,
 launch the actual read-only validation CLI, exercise HTTP responses, verify its
 file bytes/WAL are unchanged, and reject deliberately broken schemas, keys,
 coverage, indexes, rating ranges, counts, EPA and attempted lazy writes. The
-existing local snapshot is also inspectable read-only; it currently fails the
-new coverage gate because official weekly stats stop in 2024 while plays reach
-2026. No automatic repair or live-site change follows from this inspection.
+pre-migration local snapshot was also inspected read-only. That earlier inspection
+failed the coverage gate because official weekly stats stopped in 2024 while
+plays reached 2026. The subsequent native release work prepares and validates
+the replacement snapshot; see [current deployment status](../DEPLOY.md).
 
 An October 15 isolated run used the actual player-game composition/storage
 code with cached current weekly feeds and stored PBP for all six target-gap

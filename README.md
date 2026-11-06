@@ -2,11 +2,11 @@
 
 A full-stack NFL analytics platform built on nflfastR play-by-play data. It
 provides **per-game player ratings** (EPA-based, percentile-calibrated across
-27 seasons) rendered on a **matchup lineup view**, a **situational splits
+28 stored seasons) rendered on a **matchup lineup view**, a **situational splits
 engine** that conditions any player's or team's stat line on one dimension at
 a time, and **Ask NFLDB**, an agent that answers plain-English questions
-through the platform's typed queries. All of it is free to access, and every
-derived number is verified to reconcile with official NFL stats.
+through the platform's typed queries. Preparation validates supported statistics,
+source coverage, and API responses before publishing a release.
 
 **[Deployment guide →](./DEPLOY.md)** &nbsp;·&nbsp; one-container deploy to Cloud Run (free tier)
 
@@ -33,14 +33,12 @@ derived number is verified to reconcile with official NFL stats.
   play-action, blitz, red zone, dome, competitive-snaps-only, per-opponent,
   and more — with a panel that surfaces where they stand out. Works for
   offense and defense, players and teams.
-- **Ask NFLDB.** A tool-calling agent that answers questions through the same
-  typed endpoints the site uses. It does not write SQL and cannot invent
-  numbers; each answer shows the chain of database lookups behind it. Details
-  below.
-- **Verified accuracy.** The play-by-play–derived splits reconcile exactly
-  with official weekly stats (0 mismatches on attempts / carries / targets,
-  league-wide), enforced by automated reconciliation tests that gate every
-  deploy.
+- **Ask NFLDB.** A tool-calling agent that uses shared data services and
+  structured query tools. Answers include the database lookups behind them.
+  Model and streaming improvements are a subsequent milestone.
+- **Validated releases.** Passing and receiving splits use the pinned nflfastR
+  calculator with detailed player credits. Release checks cover all stored
+  seasons, counting-stat reconciliation and explicit historical field gaps.
 - **Performance.** gzip (payloads 10–20× smaller), HTTP caching, point-lookup
   indexes, per-request cursors for lock-free concurrent reads, and a pruned
   columnar store.
@@ -58,20 +56,20 @@ derived number is verified to reconcile with official NFL stats.
 ## Engineering notes
 
 ### Data accuracy
-- Official `weekly_player_stats` is the source of truth for counting stats;
-  the situational splits are computed from raw play-by-play yet reconcile to
-  it exactly. Getting there meant matching the NFL's own definitions — e.g. a
-  pass attempt is a completion/incompletion/interception (not nflfastR's
-  `pass_attempt`, which counts sacks in some seasons), and carries include QB
-  kneels.
-- EPA is standardized across every page. nflfastR's weekly `passing_epa` is
-  `SUM(qb_epa)` over dropbacks; the platform reproduces that definition so
-  "EPA/att" means the identical number on the Splits, Leaders, and Player
-  pages.
-- [`api/tests/test_reconciliation.py`](api/tests/test_reconciliation.py)
-  enforces all of this against the real database, and the deploy is gated on
-  it passing inside the shipped image — a release is blocked if the data
-  doesn't reconcile.
+- The offline R worker runs `nflfastR::calculate_stats` on filtered play subsets.
+  Detailed player credits preserve production on lateral and multi-passer plays.
+  Native passing/receiving validation compares the captured calculator outputs,
+  split conservation, and independent weekly counting totals.
+- Historical targets are unavailable for 2003–2008, receiving yards after catch
+  before 2006, and receiving air yards before 2009. Availability is tracked per
+  field while separately verified catches, yards and touchdowns remain visible.
+- Passing split aggregation retains the numerator and population for each rate.
+  Combined views recompute rates from those components, including sack-only EPA
+  rows and the modeled-throw population for CPOE.
+- Source replay and whole/split reconciliation are release gates in
+  `api/pipeline/receiving_validation.py` and `passing_validation.py`.
+  [`api/tests/test_reconciliation.py`](api/tests/test_reconciliation.py) adds
+  invariants against the real database inside the shipped image.
 
 ### Performance
 - Responses gzip ~10–20× (a veteran's splits payload: 570KB → 46KB) — the
@@ -81,15 +79,15 @@ derived number is verified to reconcile with official NFL stats.
 - ART point-lookup indexes on the large per-request tables, and per-request
   DuckDB cursors (MVCC-isolated) so concurrent reads never serialize on a
   lock.
-- The play-by-play store is pruned from 396 to 169 columns, cutting the
-  database 872MB → 400MB with no loss of functionality (every builder and
+- The earlier play-by-play pruning benchmark reduced 396 columns to 169 and
+  the then-current database from 872MB to 400MB (every builder and
   query re-verified against the slim schema).
 
 ### The ratings engine
 - Per-game grades from raw play-by-play: QB/RB/WR/TE rate on total EPA over
   their plays; defenders on a weighted event score (sacks, TFLs, INTs,
   PBUs…); kickers on made-vs-expected by distance. Raw scores map through a
-  piecewise percentile curve calibrated across all 27 seasons: 6.5 average,
+  piecewise percentile curve calibrated across the loaded history: 6.5 average,
   8+ great, 9+ elite (~top 2%).
 - Validated against history: the all-time top-rated QB games are
   Roethlisberger's perfect-rating 2014 game, Brady 2007, and Foles's 7-TD
@@ -243,29 +241,34 @@ stated in its prompt and not always followed.
 | Layer | Tech |
 |---|---|
 | Backend | Python, FastAPI, Pydantic, DuckDB |
-| Data | `nfl_data_py` / nflfastR (play-by-play, weekly stats, NGS, FTN charting, snaps, rosters) |
+| Data | Python ingestion, pinned offline R/nflfastR, captured source files, NGS, FTN, snaps and rosters |
 | AI | Claude (tool-calling agent over the platform's typed queries — no text-to-SQL) |
-| Frontend | React, TypeScript, Vite, Tailwind CSS (custom card design system), Recharts |
-| Tests / CI | pytest (incl. data-reconciliation invariants), GitHub Actions |
-| Deploy | Docker, Google Cloud Run |
+| Frontend | React, TypeScript, Vite, TanStack Query/Table, OpenAPI client, Tailwind CSS, Recharts |
+| Tests / CI | pytest, Playwright, GitHub Actions |
+| Deploy | Versioned Cloud Storage releases, Docker, Google Cloud Run |
 
 ## Architecture
 
 ```
-nfl_data_py ─► DuckDB (raw play-by-play, ~169 cols)
-                    │
-                    ├─► materialize ─► player_splits · defense_splits · team_splits
-                    │                  player_game_stats · team_season_analytics · comparables
-                    │                  player_game_ratings · team_power_rankings · team_game_ol_grades
-                    ▼
-              FastAPI  (gzip · Cache-Control · per-request cursors)   ── /api/*
-                    │                                    └── /api/ask (Claude agent → typed tools)
-              OpenAPI ─► openapi-typescript ─► typed React/TS client  ── /
+NFL feeds ─► offline R/Python worker ─► prepared DuckDB candidate
+                                            │
+                         validate all stored seasons and API views
+                                            │
+                         immutable cloud release ─► selection
+                                            │
+                         Docker image with app + verified snapshot
+                                            │
+React + TanStack Query ─► typed OpenAPI client ─► FastAPI route
+                                                    │
+Ask tools ─────────────────────────────────► shared service
+                                                    │
+                                            read-only DuckDB
 ```
 
-One embedded DuckDB file, one process. Concurrency is handled *inside* the
-process (independent cursors per request); the DB is single-writer, so the app
-runs as a single worker — see the note under [Setup](#setup).
+Each serving container has its own prepared DuckDB file and one Python process.
+Requests use independent read cursors. Cloud Run can run multiple containers
+against their own copies of the same immutable snapshot. Preparation uses a
+separate writable candidate.
 
 ## Project structure
 
@@ -274,7 +277,10 @@ nfl-platform/
 ├── Dockerfile, DEPLOY.md          # one-container deploy → Cloud Run
 ├── api/
 │   ├── main.py                    # FastAPI app: /api routes + serves the SPA
-│   ├── ingest.py                  # refresh orchestration and legacy local CLI
+│   ├── ingest.py                  # ingestion composition used by the offline worker
+│   ├── jobs/, automation/         # capture, prepare, validate, refresh and deploy commands
+│   ├── publication/               # immutable cloud uploads, selection and verified downloads
+│   ├── r/                         # pinned R calculator and dependency lock
 │   ├── pipeline/                  # feed adapters, analytics and candidate snapshots; see docs/DATA_PIPELINE.md
 │   ├── splits_core.py             # shared situational-dimension scaffolding
 │   ├── splits_builder.py          # player_splits (passing/rushing/receiving)
@@ -286,7 +292,7 @@ nfl-platform/
 │   ├── routers/                   # schedule (incl. lineup/ratings), players, teams, leaders, assistant (Ask NFLDB), meta
 │   ├── services/                  # league/team/player data, game views, structured play queries and records
 │   ├── tests/                     # endpoints, invariants, data-reconciliation
-│   └── data/nfl.duckdb            # the database (gitignored; ~400MB)
+│   └── data/                      # local snapshots and captures (gitignored)
 └── frontend/src/
     ├── features/                 # Scores, Games, Players, Teams, Leaders, Standings, Splits, Search, Live Scores
     ├── components/               # shared navigation, cards, request feedback, live card, playoff bracket
@@ -326,15 +332,14 @@ npm ci --legacy-peer-deps
 npm run dev                                        # :5173 (proxies /api → :8000)
 ```
 
-The API expects a prepared `api/data/nfl.duckdb`; startup does not download NFL
-data. Production data refresh runs offline in GitHub Actions (see [DEPLOY.md](./DEPLOY.md)).
-For a local historical build, stop the API server and run
-`uv run --locked python -m ingest --seasons 2024 2025` from `api/`.
+The API expects a prepared snapshot. Use `jobs.publish download` from the
+[cloud release guide](docs/CLOUD_RELEASES.md), then set `NFL_DB_PATH` to the
+download's `release/nfl.duckdb` before starting the server. The default local
+path is `api/data/nfl.duckdb`. Production refresh runs offline in GitHub Actions.
+The [native refresh guide](docs/NATIVE_REFRESH_AUTOMATION.md) explains preparation.
 
-> **Run a single process.** DuckDB is an embedded, single-writer database, so the
-> API runs as one worker — concurrency is handled inside the process (each request
-> gets its own cursor; reads run in parallel). Don't run multiple workers
-> (`--workers N`, `gunicorn -w N`) or a second server against the same file.
+The container runs one Python process with independent read cursors per request.
+Offline preparation writes to a separate candidate file before publication.
 
 ## Tests
 
@@ -357,7 +362,7 @@ npm run test:e2e
 npm run build                                      # type check + production build
 ```
 
-The Standings pilot uses TanStack Query and an OpenAPI-typed client. See the
+The data pages use TanStack Query and an OpenAPI-typed client. See the
 [frontend data walkthrough](docs/FRONTEND_DATA.md) for the request flow,
 responsibilities, and migration boundary.
 
@@ -373,11 +378,12 @@ pipeline (free tier).
 
 ## Data notes
 
-- **Coverage:** 1999–2025, regular season + playoffs.
+- **Stored coverage:** 1999–2026, regular season + playoffs where supplied.
+  Validation describes captured inputs. Historical missing games and metric
+  gaps remain explicit, and later feed updates require another refresh.
 - **NGS** (CPOE, time-to-throw, separation) from 2016; **FTN charting**
   (play-action, blitz, box count) from 2022; **snap counts** from ~2012.
-- **Known limitation:** a handful of *rushing/receiving yard totals* differ by
-  1–3 yards in the pbp-derived views — nflfastR credits lateral/multi-player
-  yardage differently than the official scorer. Counts are always exact; this is
-  bounded and tested. Defensive *coverage* data (completion % allowed) isn't in
-  nflfastR, so defensive splits are event-based (tackles / pressure / takeaways).
+- **Receiving availability:** targets for 2003–2008, YAC before 2006, and air
+  yards before 2009 are unavailable. Other verified receiving counts remain
+  visible with field-level explanations.
+- Defensive splits use public event data such as tackles, pressure and takeaways.

@@ -38,19 +38,18 @@ It never overwrites the source. Failure removes only the newly owned candidate.
 Native passing/receiving preparation requires the matching captured inputs;
 historical analytics must be rebuilt when their input revisions change.
 
-`NFL_DB_READ_ONLY=0` belongs to that offline worker. The legacy scheduled refresh
-step also opts into it explicitly, and its CLI refuses an implicit writable
-connection. This preserves the older offline path while its publication flow
-is migrated; it does not make that path ready to publish native snapshots.
+`NFL_DB_READ_ONLY=0` belongs to that offline worker. The scheduled native refresh
+uses candidate preparation and validates the completed result before publication.
+See [native refresh](NATIVE_REFRESH_AUTOMATION.md) for capture and deployment.
 
-## Current checkpoint
+## Serving-boundary checkpoint — October 28, 2026
 
 This completes the serving boundary. At this checkpoint the publication guard
 remained unchanged. The subsequent [offline release work](OFFLINE_RELEASES.md)
-replaces that blanket block with native source checks. Remaining work connects input capture/reuse,
-candidate validation, publication and acknowledged watermarks in the scheduled
-refresh/deployment flow. The existing workflow must not be described as migrated
-or a native snapshot as published yet.
+replaces that blanket block with native source checks. The later
+[refresh workflow](NATIVE_REFRESH_AUTOMATION.md) connects capture/reuse, validation,
+publication and acknowledged watermarks. Use [DEPLOY.md](../DEPLOY.md) for current
+rollout status. The results below describe the original serving-boundary trial.
 
 The existing 28-season summary candidate passed **111 HTTP reads** through real
 app startup while all eight builders, index creation and awards preparation were

@@ -2,13 +2,13 @@
 
 Core league, team, player and game data now have domain service owners. HTTP
 routes and assistant tools call the same ordinary Python functions. The assistant
-imports neither HTTP routes nor database query functions. Builders retain their
-analytics formulas; moving their writes offline is the next separate milestone.
+imports neither HTTP routes nor database query functions. Analytics preparation
+runs in a separate offline worker, and serving reads the prepared snapshot.
 
 Offline analytics preparation now has one orchestration function in
-`api/pipeline/analytics.py`, called after ingestion prepares its inputs. Serving
-still has startup and lazy writes. See [data preparation](DATA_PIPELINE.md) for
-the current boundaries and the remaining snapshot/read-only migration.
+`api/pipeline/analytics.py`, called after ingestion prepares its inputs. See
+[read-only serving](READ_ONLY_SERVING.md), [native refresh](NATIVE_REFRESH_AUTOMATION.md)
+and [deployment](../DEPLOY.md) for the completed preparation/publication boundary.
 Core downloads live in `pipeline/sources.py`; optional vendors and their shared
 refresh asset catalog live in `pipeline/vendor_sources.py`. Their explicit source
 outcomes distinguish retained optional data from newly loaded rows. Pure vendor
@@ -19,9 +19,7 @@ normalization is separate from storage and model execution.
 ```text
 React page → TanStack Query → typed HTTP client → FastAPI route
                                                     ↓
-Assistant tool ──────────────────────────────→ domain service → DuckDB
-                                                    ↓
-                                       analytics builder when needed
+Assistant tool ──────────────────────────────→ domain service → read-only DuckDB
 ```
 
 A page displays information. TanStack Query manages loading, cached responses,
@@ -50,10 +48,10 @@ invalid SQL/functions/aliases, connection and I/O errors, and other unexpected
 failures propagate. Even a registered missing field is an error for a required
 query; the caller's contract determines whether a fallback is allowed.
 
-Builders use the same classification at their existing fallback points. Their
-locks, formulas and lazy preparation are retained, but unexpected read/build/write
-failures now propagate. Comparables rolls back its transaction before rethrowing
-a write failure. Moving all preparation out of requests remains future work.
+Offline builders use the same classification at their fallback points.
+Unexpected read/build/write failures stop preparation. Comparables rolls back
+its transaction before rethrowing a write failure. The web process reads the
+prepared results, with required missing relations mapped to a 503 response.
 
 `services/seasons.py` reads played and scheduled coverage independently. Missing
 optional play data cannot erase an available schedule; an unexpected storage

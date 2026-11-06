@@ -302,15 +302,28 @@ and capture archive retained their hashes and no WALs appeared. Ignored evidence
 is under `api/data/native-image-*20261101*`, `native-preview-*20261101*`,
 `native-deployment-*20261101*`, and `legacy-image-*20261101*`.
 
-## Remaining integration
+## Production integration — November 6, 2026
 
-The legacy `refresh.yml` and `deploy.yml` still use the bucket's original
-`nfl.duckdb` and standalone watermarks. Uploading or selecting a native release
-leaves that serving path intact. Selection and verified download commands are
-implemented. The [native preview workflow](../DEPLOY.md) consumes the selected
-bundle and supports verified revision rollback on a separate service. The
-[native refresh workflow](NATIVE_REFRESH_AUTOMATION.md) now captures and prepares
-refreshed inputs, publishes a versioned release, and conditionally updates its
-configured selection. It has not been pushed or activated in GitHub Actions.
-That activation and production cutover remain work to finish. Ask model/streaming
-changes and alternative frontend hosting remain separate milestones.
+The native workflows are active on `main`, and the legacy refresh/deploy workflows
+are retired. Hosted preparation published
+`native/releases/refresh-42251739850-1`, with publication generation
+`1793986757725029` and SHA256
+`e0b83c5282d851314a9d1e82e0c1469bf7adaea1d904d1da74678d7dcfadc550`.
+Its database is 1,153,445,888 bytes and its matching capture ZIP is 1,144,284,148
+bytes. Both candidate and release gates passed all 28 stored seasons and 102 API
+paths. The analytics validation policy remains `f72611443cf21bba4fc9ecec485459304b10e6094c4997339747b4ac16ef7ef4`.
+
+The production selection is
+`gs://project-60bdbe3e-823a-46fb-b02-nfldb-data/native/production/current.json`.
+At cutover it was generation `1793987317317652`, SHA256
+`6d403dc4262ed6ed435ffcd99faba975139c0f6608e0e522f099b04283043671`.
+Production deployment consumed that exact selection and passed its image and
+public HTTP checks. The daily refresh is configured for this pointer and target.
+
+See [DEPLOY.md](../DEPLOY.md#verified-production-cutover--november-6-2026) for the
+workflow handoff fix, successful deployment runs, live revision and retained
+rollback revision. The original combined run records a deployment failure after
+successful publication; the completed data was reused for the successful manual
+deployment. The next changed-source run will exercise the corrected combined
+handoff. Ask model/streaming work and alternative frontend hosting remain later
+milestones.
