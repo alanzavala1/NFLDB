@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 
+from automation.timing import stage_timer
+
 
 def prepare(seasons: list[int], *, core_inputs: Path | None = None, passing_inputs: Path | None = None,
             rebuild_all_analytics=False) -> None:
@@ -19,25 +21,28 @@ def prepare(seasons: list[int], *, core_inputs: Path | None = None, passing_inpu
     try:
         from ingest import run_ingest
         options = {}
-        if core_inputs is not None:
-            from pipeline.receiving_core_collection import open_core_inputs
-            options['core_inputs'] = open_core_inputs(core_inputs)
-        if passing_inputs is not None:
-            if core_inputs is None:
-                raise ValueError('Passing exports require captured core inputs')
-            from pipeline.passing_inputs import PassingInputs
-            options['passing_inputs'] = PassingInputs(passing_inputs)
+        with stage_timer('Open captured preparation inputs'):
+            if core_inputs is not None:
+                from pipeline.receiving_core_collection import open_core_inputs
+                options['core_inputs'] = open_core_inputs(core_inputs)
+            if passing_inputs is not None:
+                if core_inputs is None:
+                    raise ValueError('Passing exports require captured core inputs')
+                from pipeline.passing_inputs import PassingInputs
+                options['passing_inputs'] = PassingInputs(passing_inputs)
         if rebuild_all_analytics:
             options['rebuild_all_analytics'] = True
         with database.write_lock:
-            outcomes = run_ingest(seasons, log=lambda message: print(message, flush=True), **options)
+            with stage_timer('Ingest sources and build derived analytics'):
+                outcomes = run_ingest(seasons, log=lambda message: print(message, flush=True), **options)
             conn = database.get_connection()
             # A schedules-only refresh skips supplemental loading/analytics.
             # These local serving prerequisites must still be prepared offline.
             if not any(o.source == 'plays' and o.status == 'loaded' for o in outcomes):
                 from pipeline.awards import load_player_awards
                 load_player_awards(conn)
-            database.ensure_indexes(strict=True)
+            with stage_timer('Create serving indexes'):
+                database.ensure_indexes(strict=True)
             conn.execute('''CREATE OR REPLACE TABLE snapshot_preparation (
                 format_version INTEGER, requested_seasons JSON,
                 source_outcomes JSON, prepared_at TIMESTAMPTZ
@@ -46,7 +51,8 @@ def prepare(seasons: list[int], *, core_inputs: Path | None = None, passing_inpu
                 'INSERT INTO snapshot_preparation VALUES (1, ?, ?, current_timestamp)',
                 [json.dumps(seasons), json.dumps([asdict(o) for o in outcomes])],
             )
-            conn.execute('CHECKPOINT')
+            with stage_timer('Checkpoint candidate database'):
+                conn.execute('CHECKPOINT')
     finally:
         database.close_connection()
 

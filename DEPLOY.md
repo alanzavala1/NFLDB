@@ -60,10 +60,10 @@ and target `production` for the daily native refresh.
   and [production deployment 42265029741](https://github.com/alanzavala1/NFLDB/actions/runs/42265029741)
   passed their image/startup/read-only gates. Each then passed 102 API checks over
   public network HTTP. The first combined run retains its failed deployment
-  record; the corrected scheduled handoff awaits its next changed-source run.
-- Production serves `nfldb-n-42265029741-1` at 100% traffic. Its image digest is
+  record. The November 7 scheduled run below verifies the corrected handoff.
+- At cutover, production served `nfldb-n-42265029741-1` at 100% traffic. Its image digest is
   `sha256:ff03cfb28f51d23b9bb3799f4bd9054562dd1e043594c729582979917eac41cc`.
-  The previous revision for rollback is **`nfldb-00076-7sq`**.
+  The previous revision for rollback at that point was **`nfldb-00076-7sq`**.
 - The database SHA256 is
   `17414cdee6f6b30d43217d5bd190f42c058998c769bc8243495245eddd7d13f9`,
   with release manifest SHA256
@@ -79,6 +79,39 @@ images. Sixteen shell controls also exercised promotion and recovery for both
 services. CI passed 1,580 backend checks with 25 expected data/model skips and all
 391 browser checks. The shipped-image checks include the real-data reconciliation
 tests. Original protected databases and prior local downloads retained their hashes.
+
+### Verified scheduled refresh — November 7, 2026
+
+Scheduled run [42385471619](https://github.com/alanzavala1/NFLDB/actions/runs/42385471619)
+at source commit `1c9dfb4` completed both `refresh` and `deploy / deploy`
+successfully. This verifies the corrected automatic handoff on real changed
+sources, without a force override or manual deployment.
+
+- The run started at 09:15:16 and finished at 10:52:36 America/Chicago (CST),
+  approximately 97 minutes overall. Preparation/validation took 89 minutes
+  36 seconds, and the deployment job took approximately four minutes.
+  The cron requests 09:00 UTC daily; this observed run started at 15:15 UTC,
+  so the scheduled hour is not an exact completion or freshness guarantee.
+- All 28 stored seasons passed validation. The image passed 102 API checks,
+  rejected persistent database writes, and passed 24 reconciliation/assistant
+  compatibility checks. These compatibility checks do not call a live model.
+- The release is `native/releases/refresh-42385471619-1`. Production selection
+  generation `1794070103262416` was passed unchanged to deployment. Its SHA256 is
+  `1776e5ca6ce3121f98f93c34eac96e059c91fd82061aedba4a700de859c1720c`.
+- Production revision **`nfldb-n-42385471619-1`** serves 100% traffic. The previous
+  verified revision is **`nfldb-n-42265029741-1`**. The new image digest is
+  `sha256:f8abb5398368c5f6de25b7a74f0193be173be88326bf4d15b51483e3ff1f7866`.
+- The database is 1,259,876,352 bytes, SHA256
+  `f26c2d3507c6dadba042ff0662a8601de08223d43cc702df019ace4e18b2f0ae`.
+  The analytics validation policy remains unchanged.
+- Separate public HTTP verification passed the release's 102 API requests at
+  https://nfl-db.cloud.run, health, all 28 loaded seasons, homepage and Splits
+  routes. Both retired ingest URLs returned 410. The cloud selection, deployment
+  receipt and actual live image identity matched.
+
+Downloaded artifacts and read-only verification evidence remain ignored under
+`api/data/automation-check-20261107*`. No new refresh or deployment was started
+for this verification, and the November 6 failed run retains its original status.
 
 ## Native workflow
 
