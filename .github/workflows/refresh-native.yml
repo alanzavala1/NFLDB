@@ -118,6 +118,30 @@ jobs:
             > "$REFRESH_ROOT/preparation.log" 2>&1
           df -h "$REFRESH_ROOT"
 
+      - name: Summarize preparation stage timings
+        if: always()
+        env:
+          PREPARATION_LOG: ${{ runner.temp }}/native-refresh/preparation.log
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['PREPARATION_LOG'])
+          if path.is_file():
+              records = [json.loads(line.removeprefix('[refresh-timing] '))
+                         for line in path.read_text(encoding='utf-8').splitlines()
+                         if line.startswith('[refresh-timing] ')]
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+                  summary.write('### Preparation stage timings\n\n')
+                  summary.write('Nested stages overlap their parent; do not add all rows together.\n\n')
+                  summary.write('| Stage | Status | Seconds |\n| --- | --- | ---: |\n')
+                  for record in records:
+                      if record['status'] != 'started':
+                          summary.write(f"| {record['stage']} | {record['status']} | {record['elapsed_seconds']:.3f} |\n")
+          PY
+
       # Preparation can take long enough to outlive the initial credentials.
       - name: Renew cloud authentication before publication
         if: steps.plan.outputs.changed == 'true'

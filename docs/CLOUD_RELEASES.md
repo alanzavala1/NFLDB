@@ -324,6 +324,13 @@ See [DEPLOY.md](../DEPLOY.md#verified-production-cutover--november-6-2026) for t
 workflow handoff fix, successful deployment runs, live revision and retained
 rollback revision. The original combined run records a deployment failure after
 successful publication; the completed data was reused for the successful manual
-deployment. The next changed-source run will exercise the corrected combined
-handoff. Ask model/streaming work and alternative frontend hosting remain later
-milestones.
+deployment. Scheduled run
+[42385471619](https://github.com/alanzavala1/NFLDB/actions/runs/42385471619)
+verified the corrected combined handoff on November 7, preparing and publishing
+`native/releases/refresh-42385471619-1` and deploying it automatically to
+production. Its exact selection generation `1794070103262416` was consumed by
+deployment, and revision `nfldb-n-42385471619-1` was verified at 100% traffic.
+The image and separate public HTTP verification each passed 102 API checks.
+See [the scheduled-run evidence](../DEPLOY.md#verified-scheduled-refresh--november-7-2026)
+for current identities. Ask model/streaming work and alternative frontend hosting
+remain later milestones.

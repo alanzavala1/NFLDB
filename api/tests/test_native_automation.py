@@ -62,13 +62,20 @@ def test_plan_distinguishes_changed_unpublished_and_forced_sources(prepared):
 def test_preparation_reuses_jobs_and_finishes_only_after_bundle_and_archive_checks(refresh_case):
     plan,download,work,options,calls,_ = refresh_case
     before = native.digest(download/'release/nfl.duckdb')
-    result = native_refresh.prepare_refresh(plan,download,work,**options)
+    messages = []
+    result = native_refresh.prepare_refresh(plan,download,work,**dict(options,log=messages.append))
     assert [module for module,_ in calls] == ['jobs.capture_core','jobs.passing_preview','jobs.refresh_inputs',
                                              'jobs.refresh','jobs.captures']
     assert '--dimensions' not in calls[1][1]  # Ordinary exporter defaults to every view.
     assert result['seasons'] == [2024] and result['kind'] == 'native_refresh_ready'
     assert json.loads((work/'refresh.json').read_bytes()) == result
     assert native.digest(download/'release/nfl.duckdb') == before
+    from automation.timing import PREFIX
+    timings = [json.loads(message.removeprefix(PREFIX)) for message in messages if message.startswith(PREFIX)]
+    completed = [record for record in timings if record['status'] == 'completed']
+    assert len(completed) == 11
+    assert all(record['elapsed_seconds'] >= 0 for record in completed)
+    assert completed[-1]['stage'] == 'Fingerprint completed outputs'
 
 
 @pytest.mark.parametrize('module',['jobs.capture_core','jobs.passing_preview','jobs.refresh_inputs',
@@ -81,10 +88,14 @@ def test_failed_stages_leave_diagnostics_but_no_ready_marker(refresh_case,module
             (work/'failure.txt').write_text(name)
             raise subprocess.CalledProcessError(1,[name])
         original(name,*args)
+    messages = []
     with pytest.raises(subprocess.CalledProcessError):
-        native_refresh.prepare_refresh(plan,download,work,**dict(options,run=fail))
+        native_refresh.prepare_refresh(plan,download,work,**dict(options,run=fail,log=messages.append))
     assert not (work/'refresh.json').exists() and (work/'failure.txt').read_text() == module
     assert native.verify_release(download/'release')
+    from automation.timing import PREFIX
+    timings = [json.loads(message.removeprefix(PREFIX)) for message in messages if message.startswith(PREFIX)]
+    assert timings[-1]['status'] == 'failed'
 
 
 @pytest.mark.parametrize('relative',['release/nfl.duckdb','release/watermarks.json','captures.zip'])

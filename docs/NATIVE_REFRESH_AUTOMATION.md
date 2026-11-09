@@ -5,15 +5,21 @@ reading its existing snapshot while a separate worker builds the next release.
 Publication and deployment are separate: selecting new data does not replace a
 running Cloud Run container.
 
-As of the November 6 cutover, both native workflows are active on `main`,
+As of the November 7 verification, both native workflows are active on `main`,
 `NATIVE_REFRESH_POINTER` selects the production pointer and
 `NATIVE_REFRESH_TARGET=production` enables deployment after successful preparation.
 The first hosted preparation/publication succeeded. Its deployment handoff
 exposed GitHub's suppression of a secret-derived URI output, fixed in `8ecae7f`.
 The validated release subsequently passed the independent preview and production
-deployment workflows. The corrected combined handoff awaits the next changed-source
-run. See [the cutover evidence](../DEPLOY.md#verified-production-cutover--november-6-2026)
-for exact runs, the live revision and rollback target. The November 1 trial below
+deployment workflows. Scheduled run
+[42385471619](https://github.com/alanzavala1/NFLDB/actions/runs/42385471619)
+then completed the corrected preparation-to-production handoff automatically on
+November 7. It detected changed sources without a force override, validated all
+28 stored seasons, published a new release, and deployed it at 100% traffic.
+The packaged image passed 102 API checks and rejected database writes. A separate
+verification passed all 102 API requests against https://nfl-db.cloud.run.
+See [the scheduled-run evidence](../DEPLOY.md#verified-scheduled-refresh--november-7-2026)
+for timing, the live revision and rollback target. The November 1 trial below
 records the earlier local checkpoint.
 
 ## What the worker does
@@ -69,6 +75,27 @@ and selection receipt as a GitHub artifact. Large databases and captures live
 in the versioned cloud publication rather than duplicated workflow artifacts.
 The legacy refresh/deploy workflows are retired by the native cutover change.
 Preparation and publication use the versioned native objects and selection.
+
+## Preparation performance diagnostics
+
+Preparation emits `[refresh-timing]` JSON records around its major operations.
+Each stage records a UTC start/end, completion or failure status, and elapsed
+seconds measured with Python's monotonic clock. The existing `preparation.log`
+artifact retains these records even if preparation fails. GitHub's run summary
+also displays the completed and failed stages in a timing table.
+
+Top-level timings separate base verification, historical capture restoration,
+fresh-season native capture, passing calculations, input composition, candidate
+and release preparation, archive packing, and final integrity checks. The
+preparation worker adds nested timings for opening inputs, ingestion/derived
+analytics, serving indexes and the final checkpoint. Nested durations overlap
+their parent and must not be summed as independent work.
+
+These diagnostics do not skip calculations or validation, change source
+watermarks, or alter the release format or validation-policy identity. They
+measure future runs using this code and cannot reconstruct detailed timings
+for the already running November 9 job. No runtime improvement is claimed until
+an actual bottleneck has been measured and a corresponding change verified.
 
 ## Local commands
 

@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 from automation.refresh_plan import read_plan, write_record
+from automation.timing import stage_timer
 from pipeline import releases as native
 from pipeline.capture_archive import restore_captures
 from publication.archive import verify_archive
@@ -52,42 +53,53 @@ def prepare_refresh(plan_path, download, workspace, *, rscript, library, run=run
     if not rscript.is_file() or not library.is_dir():
         raise ValueError('Provide an existing Rscript and locked R library')
     receipt_hash = native.digest(download/'download.json')
-    receipt = verify_download(download, plan)
+    with stage_timer('Verify downloaded base', log=log):
+        receipt = verify_download(download, plan)
     year = plan['season']
     workspace.mkdir()
     # Failures retain diagnostics but never issue refresh.json or publish.
     log('Restoring verified historical captures')
-    base = restore_captures(download/'captures.zip', workspace/'history')
+    with stage_timer('Restore historical captures', log=log):
+        base = restore_captures(download/'captures.zip', workspace/'history')
     fresh, passing, inputs = workspace/'fresh', workspace/'fresh-passing', workspace/'inputs'
     runtime = ('--rscript', rscript, '--r-library', library)
     log(f'Capturing fresh native inputs for {year}')
-    run('jobs.capture_core', '--season', year, '--output', fresh, *runtime)
+    with stage_timer('Capture fresh native season', log=log):
+        run('jobs.capture_core', '--season', year, '--output', fresh, *runtime)
     log(f'Calculating all passing views for {year}')
-    run('jobs.passing_preview', '--core-inputs', fresh/'core', '--season', year,
-        '--exports', passing, *runtime)
+    with stage_timer('Calculate fresh passing views', log=log):
+        run('jobs.passing_preview', '--core-inputs', fresh/'core', '--season', year,
+            '--exports', passing, *runtime)
     log('Combining refreshed season with unchanged historical inputs')
-    run('jobs.refresh_inputs', '--core-inputs', base['core'], '--passing-inputs', base['passing'],
-        '--fresh-core', fresh/'core', '--fresh-passing', passing, '--output', inputs)
+    with stage_timer('Combine fresh and historical inputs', log=log):
+        run('jobs.refresh_inputs', '--core-inputs', base['core'], '--passing-inputs', base['passing'],
+            '--fresh-core', fresh/'core', '--fresh-passing', passing, '--output', inputs)
     log('Preparing candidate and validating every stored season and API view')
-    run('jobs.refresh', 'prepare', download/'release/watermarks.json',
-        '--source', download/'release/nfl.duckdb', '--candidate', workspace/'candidate.duckdb',
-        '--release', workspace/'release', '--seasons', year,
-        '--core-inputs', inputs/'core', '--passing-inputs', inputs/'passing')
+    with stage_timer('Prepare candidate and validate release', log=log):
+        run('jobs.refresh', 'prepare', download/'release/watermarks.json',
+            '--source', download/'release/nfl.duckdb', '--candidate', workspace/'candidate.duckdb',
+            '--release', workspace/'release', '--seasons', year,
+            '--core-inputs', inputs/'core', '--passing-inputs', inputs/'passing')
     log('Packing the matching captured inputs')
-    run('jobs.captures', 'pack', '--core-inputs', inputs/'core', '--passing-inputs', inputs/'passing',
-        '--output', workspace/'captures.zip')
-    native.verify_release(workspace/'release')
+    with stage_timer('Pack captured inputs', log=log):
+        run('jobs.captures', 'pack', '--core-inputs', inputs/'core', '--passing-inputs', inputs/'passing',
+            '--output', workspace/'captures.zip')
+    with stage_timer('Verify completed release', log=log):
+        native.verify_release(workspace/'release')
     report = json.loads((workspace/'release/validation.json').read_bytes())
     expected_seasons = sorted(set(plan['publication']['publication']['seasons']) | {year})
     if report['played_seasons'] != expected_seasons:
         raise ValueError('Refresh lost historical coverage or did not include the requested season')
-    verify_archive(workspace/'captures.zip', report['source_revisions'], expected_seasons)
-    verify_download(download, plan)
+    with stage_timer('Verify matching capture archive', log=log):
+        verify_archive(workspace/'captures.zip', report['source_revisions'], expected_seasons)
+    with stage_timer('Recheck original downloaded inputs', log=log):
+        verify_download(download, plan)
     if native.digest(plan_path) != plan_hash or native.digest(download/'download.json') != receipt_hash:
         raise ValueError('Refresh plan or input receipt changed during preparation')
-    files = {f'release/{name}': fingerprint(workspace/'release'/name)
-             for name in (*native.FILES, 'release.json')}
-    files['captures.zip'] = fingerprint(workspace/'captures.zip')
+    with stage_timer('Fingerprint completed outputs', log=log):
+        files = {f'release/{name}': fingerprint(workspace/'release'/name)
+                 for name in (*native.FILES, 'release.json')}
+        files['captures.zip'] = fingerprint(workspace/'captures.zip')
     result = dict(format_version=1, kind='native_refresh_ready', season=year, seasons=expected_seasons,
                   selection=plan['selection'], plan_sha256=plan_hash, download_sha256=receipt_hash,
                   validation_code_sha256=plan['validation_code_sha256'], files=files)
