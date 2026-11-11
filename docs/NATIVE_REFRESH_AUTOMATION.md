@@ -78,6 +78,17 @@ Preparation and publication use the versioned native objects and selection.
 
 ## Preparation performance diagnostics
 
+The combined refresh checks downloaded row counts after candidate preparation,
+then runs full statistical/source/API validation during release packaging under
+a read lock. The standalone candidate command also performs full validation by
+default. Release packaging checks the database hash before and after validation,
+verifies the copied bytes, and writes the completion marker last.
+
+The validation-policy fingerprint includes orchestration code. The exact
+reviewed code revision for this validation-order change maps to the existing
+policy in `api/automation/validation_policy.py`, preserving existing releases.
+Further fingerprinted code changes receive their own revision automatically.
+
 Preparation emits `[refresh-timing]` JSON records around its major operations.
 Each stage records a UTC start/end, completion or failure status, and elapsed
 seconds measured with Python's monotonic clock. The existing `preparation.log`

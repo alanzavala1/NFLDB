@@ -3,6 +3,7 @@ from pathlib import Path
 
 import duckdb
 
+from automation.timing import stage_timer
 from pipeline.refresh_tracking import acknowledged_watermarks
 from pipeline.releases import create_release
 from pipeline.snapshots import prepare_candidate, check_preparation
@@ -26,9 +27,10 @@ def prepare_refresh_release(source, candidate, output, seasons, *, core_inputs, 
     """
     seasons = sorted(set(seasons))
     before = {year: observe(year) for year in seasons}
-    prepared = prepare_candidate(Path(source), Path(candidate), seasons, log=log,
-                                 core_inputs=Path(core_inputs), passing_inputs=Path(passing_inputs),
-                                 rebuild_all_analytics=True)
+    with stage_timer('Prepare release candidate', log=log):
+        prepared = prepare_candidate(Path(source), Path(candidate), seasons, log=log,
+                                     core_inputs=Path(core_inputs), passing_inputs=Path(passing_inputs),
+                                     rebuild_all_analytics=True, validate=False)
     with duckdb.connect(str(prepared), read_only=True) as conn:
         record = check_preparation(conn, seasons)
     outcomes = [SourceOutcome(**value) for value in record['source_outcomes']]
@@ -38,7 +40,8 @@ def prepare_refresh_release(source, candidate, output, seasons, *, core_inputs, 
         after = observe(year)
         marks = acknowledged_watermarks(marks, year, before[year], after, outcomes,
                                        captured_core=True, core_versions=versions[year])
-    manifest = create_release(prepared, output, core_inputs=core_inputs, passing_inputs=passing_inputs,
-                              watermarks=marks)
+    with stage_timer('Validate and package release', log=log):
+        manifest = create_release(prepared, output, core_inputs=core_inputs, passing_inputs=passing_inputs,
+                                  watermarks=marks)
     log(f'Validated release bundle: {output}; current release selection is unchanged')
     return manifest

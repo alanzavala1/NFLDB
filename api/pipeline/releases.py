@@ -20,6 +20,8 @@ FILES = ('nfl.duckdb', 'validation.json', 'watermarks.json')
 
 def validation_revision():
     """Portable policy fingerprint; line endings don't change Python semantics."""
+    from automation.validation_policy import compatible_revision
+
     api = Path(__file__).resolve().parents[1]
     paths = [*api.glob('*.py'), api/'uv.lock', api/'jobs/validate.py']
     for folder in ('pipeline', 'schemas', 'services', 'routers'):
@@ -28,7 +30,7 @@ def validation_revision():
     for path in sorted(paths):
         value.update(path.relative_to(api).as_posix().encode()+b'\0')
         value.update(path.read_bytes().replace(b'\r\n', b'\n')+b'\0')
-    return value.hexdigest()
+    return compatible_revision(value.hexdigest())
 
 
 def digest(path):
