@@ -147,12 +147,14 @@ def check_preparation(conn, seasons: list[int] | None = None) -> dict:
 
 def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=print, *,
                       core_inputs: Path | None = None, passing_inputs: Path | None = None,
-                      rebuild_all_analytics=False) -> Path:
+                      rebuild_all_analytics=False, validate=True) -> Path:
     """Copy a closed snapshot, prepare and validate in isolated processes.
 
     Never replaces source. Failed candidates are removed after the worker exits.
     Validation checks core rows, analytics, statistical identities and sampled API
     responses. Promotion and refresh watermark changes remain separate.
+    A combined release build can defer full validation to create_release, which
+    validates the closed candidate under a read lock before packaging it.
     """
     source, candidate = Path(source).resolve(), Path(candidate).absolute()
     if not seasons or any(type(s) is not int or s < 1999 for s in seasons):
@@ -182,10 +184,12 @@ def prepare_candidate(source: Path, candidate: Path, seasons: list[int], log=pri
         validation_options = {} if core_inputs is None else {'core_inputs': core_inputs}
         if passing_inputs is not None:
             validation_options['passing_inputs'] = passing_inputs
-        _run_validation(candidate, **validation_options)
+        if validate:
+            _run_validation(candidate, **validation_options)
     except BaseException:
         candidate.unlink(missing_ok=True)
         _wal(candidate).unlink(missing_ok=True)
         raise
-    log(f'Candidate validated: {candidate}; publication remains a separate step')
+    state = 'validated' if validate else 'prepared for release validation'
+    log(f'Candidate {state}: {candidate}; publication remains a separate step')
     return candidate

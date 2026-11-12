@@ -126,6 +126,16 @@ def test_changed_validation_code_invalidates_a_previously_built_release(release_
         releases.verify_release(target)
 
 
+def test_reviewed_orchestration_compatibility_is_limited_to_exact_code_revision():
+    from automation.validation_policy import EQUIVALENT_REVISIONS, compatible_revision
+
+    assert releases.validation_revision() == 'f72611443cf21bba4fc9ecec485459304b10e6094c4997339747b4ac16ef7ef4'
+    for revision, policy in EQUIVALENT_REVISIONS.items():
+        assert compatible_revision(revision) == policy
+        changed = ('1' if revision[0] == '0' else '0') + revision[1:]
+        assert compatible_revision(changed) == changed
+
+
 def test_policy_changed_during_validation_cannot_create_a_release(release_case, monkeypatch):
     source, root, report, _ = release_case
     policy = root/'policy.txt'

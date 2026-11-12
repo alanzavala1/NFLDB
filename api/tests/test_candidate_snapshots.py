@@ -126,6 +126,26 @@ def test_schedule_only_new_season_is_allowed(source, synthetic_worker, tmp_path,
     snapshots.prepare_candidate(source, tmp_path / 'future.duckdb', [2027])
 
 
+def test_release_preparation_defers_full_validation_but_checks_downloaded_counts(
+    source, synthetic_worker, tmp_path, monkeypatch,
+):
+    def full_validation(candidate):
+        pytest.fail('Full validation belongs to release packaging for this call')
+
+    monkeypatch.setattr(snapshots, '_run_validation', full_validation)
+    before = digest(source)
+    candidate = tmp_path / 'awaiting-release-validation.duckdb'
+    snapshots.prepare_candidate(source, candidate, [2026], validate=False)
+    snapshots.validate_preparation(candidate, [2026])
+    assert digest(source) == before
+
+    monkeypatch.setenv('CANDIDATE_TEST_MODE', 'bad_count')
+    invalid = tmp_path / 'invalid-counts.duckdb'
+    with pytest.raises(snapshots.CandidateError):
+        snapshots.prepare_candidate(source, invalid, [2026], validate=False)
+    assert not invalid.exists() and digest(source) == before
+
+
 def test_missing_plays_cannot_relabel_existing_season_unplayed(
     source, synthetic_worker, tmp_path, monkeypatch,
 ):

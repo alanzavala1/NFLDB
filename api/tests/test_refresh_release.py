@@ -25,6 +25,7 @@ def test_isolated_prepare_full_rebuild_and_stable_vendor_marks_are_bundled_toget
     def prepare(given_source, given_candidate, seasons, **options):
         assert given_source == source and given_candidate == candidate and seasons == [2026]
         assert options['rebuild_all_analytics'] is True
+        assert options['validate'] is False
         assert options['core_inputs'] == tmp_path/'core' and options['passing_inputs'] == tmp_path/'passing'
         outcomes = []
         with duckdb.connect(str(candidate)) as conn:
@@ -36,12 +37,17 @@ def test_isolated_prepare_full_rebuild_and_stable_vendor_marks_are_bundled_toget
             conn.execute('INSERT INTO snapshot_preparation VALUES (1,?,?)', ['[2026]',json.dumps([asdict(item) for item in outcomes])])
         return candidate
     monkeypatch.setattr(refresh_release, 'prepare_candidate', prepare)
-    monkeypatch.setattr(releases, '_validate', lambda *args: dict(publication_ready=True,
-        official_receiving=True, official_passing=True, played_seasons=[2026],api_requests=['/api/seasons'],
-        source_revisions={'core':'capture','passing':'exports'}))
+    validations = []
+    def validate(*args):
+        validations.append(args)
+        return dict(publication_ready=True, official_receiving=True, official_passing=True,
+                    played_seasons=[2026], api_requests=['/api/seasons'],
+                    source_revisions={'core':'capture','passing':'exports'})
+    monkeypatch.setattr(releases, '_validate', validate)
     result = refresh_release.prepare_refresh_release(source,candidate,output,[2026],core_inputs=tmp_path/'core',
         passing_inputs=tmp_path/'passing',previous_watermarks=previous,observe=observe,log=lambda _:None)
     assert result['kind'] == 'native_nfl_release' and observed == [2026,2026]
+    assert len(validations) == 1 and validations[0][0] == candidate
     marks = json.loads((output/'watermarks.json').read_bytes())
     expected = {f'{key}:2026':value for key,value in core_versions.items()} if verified else {}
     assert marks == {**previous,'snaps:2026':'today',**expected}
