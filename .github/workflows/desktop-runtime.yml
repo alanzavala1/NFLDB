@@ -1,0 +1,65 @@
+name: Desktop Python runtime
+
+on:
+  pull_request:
+    paths:
+      - desktop/runtime/**
+      - .github/workflows/desktop-runtime.yml
+  push:
+    branches: [main, 'codex/desktop-runtime-*']
+    paths:
+      - desktop/runtime/**
+      - .github/workflows/desktop-runtime.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Runtime (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            target: windows-x64
+            architecture: x86_64
+          - runner: macos-15
+            target: macos-arm64
+            architecture: arm64
+          - runner: macos-15-intel
+            target: macos-x64
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: desktop/runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: desktop/runtime/.python-version
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.11.23'
+          enable-cache: true
+          cache-dependency-glob: desktop/runtime/uv.lock
+      - name: Install locked runtime and build tools
+        run: uv sync --locked --group build
+      - name: Check the source runtime
+        run: uv run --locked --group build python runtime_check.py
+      - name: Package the runtime
+        run: uv run --locked --group build pyinstaller runtime.spec --clean --noconfirm
+      - name: Verify relocated executable
+        run: uv run --locked --group build python verify_bundle.py dist/nfldb-runtime-check --architecture ${{ matrix.architecture }}
+      - name: Archive verified bundle
+        working-directory: desktop/runtime/dist
+        run: python -m tarfile -c ../nfldb-runtime-check-${{ matrix.target }}.tar.gz nfldb-runtime-check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.target }}
+          path: desktop/runtime/nfldb-runtime-check-${{ matrix.target }}.tar.gz
+          retention-days: 7
+          compression-level: 0
