@@ -20,7 +20,7 @@ EXPECTED = [
 def verify(bundle, architecture=None):
     with tempfile.TemporaryDirectory(prefix="nfldb-relocation-") as temporary:
         scratch = Path(temporary)
-        moved = scratch / "relocated runtime space Ω"
+        moved = (scratch / "relocated runtime space Ω").resolve()
         shutil.copytree(bundle, moved)
         executable = moved / ("nfldb-runtime-check.exe" if os.name == "nt" else "nfldb-runtime-check")
         environment = {key: value for key, value in os.environ.items()
@@ -52,7 +52,7 @@ def verify(bundle, architecture=None):
                 if architecture and actual_architecture != architecture:
                     raise RuntimeError(f"Incorrect architecture: {actual_architecture}")
                 for location in result["dependencies"].values():
-                    if not Path(location).is_relative_to(moved):
+                    if not Path(location).resolve().is_relative_to(moved):
                         raise RuntimeError(f"Dependency outside bundle: {location}")
                 rows = result["rows"]
                 if len(rows) != len(EXPECTED):
