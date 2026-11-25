@@ -1,203 +1,77 @@
-# Native refresh automation
+# Scheduled data refresh
 
-This job prepares data before visitors request it. The serving container keeps
-reading its existing snapshot while a separate worker builds the next release.
-Publication and deployment are separate: selecting new data does not replace a
-running Cloud Run container.
+The **Prepare native data release** workflow builds new data separately from the
+serving website. It is defined in `.github/workflows/refresh-native.yml` and
+scheduled for 09:00 UTC daily; GitHub scheduling can be delayed.
 
-As of the November 7 verification, both native workflows are active on `main`,
-`NATIVE_REFRESH_POINTER` selects the production pointer and
-`NATIVE_REFRESH_TARGET=production` enables deployment after successful preparation.
-The first hosted preparation/publication succeeded. Its deployment handoff
-exposed GitHub's suppression of a secret-derived URI output, fixed in `8ecae7f`.
-The validated release subsequently passed the independent preview and production
-deployment workflows. Scheduled run
-[42385471619](https://github.com/alanzavala1/NFLDB/actions/runs/42385471619)
-then completed the corrected preparation-to-production handoff automatically on
-November 7. It detected changed sources without a force override, validated all
-28 stored seasons, published a new release, and deployed it at 100% traffic.
-The packaged image passed 102 API checks and rejected database writes. A separate
-verification passed all 102 API requests against https://nfl-db.cloud.run.
-See [the scheduled-run evidence](../DEPLOY.md#verified-scheduled-refresh--november-7-2026)
-for timing, the live revision and rollback target. The November 1 trial below
-records the earlier local checkpoint.
+## Configuration
 
-## What the worker does
+| Repository setting | Purpose |
+|---|---|
+| Variable `NATIVE_REFRESH_POINTER` | Existing cloud selection URI; required for scheduled runs |
+| Variable `NATIVE_REFRESH_TARGET` | `preview` or `production` to deploy a successful selection |
+| Secrets `GCP_PROJECT_ID`, `GCP_WIF_PROVIDER`, `GCP_SA_EMAIL` | Google Cloud authentication through GitHub OIDC |
 
-1. Reads the current native selection and verifies its publication metadata.
-   It compares the bundled watermarks with the three native RDS feeds and nine
-   watched vendor feeds. This check does not download a database or capture ZIP.
-2. If something changed, downloads that exact selected database and its matching
-   capture archive. A forced run can rebuild when the watched versions match.
-3. Restores the saved historical captures, captures the requested season, runs
-   every passing view, and combines the fresh season with unchanged history.
-4. Prepares a separate candidate and validates all stored seasons and API views.
-   Existing statistical definitions, missing-data rules and validation gates
-   remain in force. The R calculator is not rerun for unchanged historical years.
-5. Packages the matching captures and writes `refresh.json` only after the new
-   release, archive, historical coverage and original input hashes pass.
-6. Publishes to a new immutable cloud prefix, then updates the configured
-   selection using the generation observed **before** preparation started.
+Manual runs accept a `pointer` override, optional `season` and `force` flag.
+Without a season, planning uses the newest scheduled year. `force` bypasses the
+unchanged-source shortcut, not validation. The native path requires that season's
+three RDS assets; it does not handle schedules-only preseason refreshes.
 
-If another job selects a release first, the conditional update fails. It never
-silently rereads the pointer and overwrites the newer selection. A completed but
-unselected publication can remain available for inspection or explicit recovery.
+The worker uses Ubuntu 24.04, Python 3.12, uv 0.11.23 and R 4.6.1. Python and R
+locks are verified even when dependency caches are restored. Cloud permissions
+must allow release creation and conditional selection updates; see
+[deployment setup](../DEPLOY.md#cloud-setup).
 
-## GitHub Actions
+## Run sequence
 
-The workflow is `.github/workflows/refresh-native.yml`, named **Prepare native
-data release**. It uses Ubuntu 24.04, locked Python dependencies, R 4.6.1, and the
-existing `renv.lock`. The R installer has a pinned SHA256. The isolated R library
-is cached, then verified on every run; the cache does not replace lock checks.
-Runtime installation follows [Posit's versioned installation instructions](https://docs.posit.co/resources/install-r.html).
+1. Read the selected publication and compare its watermarks with three native
+   RDS feeds and nine watched vendor feeds. No large data download is needed yet.
+2. Stop if unchanged. Otherwise download the pinned database/captures and restore
+   the historical input collections.
+3. Capture the refreshed season, calculate passing exports, and combine them with
+   unchanged history. Historical R exports are reused.
+4. Prepare a candidate, validate it during release packaging and pack matching captures.
+5. Publish to a new immutable prefix and conditionally select it using the pointer
+   generation observed before preparation.
+6. If configured, invoke **Deploy native snapshot** with that exact selection.
 
-Scheduled runs are skipped until the repository variable
-**`NATIVE_REFRESH_POINTER`** names an existing native selection JSON URI. For
-manual runs, supply a `pointer` input or use that variable. Optional `season`
-selects one year; blank uses the newest scheduled year. `force` bypasses the
-source-change decision, not validation. Native capture currently requires the
-season's three RDS assets to exist; preseason schedules-only refresh remains
-outside this native path.
+Refresh jobs share one queue. A concurrent external selection change still causes
+the conditional update to fail. Failed preparation does not publish or acknowledge
+new source versions. Failed deployment retains the completed publication for retry.
 
-Use the same cloud authentication secrets as the deployment workflow. This job
-also needs permission to create publication objects and conditionally replace
-the selection. It renews authentication after preparation, before publication.
-Configure a trial/candidate selection while proving automation. Set repository
-variable `NATIVE_REFRESH_TARGET` to `preview` or `production` to pass a successful
-selection to the reusable `deploy-native.yml` workflow. The deployment pins the
-exact selection identity emitted by this refresh and rechecks it before traffic
-promotion. An unchanged-source run skips preparation and deployment. A failed
-deployment retains its publication for a manual retry through **Deploy native
-snapshot**. See [DEPLOY.md](../DEPLOY.md) for rollout and rollback.
+## Local operation
 
-The job records plan, preparation logs, validation reports, publication receipt,
-and selection receipt as a GitHub artifact. Large databases and captures live
-in the versioned cloud publication rather than duplicated workflow artifacts.
-The legacy refresh/deploy workflows are retired by the native cutover change.
-Preparation and publication use the versioned native objects and selection.
+From `api/`, using an authenticated Google Cloud CLI and the
+[locked R environment](../api/r/README.md):
 
-## Preparation performance diagnostics
-
-The combined refresh checks downloaded row counts after candidate preparation,
-then runs full statistical/source/API validation during release packaging under
-a read lock. The standalone candidate command also performs full validation by
-default. Release packaging checks the database hash before and after validation,
-verifies the copied bytes, and writes the completion marker last.
-
-The validation-policy fingerprint includes orchestration code. The exact
-reviewed code revision for this validation-order change maps to the existing
-policy in `api/automation/validation_policy.py`, preserving existing releases.
-Further fingerprinted code changes receive their own revision automatically.
-
-Preparation emits `[refresh-timing]` JSON records around its major operations.
-Each stage records a UTC start/end, completion or failure status, and elapsed
-seconds measured with Python's monotonic clock. The existing `preparation.log`
-artifact retains these records even if preparation fails. GitHub's run summary
-also displays the completed and failed stages in a timing table.
-
-Top-level timings separate base verification, historical capture restoration,
-fresh-season native capture, passing calculations, input composition, candidate
-and release preparation, archive packing, and final integrity checks. The
-preparation worker adds nested timings for opening inputs, ingestion/derived
-analytics, serving indexes and the final checkpoint. Nested durations overlap
-their parent and must not be summed as independent work.
-
-These diagnostics do not skip calculations or validation, change source
-watermarks, or alter the release format or validation-policy identity. They
-measure future runs using this code and cannot reconstruct detailed timings
-for the already running November 9 job. No runtime improvement is claimed until
-an actual bottleneck has been measured and a corresponding change verified.
-
-## Local commands
-
-From `api/`, using its locked Python environment:
-
-```bash
-python -m jobs.refresh_native plan --pointer gs://BUCKET/native/candidates/current.json \
-  --season 2026 --output NEW_PLAN.json
+```sh
+uv run --locked python -m jobs.refresh_native plan \
+  --pointer gs://BUCKET/native/candidates/current.json \
+  --season 2026 --output data/plan.json
 ```
 
-If `changed` is true, use `jobs.publish download --include-captures` with the
-plan's exact `selection.pointer_generation` and `selection.pointer_sha256`, as
-described in [cloud releases](CLOUD_RELEASES.md). Then:
+When `changed` is true, [download](CLOUD_RELEASES.md#download-a-selected-release)
+with `--include-captures` and the plan's `selection.pointer_generation` and
+`selection.pointer_sha256`. Then:
 
-```bash
-python -m jobs.refresh_native prepare --plan NEW_PLAN.json \
-  --download VERIFIED_DOWNLOAD_DIRECTORY --workspace NEW_WORKSPACE \
-  --rscript PATH_TO_RSCRIPT --r-library PATH_TO_LOCKED_LIBRARY
+```sh
+uv run --locked python -m jobs.refresh_native prepare \
+  --plan data/plan.json --download data/selected-download \
+  --workspace data/new-refresh --rscript PATH_TO_RSCRIPT \
+  --r-library PATH_TO_LOCKED_LIBRARY
 ```
 
-The command calls the existing capture, passing, composition, preparation and
-archive jobs in fresh processes. It preserves the downloaded source and requires
-a new workspace. Failed stages keep diagnostics and issue no completion marker;
-they do not publish or advance watermarks. The ordinary `jobs.publish upload`
-and `select` commands remain independently usable for publication recovery.
+Use new output paths. `refresh.json` marks completed preparation; publication and
+selection remain explicit [cloud release commands](CLOUD_RELEASES.md).
 
-Watermarks acknowledge stable, successfully consumed versions. A source that
-changes during preparation or fails an optional download retains its old mark,
-so the next check can retry it. Publication describes captured inputs; it does
-not guarantee that no upstream feed changed after the run.
+## Diagnosis and recovery
 
-## Verified preparation trial — November 1, 2026
+Workflow artifacts retain plans, logs, validation reports and publication/selection
+receipts. Large databases and captures remain in Cloud Storage. `[refresh-timing]`
+records in `preparation.log` report stage duration and failure status; nested
+stage times overlap and must not be summed.
 
-The ordinary plan and preparation commands completed using the existing
-authenticated cloud SDK and pinned Linux worker. The base was the previously
-verified cloud download, rechecked by the orchestrator before and after use.
-This trial reused that download and existing R library; it did not repeat their
-setup or transfer. The GitHub workflow passed actionlint but has not been pushed,
-dispatched, or enabled through `NATIVE_REFRESH_POINTER`.
-
-- The metadata plan detected updates to all 12 watched feeds.
-- Fresh 2026 inputs contained 20,841 play rows and 8,295 weekly-stat rows,
-  compared with the base snapshot's 18,738 and 7,447.
-- Native receiving capture and every passing view completed. The combined input
-  collections retained all 28 seasons, 1999–2026.
-- Candidate and release validation both passed, including 102 API requests.
-- Bidirectional `EXCEPT ALL` found no changes to 1999–2025 passing/receiving
-  split rows. Historical capture identities, all five protected databases, the
-  downloaded base, original release and original archive retained their hashes.
-- The candidate and release database hashes matched, and all three native
-  source-version acknowledgments matched the fresh proof. The new capture ZIP
-  contained 4,741 manifest-bound files and matched the release's input revisions.
-
-Preparation took approximately 52 minutes 39 seconds, measured from the job
-log's creation and last-write timestamps. The completed workspace used 9.0 GiB;
-that excludes the separately stored base download, installed runtimes, package
-libraries and caches. This is a local Linux measurement, not a GitHub-hosted
-runner benchmark or a measured peak for the whole machine.
-
-The analytics/API policy remains
-`f72611443cf21bba4fc9ecec485459304b10e6094c4997339747b4ac16ef7ef4`.
-No statistical definitions, tolerances, availability rules, or dependency locks
-changed. The related 67 Python controls passed on both Windows and Linux.
-Evidence stays ignored under `api/data/native-automation-*20261101*`.
-
-The same release and capture ZIP were then uploaded and remotely verified at:
-
-```text
-gs://project-60bdbe3e-823a-46fb-b02-nfldb-data/native/releases/20261101-automation-12680c768522
-publication.json generation: 1793598080995895
-publication SHA256: e2ee4d5015a799504dfc268375490c83a3c7376c3910fbae4a098bf8498ebf9a
-```
-
-The database is 1,060,384,768 bytes, SHA256
-`d7711eb9941fa6e4b5ab78b67f44146f6198d1b6542fcd69d2810fa39111a8f0`.
-The matching ZIP is 1,143,638,412 bytes, SHA256
-`dc78cffeefe90a1d25860d0c8aeb8e2ef2e5aa9367a58296ab0124479cf721ee`.
-The local Windows SDK read the finished Linux files through their WSL share;
-upload and remote verification took approximately 19 minutes 27 seconds on this
-connection. The hosted workflow uses Linux-native paths and still needs its own
-runtime/network measurement.
-
-Conditional selection succeeded using the original generation observed before
-preparation. The existing trial pointer became generation `1793598229937426`,
-SHA256 `f1c29caca7148c6e63fe881b66bfc481bbb74475764a9e0983034a5c8d4b317c`.
-Production remained on `nfldb-00072-vs6` at 100% traffic; no image was built or
-deployed in this chunk, and no legacy root object was written.
-
-A subsequent ordinary plan read the new selection and detected seven later
-upstream versions: the three native RDS feeds and four PFR feeds. Those updates
-arrived after the versions used by this release; the next refresh remains
-indicated. No repeated rebuild was started. The unchanged-source branch was
-covered by the control tests, rather than falsely reporting this real post-run
-check as unchanged. This is a versioned batch snapshot, not a live-feed mirror.
+Optional failed or mid-build changed sources retain their old watermarks for a
+later retry. A completed but unselected release can be inspected or selected
+explicitly. Retry a failed deployment with its saved selection identity rather
+than rerunning calculation. See [rollout and rollback](../DEPLOY.md).

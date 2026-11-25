@@ -1,225 +1,86 @@
-# Deploying NFLDB
+# Deployment
 
-The React frontend and FastAPI API ship in one container with an offline-prepared
-DuckDB snapshot. Cloud Run serves that snapshot **read-only**. It never downloads
-sources, prepares analytics, or updates watermarks during a visitor's request.
-R runs in the offline worker, not the serving container.
+NFLDB runs at [nfl-db.cloud.run](https://nfl-db.cloud.run). React, FastAPI and a
+validated DuckDB snapshot ship in one Docker image. R runs only in data preparation.
 
-## Public address
+## Deploy a release
 
-The live site is **https://nfl-db.cloud.run**. A Cloud Run custom URL mapping
-connects that hostname to service `nfldb` in `us-central1`. The mapping follows
-the service's traffic allocation across deployments and rollbacks.
+Run **Deploy native snapshot** in GitHub Actions
+(`.github/workflows/deploy-native.yml`) with:
 
-The mapping was created November 6, 2026 using Google Cloud CLI 592.0.0 with
-the beta component. Google's [custom URL feature](https://docs.cloud.google.com/run/docs/custom-urls)
-is in Preview. Its HTTPS address requires no domain registration or DNS setup.
+| Input | Value |
+|---|---|
+| `target` | `preview` or `production` |
+| `operation` | `deploy` |
+| `pointer` | Cloud selection URI |
+| `pointer_generation` | Exact generation from `jobs.publish current` |
+| `pointer_sha256` | Exact selection hash from that receipt |
 
-```bash
-gcloud beta run domain-mappings describe --domain nfl-db.cloud.run \
-  --project project-60bdbe3e-823a-46fb-b02 --region us-central1
-```
+The workflow downloads and verifies the selected bundle, builds the image, runs
+API/reconciliation/read-only checks inside it, and deploys its immutable image
+digest. It checks the candidate and rechecks the selection before moving traffic.
+Post-promotion checks verify the public service. A receipt records the previous
+revision, image identity and traffic state.
 
-Google reported the mapping Ready and DomainRoutable. Public HTTP checks passed
-for health, all 28 seasons, standings, homepage, the Splits client route, and
-the frontend's JavaScript and CSS assets.
+Preview uses `nfldb-native-preview`; production uses `nfldb`, both in
+`us-central1`. The workflow configures 4 GiB RAM, 2 CPUs and zero minimum instances;
+maximum instances are one and three respectively. DuckDB is capped at 2,400 MB
+and two threads. Each instance reads its own copy of the database.
 
-## Native deployment
-
-- `deploy-native.yml` supports **preview** (`nfldb-native-preview`) and
-  **production** (`nfldb`). Both consume an exact, verified cloud selection.
-- The [native refresh workflow](docs/NATIVE_REFRESH_AUTOMATION.md) connects
-  capture, calculation, validation and publication. Set `NATIVE_REFRESH_POINTER`
-  to the desired selection URI and `NATIVE_REFRESH_TARGET` to `production` to
-  deploy each successfully prepared release through the same deployment gate.
-- The legacy `refresh.yml` and `deploy.yml` workflows are retired by this change.
-  Disable their existing GitHub registrations and finish any in-flight legacy
-  jobs before the first native production switch.
-- Validation describes the captured inputs. Later upstream versions are picked
-  up by subsequent refreshes.
-
-See [cloud publication and selection](docs/CLOUD_RELEASES.md) and
-[offline preparation](docs/OFFLINE_RELEASES.md) for the preceding steps.
-
-### Verified production cutover — November 6, 2026
-
-[PR #12](https://github.com/alanzavala1/NFLDB/pull/12) is merged. The old workflow
-registrations were disabled before merge and are now deleted. Repository variables
-select `gs://project-60bdbe3e-823a-46fb-b02-nfldb-data/native/production/current.json`
-and target `production` for the daily native refresh.
-
-- Hosted preparation job [42251739850](https://github.com/alanzavala1/NFLDB/actions/runs/42251739850)
-  captured fresh 2026 inputs, validated all 28 stored seasons and 102 API paths,
-  and published `native/releases/refresh-42251739850-1`. Preparation took
-  68 minutes 25 seconds on the hosted worker.
-- That run's subsequent deployment stopped because GitHub suppressed the
-  secret-derived selection URI job output. Commit `8ecae7f` passes the configured
-  URI directly, keeping the generation and SHA256 as outputs. The completed
-  release was reused through the independent deployment workflow.
-- [Preview deployment 42264100300](https://github.com/alanzavala1/NFLDB/actions/runs/42264100300)
-  and [production deployment 42265029741](https://github.com/alanzavala1/NFLDB/actions/runs/42265029741)
-  passed their image/startup/read-only gates. Each then passed 102 API checks over
-  public network HTTP. The first combined run retains its failed deployment
-  record. The November 7 scheduled run below verifies the corrected handoff.
-- At cutover, production served `nfldb-n-42265029741-1` at 100% traffic. Its image digest is
-  `sha256:ff03cfb28f51d23b9bb3799f4bd9054562dd1e043594c729582979917eac41cc`.
-  The previous revision for rollback at that point was **`nfldb-00076-7sq`**.
-- The database SHA256 is
-  `17414cdee6f6b30d43217d5bd190f42c058998c769bc8243495245eddd7d13f9`,
-  with release manifest SHA256
-  `bd19a11867f563c76cfce4c91aff089bfe78f35ae6494e8cefa361de345ec31f`.
-  Production's current-season schedule retained all 121 previously completed
-  games and contains 122 completed games through Week 9. Both retired ingest
-  URLs returned 410.
-
-Before cutover, a separate real preview drill deployed the November 1 data,
-rolled back to the October 28 snapshot, and restored the newer snapshot. Each
-stage passed 102 public API checks. Those revisions contain different data and
-images. Sixteen shell controls also exercised promotion and recovery for both
-services. CI passed 1,580 backend checks with 25 expected data/model skips and all
-391 browser checks. The shipped-image checks include the real-data reconciliation
-tests. Original protected databases and prior local downloads retained their hashes.
-
-### Verified scheduled refresh — November 7, 2026
-
-Scheduled run [42385471619](https://github.com/alanzavala1/NFLDB/actions/runs/42385471619)
-at source commit `1c9dfb4` completed both `refresh` and `deploy / deploy`
-successfully. This verifies the corrected automatic handoff on real changed
-sources, without a force override or manual deployment.
-
-- The run started at 09:15:16 and finished at 10:52:36 America/Chicago (CST),
-  approximately 97 minutes overall. Preparation/validation took 89 minutes
-  36 seconds, and the deployment job took approximately four minutes.
-  The cron requests 09:00 UTC daily; this observed run started at 15:15 UTC,
-  so the scheduled hour is not an exact completion or freshness guarantee.
-- All 28 stored seasons passed validation. The image passed 102 API checks,
-  rejected persistent database writes, and passed 24 reconciliation/assistant
-  compatibility checks. These compatibility checks do not call a live model.
-- The release is `native/releases/refresh-42385471619-1`. Production selection
-  generation `1794070103262416` was passed unchanged to deployment. Its SHA256 is
-  `1776e5ca6ce3121f98f93c34eac96e059c91fd82061aedba4a700de859c1720c`.
-- Production revision **`nfldb-n-42385471619-1`** serves 100% traffic. The previous
-  verified revision is **`nfldb-n-42265029741-1`**. The new image digest is
-  `sha256:f8abb5398368c5f6de25b7a74f0193be173be88326bf4d15b51483e3ff1f7866`.
-- The database is 1,259,876,352 bytes, SHA256
-  `f26c2d3507c6dadba042ff0662a8601de08223d43cc702df019ace4e18b2f0ae`.
-  The analytics validation policy remains unchanged.
-- Separate public HTTP verification passed the release's 102 API requests at
-  https://nfl-db.cloud.run, health, all 28 loaded seasons, homepage and Splits
-  routes. Both retired ingest URLs returned 410. The cloud selection, deployment
-  receipt and actual live image identity matched.
-
-Downloaded artifacts and read-only verification evidence remain ignored under
-`api/data/automation-check-20261107*`. No new refresh or deployment was started
-for this verification, and the November 6 failed run retains its original status.
-
-## Native workflow
-
-Run **Deploy native snapshot** in GitHub Actions with operation `deploy` and
-target `preview` or `production`.
-Supply the selection URI, exact object generation, and SHA256 returned by
-`jobs.publish current`. Retrying a failed deployment does not require new data;
-deployment success is separate from preparation success.
-
-The workflow:
-
-1. Downloads the selected bundle and verifies its hashes, native validation
-   report, and compatibility with the checked-out analytics/API policy.
-2. Builds the frontend and locked Python environment. Only the four native
-   release files enter through the separate `native_snapshot` build context.
-3. Runs the certified API requests, including real startup and read-only checks,
-   then reconciliation and assistant compatibility tests inside the image.
-   Missing data fails the native gate rather than silently skipping.
-4. Pushes an image tagged with code/data/run identities, resolves its immutable
-   registry digest, and deploys **that digest** to the selected service.
-5. Checks the candidate's image identity, readiness, API health, seasons response,
-   and frontend before promoting it. It rechecks the latest selection immediately
-   before promotion; a superseded job stops.
-6. Verifies the service after promotion and saves the previous revision, exact
-   image, traffic state, and download receipt as a workflow artifact.
-
-Deployments and rollbacks share a GitHub concurrency group and never cancel a
-running traffic operation. This serializes this workflow, not independent console
-or CLI changes. Selection and Cloud Run traffic are separate services, so their
-updates are not one atomic transaction. A selection changed after the final
-check requires a subsequent deploy.
-
-Both services use 4 GiB RAM, 2 CPUs and zero minimum instances. Preview allows
-one maximum instance and production allows three.
-DuckDB is capped at 2,400 MB and two threads. Read-only serving supports multiple
-replicas; the preview's single-instance cap is a cost/testing choice.
-
-### Local image check
-
-After `jobs.publish download` completes into a new directory:
-
-```bash
-# From the repository root; RELEASE is the download's release/ directory.
-docker build --target native --provenance=false \
-  --build-context native_snapshot="$RELEASE" -t nfldb-native:check .
-docker run --rm --read-only --tmpfs /tmp --memory 4g --cpus 2 \
-  nfldb-native:check python -m jobs.deploy check-image
-docker run --rm --read-only --tmpfs /tmp -p 8080:8080 nfldb-native:check
-```
-
-The shared source context excludes local databases, captures, virtual environments,
-credentials, and private planning documents. The native image has no legacy
-database copy. Both Docker targets require an explicit data context; a bare
-`docker build .` is intentionally insufficient.
+For automatic deployment after data refresh, configure
+[refresh automation](docs/NATIVE_REFRESH_AUTOMATION.md).
 
 ## Rollback
 
-Run the same workflow with operation `rollback`, the matching target, and the
-full **previous revision** from a successful deployment artifact.
-The script verifies that the revision belongs to the selected service, checks its tagged
-URL, then sends 100% of traffic to it. This restores the previous code **and baked
-database together**, without rebuilding either.
+Run the same workflow with operation `rollback`, the matching target and the
+previous verified `revision` from a deployment receipt. Rollback restores that
+revision's code and baked database together, without rebuilding either.
 
-An unhealthy candidate is not promoted. If checks fail after a traffic switch,
-the script attempts to restore the exact previous revision and saves failure
-evidence. If restoration fails, the job reports it; use `before.json` to recover.
-The first preview creation has no previous revision to restore. Rollback does
-not edit the desired cloud selection; resolve the cause before retrying it.
+An unhealthy candidate is not promoted. If post-promotion checks fail, the script
+attempts to restore the previous revision and saves failure evidence. A first
+preview creation has no prior revision. If recovery fails, inspect `before.json`
+and restore the recorded traffic allocation.
 
-The production service must already have a revision available for rollback.
-Cloud Run documents the underlying command in its
-[rollback guide](https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration):
+Deployment and rollback share a non-cancelling queue per target. Cloud selection
+and traffic updates are separate operations: rollback does not change the desired
+data selection, and independent console/CLI changes are not serialized by GitHub.
+Keep the previous revision and image available for recovery.
 
-```bash
-gcloud run services update-traffic nfldb-native-preview --region us-central1 \
-  --to-revisions=EXACT_PREVIOUS_REVISION=100
+## Local image check
+
+After [downloading a release](docs/CLOUD_RELEASES.md), run these Bash commands from
+the repository root. Set `RELEASE` to its `release/` directory:
+
+```sh
+docker build --target native --provenance=false \
+  --build-context native_snapshot="$RELEASE" -t nfldb:check .
+docker run --rm --read-only --tmpfs /tmp --memory 4g --cpus 2 \
+  nfldb:check python -m jobs.deploy check-image
+docker run --rm --read-only --tmpfs /tmp -p 8080:8080 nfldb:check
 ```
 
-## Existing cloud setup
+Both Docker targets require an explicit data context. The `legacy` target accepts
+`legacy_snapshot` for examining older databases; production rollback normally
+uses an existing Cloud Run revision. The source build context excludes local
+data, credentials and private planning files.
 
-Workflows use Workload Identity Federation: GitHub exchanges a short-lived OIDC
-token for Google credentials, with no downloadable service-account key. The
-project needs Cloud Run, Artifact Registry, Cloud Storage, and IAM Credentials
-enabled, an Artifact Registry Docker repository named `nfldb` in `us-central1`,
-and the publication bucket.
+## Cloud setup
 
-| Repository secret | Purpose |
-| --- | --- |
+The project needs Cloud Run, Artifact Registry, Cloud Storage and IAM Credentials,
+an Artifact Registry repository named `nfldb` in `us-central1`, and a publication
+bucket. Workflows use Workload Identity Federation with these repository secrets:
+
+| Secret | Purpose |
+|---|---|
 | `GCP_PROJECT_ID` | Google Cloud project |
-| `GCP_WIF_PROVIDER` | Existing GitHub OIDC provider resource |
-| `GCP_SA_EMAIL` | Deployment service account |
+| `GCP_WIF_PROVIDER` | GitHub OIDC provider resource |
+| `GCP_SA_EMAIL` | Workflow service account |
 
-The deployer needs Cloud Run administration, Artifact Registry write, bucket
-object read, and permission to act as the runtime service account. Publication
-and selection writers also need object write permissions. Restrict the WIF
-provider to the intended repository. Google's
-[authentication action](https://github.com/google-github-actions/auth)
-documents one-time setup.
+The deployer needs Cloud Run administration, registry write, bucket read and
+permission to act as the runtime service account. Publication also needs object
+write permissions. Restrict the identity provider to the intended repository;
+see [Google's authentication action](https://github.com/google-github-actions/auth).
 
-## Legacy rollback image
-
-The Dockerfile retains an explicit legacy build target for examining older
-snapshots. A local directory containing `nfl.duckdb` supplies `legacy_snapshot`:
-
-```bash
-docker build --target legacy --provenance=false \
-  --build-context legacy_snapshot="$LEGACY_DIRECTORY" -t nfldb-legacy:check .
-```
-
-Production rollback uses the previous Cloud Run revision, which already contains
-its code and data. Keep that revision and its image available through cutover.
+The public hostname maps to the production service and follows its traffic
+allocation. Deployment status and revision identities come from workflow receipts
+and Cloud Run, rather than fixed values in this guide.
